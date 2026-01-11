@@ -49,6 +49,7 @@
 
 ### 4.2 제조사 클라우드 연동
 - **POST `/cloud/connect` (FR-CLOUD-001)**: 제조사 OAuth 연동 요청 (입구)
+- **POST `/cloud/callback` (FR-CLOUD-001)**: OAuth 인증 코드 전달 및 토큰 교환
 - **POST `/cloud/sync` (FR-CLOUD-002)**: 클라우드 데이터 강제 동기화 트리거
 
 ---
