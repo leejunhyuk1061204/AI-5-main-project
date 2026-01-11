@@ -1,0 +1,45 @@
+# --- Java & Spring Boot ---
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+!**/src/main/resources/ant-static-assets/
+!**/src/test/resources/ant-static-assets/
+bin/
+out/
+.settings/
+.classpath
+.project
+*.iml
+*.ipr
+*.iws
+
+# --- Python (FastAPI/AI) ---
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+env/
+.env
+.pytest_cache/
+
+# --- IDE (IntelliJ, VSCode) ---
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# --- Docker ---
+.docker/
+data/
+logs/
+*.log
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+
+# --- Logs ---
+logs/
+*.log
