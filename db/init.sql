@@ -109,7 +109,7 @@ CREATE TABLE IF NOT EXISTS obd_logs (
     rpm FLOAT,
     speed FLOAT,
     voltage FLOAT,
-    cool coolant_temp FLOAT,
+    coolant_temp FLOAT,
     engine_load FLOAT,
     fuel_trim_short FLOAT,
     fuel_trim_long FLOAT,
