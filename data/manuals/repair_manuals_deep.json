@@ -1,0 +1,34 @@
+[
+  {
+    "model": "Sonata L4-2.4L",
+    "base_url": "https://charm.li/Hyundai/2012/Sonata%20L4-2.4L/",
+    "sections": [
+      {
+        "section": "General Information",
+        "url": "https://charm.li/Hyundai/2012/Sonata%20L4-2.4L/Repair%20and%20Diagnosis/A%20L%20L%20%20Diagnostic%20Trouble%20Codes%20%28%20DTC%20%29/Testing%20and%20Inspection/B%20Code%20Charts/B1101/Airbag%28Event%20%231%29/General%20Information/",
+        "content": "General Information\nAirbag(Event #1)\nB1101 Battery Voltage High - General Information\nComponent Location\nGeneral Description\nSRSCM (Supplemental Restraints System Control Module) checks input voltage when \"IG ON\" to make air bag system work properly.\nIf input voltage is out of normal range, there can be malfunction in system operation. In this case, Check battery and charging system.\nDTC Description\nThe SRSCM sets DTC B1101 and turns warning light on if voltage above threshold value is detected for more than 4 sec.\n(If voltage within threshold value is detected When the SRSCM returns to normal condition. SRSCM regards DTC as being cleared and turns warning light off).\nDTC Detecting Condition\nSpecification\nDiagnostic Circuit Diagram",
+        "depth": 2
+      }
+    ],
+    "extracted_at": "2026-01-12 22:14:32"
+  },
+  {
+    "model": "Elantra L4-1.8L",
+    "base_url": "https://charm.li/Hyundai/2012/Elantra%20L4-1.8L/",
+    "sections": [
+      {
+        "section": "General Information",
+        "url": "https://charm.li/Hyundai/2012/Elantra%20L4-1.8L/Repair%20and%20Diagnosis/A%20L%20L%20%20Diagnostic%20Trouble%20Codes%20%28%20DTC%20%29/Testing%20and%20Inspection/B%20Code%20Charts/B1101/General%20Information/",
+        "content": "General Information\nAirbag(Event #2)\nB110100 Battery Voltage High - General Information\nComponent Location\nGeneral Description\nSRSCM (Supplemental Restraints System Control Module) checks input voltage when \"IG ON\" to make air bag system work properly.\nIf input voltage is out of normal range, there can be malfunction in system operation. In this case, Check battery and charging system.\nDTC Description\nThe SRSCM sets DTC B110100 and turns warning light on if voltage above threshold value is detected for more than 4 sec.\n(If voltage within threshold value is detected When the SRSCM returns to normal condition. SRSCM regards DTC as being cleared and turns warning light off).\nDTC Detecting Condition\nSpecification\nDiagnostic Circuit Diagram",
+        "depth": 2
+      },
+      {
+        "section": "Scantool Diagnostics",
+        "url": "https://charm.li/Hyundai/2012/Elantra%20L4-1.8L/Repair%20and%20Diagnosis/A%20L%20L%20%20Diagnostic%20Trouble%20Codes%20%28%20DTC%20%29/Testing%20and%20Inspection/B%20Code%20Charts/B1101/Scantool%20Diagnostics/",
+        "content": "Scantool Diagnostics\nAirbag(Event #2)\nB110100 Battery Voltage High - Scantool Diagnostics\nMonitor Scantool Data\n1.\nIgnition \"OFF\", connect scantool.\n2.\nIgnition \"ON\"& Engine \"OFF\", select \"Current Data\" mode.\n3.\nMonitor the \"Battery Voltage\" parameter on the Scantool.\nSpecification :\nApprox. 6.7 ≤ Vbatt ≤ 18.7\nFig.1) Normal Data\n4.\nIs parameter displayed within specifications?",
+        "depth": 2
+      }
+    ],
+    "extracted_at": "2026-01-12 22:14:53"
+  }
+]
