@@ -4,7 +4,7 @@ spring:
   
   datasource:
     # .env의 DB_PORT와 DB_NAME 등을 조합하여 설정
-    url: jdbc:postgresql://${REDIS_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:car_sentry}
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:car_sentry}
     username: ${DB_USER:postgres}
     password: ${DB_PASSWORD:postgres}
     driver-class-name: org.postgresql.Driver
@@ -25,7 +25,7 @@ spring:
         dialect: org.hibernate.dialect.PostgreSQLDialect
 
   rabbitmq:
-    host: ${REDIS_HOST:localhost}
+    host: ${MQ_HOST:localhost}
     port: ${MQ_PORT:5672}
     username: ${MQ_USER:guest}
     password: ${MQ_PASSWORD:guest}
