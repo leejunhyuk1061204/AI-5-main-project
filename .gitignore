@@ -32,9 +32,17 @@ env/
 
 # --- Docker ---
 .docker/
-data/
 logs/
 *.log
+
+# --- RAG Data (ZIP/DB는 제외, JSON은 커밋) ---
+data/manuals/zips/
+data/manuals/Sonata_2012/
+data/dtc/*.db
+*.zip
+data/sync_tracker.db
+data/logs/
+data/manuals/parsed/
 
 # --- OS ---
 .DS_Store
