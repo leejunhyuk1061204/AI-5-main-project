@@ -1,0 +1,42 @@
+spring:
+  application:
+    name: car-sentry-backend
+  
+  datasource:
+    # .env의 DB_PORT와 DB_NAME 등을 조합하여 설정
+    url: jdbc:postgresql://${REDIS_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:car_sentry}
+    username: ${DB_USER:postgres}
+    password: ${DB_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+  
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  rabbitmq:
+    host: ${REDIS_HOST:localhost}
+    port: ${MQ_PORT:5672}
+    username: ${MQ_USER:guest}
+    password: ${MQ_PASSWORD:guest}
+
+server:
+  port: 8080
+
+logging:
+  file:
+    name: logs/carsentry.log
+  level:
+    root: INFO
+    com.carsentry: DEBUG
+    org.hibernate.SQL: DEBUG
