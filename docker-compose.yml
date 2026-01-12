@@ -1,0 +1,58 @@
+# =========================================================================
+# 🚀 AI-5 Car-Sentry 원클릭 인프라 서비스
+# =========================================================================
+# 💡 [필독] 실행 전 다음 단계를 꼭 확인하세요!
+#
+# STEP 1. 설정 파일 준비 (.env 만들기)
+#         폴더에 있는 '.env.example' 파일을 복사해서 이름을 '.env'로 바꿔주세요.
+#         (명령어: copy .env.example .env)
+#
+# STEP 2. 서버 실행 (자동 설치 포함)
+#         docker-compose up -d
+#
+# ⚠️ 주의: Docker Desktop이 반드시 켜져 있어야 합니다.
+# =========================================================================
+
+version: '3.8'
+
+services:
+  # 1. 데이터베이스 (PostgreSQL + TimescaleDB + pgvector)
+  db:
+    image: timescale/timescaledb-ha:pg15
+    container_name: car-sentry-db
+    restart: always
+    environment:
+      - POSTGRES_USER=${DB_USER:-postgres}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-postgres}
+      - POSTGRES_DB=${DB_NAME:-car_sentry}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql # 초기화 스크립트 마운트
+    networks:
+      - car-sentry-network
+
+  # 2. 메시지 큐 (RabbitMQ)
+  rabbitmq:
+    image: rabbitmq:3.12-management
+    container_name: car-sentry-mq
+    restart: always
+    environment:
+      - RABBITMQ_DEFAULT_USER=${MQ_USER:-guest}
+      - RABBITMQ_DEFAULT_PASS=${MQ_PASSWORD:-guest}
+    ports:
+      - "${MQ_PORT:-5672}:5672" # AMQP 포트
+      - "${MQ_MANAGEMENT_PORT:-15672}:15672" # Management UI 포트
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - car-sentry-network
+
+networks:
+  car-sentry-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  rabbitmq_data:
