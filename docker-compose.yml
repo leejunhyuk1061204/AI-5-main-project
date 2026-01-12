@@ -49,6 +49,18 @@ services:
     networks:
       - car-sentry-network
 
+  # 3. Redis (Cache/Session)
+  redis:
+    image: redis:7.2-alpine
+    container_name: car-sentry-redis
+    restart: always
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - car-sentry-network
+
 networks:
   car-sentry-network:
     driver: bridge
@@ -56,3 +68,4 @@ networks:
 volumes:
   postgres_data:
   rabbitmq_data:
+  redis_data:
