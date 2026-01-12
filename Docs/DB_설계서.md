@@ -296,6 +296,8 @@ AI 예측 데이터(`consumables_state`)와 연동되는 핵심 항목들은 드
 | | oil_leak | ENUM | | 누유/미세누유 점검 결과 |
 | | inspection_sheet_url| TEXT | | 성능점검표 원본 이미지(S3) |
 
+
+
 ---
 
 ### 2.7 실시간 이상 감지 이력 (anomaly_records - FR-ANOMALY)

@@ -1,36 +1,55 @@
 -- 1. 필수 확장 기능 활성화
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
 CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;
+
 CREATE EXTENSION IF NOT EXISTS vector;
 
 -- 2. ENUM 타입 정의
 DO $$ BEGIN
     CREATE TYPE user_level AS ENUM ('FREE', 'PREMIUM', 'ADMIN');
-    CREATE TYPE fuel_type AS ENUM ('GASOLINE', 'DIESEL', 'EV', 'HEV', 'LPG');
-    CREATE TYPE registration_source AS ENUM ('MANUAL', 'OBD', 'CLOUD');
-    CREATE TYPE charging_status AS ENUM ('DISCONNECTED', 'CHARGING', 'FULL', 'ERROR');
-    CREATE TYPE diag_trigger_type AS ENUM ('MANUAL', 'DTC', 'ANOMALY', 'ROUTINE');
-    CREATE TYPE diag_status AS ENUM ('PENDING', 'PROCESSING', 'DONE', 'FAILED');
-    CREATE TYPE risk_level AS ENUM ('LOW', 'MID', 'HIGH', 'CRITICAL');
-    CREATE TYPE media_type AS ENUM ('AUDIO', 'IMAGE', 'SNAPSHOT');
-    CREATE TYPE evidence_status AS ENUM ('REQUESTED', 'UPLOADED', 'FAILED');
-    CREATE TYPE dtc_type AS ENUM ('STORED', 'PENDING', 'PERMANENT');
-    CREATE TYPE dtc_status AS ENUM ('ACTIVE', 'RESOLVED', 'CLEARED');
-    CREATE TYPE dtc_resolution_type AS ENUM ('AUTO', 'MANUAL', 'OBD_CLEAR');
-    CREATE TYPE noti_type AS ENUM ('ALARM', 'RECALL', 'INFO', 'REPORT');
-    CREATE TYPE insight_category AS ENUM ('ECO_DRIVING', 'SAFETY', 'MAINTENANCE');
-    CREATE TYPE recall_status AS ENUM ('OPEN', 'CLOSED');
-    CREATE TYPE inspection_type AS ENUM ('REGULAR', 'TOTAL');
-EXCEPTION
-    WHEN duplicate_object THEN null;
+
+CREATE TYPE fuel_type AS ENUM ('GASOLINE', 'DIESEL', 'EV', 'HEV', 'LPG');
+
+CREATE TYPE registration_source AS ENUM ('MANUAL', 'OBD', 'CLOUD');
+
+CREATE TYPE charging_status AS ENUM ('DISCONNECTED', 'CHARGING', 'FULL', 'ERROR');
+
+CREATE TYPE diag_trigger_type AS ENUM ('MANUAL', 'DTC', 'ANOMALY', 'ROUTINE');
+
+CREATE TYPE diag_status AS ENUM ('PENDING', 'PROCESSING', 'DONE', 'FAILED');
+
+CREATE TYPE risk_level AS ENUM ('LOW', 'MID', 'HIGH', 'CRITICAL');
+
+CREATE TYPE media_type AS ENUM ('AUDIO', 'IMAGE', 'SNAPSHOT');
+
+CREATE TYPE evidence_status AS ENUM ('REQUESTED', 'UPLOADED', 'FAILED');
+
+CREATE TYPE dtc_type AS ENUM ('STORED', 'PENDING', 'PERMANENT');
+
+CREATE TYPE dtc_status AS ENUM ('ACTIVE', 'RESOLVED', 'CLEARED');
+
+CREATE TYPE dtc_resolution_type AS ENUM ('AUTO', 'MANUAL', 'OBD_CLEAR');
+
+CREATE TYPE noti_type AS ENUM ('ALARM', 'RECALL', 'INFO', 'REPORT');
+
+CREATE TYPE insight_category AS ENUM ('ECO_DRIVING', 'SAFETY', 'MAINTENANCE');
+
+CREATE TYPE recall_status AS ENUM ('OPEN', 'CLOSED');
+
+CREATE TYPE inspection_type AS ENUM ('REGULAR', 'TOTAL');
+
+EXCEPTION WHEN duplicate_object THEN null;
+
 END $$;
 
 -- 3. 테이블 생성 (Core)
 
 -- 사용자 (2.1.1)
 CREATE TABLE IF NOT EXISTS users (
-    user_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
     email VARCHAR(255) UNIQUE NOT NULL,
     password_hash VARCHAR(255),
     nickname VARCHAR(50),
@@ -44,7 +63,7 @@ CREATE TABLE IF NOT EXISTS users (
 
 -- 사용자 설정 (2.1.2)
 CREATE TABLE IF NOT EXISTS user_settings (
-    user_id UUID PRIMARY KEY REFERENCES users(user_id),
+    user_id UUID PRIMARY KEY REFERENCES users (user_id),
     noti_maintenance BOOLEAN DEFAULT TRUE,
     noti_anomaly BOOLEAN DEFAULT TRUE,
     noti_recall BOOLEAN DEFAULT TRUE,
@@ -54,8 +73,8 @@ CREATE TABLE IF NOT EXISTS user_settings (
 
 -- 클라우드 계정 (2.1.3)
 CREATE TABLE IF NOT EXISTS cloud_accounts (
-    account_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID REFERENCES users(user_id),
+    account_id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
+    user_id UUID REFERENCES users (user_id),
     provider VARCHAR(50),
     provider_user_id VARCHAR(255),
     access_token TEXT,
@@ -66,8 +85,8 @@ CREATE TABLE IF NOT EXISTS cloud_accounts (
 
 -- 차량 (2.1.4)
 CREATE TABLE IF NOT EXISTS vehicles (
-    vehicles_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID REFERENCES users(user_id),
+    vehicles_id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
+    user_id UUID REFERENCES users (user_id),
     vin VARCHAR(255) UNIQUE,
     car_number VARCHAR(20),
     manufacturer VARCHAR(50),
@@ -86,25 +105,27 @@ CREATE TABLE IF NOT EXISTS vehicles (
 -- OBD 실시간 로그 (2.2.1) - TimescaleDB
 CREATE TABLE IF NOT EXISTS obd_logs (
     time TIMESTAMPTZ NOT NULL,
-    vehicles_id UUID NOT NULL REFERENCES vehicles(vehicles_id),
+    vehicles_id UUID NOT NULL REFERENCES vehicles (vehicles_id),
     rpm FLOAT,
     speed FLOAT,
     voltage FLOAT,
-    coolant_temp FLOAT,
+    cool coolant_temp FLOAT,
     engine_load FLOAT,
     fuel_trim_short FLOAT,
     fuel_trim_long FLOAT,
     json_extra JSONB
 );
 -- 시계열 테이블로 변환
-SELECT create_hypertable('obd_logs', 'time', if_not_exists => TRUE);
+SELECT create_hypertable ( 'obd_logs', 'time', if_not_exists => TRUE );
 -- 리텐션 정책 (7일)
-SELECT add_retention_policy('obd_logs', INTERVAL '7 days', if_not_exists => TRUE);
+SELECT add_retention_policy (
+        'obd_logs', INTERVAL '7 days', if_not_exists => TRUE
+    );
 
 -- 클라우드 동기화 데이터 (2.2.2)
 CREATE TABLE IF NOT EXISTS cloud_telemetry (
     last_synced_at TIMESTAMPTZ NOT NULL,
-    vehicles_id UUID NOT NULL REFERENCES vehicles(vehicles_id),
+    vehicles_id UUID NOT NULL REFERENCES vehicles (vehicles_id),
     odometer FLOAT,
     fuel_level FLOAT,
     battery_soc FLOAT,
@@ -115,8 +136,8 @@ CREATE TABLE IF NOT EXISTS cloud_telemetry (
 -- 주행 요약 (2.2.3)
 CREATE TABLE IF NOT EXISTS trip_summaries (
     start_time TIMESTAMP NOT NULL,
-    vehicles_id UUID NOT NULL REFERENCES vehicles(vehicles_id),
-    trip_id UUID NOT NULL UNIQUE DEFAULT uuid_generate_v4(),
+    vehicles_id UUID NOT NULL REFERENCES vehicles (vehicles_id),
+    trip_id UUID NOT NULL UNIQUE DEFAULT uuid_generate_v4 (),
     end_time TIMESTAMP,
     distance FLOAT,
     drive_score INT,
@@ -130,8 +151,8 @@ CREATE TABLE IF NOT EXISTS trip_summaries (
 
 -- 진단 세션 (2.3.1)
 CREATE TABLE IF NOT EXISTS diag_sessions (
-    diag_session_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    vehicles_id UUID REFERENCES vehicles(vehicles_id),
+    diag_session_id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
+    vehicles_id UUID REFERENCES vehicles (vehicles_id),
     trip_id UUID, -- trip_summaries.trip_id
     trigger_type diag_trigger_type,
     status diag_status,
@@ -140,8 +161,8 @@ CREATE TABLE IF NOT EXISTS diag_sessions (
 
 -- AI 진단 결과 (2.3.2)
 CREATE TABLE IF NOT EXISTS diag_results (
-    diag_result_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    diag_session_id UUID REFERENCES diag_sessions(diag_session_id),
+    diag_result_id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
+    diag_session_id UUID REFERENCES diag_sessions (diag_session_id),
     final_report TEXT,
     confidence FLOAT,
     detected_issues JSONB,
@@ -151,8 +172,8 @@ CREATE TABLE IF NOT EXISTS diag_results (
 
 -- AI 진단 증거 및 미션 (2.3.3)
 CREATE TABLE IF NOT EXISTS ai_evidences (
-    evidence_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    diag_session_id UUID REFERENCES diag_sessions(diag_session_id),
+    evidence_id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
+    diag_session_id UUID REFERENCES diag_sessions (diag_session_id),
     media_type media_type,
     s3_key TEXT,
     ai_analysis JSONB,
@@ -164,8 +185,8 @@ CREATE TABLE IF NOT EXISTS ai_evidences (
 
 -- DTC 고장 코드 이력 (2.4.1)
 CREATE TABLE IF NOT EXISTS dtc_history (
-    dtc_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    vehicles_id UUID REFERENCES vehicles(vehicles_id),
+    dtc_id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
+    vehicles_id UUID REFERENCES vehicles (vehicles_id),
     dtc_code VARCHAR(10),
     description TEXT,
     dtc_type dtc_type,
@@ -177,8 +198,8 @@ CREATE TABLE IF NOT EXISTS dtc_history (
 
 -- DTC 고장 시점 스냅샷 (2.4.2)
 CREATE TABLE IF NOT EXISTS dtc_freeze_frames (
-    frame_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    dtc_id UUID UNIQUE REFERENCES dtc_history(dtc_id),
+    frame_id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
+    dtc_id UUID UNIQUE REFERENCES dtc_history (dtc_id),
     rpm FLOAT,
     speed FLOAT,
     coolant_temp FLOAT,
@@ -190,8 +211,8 @@ CREATE TABLE IF NOT EXISTS dtc_freeze_frames (
 
 -- 소모품 잔여 수명 (2.4.3)
 CREATE TABLE IF NOT EXISTS consumables_state (
-    consumable_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    vehicles_id UUID REFERENCES vehicles(vehicles_id),
+    consumable_id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
+    vehicles_id UUID REFERENCES vehicles (vehicles_id),
     part_name VARCHAR(50),
     current_life FLOAT,
     predicted_date DATE,
@@ -200,8 +221,8 @@ CREATE TABLE IF NOT EXISTS consumables_state (
 
 -- 정비 차계부 (2.4.4)
 CREATE TABLE IF NOT EXISTS maintenance_logs (
-    maintenance_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    vehicles_id UUID REFERENCES vehicles(vehicles_id),
+    maintenance_id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
+    vehicles_id UUID REFERENCES vehicles (vehicles_id),
     maintenance_date DATE,
     part_name VARCHAR(50),
     is_standardized BOOLEAN,
@@ -216,8 +237,8 @@ CREATE TABLE IF NOT EXISTS maintenance_logs (
 
 -- 사용자 알림 (2.5.1)
 CREATE TABLE IF NOT EXISTS user_notifications (
-    notification_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID REFERENCES users(user_id),
+    notification_id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
+    user_id UUID REFERENCES users (user_id),
     type noti_type,
     title VARCHAR(255),
     message TEXT,
@@ -227,18 +248,21 @@ CREATE TABLE IF NOT EXISTS user_notifications (
 
 -- 지식 베이스 벡터 (2.5.2)
 CREATE TABLE IF NOT EXISTS knowledge_vectors (
-    knowledge_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    knowledge_id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
     category VARCHAR(20),
     content TEXT,
-    embedding vector(1536)
+    metadata JSONB, -- 추가분: 제조사, 모델, 연식, 페이지 등 필터링용
+    embedding vector (1536)
 );
+
+CREATE INDEX IF NOT EXISTS idx_knowledge_metadata ON knowledge_vectors USING GIN (metadata);
 
 -- 8. 외부 API 연동 및 상세 정보 (External)
 
 -- 차량 상세 제원 (2.6.1)
 CREATE TABLE IF NOT EXISTS vehicle_specs (
-    spec_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    vehicles_id UUID REFERENCES vehicles(vehicles_id),
+    spec_id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
+    vehicles_id UUID REFERENCES vehicles (vehicles_id),
     length FLOAT,
     width FLOAT,
     height FLOAT,
@@ -254,8 +278,8 @@ CREATE TABLE IF NOT EXISTS vehicle_specs (
 
 -- 리콜 상세 정보 (2.6.2)
 CREATE TABLE IF NOT EXISTS vehicle_recalls (
-    recall_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    vehicles_id UUID REFERENCES vehicles(vehicles_id),
+    recall_id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
+    vehicles_id UUID REFERENCES vehicles (vehicles_id),
     recall_title VARCHAR(255),
     component VARCHAR(100),
     recall_reason TEXT,
@@ -266,8 +290,8 @@ CREATE TABLE IF NOT EXISTS vehicle_recalls (
 
 -- 정기 및 종합검사 정보 (2.6.3)
 CREATE TABLE IF NOT EXISTS vehicle_inspections (
-    inspection_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    vehicles_id UUID REFERENCES vehicles(vehicles_id),
+    inspection_id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
+    vehicles_id UUID REFERENCES vehicles (vehicles_id),
     inspection_type inspection_type,
     validity_start_date DATE,
     validity_end_date DATE,
@@ -277,8 +301,8 @@ CREATE TABLE IF NOT EXISTS vehicle_inspections (
 
 -- 중고차 성능상태점검 기록 (2.6.4)
 CREATE TABLE IF NOT EXISTS used_car_performance_records (
-    record_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    vehicles_id UUID REFERENCES vehicles(vehicles_id),
+    record_id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
+    vehicles_id UUID REFERENCES vehicles (vehicles_id),
     inspection_date DATE,
     mileage_at_work FLOAT,
     accident_history BOOLEAN,
@@ -293,8 +317,8 @@ CREATE TABLE IF NOT EXISTS used_car_performance_records (
 
 -- 실시간 이상 감지 이력 (2.7)
 CREATE TABLE IF NOT EXISTS anomaly_records (
-    anomaly_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    vehicles_id UUID REFERENCES vehicles(vehicles_id),
+    anomaly_id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
+    vehicles_id UUID REFERENCES vehicles (vehicles_id),
     recorded_at TIMESTAMP,
     anomaly_type VARCHAR(50),
     severity risk_level,
@@ -303,8 +327,8 @@ CREATE TABLE IF NOT EXISTS anomaly_records (
 
 -- 개인화 인사이트 (2.8)
 CREATE TABLE IF NOT EXISTS user_insights (
-    insight_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID REFERENCES users(user_id),
+    insight_id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
+    user_id UUID REFERENCES users (user_id),
     trip_id UUID,
     category insight_category,
     title VARCHAR(255),
