@@ -132,7 +132,6 @@
     - **Description**: 엔진/부품 소리를 분석하여 이상 유무 및 원인 판별.
     - **Request (Multipart)**:
         - `file`: 오디오 파일 (.wav, .m4a)
-        - `sampling_rate`: 16000 (Optional)
     - **Response (JSON)**:
         ```json
         {
