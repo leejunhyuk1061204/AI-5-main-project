@@ -6,9 +6,14 @@ module.exports = {
     extend: {
       colors: {
         "primary": "#0d7ff2",
+        "primary-dark": "#0b6bc9",
         "primary-glow": "#00f0ff",
         "background-light": "#f5f7f8",
-        "background-dark": "#0a1016",
+        "background-dark": "#101922",
+        "surface-dark": "#16212b",
+        "input-dark": "#1e2936",
+        "input-border": "#2d3b4e",
+        "text-secondary": "#94a3b8",
         "deep-black": "#020202",
       },
     },
