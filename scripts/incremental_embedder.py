@@ -6,14 +6,18 @@ import time
 import psycopg2
 from psycopg2.extras import execute_values
 from sentence_transformers import SentenceTransformer
+from dotenv import load_dotenv
+
+# .env 파일 로드
+load_dotenv()
 
 # --- 설정 ---
 DB_CONFIG = {
-    "host": "localhost",
-    "port": 5432,
-    "database": "car_sentry",
-    "user": "Ai-5-main-project",
-    "password": "Ai5MainProj"
+    "host": os.getenv("DB_HOST", "localhost"),
+    "port": os.getenv("DB_PORT", 5432),
+    "database": os.getenv("DB_NAME", "car_sentry"),
+    "user": os.getenv("DB_USER", "Ai-5-main-project"),
+    "password": os.getenv("DB_PASSWORD", "Ai5MainProj")
 }
 
 TRACKER_DB_PATH = "data/sync_tracker.db"
