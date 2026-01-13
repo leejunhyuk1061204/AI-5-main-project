@@ -1,20 +1,58 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, Platform, KeyboardAvoidingView } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, Platform, KeyboardAvoidingView, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function Login() {
     const navigation = useNavigation<any>();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
+    const [loading, setLoading] = useState(false);
 
-    const handleLogin = () => {
-        // Implement login logic here
-        // For now, navigate to MainPage
-        navigation.navigate('MainPage');
+    const handleLogin = async () => {
+        if (!email || !password) {
+            Alert.alert('알림', '이메일과 비밀번호를 입력해주세요.');
+            return;
+        }
+
+        setLoading(true);
+        try {
+            const baseUrl = Platform.OS === 'android' ? 'http://10.0.2.2:8080' : 'http://localhost:8080';
+
+            const response = await fetch(`${baseUrl}/api/v1/auth/login`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    email: email,
+                    password: password,
+                }),
+            });
+
+            const result = await response.json();
+
+            if (response.ok) {
+                // Store JWT Token
+                if (result.data && result.data.token) {
+                    await AsyncStorage.setItem('userToken', result.data.token);
+                }
+
+                navigation.navigate('MainPage');
+            } else {
+                const errorMessage = result.error?.message || '이메일 또는 비밀번호를 확인해주세요.';
+                Alert.alert('로그인 실패', errorMessage);
+            }
+        } catch (error) {
+            Alert.alert('오류', '서버와의 연결에 실패했습니다.');
+            console.error('Login Error:', error);
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (
@@ -54,7 +92,7 @@ export default function Login() {
                             <Text className="text-sm font-medium text-gray-300 ml-1">이메일</Text>
                             <View className="relative group">
                                 <View className="absolute inset-y-0 left-0 pl-4 justify-center pointer-events-none z-10">
-                                    <MaterialIcons name="mail" size={20} className="text-gray-500" color="#6b7280" />
+                                    <MaterialIcons name="mail" size={20} color="#6b7280" />
                                 </View>
                                 <TextInput
                                     value={email}
@@ -73,7 +111,7 @@ export default function Login() {
                             <Text className="text-sm font-medium text-gray-300 ml-1">비밀번호</Text>
                             <View className="relative group">
                                 <View className="absolute inset-y-0 left-0 pl-4 justify-center pointer-events-none z-10">
-                                    <MaterialIcons name="lock" size={20} className="text-gray-500" color="#6b7280" />
+                                    <MaterialIcons name="lock" size={20} color="#6b7280" />
                                 </View>
                                 <TextInput
                                     value={password}
@@ -108,9 +146,14 @@ export default function Login() {
                         {/* Login Button */}
                         <TouchableOpacity
                             onPress={handleLogin}
-                            className="w-full rounded-xl bg-primary py-4 items-center justify-center shadow-lg shadow-blue-500/20 active:opacity-90 mt-4"
+                            disabled={loading}
+                            className={`w-full rounded-xl ${loading ? 'bg-primary/50' : 'bg-primary'} py-4 items-center justify-center shadow-lg shadow-blue-500/20 active:opacity-90 mt-4`}
                         >
-                            <Text className="text-sm font-bold text-white">로그인</Text>
+                            {loading ? (
+                                <ActivityIndicator color="white" />
+                            ) : (
+                                <Text className="text-sm font-bold text-white">로그인</Text>
+                            )}
                         </TouchableOpacity>
                     </View>
 
