@@ -81,3 +81,15 @@ docker-compose up -d
 
 ---
 © 2026 AI-5 Project Team. All rights reserved.
+
+### ai 환경설정 ###
+
+# 1. 가상환경 생성
+conda create -n ai5 python=3.10
+conda activate ai5
+
+# 2. PyTorch 설치 (CUDA 12.1 기준)
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+
+# 3. 주요 프레임워크 설치
+pip install ultralytics transformers xgboost lightgbm pytorch-lightning librosa fastapi uvicorn
