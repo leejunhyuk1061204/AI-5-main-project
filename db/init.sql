@@ -91,6 +91,7 @@ CREATE TABLE IF NOT EXISTS vehicles (
     car_number VARCHAR(20),
     manufacturer VARCHAR(50),
     model_name VARCHAR(100),
+    model_year INT,
     fuel_type fuel_type,
     total_mileage FLOAT DEFAULT 0,
     is_primary BOOLEAN DEFAULT FALSE,
@@ -98,6 +99,17 @@ CREATE TABLE IF NOT EXISTS vehicles (
     cloud_linked BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT NOW(),
     deleted_at TIMESTAMP
+);
+
+-- 차량 모델 마스터 (2.1.5 - Track B Reference)
+CREATE TABLE IF NOT EXISTS car_model_master (
+    model_id SERIAL PRIMARY KEY,
+    manufacturer VARCHAR(50),
+    model_name VARCHAR(100),
+    model_year INT,
+    fuel_type VARCHAR(20),
+    displacement INT,
+    spec_json JSONB
 );
 
 -- 4. 텔레메트리 (Telemetry)
@@ -116,7 +128,9 @@ CREATE TABLE IF NOT EXISTS obd_logs (
     json_extra JSONB
 );
 -- 시계열 테이블로 변환
-SELECT create_hypertable ( 'obd_logs', 'time', if_not_exists => TRUE );
+SELECT create_hypertable (
+        'obd_logs', 'time', if_not_exists => TRUE
+    );
 -- 리텐션 정책 (7일)
 SELECT add_retention_policy (
         'obd_logs', INTERVAL '7 days', if_not_exists => TRUE

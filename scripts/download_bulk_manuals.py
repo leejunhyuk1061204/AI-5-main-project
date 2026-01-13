@@ -79,6 +79,14 @@ def download_zip(brand, year, model):
         size_mb = os.path.getsize(filepath) / 1024 / 1024
         print(f"  [SKIP] Already exists: {filename} ({size_mb:.0f} MB)")
         return True
+
+    # 2. 파싱된 데이터 확인 (parsed_manuals.json)
+    parsed_filename = filename.replace('.zip', '_full.json')
+    parsed_filepath = os.path.join("data/manuals/parsed", parsed_filename)
+
+    if os.path.exists(parsed_filepath):
+        print(f"  [SKIP] Already parsed: {parsed_filename}")
+        return True
     
     # 지수 백오프 설정
     max_retries = 5

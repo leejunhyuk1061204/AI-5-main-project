@@ -1,90 +1,198 @@
-# API 상세 명세서 (v1.4)
+# API 상세 명세서 (v2.0)
 
-## 1. 공통 규격
-- **기본 URL**: `/api/v1`
-- **인증**: JWT (Header: `Authorization: Bearer {token}`)
-- **응답 형식**: `{ "success": boolean, "data": object|null, "error": { "code": string, "message": string }|null }`
+> **문서 개요**: 본 문서는 시스템 간 통신 규격을 정의하며, 크게 **Client(App) ↔ Backend(Java)** 와 **Backend(Java) ↔ AI Server(Python)** 두 가지 파트로 나뉩니다.
+> **RabbitMQ** 및 **Redis**는 내부 인프라 통신용이므로 본 REST API 명세에는 포함되지 않습니다.
 
 ---
 
-## 2. 사용자 및 인증 (Auth & Users)
+# Part 1. Frontend ↔ Backend API
+> **Mobile App**과 **Java Backend** 간의 통신 규격입니다.
+> - **Base URL**: `https://api.car-sentry.com/api/v1`
+> - **Auth**: `Authorization: Bearer {jwt_token}`
 
-### 2.1 회원가입/로그인
-- **POST `/auth/signup` (FR-USER-001)**: 이메일 기반 회원가입
-- **POST `/auth/login` (FR-USER-002)**: 로그인 및 JWT 발급
-- **POST `/auth/logout` (FR-USER-007)**: 로그아웃 (토큰 무효화 처리)
+## 1. 사용자 및 인증 (Auth & Users)
 
-### 2.2 계정 및 보안
-- **GET `/users/me` (FR-USER-003)**: 내 프로필 정보 및 멤버십 조회
-- **PATCH `/users/me` (FR-USER-004)**: 닉네임, FCM 토큰 업데이트
+### 1.1 인증 (Authentication)
+- **POST `/auth/signup` (FR-USER-001)**: 회원가입 (이메일, 비밀번호, 닉네임)
+- **POST `/auth/login` (FR-USER-002)**: 로그인 (JWT Access/Refresh Token 발급)
+- **POST `/auth/refresh` (FR-USER-008)**: 토큰 갱신
+- **POST `/auth/logout` (FR-USER-007)**: 로그아웃
+
+### 1.2 사용자 정보 (User Profile)
+- **GET `/users/me` (FR-USER-003)**: 내 프로필 조회
+- **PATCH `/users/me` (FR-USER-004)**: 프로필 수정 (닉네임, FCM 토큰)
 - **POST `/users/me/password` (FR-USER-005)**: 비밀번호 변경
-- **DELETE `/users/me` (FR-USER-006)**: 회원 탈퇴 (Soft Delete & 익명화)
+- **DELETE `/users/me` (FR-USER-006)**: 회원 탈퇴
 
-### 2.3 서비스 설정
-- **GET `/users/me/settings` (FR-NOTI-001)**: 알림 항목별 ON/OFF 상태 조회
-- **PUT `/users/me/settings` (FR-NOTI-001)**: 알림 설정 일괄 업데이트
-
----
-
-## 3. 차량 관리 (Vehicles)
-
-### 3.1 등록 및 조회
-- **POST `/vehicles` (FR-CAR-001)**: 차량 등록 (VIN/차번호 기반)
-- **GET `/vehicles` (FR-CAR-002)**: 내 차량 리스트 조회
-- **GET `/vehicles/{vehicles_id}` (FR-CAR-003)**: 특정 차량 상세 정보 및 제원
-
-### 3.2 수정 및 설정
-- **PATCH `/vehicles/{vehicles_id}` (FR-CAR-004)**: 차량 별명, 메모 수정
-- **POST `/vehicles/{vehicles_id}/primary` (FR-CAR-005)**: 대표 차량으로 설정
-- **DELETE `/vehicles/{vehicles_id}` (FR-CAR-006)**: 차량 삭제 (Soft Delete)
+### 1.3 설정 (Settings)
+- **GET `/users/me/settings` (FR-NOTI-001)**: 알림 설정 조회 (정비, 이상징후, 리콜 등)
+- **PUT `/users/me/settings` (FR-NOTI-001)**: 알림 설정 수정
 
 ---
 
-## 4. 텔레메트리 및 데이터 (Telemetry)
+## 2. 차량 관리 (Vehicles)
 
-### 4.1 OBD 데이터
-- **POST `/telemetry/obd` (FR-OBD-003, FR-DRIVE-001)**: 실시간 로그 배치 업로드
-- **GET `/trips` (FR-DRIVE-002)**: 주행 이력 목록
-- **GET `/trips/{trip_id}` (FR-DRIVE-002, 003)**: 상세 주행 보고서 및 운전 점수
+### 2.1 차량 등록 및 조회
+- **POST `/vehicles` (FR-CAR-001)**: 차량 등록
+    - **Body**: `vin`(Optional), `car_number`, `manufacturer`, `model`, `year`, `fuel_type`
+- **GET `/vehicles` (FR-CAR-002)**: 보유 차량 목록 조회
+- **GET `/vehicles/{id}` (FR-CAR-003)**: 차량 상세 정보 조회
+- **PATCH `/vehicles/{id}` (FR-CAR-004)**: 차량 정보 수정 (별명, 메모)
+- **POST `/vehicles/{id}/primary` (FR-CAR-005)**: 대표 차량 설정
+- **DELETE `/vehicles/{id}` (FR-CAR-006)**: 차량 삭제
 
-### 4.2 제조사 클라우드 연동
-- **POST `/cloud/connect` (FR-CLOUD-001)**: 제조사 OAuth 연동 요청 (입구)
-- **POST `/cloud/callback` (FR-CLOUD-001)**: OAuth 인증 코드 전달 및 토큰 교환
-- **POST `/cloud/sync` (FR-CLOUD-002)**: 클라우드 데이터 강제 동기화 트리거
-
----
-
-## 5. AI 진단 및 예지 (Diagnosis & AI)
-
-### 5.1 고장 진단 (DTC)
-- **GET `/vehicles/{id}/dtc` (FR-DIAG-001)**: 현재/기존 DTC 이력 조회 (정규화된 Freeze Frame 포함)
-- **POST `/vehicles/{id}/dtc/clear` (FR-DIAG-001)**: DTC 삭제 명령 전송
-
-### 5.2 정밀 진단 시스템
-- **POST `/ai/diagnose` (FR-DIAG-002)**: 멀티모달 진단 요청 (소리, 사진 등 포함)
-- **GET `/ai/diagnose/{session_id}` (FR-DIAG-003)**: 진단 리포트 조회
-- **GET `/ai/missions/{session_id}` (FR-DIAG-004)**: AI 추가 증거 요청(미션) 확인
-
-### 5.3 이상 감지 및 예지
-- **GET `/vehicles/{id}/anomalies` (FR-ANOMALY-001, 002)**: 실시간 이상 징후 이력 조회
-- **GET `/vehicles/{id}/predictions` (FR-PREDICT-002)**: 부품 및 고장 시점 사전 예측 정보
+### 2.2 공공 데이터 및 마스터 데이터 (Data & Spec)
+- **GET `/meta/car-models` (FR-CAR-EXT-001)**: 차량 모델 마스터 데이터 전체 조회 (Track B 드롭다운용 - 제조사/모델/연식)
+- **GET `/meta/car-models` (FR-CAR-EXT-001)**: 차량 모델 마스터 데이터 전체 조회 (Track B 드롭다운용 - 제조사/모델/연식)
+    - **Strategy**: **Lazy Loading** (차량 등록 화면 진입 시 호출). 전체 목록(JSON)을 받아 프론트엔드에서 제조사 -> 모델 -> 연식 순으로 필터링.
+- **GET `/vehicles/{id}/spec` (FR-CAR-007)**: 차량 제원 상세 조회 (배기량, 연비 등 - 공공 API 캐시)
+- **GET `/vehicles/{id}/recall` (FR-RECALL-001)**: 리콜 대상 여부 및 상세 조회 (국토부 API)
+- **GET `/vehicles/{id}/inspection` (FR-INSP-001)**: 정기검사 유효기간 및 이력 조회 (교통안전공단)
+- **GET `/vehicles/{id}/performance` (FR-VALUE-001)**: 중고차 성능점검 기록 조회 (교통안전공단)
 
 ---
 
-## 6. 소모품 및 알림 (Parts & Notifications)
+## 3. 텔레메트리 및 운전 분석 (Telemetry)
 
-### 6.1 소모품 관리
-- **GET `/vehicles/{id}/consumables` (FR-PARTS-004)**: 소모품 상태 목록 조회
-- **POST `/maintenance` (FR-PARTS-001)**: 정비 기록 추가 및 주기 리셋
+### 3.1 주행 데이터
+- **POST `/telemetry/obd` (FR-OBD-001)**: [앱→서버] 실시간 OBD 로그 배치 업로드 (1Hz 데이터 묶음)
+    - **Body**: `[{timestamp, rpm, speed, ...}, ...]`
+- **GET `/trips` (FR-DRIVE-002)**: 주행 이력 목록 조회 (기간 필터)
+- **GET `/trips/{trip_id}` (FR-DRIVE-003)**: 상세 주행 리포트 (경로, 운전점수, 급가속 횟수 등)
 
-### 6.2 알림 및 리콜
-- **GET `/notifications` (FR-RECALL-003)**: 알림 내역 조회
-- **GET `/external/recall/{vin}` (FR-RECALL-001)**: 국토부 리콜 상세 정보
-- **GET `/personal/insights` (FR-PERS-001)**: 개인화 인사이트(미니 보고서) 조회
+### 3.2 제조사 클라우드 연동 (Cloud)
+- **POST `/cloud/connect` (FR-CLOUD-001)**: OAuth 연동 시작 (Redirect URL 반환)
+- **POST `/cloud/callback` (FR-CLOUD-002)**: 인증 코드 수신 및 토큰 교환
+- **POST `/cloud/sync` (FR-CLOUD-003)**: 데이터 수동 동기화 요청
 
 ---
 
-## 7. 외부 데이터 및 지식 (External)
-- **GET `/external/car-specs/{vin}` (FR-CAR-003)**: 차량 상세 제원 연동
-- **GET `/ai/knowledge/search` (FR-DIAG-005)**: 지식베이스 RAG 검색
-- **GET `/external/used-car/performance/{id}` (FR-VALUE-001)**: 중고차 성능점검 기록 조회
+## 4. 정비 및 예지 (Maintenance & AI)
+
+### 4.1 진단 및 리포트
+- **POST `/ai/diagnose` (FR-DIAG-002)**: 멀티모달 진단 요청
+    - **Request (Multipart)**:
+        - `type`: "VISION" | "AUDIO" | "HYBRID"
+        - `file`: 이미지 또는 오디오 파일
+        - `obd_context`: (Optional) 최근 OBD 스냅샷
+    - **Response**: `session_id` 반환 (비동기 처리)
+- **GET `/ai/diagnose/{session_id}` (FR-DIAG-003)**: 진단 결과 상세 조회 (Polling)
+- **GET `/ai/missions/{session_id}` (FR-DIAG-004)**: 추가 증거 요청 미션 확인
+
+### 4.2 이상 감지 및 예측
+- **GET `/vehicles/{id}/anomalies` (FR-ANOMALY-001)**: 이상 징후 감지 이력
+    - **Query**: `start_date`, `end_date`, `page`, `size`
+- **GET `/vehicles/{id}/predictions` (FR-PREDICT-001)**: 소모품 수명 예측 및 교체 추천일
+    - **Response**: 부품별 `remaining_life (%)`, `predicted_date`, `wear_factor`
+
+### 4.3 차계부 (Maintenance Log)
+- **GET `/maintenance` (FR-LOG-001)**: 정비 내역 조회
+- **POST `/maintenance` (FR-LOG-002)**: 정비 내역 수동 입력 (영수증 OCR 포함)
+- **PUT `/maintenance/{log_id}` (FR-LOG-003)**: 내역 수정
+- **DELETE `/maintenance/{log_id}` (FR-LOG-004)**: 내역 삭제
+
+---
+
+## 5. 부가 기능 (Features)
+- **GET `/notifications` (FR-NOTI-002)**: 알림 센터 내역 조회
+- **GET `/insights/personal` (FR-INSIGHT-001)**: 개인화 운전/정비 인사이트 조회
+- **GET `/knowledge/search` (FR-RAG-001)**: 자동차 Q&A (RAG 검색)
+
+---
+---
+
+# Part 2. Backend ↔ AI Server API (Internal)
+> **Java Backend**가 **Python AI Server**로 추론을 요청할 때 사용하는 내부 API입니다.
+> - **Base URL**: `http://ai-service:8000` (Private Network)
+> - **Protocol**: HTTP/1.1 (Wait for Response)
+
+### 1. Vision Analysis (YOLOv8)
+- **POST `/predict/vision`**
+    - **Description**: 차량 외관 이미지를 분석하여 손상 부위 탐지.
+    - **Request (Multipart)**:
+        - `file`: 이미지 파일 (Binary)
+    - **Response (JSON)**:
+        ```json
+        {
+            "status": "DAMAGED",
+            "damage_area_px": 4500,
+            "detections": [
+                {
+                    "label": "SCRATCH",
+                    "confidence": 0.92,
+                    "bbox": [120, 45, 200, 150] // [x, y, w, h]
+                }
+            ],
+            "processed_image_url": "s3://..."
+        }
+        ```
+
+### 2. Audio Diagnosis (AST)
+- **POST `/predict/audio`**
+    - **Description**: 엔진/부품 소리를 분석하여 이상 유무 및 원인 판별.
+    - **Request (Multipart)**:
+        - `file`: 오디오 파일 (.wav, .m4a)
+        - `sampling_rate`: 16000 (Optional)
+    - **Response (JSON)**:
+        ```json
+        {
+            "primary_status": "FAULTY",
+            "component": "ENGINE_BELT",
+            "detail": {
+                "diagnosed_label": "SLIP_NOISE",
+                "description": "구동 벨트 장력 부족 의심"
+            },
+            "confidence": 0.88,
+            "is_critical": false
+        }
+        ```
+
+### 3. Anomaly Detection (LSTM-AE)
+- **POST `/predict/anomaly`**
+    - **Description**: 시계열 OBD 데이터를 분석하여 이상 징후 패턴 감지.
+    - **Request (JSON)**:
+        ```json
+        {
+            "time_series": [
+                { "rpm": 2500, "load": 45.5, "coolant": 92.0, "voltage": 13.5 },
+                { "rpm": 2510, "load": 46.0, "coolant": 92.1, "voltage": 13.4 },
+                ... // (60 items for 60s window)
+            ]
+        }
+        ```
+    - **Response (JSON)**:
+        ```json
+        {
+            "is_anomaly": true,
+            "anomaly_score": 0.85,
+            "threshold": 0.70,
+            "contributing_factors": ["RPM", "VOLTAGE"]
+        }
+        ```
+
+### 4. Wear Factor Prediction (XGBoost)
+- **POST `/predict/wear-factor`**
+    - **Description**: 차량 누적 데이터 및 운전 습관을 기반으로 소모품 노화 계수 예측.
+    - **Request (JSON)**:
+        ```json
+        {
+            "vehicle_metadata": {
+                "model_year": 2020,
+                "fuel_type": "GASOLINE",
+                "total_mileage": 52000
+            },
+            "driving_habits": {
+                "avg_rpm": 2200,
+                "hard_accel_count": 15,
+                "hard_brake_count": 8,
+                "idle_ratio": 0.15
+            }
+        }
+        ```
+    - **Response (JSON)**:
+        ```json
+        {
+            "predicted_wear_factor": 1.15, // 표준 대비 1.15배 빠르게 마모 중
+            "model_version": "v1.0.2"
+        }
+        ```
