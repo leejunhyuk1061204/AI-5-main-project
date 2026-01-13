@@ -2,9 +2,9 @@ package kr.co.himedia.backend.Service.auth;
 
 import kr.co.himedia.backend.DTO.auth.SignupRequest;
 import kr.co.himedia.backend.DTO.auth.UserResponse;
+import kr.co.himedia.backend.Entity.User;
 import kr.co.himedia.backend.DTO.auth.LoginRequest;
 import kr.co.himedia.backend.DTO.auth.TokenResponse;
-import kr.co.himedia.backend.domain.user.User;
 import kr.co.himedia.backend.Repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;

@@ -1,6 +1,6 @@
 package kr.co.himedia.backend.Repository;
 
-import kr.co.himedia.backend.domain.user.User;
+import kr.co.himedia.backend.Entity.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.Optional;

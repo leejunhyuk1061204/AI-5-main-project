@@ -1,4 +1,4 @@
-package kr.co.himedia.backend.domain.user;
+package kr.co.himedia.backend.Entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
