@@ -35,7 +35,6 @@
 | **user_settings** | user_id | UUID | PK, FK | 사용자 식별자 (users.user_id) |
 | | noti_maintenance | BOOLEAN | DEFAULT TRUE | 정비/소모품 알림 수신 여부 |
 | | noti_anomaly | BOOLEAN | DEFAULT TRUE | 실시간 이상감지 알림 수신 여부 |
-| | noti_recall | BOOLEAN | DEFAULT TRUE | 리콜 및 정기점검 알림 수신 여부 |
 | | noti_marketing | BOOLEAN | DEFAULT FALSE | 마케팅 알림 수신 여부 |
 | | night_push_allowed| BOOLEAN | DEFAULT FALSE | 야간 푸시 제한 여부 |
 
@@ -46,8 +45,8 @@
 |:---|:---|:---|:---|:---|
 | **cloud_accounts** | account_id | UUID | PK | 식별자 |
 | | user_id | UUID | FK | 사용자 식별자 |
-| | provider | VARCHAR(50) | | 제조사 (HYUNDAI, KIA, TESLA 등) |
-| | provider_user_id | VARCHAR(255) | | 제조사 측 사용자 식별 ID |
+| | provider | VARCHAR(50) | | 제조사 (HYUNDAI, KIA, TESLA 등) - Via High Mobility |
+| | provider_user_id | VARCHAR(255) | | High Mobility 사용자 식별 ID |
 | | access_token | TEXT | | 암호화된 Access Token |
 | | refresh_token | TEXT | | 암호화된 Refresh Token |
 | | expires_at | TIMESTAMP | | 토큰 만료 일시 |
@@ -59,15 +58,18 @@
 | | user_id | UUID | FK | 소유주 (users.user_id) |
 | | vin | VARCHAR(255) | UK | 차대번호 (암호화, 어댑터 미연동 시 NULL 가능) |
 | | car_number | VARCHAR(20) | | 차량 번호 (예: 123가 4567) |
-| | manufacturer | VARCHAR(50) | | 제조사 (Hyundai, Tesla 등) |
-| | model_name | VARCHAR(100) | | 상세 모델명 |
+| | manufacturer | VARCHAR(50) | | 제조사 (예: Hyundai) |
+| | model_name | VARCHAR(100) | | 모델명 (예: Sonata) |
+| | model_year | INT | | 차량 연식 (예: 2023) |
 | | fuel_type | ENUM | | GASOLINE / DIESEL / EV / HEV / LPG |
-| | total_mileage | FLOAT | DEFAULT 0 | 현재 누적 주행거리 (km) |
-| | is_primary | BOOLEAN | DEFAULT FALSE | 사용자의 대표(기본) 차량 여부 (FR-CAR-005) |
-| | registration_source| ENUM | | 등록 경로 (MANUAL / OBD / CLOUD) |
-| | cloud_linked | BOOLEAN | DEFAULT FALSE | 제조사 클라우드 API 연동 여부 |
+| | total_mileage | FLOAT | DEFAULT 0 | 누적 주행거리 (km) |
+| | is_primary | BOOLEAN | DEFAULT FALSE | 대표 차량 여부 |
+| | registration_source | ENUM | | MANUAL / OBD / CLOUD |
+| | cloud_linked | BOOLEAN | DEFAULT FALSE | 클라우드 계정 연동 여부 |
 | | created_at | TIMESTAMP | DEFAULT NOW() | 등록 일시 |
 | | deleted_at | TIMESTAMP | | 삭제 일시 (Soft Delete) |
+
+
 
 ### 2.2 텔레메트리 (Telemetry)
 차량 주행 중 발생하는 데이터와 제조사 클라우드 동기화 데이터를 관리합니다.
@@ -89,7 +91,7 @@
 | | json_extra | JSONB | | 연료량/제조사별 특화 데이터 (EV SoC 등) |
 
 #### 2.2.2 클라우드 동기화 데이터 (cloud_telemetry)
-*제조사 API(Smartcar 등)를 통해 정기적으로 가져오는 공식 상태 정보.*
+*제조사 API(High Mobility)를 통해 정기적으로 가져오는 공식 상태 정보.*
 
 | 테이블명 | 컬럼명 | 타입 | 제약조건 | 설명 |
 |:---|:---|:---|:---|:---|
@@ -114,6 +116,13 @@
 | | average_speed | FLOAT | | 평균 속도 |
 | | top_speed | FLOAT | | 최고 속도 |
 | | fuel_consumed | FLOAT | | 소모 연료량 추정치 |
+| | min_battery_voltage | FLOAT | | 시동 시 최저 전압 (배터리 수명 예측용) |
+| | max_coolant_temp | FLOAT | | 주행 중 최고 냉각수 온도 (과열 이력) |
+| | avg_fuel_trim | FLOAT | | 평균 연료 보정값 (흡기/누유 추적) |
+| | max_engine_load | FLOAT | | 최대 엔진 부하 (엔진 피로도 관리) |
+| | idle_time | INT | | 공회전 시간 (초) - 정차 비율 계산용 |
+| | hard_accel_count | INT | | 급가속 횟수 (운전 습관) |
+| | hard_brake_count | INT | | 급감속 횟수 (브레이크 수명 예측) |
 
 ### 2.3 AI 진단 및 증거 (Diagnosis & AI)
 AI 모델의 분석 과정과 최종 리포트를 관리합니다.
@@ -235,8 +244,9 @@ AI 예측 데이터(`consumables_state`)와 연동되는 핵심 항목들은 드
 | | is_read | BOOLEAN | DEFAULT FALSE | 읽음 여부 |
 | | created_at | TIMESTAMP | | 발송 시각 |
 | **knowledge_vectors** | knowledge_id | UUID | PK | 식별자 |
-| | category | VARCHAR(20) | | MANUAL / RECALL / DTC_GUIDE / CASE_STUDY / PART_INFO |
+| | category | VARCHAR(20) | | MANUAL / DTC_GUIDE / CASE_STUDY / PART_INFO |
 | | content | TEXT | | 원문 텍스트 |
+| | metadata | JSONB | | { manufacturer, model, year, source, page, dtc_code } |
 | | embedding | VECTOR(1536) | | OpenAI 임베딩 벡터 (pgvector) |
 
 ### 2.6 외부 API 연동 및 상세 정보 (External & Detailed)
@@ -259,48 +269,28 @@ AI 예측 데이터(`consumables_state`)와 연동되는 핵심 항목들은 드
 | | official_fuel_economy| FLOAT | | 공인 연비 (km/L) |
 | | last_updated | TIMESTAMP | | 동기화 시각 |
 
-#### 2.6.2 리콜 상세 정보 (vehicle_recalls - FR-RECALL-001)
-| 테이블명 | 컬럼명 | 타입 | 제약조건 | 설명 |
-|:---|:---|:---|:---|:---|
-| **vehicle_recalls** | recall_id | UUID | PK | 식별자 |
-| | vehicles_id | UUID | FK | 차량 식별자 |
-| | recall_title | VARCHAR(255) | | 리콜 명칭 (예: 고전압 배터리 제어기) |
-| | component | VARCHAR(100) | | 대상 부품 명칭 |
-| | recall_reason | TEXT | | 리콜 사유 및 상세 내용 |
-| | status | ENUM | | 미조치(OPEN) / 완료(CLOSED) |
-| | recall_date | DATE | | 리콜 개시일 |
-| | inspection_center | VARCHAR(100) | | 점검/수리 기관 정보 |
 
-#### 2.6.3 정기 및 종합검사 정보 (vehicle_inspections - FR-RECALL-002)
-| 테이블명 | 컬럼명 | 타입 | 제약조건 | 설명 |
-|:---|:---|:---|:---|:---|
-| **vehicle_inspections** | inspection_id | UUID | PK | 식별자 |
-| | vehicles_id | UUID | FK | 차량 식별자 |
-| | inspection_type | ENUM | | 정기(REGULAR) / 종합(TOTAL) |
-| | validity_start_date | DATE | | 유효기간 시작일 |
-| | validity_end_date | DATE | | 유효기간 종료일 |
-| | result | VARCHAR(50) | | 검사 결과 (합격/불합격) |
-| | next_inspection_date| DATE | | 차기 검사 예정일 |
-
-#### 2.6.4 중고차 성능상태점검 기록 (used_car_performance_records - FR-VALUE-001)
-| 테이블명 | 컬럼명 | 타입 | 제약조건 | 설명 |
-|:---|:---|:---|:---|:---|
-| **used_car_performance_records** | record_id | UUID | PK | 식별자 |
-| | vehicles_id | UUID | FK | 차량 식별자 |
-| | inspection_date | DATE | | 점검 완료일 |
-| | mileage_at_work | FLOAT | | 점검 당시 주행거리 |
-| | accident_history | BOOLEAN | | 사고 유무 |
-| | flooding_history | BOOLEAN | | 침수 이력 |
-| | frame_damage | JSONB | | 주요 프레임(뼈대) 손상 여부 상세 |
-| | engine_transmission | ENUM | | 동력계 상태 (양호/보통/불량) |
-| | oil_leak | ENUM | | 누유/미세누유 점검 결과 |
-| | inspection_sheet_url| TEXT | | 성능점검표 원본 이미지(S3) |
 
 
 
 ---
 
-### 2.7 실시간 이상 감지 이력 (anomaly_records - FR-ANOMALY)
+### 2.7 차량 마스터 데이터 (Reference Data)
+사용자에게 수동 등록(Track B) 시 제공할 제조사 및 차량 모델 표준 정보입니다. 프론트엔드 캐싱을 위해 단순한 구조로 설계합니다.
+
+| 테이블명 | 컬럼명 | 타입 | 제약조건 | 설명 |
+|:---|:---|:---|:---|:---|
+| **car_model_master** | model_id | INT | PK | 식별자 (Auto Increment) |
+| | manufacturer | VARCHAR(50) | | 제조사 (예: Hyundai, Kia) |
+| | model_name | VARCHAR(100) | | 모델명 (예: Grandeur IG) |
+| | model_year | INT | | 연식 (예: 2020) |
+| | fuel_type | VARCHAR(20) | | 유종 (Gasoline/Diesel/LPG/HEV/EV) |
+| | displacement | INT | | 배기량 (cc) - 자동차세/연비 기준 |
+| | spec_json | JSONB | | 기타 제원 (탱크용량, 타이어규격 등) |
+
+---
+
+### 2.8 실시간 이상 감지 이력 (anomaly_records - FR-ANOMALY)
 OBD 표준 DTC 외에 AI가 실시간으로 감지한 핵심 이상 징후를 기록합니다. 시계열 데이터 삭제(7일) 대비 영구 보존용 '사건 하이라이트' 역할을 합니다.
 
 | 테이블명 | 컬럼명 | 타입 | 제약조건 | 설명 |
@@ -376,12 +366,9 @@ AI가 분석한 주행/정비 리포트(미니 보고서) 전문을 관리합니
     - `RESOLVED`: 정비 이력(`maintenance_logs`)이 등록되거나, 일정 주행 기간 동안 해당 DTC가 재발생하지 않음을 AI가 확인했을 때의 상태.
 - **재확인 로직**: '삭제'된 DTC가 다시 감지될 경우, 신규 레코드가 아닌 기존 레코드와의 연관성을 분석하여 '미결된 고장'으로 리스크 가중치를 부여합니다.
 
-#### 3.4.4 정비 이력 중복 제거 및 병합 (Deduplication)
-- **매칭 기준**: 동일 차량(`vehicles_id`) + 동일 정비 항목 + 정비 날짜 오차범위 `±3일` 이내.
-- **병합 규칙 (Merge Policy)**:
-    - **공식 데이터 우선**: 정비 일자, 비용, 정비소 명칭, 주행거리는 **공공 API 데이터**를 우선 적용함.
-    - **통합 보존**: 사용자가 입력한 메모, 영수증 사진 등은 삭제하지 않고 병합된 레코드에 유지함.
-    - **상태 변화**: 병합 성공 시 해당 이력은 '사용자 인증'에서 **'공식 인증됨'** 상태로 변경됨.
+#### 3.4.4 정비 이력 관리 (Single Source)
+- **원칙**: 공공 데이터와의 병합 로직을 폐기하고, 사용자의 **수동 입력**(`maintenance_logs`)을 유일한, 신뢰할 수 있는 관리 기준으로 삼습니다.
+- **데이터 풍부성**: 사용자가 입력한 가격, 메모, 사진 등은 소모품 주기 예측의 핵심 학습 데이터로 보존합니다.
 
 #### 3.4.5 커넥션 풀 및 트랜잭션 정책
 - **원칙**: 모든 원격 호출(AI 서버, 클라우드 API) 시 DB 트랜잭션을 점유하지 않음.
@@ -412,6 +399,20 @@ AI가 분석한 주행/정비 리포트(미니 보고서) 전문을 관리합니
 1.  **Soft Delete 적용**: 사용자의 서비스 탈퇴 또는 차량 삭제 시에도 DB의 `deleted_at` 컬럼만 업데이트하며, 로우(Row) 자체는 삭제하지 않습니다.
 2.  **AI 재학습 활용**: 삭제 처리된 데이터는 서비스 운영 목적에서는 제외되나, **개인식별정보(Email, VIN, 차번호 등)를 제거(Anonymization)**한 후 AI 모델의 고도화 및 학습용 데이터셋으로 영구 보존하여 활용합니다.
 3.  **데이터 무결성**: 시계열 데이터(`obd_logs`) 역시 7일 후 핫 스토리지에서 삭제되기 전, 반드시 `trip_summaries` 및 `ai_evidences`로 유의미한 정보가 추출/정제되었음을 보장해야 합니다.
+
+---
+
+## 5. 인메모리 데이터 전략 (Redis)
+
+Redis는 빈번한 데이터 조회 성능을 높이고, 세션 및 실시간 데이터 버퍼링을 위해 사용됩니다.
+
+| Key Pattern | Type | TTL | 용도 | 예시 |
+|:---|:---|:---|:---|:---|
+| `session:refresh:{user_id}` | String | 14일 | Refresh Token 저장 (보안) | `session:refresh:u123` |
+| `telemetry:buffer:{vin}` | List | 10분 | 실시간 OBD/Cloud 데이터 버퍼링 | `telemetry:buffer:K123...` |
+| `vehicle:spec:{vin}` | Hash | 24시간 | 차량 제원 캐싱 (API 호출 최소화) | `vehicle:spec:K123...` |
+| `auth:blacklist:{token}` | String | 남은 만료시간 | 로그아웃된 Access Token 차단 | `auth:blacklist:eyJ...` |
+
 
 ---
 **[문서 끝]**
