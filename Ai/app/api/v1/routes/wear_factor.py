@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException
-from Ai.app.schemas.wear_factor import WearFactorRequest, WearFactorResponse
+from ai.app.schemas.wear_factor import WearFactorRequest, WearFactorResponse
 from datetime import date
 import random
 
@@ -18,8 +18,7 @@ def predict_wear_factor(req: WearFactorRequest):
 
     # 전처리 최소 구현(feature)
     usage_mileage = total_mileage - replaced_mileage
-    days_since_last_replaced = (date.today() - req.last_replaced.date).days
-
+    days_since_last_replaced = (date.today() - req.last_replaced.replaced_date).days
     wear_factor = round(random.uniform(0.8, 1.5), 2)
 
     return WearFactorResponse(
