@@ -1,14 +1,16 @@
-from fastapi import APIRouter, UploadFile, File, Depends
-from ai.app.schemas.vision import VisionResponse
-from ai.app.services.vision_service import VisionService
+# app/api/v1/routes/visual_router.py
+from fastapi import APIRouter
+from app.schemas.visual_schema import VisionResponse
+from app.services.visual_service import get_smart_visual_diagnosis # 스마트 라우팅 서비스
 
-# 1. URL 맞추기: /predict/vision이 되도록 설정
 router = APIRouter(prefix="/predict", tags=["Vision Analysis"])
 
-# --- API 엔드포인트 ---
-@router.post("/vision", response_model=VisionResponse) # 최종 주소: /predict/vision
-async def analyze_vision(
-    file: UploadFile = File(...),
-    service: VisionService = Depends()
-):
-    return await service.predict_vision(file)
+@router.post("/vision", response_model=VisionResponse)
+async def analyze_vision(s3_url: str): # S3 URL을 인자로 받음
+    print(f"[Vision Router] Received S3 URL: {s3_url}")
+    
+    # 이전에 만든 YOLO -> LLM 판단 로직이 담긴 서비스를 호출합니다.
+    result = await get_smart_visual_diagnosis(s3_url)
+    
+    # 서비스 결과(dict)를 Response 모델 형식에 맞춰 반환
+    return result["data"]
