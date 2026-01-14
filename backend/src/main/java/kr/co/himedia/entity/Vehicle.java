@@ -62,6 +62,9 @@ public class Vehicle {
     @Column(name = "memo", columnDefinition = "TEXT")
     private String memo;
 
+    @Column(name = "obd_device_id", length = 100)
+    private String obdDeviceId;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
@@ -72,7 +75,7 @@ public class Vehicle {
     @Builder
     public Vehicle(UUID userId, String vin, String carNumber, String manufacturer, String modelName,
             Integer modelYear, FuelType fuelType, Double totalMileage, Boolean isPrimary,
-            RegistrationSource registrationSource, String nickname, String memo) {
+            RegistrationSource registrationSource, String nickname, String memo, String obdDeviceId) {
         this.userId = userId;
         this.vin = vin;
         this.carNumber = carNumber;
@@ -86,6 +89,7 @@ public class Vehicle {
         this.cloudLinked = false; // Default
         this.nickname = nickname;
         this.memo = memo;
+        this.obdDeviceId = obdDeviceId;
     }
 
     public void updateInfo(String nickname, String memo) {

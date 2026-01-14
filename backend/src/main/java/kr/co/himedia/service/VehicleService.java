@@ -32,6 +32,20 @@ public class VehicleService {
         return VehicleDto.Response.from(savedVehicle);
     }
 
+    @Transactional
+    public VehicleDto.Response registerVehicleByObd(UUID userId, VehicleDto.ObdRegistrationRequest request) {
+        // 첫 차량 등록 시 자동으로 대표 차량으로 설정
+        boolean hasVehicles = !vehicleRepository.findByUserIdAndDeletedAtIsNull(userId).isEmpty();
+
+        Vehicle vehicle = request.toEntity(userId);
+        if (!hasVehicles) {
+            vehicle.setPrimary(true);
+        }
+
+        Vehicle savedVehicle = vehicleRepository.save(vehicle);
+        return VehicleDto.Response.from(savedVehicle);
+    }
+
     public List<VehicleDto.Response> getVehicleList(UUID userId) {
         return vehicleRepository.findByUserIdAndDeletedAtIsNull(userId).stream()
                 .map(VehicleDto.Response::from)

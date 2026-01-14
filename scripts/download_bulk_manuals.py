@@ -41,43 +41,43 @@ TARGETS = [
     ("Kia", "2013", "Rio%20L4-1.6L"),                   # 프라이드
     
     # === BMW ===
-    ("BMW", "2012", "328i%20L4-2.0L%20Turbo"),          # 3시리즈 (F30)
-    ("BMW", "2012", "528i%20L4-2.0L%20Turbo"),          # 5시리즈 (F10)
-    ("BMW", "2011", "X5%20xDrive35i%20L6-3.0L%20Turbo"), # X5 (E70)
-    ("BMW", "2012", "750Li%20V8-4.4L%20Turbo"),         # 7시리즈 (F02)
+    ("BMW", "2012", "328i%20Sedan%20%28F30%29%20L4-2.0L%20Turbo%20%28N20%29"),
+    ("BMW", "2012", "528i%20Sedan%20%28F10%29%20L4-2.0L%20Turbo%20%28N20%29"),
+    ("BMW", "2011", "X5%20xDrive35i%20%28E70%29%20L6-3.0L%20Turbo%20%28N55%29"),
+    ("BMW", "2012", "750Li%20%28F02%29%20V8-4.4L%20Turbo%20%28N63%29"),
     
-    # === Mercedes-Benz ===
-    ("Mercedes-Benz", "2012", "C250%20L4-1.8L%20Turbo"), # C클래스 (W204)
-    ("Mercedes-Benz", "2012", "E350%20V6-3.5L"),         # E클래스 (W212)
-    ("Mercedes-Benz", "2012", "S550%20V8-4.6L%20Turbo"), # S클래스 (W221)
-    ("Mercedes-Benz", "2013", "GLK350%20V6-3.5L"),       # GLK
+    # === Mercedes-Benz (Listing name is "Mercedes Benz") ===
+    ("Mercedes%20Benz", "2012", "C%20250%20Sedan%20%28204.047%29%20L4-1.8L%20Turbo%20%28271.860%29"),
+    ("Mercedes%20Benz", "2012", "E%20350%20Sedan%20%28212.059%29%20V6-3.5L%20%28276.952%29"),
+    ("Mercedes%20Benz", "2012", "S%20550%20%28221.173%29%20V8-4.6L%20Turbo%20%28278.932%29"),
+    ("Mercedes%20Benz", "2013", "GLK%20350%204MATIC%20%28204.988%29%20V6-3.5L%20%28276.957%29"),
     
     # === Audi ===
-    ("Audi", "2012", "A4%20L4-2.0L%20Turbo"),            # A4
-    ("Audi", "2012", "A6%20V6-3.0L%20Turbo"),            # A6
-    ("Audi", "2012", "Q5%20V6-3.2L"),                    # Q5
+    ("Audi", "2012", "A4%20Sedan%20%288K2%29%20L4-2.0L%20Turbo%20%28CAEB%29"),
+    ("Audi", "2012", "A6%20Sedan%20%284G2%29%20V6-3.0L%20Turbo%20%28CGXB%29"),
+    ("Audi", "2012", "Q5%20%288RB%29%20V6-3.2L%20%28CALB%29"),
     
     # === Lexus ===
-    ("Lexus", "2012", "ES350%20V6-3.5L"),               # ES350
-    ("Lexus", "2012", "RX350%20V6-3.5L"),               # RX350
+    ("Lexus", "2012", "ES%20350%20V6-3.5L%20%282GR-FE%29"),
+    ("Lexus", "2012", "RX%20350%20AWD%20V6-3.5L%20%282GR-FE%29"),
     
     # === Volkswagen ===
-    ("Volkswagen", "2012", "Tiguan%20L4-2.0L%20Turbo"),  # 티구안
-    ("Volkswagen", "2012", "Golf%20L4-2.0L%20Turbo"),    # 골프
-    ("Volkswagen", "2012", "Passat%20L4-2.0L%20Turbo"),  # 파사트
+    ("Volkswagen", "2012", "Tiguan%20%285N1%29%20L4-2.0L%20Turbo%20%28CCTA%29"),
+    ("Volkswagen", "2012", "Golf%20%285K1%29%20L4-2.0L%20DSL%20Turbo%20%28CJAA%29"),
+    ("Volkswagen", "2012", "Passat%20Sedan%20%28A32%29%20L4-2.0L%20DSL%20Turbo%20%28CKRA%29"),
     
     # === Chevrolet (한국GM 공용 모델 중심) ===
-    ("Chevrolet", "2012", "Cruze%20L4-1.4L%20Turbo"),    # 크루즈
-    ("Chevrolet", "2013", "Malibu%20L4-2.5L"),           # 말리부
-    ("Chevrolet", "2012", "Spark%20L4-1.2L"),            # 스파크
-    ("Chevrolet", "2012", "Equinox%20L4-2.4L"),          # 에퀴녹스 (캡티바 유사)
+    ("Chevrolet", "2012", "Cruze%20L4-1.4L%20Turbo"),
+    ("Chevrolet", "2013", "Malibu%20L4-2.5L"),
+    ("Chevrolet", "2012", "Spark%20L4-1.2L"),
+    ("Chevrolet", "2012", "Equinox%20AWD%20L4-2.4L"),
     
     # === Toyota ===
-    ("Toyota", "2012", "Camry%20L4-2.5L"),              # 캠리
-    ("Toyota", "2012", "Prius%20L4-1.8L"),              # 프리우스
+    ("Toyota", "2012", "Camry%20L4-2.5L%20%282AR-FE%29"),
+    ("Toyota", "2012", "Prius%20L4-1.8L%20%282ZR-FXE%29"),
     
     # === Ford ===
-    ("Ford", "2013", "Explorer%20V6-3.5L"),              # 익스플로러
+    ("Ford", "2013", "Explorer%204WD%20V6-3.5L"),
 ]
 
 def download_zip(brand, year, model):

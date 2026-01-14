@@ -1,0 +1,18 @@
+[
+    {
+        "timestamp": "2024-05-20T10:00:00",
+        "vehicleId": "72fea470-35d5-4394-9cf7-fa70e3ef78c3",
+        "rpm": 2500.5,
+        "speed": 80.0,
+        "voltage": 13.5,
+        "coolantTemp": 90.0
+    },
+    {
+        "timestamp": "2024-05-20T10:00:01",
+        "vehicleId": "72fea470-35d5-4394-9cf7-fa70e3ef78c3",
+        "rpm": 2510.0,
+        "speed": 81.0,
+        "voltage": 13.4,
+        "coolantTemp": 90.5
+    }
+]
