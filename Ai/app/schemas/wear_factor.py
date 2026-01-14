@@ -3,6 +3,7 @@ from datetime import date as Date
 from pydantic import BaseModel, Field, ConfigDict
 
 
+
 class TargetItem(str, Enum):
     ENGINE_OIL = "ENGINE_OIL"
     BRAKE_PADS = "BRAKE_PADS"
@@ -22,6 +23,7 @@ class LastReplaced(BaseModel):
 
     # alias로 들어온 값을 그대로 파싱 허용
     model_config = ConfigDict(populate_by_name=True)
+
 
 
 class VehicleMetadata(BaseModel):
