@@ -402,16 +402,8 @@ AI가 분석한 주행/정비 리포트(미니 보고서) 전문을 관리합니
 
 ---
 
-## 5. 인메모리 데이터 전략 (Redis)
-
-Redis는 빈번한 데이터 조회 성능을 높이고, 세션 및 실시간 데이터 버퍼링을 위해 사용됩니다.
-
-| Key Pattern | Type | TTL | 용도 | 예시 |
-|:---|:---|:---|:---|:---|
-| `session:refresh:{user_id}` | String | 14일 | Refresh Token 저장 (보안) | `session:refresh:u123` |
-| `telemetry:buffer:{vin}` | List | 10분 | 실시간 OBD/Cloud 데이터 버퍼링 | `telemetry:buffer:K123...` |
-| `vehicle:spec:{vin}` | Hash | 24시간 | 차량 제원 캐싱 (API 호출 최소화) | `vehicle:spec:K123...` |
-| `auth:blacklist:{token}` | String | 남은 만료시간 | 로그아웃된 Access Token 차단 | `auth:blacklist:eyJ...` |
+## 5. 인메모리 데이터 전략 (Redis) - **[MVP 제외]**
+> **Note**: 초기 단계에서는 Redis를 도입하지 않고, 모든 상태 관리를 DB 및 메모리(JVM) 레벨에서 처리합니다. 대규모 트래픽 발생 시 도입을 재검토합니다.
 
 
 ---
