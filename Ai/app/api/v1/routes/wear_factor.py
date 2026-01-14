@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException
-from Ai.app.schemas.wear_factor import WearFactorRequest, WearFactorResponse
+from ai.app.schemas.wear_factor import WearFactorRequest, WearFactorResponse
 from datetime import date
 import random
 

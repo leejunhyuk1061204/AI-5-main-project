@@ -1,5 +1,5 @@
 from enum import Enum
-from datetime import date
+from datetime import date as dt_date
 from pydantic import BaseModel, Field
 
 
@@ -17,7 +17,7 @@ class FuelType(str, Enum):
 
 
 class LastReplaced(BaseModel):
-    date: date = Field(..., description="YYYY-MM-DD")
+    date: dt_date = Field(..., description="YYYY-MM-DD")
     mileage: int = Field(..., ge=0)
 
 
