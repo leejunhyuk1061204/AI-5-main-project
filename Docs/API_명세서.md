@@ -1,7 +1,7 @@
 # API 상세 명세서 (v2.0)
 
 > **문서 개요**: 본 문서는 시스템 간 통신 규격을 정의하며, 크게 **Client(App) ↔ Backend(Java)** 와 **Backend(Java) ↔ AI Server(Python)** 두 가지 파트로 나뉩니다.
-> **RabbitMQ** 및 **Redis**는 내부 인프라 통신용이므로 본 REST API 명세에는 포함되지 않습니다.
+> **RabbitMQ**는 내부 인프라 통신용이므로 본 REST API 명세에는 포함되지 않습니다.
 
 ---
 
@@ -55,7 +55,7 @@
 ## 3. 텔레메트리 및 운전 분석 (Telemetry)
 
 ### 3.1 주행 데이터
-- **POST `/telemetry/obd` (FR-OBD-001)**: [앱→서버] 실시간 OBD 로그 배치 업로드 (1Hz 데이터 묶음)
+- **POST `/telemetry/batch` (FR-OBD-001)**: [앱→서버] OBD 로그 배치 업로드 (3분 주기)
     - **Body**: `[{timestamp, rpm, speed, ...}, ...]`
 - **GET `/trips` (FR-DRIVE-002)**: 주행 이력 목록 조회 (기간 필터)
 - **GET `/trips/{trip_id}` (FR-DRIVE-003)**: 상세 주행 리포트 (경로, 운전점수, 급가속 횟수 등)
@@ -175,6 +175,11 @@
     - **Request (JSON)**:
         ```json
         {
+            "target_item": "ENGINE_OIL", // [Add] 예측 대상 (ENGINE_OIL, BRAKE_PADS, TIRES 등)
+            "last_replaced": {           // [Add] 마지막 교체 시점
+                "date": "2025-06-01",
+                "mileage": 48000         // [Check] 교체 당시 총 주행거리 (누적값) -> 현재-이거 = 사용량
+            },
             "vehicle_metadata": {
                 "model_year": 2020,
                 "fuel_type": "GASOLINE",
