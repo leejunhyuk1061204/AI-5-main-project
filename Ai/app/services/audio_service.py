@@ -1,8 +1,8 @@
 # app/services/audio_service.py
-from app.services.hertz import process_to_16khz
-from app.services.ast_service import run_ast_inference
-from app.services.llm_service import analyze_audio_with_llm
-from app.schemas.audio_schema import AudioResponse, AudioDetail
+from ai.app.services.hertz import process_to_16khz
+from ai.app.services.ast_service import run_ast_inference
+from ai.app.services.llm_service import analyze_audio_with_llm
+from ai.app.schemas.audio_schema import AudioResponse, AudioDetail
 
 class AudioService:
     async def predict_audio_smart(self, s3_url: str) -> AudioResponse:
