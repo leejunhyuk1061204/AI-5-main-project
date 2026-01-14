@@ -1,38 +1,16 @@
-from fastapi import APIRouter, UploadFile, File
-from pydantic import BaseModel
-from typing import List, Optional
+# app/api/v1/routes/visual_router.py
+from fastapi import APIRouter
+from ai.app.schemas.visual_schema import VisionResponse
+from ai.app.services.visual_service import get_smart_visual_diagnosis # 스마트 라우팅 서비스
 
-# 1. URL 맞추기: /predict/vision이 되도록 설정
 router = APIRouter(prefix="/predict", tags=["Vision Analysis"])
 
-# --- 명세서에 맞춘 Output 구조 ---
-class DetectionItem(BaseModel):
-    label: str          # "SCRATCH" (대문자)
-    confidence: float   # 0.92
-    bbox: List[int]     # [x, y, w, h]
-    # damage_area_px는 여기서 빠지고 전체 요약으로 이동했습니다.
-
-class VisionResponse(BaseModel):
-    status: str         # "DAMAGED" (대문자)
-    damage_area_px: int # 전체 파손 면적 (Root 레벨로 이동)
-    detections: List[DetectionItem]
-    processed_image_url: Optional[str] = None # S3 주소 (없을 수도 있으니 Optional)
-
-# --- API 엔드포인트 ---
-@router.post("/vision", response_model=VisionResponse) # 최종 주소: /predict/vision
-async def analyze_vision(file: UploadFile = File(...)):
-    print(f"Received image: {file.filename}")
+@router.post("/vision", response_model=VisionResponse)
+async def analyze_vision(s3_url: str): # S3 URL을 인자로 받음
+    print(f"[Vision Router] Received S3 URL: {s3_url}")
     
-    # [Mock Data] 명세서와 똑같은 가짜 데이터 리턴
-    return VisionResponse(
-        status="DAMAGED",       # 명세서는 대문자 원함
-        damage_area_px=4500,    # 전체 파손 면적
-        detections=[
-            DetectionItem(
-                label="SCRATCH",
-                confidence=0.92,
-                bbox=[120, 45, 200, 150]
-            )
-        ],
-        processed_image_url="s3://car-sentry-bucket/processed/img_001.jpg" # 임시 주소
-    )
+    # 이전에 만든 YOLO -> LLM 판단 로직이 담긴 서비스를 호출합니다.
+    result = await get_smart_visual_diagnosis(s3_url)
+    
+    # 서비스 결과(dict)를 Response 모델 형식에 맞춰 반환
+    return result["data"]

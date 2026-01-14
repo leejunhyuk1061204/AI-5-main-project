@@ -2,10 +2,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
-from Ai.app.api.v1.routes.health import router as health_router
-from Ai.app.api.v1.routes.router import router as predict_router
-from Ai.app.api.v1.routes.visual_router import router as vision_router
-from Ai.app.api.v1.routes.audio_router import router as audio_router
+from ai.app.api.v1.routes.health import router as health_router
+from ai.app.api.v1.routes.router import router as predict_router
+from ai.app.api.v1.routes.visual_router import router as vision_router
+from ai.app.api.v1.routes.audio_router import router as audio_router
 
 
 

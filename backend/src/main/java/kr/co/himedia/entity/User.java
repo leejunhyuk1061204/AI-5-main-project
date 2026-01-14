@@ -1,12 +1,10 @@
 package kr.co.himedia.entity;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
+import jakarta.persistence.*;
 import kr.co.himedia.common.BaseEntity;
 import lombok.*;
 
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
@@ -28,6 +26,27 @@ public class User extends BaseEntity {
     @Column(name = "password_hash")
     private String passwordHash;
 
-    @Column(name = "nickname")
+    @Column(name = "nickname", length = 50)
     private String nickname;
+
+    @Column(name = "fcm_token")
+    private String fcmToken;
+
+    @Enumerated(EnumType.STRING)
+    @Builder.Default
+    @Column(name = "user_level", nullable = false)
+    private UserLevel userLevel = UserLevel.FREE;
+
+    @Column(name = "membership_expiry")
+    private LocalDateTime membershipExpiry;
+
+    @Column(name = "last_login_at")
+    private LocalDateTime lastLoginAt;
+
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
+
+    @Lob
+    @Column(name = "profile_image")
+    private byte[] profileImage;
 }
