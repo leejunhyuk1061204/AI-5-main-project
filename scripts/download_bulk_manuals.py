@@ -13,6 +13,11 @@ TARGETS = [
     ("Hyundai", "2012", "Genesis%20V6-3.8L"),           # 제네시스 BH
     ("Hyundai", "2013", "Genesis%20Coupe%20L4-2.0L%20Turbo"), # 제네시스 쿠페
     ("Hyundai", "2011", "Elantra%20L4-1.8L"),           # 아반떼 MD
+    ("Hyundai", "2012", "Elantra%20L4-1.8L"),           # 아반떼 MD (Additional)
+    ("Hyundai", "2013", "Elantra%20L4-1.8L"),           # 아반떼 MD (Additional)
+    ("Hyundai", "2011", "Sonata%20L4-2.4L"),            # 쏘나타 YF
+    ("Hyundai", "2012", "Sonata%20L4-2.4L"),            # 쏘나타 YF
+    ("Hyundai", "2013", "Sonata%20L4-2.4L"),            # 쏘나타 YF
     ("Hyundai", "2012", "Azera%20V6-3.3L"),              # 그랜저 HG
     ("Hyundai", "2013", "Equus%20V8-5.0L"),              # 에쿠스 VI
     ("Hyundai", "2013", "Santa%20Fe%20Sport%20L4-2.0L%20Turbo"), # 싼타페 DM
@@ -21,11 +26,16 @@ TARGETS = [
     ("Hyundai", "2013", "Accent%20L4-1.6L"),             # 엑센트 RB
     
     # === 기아 (Kia) ===
+    ("Kia", "2011", "Optima%20L4-2.4L"),                # K5 (Additional)
     ("Kia", "2012", "Optima%20L4-2.4L"),                # K5
+    ("Kia", "2013", "Optima%20L4-2.4L"),                # K5 (Additional)
     ("Kia", "2014", "Cadenza%20V6-3.3L"),               # K7
     ("Kia", "2012", "Forte%20L4-2.4L"),                 # 포르테
+    ("Kia", "2011", "Sorento%20V6-3.5L"),               # 쏘렌토R (Additional)
     ("Kia", "2012", "Sorento%20V6-3.5L"),               # 쏘렌토R
+    ("Kia", "2011", "Sportage%20L4-2.4L"),              # 스포티지R (Additional)
     ("Kia", "2012", "Sportage%20L4-2.4L"),              # 스포티지R
+    ("Kia", "2013", "Sportage%20L4-2.4L"),              # 스포티지R (Additional)
     ("Kia", "2012", "Soul%20L4-2.0L"),                  # 쏘울
     ("Kia", "2012", "Sedona%20V6-3.5L"),                # 카니발
     ("Kia", "2013", "Rio%20L4-1.6L"),                   # 프라이드

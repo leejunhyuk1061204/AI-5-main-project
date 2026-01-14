@@ -82,7 +82,25 @@ tasks.withType(JavaExec) {
     }
 }
 
-// Spring Boot Run 설정: .env 위치 명시
+// Spring Boot Run 설정: .env 위치 명시 + 환경변수 주입
 bootRun {
     systemProperty "dotenv.location", "../"
+    
+    // .env 파일에서 환경변수 직접 주입
+    if (file("../.env").exists()) {
+        file("../.env").readLines().each { line ->
+            if (!line.trim().isEmpty() && !line.startsWith("#")) {
+                def parts = line.split("=", 2)
+                if (parts.length == 2) {
+                    def key = parts[0].trim()
+                    def value = parts[1].trim()
+                    // 주석 제거 (값 뒤의 # 이후 내용)
+                    if (value.contains("#")) {
+                        value = value.split("#")[0].trim()
+                    }
+                    environment key, value
+                }
+            }
+        }
+    }
 }
