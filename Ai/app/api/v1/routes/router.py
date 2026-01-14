@@ -5,6 +5,7 @@ from ai.app.api.v1.routes.anomaly import router as anomaly_router
 from ai.app.api.v1.routes.wear_factor import router as wear_factor_router
 from ai.app.api.v1.routes.visual_router import router as visual_router
 
+
 router = APIRouter()
 
 router.include_router(health_router)
