@@ -1,6 +1,6 @@
 # app/services/llm_service.py
-from app.schemas.visual_schema import VisionResponse
-from app.schemas.audio_schema import AudioResponse, AudioDetail
+from ai.app.schemas.visual_schema import VisionResponse
+from ai.app.schemas.audio_schema import AudioResponse, AudioDetail
 
 async def analyze_general_image(s3_url: str) -> VisionResponse:
     """
