@@ -265,8 +265,9 @@ CREATE TABLE IF NOT EXISTS knowledge_vectors (
     knowledge_id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
     category VARCHAR(20),
     content TEXT,
-    metadata JSONB, -- 추가분: 제조사, 모델, 연식, 페이지 등 필터링용
-    embedding vector (1536)
+    metadata JSONB, -- { manufacturer, model, year, source, page, dtc_code }
+    embedding VECTOR (1024), -- 로컬 AI (mxbai-embed-large) 임베딩 벡터
+    content_hash VARCHAR(64) UNIQUE -- 중복 방지용 해시
 );
 
 CREATE INDEX IF NOT EXISTS idx_knowledge_metadata ON knowledge_vectors USING GIN (metadata);

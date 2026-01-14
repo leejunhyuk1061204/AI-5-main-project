@@ -28,93 +28,74 @@
 ## 1. 사용자 및 인증 (Auth & Users)
 
 ### 1.1 인증 (Authentication)
-- **POST `/auth/signup` (FR-USER-001)**: 회원가입 (이메일, 비밀번호, 닉네임)
-- **POST `/auth/login` (FR-USER-002)**: 로그인 (JWT Access/Refresh Token 발급)
-- **POST `/auth/refresh` (FR-USER-008)**: 토큰 갱신
-- **POST `/auth/logout` (FR-USER-007)**: 로그아웃
+- **POST `/auth/signup` (BE-AU-001)**: 회원가입 (이메일, 비밀번호, 닉네임)
+- **POST `/auth/login` (BE-AU-002)**: 로그인 (JWT Access/Refresh Token 발급)
 
 ### 1.2 사용자 정보 (User Profile)
-- **GET `/users/me` (FR-USER-003)**: 내 프로필 조회
-- **PATCH `/users/me` (FR-USER-004)**: 프로필 수정 (닉네임, FCM 토큰)
-- **POST `/users/me/password` (FR-USER-005)**: 비밀번호 변경
-- **DELETE `/users/me` (FR-USER-006)**: 회원 탈퇴
-
-### 1.3 설정 (Settings)
-- **GET `/users/me/settings` (FR-NOTI-001)**: 알림 설정 조회 (정비, 이상징후, 리콜 등)
-- **PUT `/users/me/settings` (FR-NOTI-001)**: 알림 설정 수정
+- **GET `/users/me` (BE-AU-003)**: 내 프로필 조회
+- **PATCH `/users/me` (BE-AU-004)**: 프로필 수정 (닉네임, FCM 토큰)
+- **POST `/users/me/password` (BE-AU-005)**: 비밀번호 변경
+- **DELETE `/users/me` (BE-AU-007)**: 회원 탈퇴
 
 ---
 
 ## 2. 차량 관리 (Vehicles)
 
 ### 2.1 차량 등록 및 조회
-- **POST `/vehicles` (FR-CAR-001)**: 차량 등록
-    - **Body**: `vin`(Optional), `car_number`, `manufacturer`, `model`, `year`, `fuel_type`
-- **GET `/vehicles` (FR-CAR-002)**: 보유 차량 목록 조회
-- **GET `/vehicles/{id}` (FR-CAR-003)**: 차량 상세 정보 조회
-- **PATCH `/vehicles/{id}` (FR-CAR-004)**: 차량 정보 수정 (별명, 메모)
-- **POST `/vehicles/{id}/primary` (FR-CAR-005)**: 대표 차량 설정
-- **DELETE `/vehicles/{id}` (FR-CAR-006)**: 차량 삭제
+- **POST `/vehicles` (BE-VH-001)**: 차량 수동 등록
+- **POST `/vehicles/obd` (BE-VH-002)**: OBD 기반 차량 등록 (VIN 자동 매핑)
+- **GET `/vehicles` (BE-VH-004)**: 보유 차량 목록 조회
+- **GET `/vehicles/{id}` (BE-VH-004)**: 차량 상세 정보 조회
+- **PUT `/vehicles/{id}` (BE-VH-004)**: 차량 정보 수정 (별명, 메모)
+- **PATCH `/vehicles/{id}/primary` (BE-VH-006)**: 대표 차량 설정
+- **DELETE `/vehicles/{id}` (BE-VH-007)**: 차량 삭제
 
-### 2.2 공공 데이터 및 마스터 데이터 (Data & Spec)
-- **GET `/meta/car-models` (FR-CAR-EXT-001)**: 차량 모델 마스터 데이터 전체 조회 (Track B 드롭다운용 - 제조사/모델/연식)
-- **GET `/meta/car-models` (FR-CAR-EXT-001)**: 차량 모델 마스터 데이터 전체 조회 (Track B 드롭다운용 - 제조사/모델/연식)
-    - **Strategy**: **Lazy Loading** (차량 등록 화면 진입 시 호출). 전체 목록(JSON)을 받아 프론트엔드에서 제조사 -> 모델 -> 연식 순으로 필터링.
-- **GET `/vehicles/{id}/spec` (FR-CAR-007)**: 차량 제원 상세 조회 (배기량, 연비 등 - 공공 API 캐시)
-- **GET `/vehicles/{id}/recall` (FR-RECALL-001)**: 리콜 대상 여부 및 상세 조회 (국토부 API)
-- **GET `/vehicles/{id}/inspection` (FR-INSP-001)**: 정기검사 유효기간 및 이력 조회 (교통안전공단)
-- **GET `/vehicles/{id}/performance` (FR-VALUE-001)**: 중고차 성능점검 기록 조회 (교통안전공단)
-
----
-
-## 3. 텔레메트리 및 운전 분석 (Telemetry)
-
-### 3.1 주행 데이터
-- **POST `/telemetry/batch` (FR-OBD-001)**: [앱→서버] OBD 로그 배치 업로드 (3분 주기)
-    - **Body**: `[{timestamp, rpm, speed, ...}, ...]`
-- **GET `/trips` (FR-DRIVE-002)**: 주행 이력 목록 조회 (기간 필터)
-- **GET `/trips/{trip_id}` (FR-DRIVE-003)**: 상세 주행 리포트 (경로, 운전점수, 급가속 횟수 등)
-- **GET `/telemetry/status/{vehicleId}` (FR-OBD-002)**: 차량의 실시간 연결 및 주행 상태 조회
-- **POST `/telemetry/status/{vehicleId}/disconnect` (FR-OBD-005)**: 앱에서 수동으로 연결 해제 시 현재 주행 세션 즉시 종료
-    - **Response**: `{ "success": true, ... }`
-
-### 3.2 제조사 클라우드 연동 (Cloud)
-- **POST `/cloud/connect` (FR-CLOUD-001)**: OAuth 연동 시작 (Redirect URL 반환)
-- **POST `/cloud/callback` (FR-CLOUD-002)**: 인증 코드 수신 및 토큰 교환
-- **POST `/cloud/sync` (FR-CLOUD-003)**: 데이터 수동 동기화 요청
+### 2.2 마스터 데이터 (Master Data)
+- **GET `/master/manufacturers` (BE-VH-003)**: 제조사 목록 조회 (예: Hyundai, Kia)
+- **GET `/master/models` (BE-VH-003)**: 모델 목록 조회 (파라미터: manufacturer)
 
 ---
 
 ## 4. 정비 및 예지 (Maintenance & AI)
 
 ### 4.1 진단 및 리포트
-- **POST `/ai/diagnose` (FR-DIAG-002)**: 멀티모달 진단 요청
-    - **Request (Multipart)**:
-        - `type`: "VISION" | "AUDIO" | "HYBRID"
-        - `file`: 이미지 또는 오디오 파일
-        - `obd_context`: (Optional) 최근 OBD 스냅샷
-    - **Response**: `session_id` 반환 (비동기 처리)
-- **GET `/ai/diagnose/{session_id}` (FR-DIAG-003)**: 진단 결과 상세 조회 (Polling)
-- **GET `/ai/missions/{session_id}` (FR-DIAG-004)**: 추가 증거 요청 미션 확인
+- **POST `/ai/diagnose` (BE-AI-001)**: 멀티모달 진단 요청 (진단 세션 생성)
+- **GET `/ai/diagnose/{session_id}` (BE-AI-005)**: 진단 결과 상세 조회
+- **GET `/ai/missions/{session_id}` (BE-AI-006)**: 추가 증거 요청 미션 확인
 
 ### 4.2 이상 감지 및 예측
-- **GET `/vehicles/{id}/anomalies` (FR-ANOMALY-001)**: 이상 징후 감지 이력
+- **GET `/vehicles/{id}/anomalies` (BE-TD-006)**: 이상 징후 감지 이력
     - **Query**: `start_date`, `end_date`, `page`, `size`
-- **GET `/vehicles/{id}/predictions` (FR-PREDICT-001)**: 소모품 수명 예측 및 교체 추천일
+- **GET `/vehicles/{id}/predictions` (BE-MT-002)**: 소모품 수명 예측 및 교체 추천일
     - **Response**: 부품별 `remaining_life (%)`, `predicted_date`, `wear_factor`
 
 ### 4.3 차계부 (Maintenance Log)
-- **GET `/maintenance` (FR-LOG-001)**: 정비 내역 조회
-- **POST `/maintenance` (FR-LOG-002)**: 정비 내역 수동 입력 (영수증 OCR 포함)
-- **PUT `/maintenance/{log_id}` (FR-LOG-003)**: 내역 수정
-- **DELETE `/maintenance/{log_id}` (FR-LOG-004)**: 내역 삭제
+- **GET `/maintenance` (BE-MT-001)**: 정비 내역 조회
+- **POST `/maintenance` (BE-MT-001)**: 정비 내역 수동 입력 (영수증 OCR 포함)
+- **PUT `/maintenance/{log_id}` (BE-MT-001)**: 내역 수정
+- **DELETE `/maintenance/{log_id}` (BE-MT-001)**: 내역 삭제
 
 ---
 
 ## 5. 부가 기능 (Features)
-- **GET `/notifications` (FR-NOTI-002)**: 알림 센터 내역 조회
-- **GET `/insights/personal` (FR-INSIGHT-001)**: 개인화 운전/정비 인사이트 조회
-- **GET `/knowledge/search` (FR-RAG-001)**: 자동차 Q&A (RAG 검색)
+- **GET `/notifications` (BE-NT-001)**: 알림 센터 내역 조회
+- **GET `/insights/personal` (BE-TD-008)**: 개인화 운전/정비 인사이트 조회
+- **GET `/knowledge/search` (BE-AI-005)**: 자동차 Q&A (RAG 검색)
+
+---
+
+## 3. 텔레메트리 및 운전 분석 (Telemetry)
+
+### 3.1 주행 데이터 (BE-TD-002, BE-TD-005)
+- **POST `/telemetry/batch` (BE-TD-002)**: OBD 로그 배치 업로드 (3분 주기, 자동 통계 업데이트)
+- **GET `/telemetry/status/{vehicleId}` (BE-TD-006)**: 차량 실시간 연결 상태 조회 (주행/정차 여부)
+- **POST `/telemetry/status/{vehicleId}/disconnect` (BE-TD-006)**: 차량 연결 해제 및 세션 강제 종료
+
+### 3.2 주행 세션 (BE-TD-001, BE-TD-004)
+- **POST `/trips/start` (BE-TD-001)**: 주행 세션 시작 (파라미터: vehicleId)
+- **POST `/trips/{tripId}/end` (BE-TD-004)**: 주행 세션 종료 (통계 확정)
+- **GET `/trips` (BE-TD-005)**: 주행 이력 목록 조회 (파라미터: vehicleId)
+- **GET `/trips/{tripId}` (BE-TD-005)**: 상세 주행 리포트 (경로, 운전점수, 통계)
 
 ---
 ---
