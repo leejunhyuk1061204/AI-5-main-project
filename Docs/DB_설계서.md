@@ -247,7 +247,7 @@ AI 예측 데이터(`consumables_state`)와 연동되는 핵심 항목들은 드
 | | category | VARCHAR(20) | | MANUAL / DTC_GUIDE / CASE_STUDY / PART_INFO |
 | | content | TEXT | | 원문 텍스트 |
 | | metadata | JSONB | | { manufacturer, model, year, source, page, dtc_code } |
-| | embedding | VECTOR(1536) | | OpenAI 임베딩 벡터 (pgvector) |
+| | embedding | VECTOR(1024) | | 로컬 AI (mxbai-embed-large) 임베딩 벡터 |
 
 ### 2.6 외부 API 연동 및 상세 정보 (External & Detailed)
 국토부, 교통안전공단 및 중고차 성능점검 API 등을 통해 수집되는 차량의 객관적 상태 정보를 관리합니다.
