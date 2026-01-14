@@ -57,9 +57,12 @@
 - **DELETE `/vehicles/{id}` (FR-CAR-006)**: 차량 삭제
 
 ### 2.2 공공 데이터 및 마스터 데이터 (Data & Spec)
-- **GET `/meta/car-models` (FR-CAR-EXT-001)**: 차량 모델 마스터 데이터 전체 조회 (Track B 드롭다운용 - 제조사/모델/연식)
-- **GET `/meta/car-models` (FR-CAR-EXT-001)**: 차량 모델 마스터 데이터 전체 조회 (Track B 드롭다운용 - 제조사/모델/연식)
-    - **Strategy**: **Lazy Loading** (차량 등록 화면 진입 시 호출). 전체 목록(JSON)을 받아 프론트엔드에서 제조사 -> 모델 -> 연식 순으로 필터링.
+- **GET `/master/manufacturers` (BE-VH-003)**: 제조사 목록 조회
+    - **Response**: `["Hyundai", "Kia", ...]`
+- **GET `/master/models?manufacturer={name}` (BE-VH-003)**: 제조사별 모델 데이터 조회
+    - **Query**: `manufacturer` (필수, e.g., "Hyundai")
+    - **Response**: `[{ "modelName": "Avante (CN7)", "modelYear": 2024, "fuelType": "GASOLINE" }, ...]`
+    - **Strategy**: 프론트엔드에서 모델명/연식/연료 드롭다운 필터링 처리
 - **GET `/vehicles/{id}/spec` (FR-CAR-007)**: 차량 제원 상세 조회 (배기량, 연비 등 - 공공 API 캐시)
 - **GET `/vehicles/{id}/recall` (FR-RECALL-001)**: 리콜 대상 여부 및 상세 조회 (국토부 API)
 - **GET `/vehicles/{id}/inspection` (FR-INSP-001)**: 정기검사 유효기간 및 이력 조회 (교통안전공단)
