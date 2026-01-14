@@ -351,6 +351,22 @@ CREATE TABLE IF NOT EXISTS user_insights (
     is_read BOOLEAN DEFAULT FALSE
 );
 
+-- RAG 지식 벡터 저장소 (2.5 - AI/RAG)
+CREATE TABLE IF NOT EXISTS knowledge_vectors (
+    knowledge_id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
+    category VARCHAR(20) NOT NULL, -- MANUAL / DTC_GUIDE / CASE_STUDY / PART_INFO
+    content TEXT NOT NULL,
+    metadata JSONB, -- { manufacturer, model, year, source, page, dtc_code }
+    embedding VECTOR (1536), -- OpenAI 임베딩 벡터 (pgvector)
+    content_hash VARCHAR(64) UNIQUE, -- 중복 방지용 해시
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- knowledge_vectors 인덱스
+CREATE INDEX IF NOT EXISTS idx_knowledge_category ON knowledge_vectors (category);
+
+CREATE INDEX IF NOT EXISTS idx_knowledge_metadata ON knowledge_vectors USING GIN (metadata);
+
 -- Seed data for car_model_master
 
 -- Auto-generated Seed Data for car_model_master
