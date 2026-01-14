@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, Platform, KeyboardAvoidingView, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, Platform, KeyboardAvoidingView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
+import { cssInterop } from 'nativewind';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -13,61 +14,9 @@ export default function SignUp() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [passwordConfirm, setPasswordConfirm] = useState('');
-    const [loading, setLoading] = useState(false);
 
     const [showPassword, setShowPassword] = useState(false);
     const [showPasswordConfirm, setShowPasswordConfirm] = useState(false);
-
-    const handleSignUp = async () => {
-        // Validation
-        if (!name || !email || !password || !passwordConfirm) {
-            Alert.alert('알림', '모든 필드를 입력해주세요.');
-            return;
-        }
-
-        if (password !== passwordConfirm) {
-            Alert.alert('알림', '비밀번호가 일치하지 않습니다.');
-            return;
-        }
-
-        if (password.length < 8) {
-            Alert.alert('알림', '비밀번호는 8자 이상이어야 합니다.');
-            return;
-        }
-
-        setLoading(true);
-        try {
-            // Android emulator uses 10.0.2.2 for localhost, web uses localhost
-            const baseUrl = Platform.OS === 'android' ? 'http://10.0.2.2:8080' : 'http://localhost:8080';
-
-            const response = await fetch(`${baseUrl}/api/v1/auth/signup`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    email: email,
-                    password: password,
-                    nickname: name,
-                }),
-            });
-
-            const result = await response.json();
-
-            if (response.ok) {
-                Alert.alert('성공', '회원가입이 완료되었습니다.', [
-                    { text: '확인', onPress: () => navigation.navigate('Login') }
-                ]);
-            } else {
-                Alert.alert('실패', result.message || '회원가입에 실패했습니다.');
-            }
-        } catch (error) {
-            Alert.alert('오류', '서버와의 연결에 실패했습니다.');
-            console.error('SignUp Error:', error);
-        } finally {
-            setLoading(false);
-        }
-    };
 
     return (
         <SafeAreaView className="flex-1 bg-background-dark">
@@ -76,11 +25,10 @@ export default function SignUp() {
             {/* Top App Bar */}
             <View className="flex-row items-center justify-between p-4 bg-background-dark/90 backdrop-blur-md z-50 sticky top-0">
                 <TouchableOpacity
-                    onPress={() => navigation.goBack()}
                     className="flex items-center justify-center w-10 h-10 rounded-full hover:bg-white/10"
                     activeOpacity={0.7}
                 >
-                    <MaterialIcons name="arrow-back-ios-new" size={24} color="white" />
+                    <MaterialIcons name="arrow-back-ios-new" size={24} className="text-white" />
                 </TouchableOpacity>
                 <Text className="text-lg font-bold leading-tight tracking-tight flex-1 text-center pr-10 text-white">
                     회원가입
@@ -112,7 +60,7 @@ export default function SignUp() {
                         {/* Name Field */}
                         <View className="flex flex-col gap-2 group">
                             <Text className="text-sm font-medium text-slate-300 ml-1">
-                                성함 (닉네임)
+                                성함
                             </Text>
                             <View className="relative">
                                 <TextInput
@@ -141,7 +89,7 @@ export default function SignUp() {
                                     autoCapitalize="none"
                                 />
                                 <View className="absolute right-4 pointer-events-none">
-                                    <MaterialIcons name="mail" size={20} color="#64748b" />
+                                    <MaterialIcons name="mail" size={20} className="text-slate-500" color="#64748b" />
                                 </View>
                             </View>
                         </View>
@@ -167,6 +115,7 @@ export default function SignUp() {
                                     <MaterialIcons
                                         name={showPassword ? "visibility" : "visibility-off"}
                                         size={20}
+                                        className="text-slate-500"
                                         color="#64748b"
                                     />
                                 </TouchableOpacity>
@@ -194,6 +143,7 @@ export default function SignUp() {
                                     <MaterialIcons
                                         name={showPasswordConfirm ? "visibility" : "visibility-off"}
                                         size={20}
+                                        className="text-slate-500"
                                         color="#64748b"
                                     />
                                 </TouchableOpacity>
@@ -211,21 +161,13 @@ export default function SignUp() {
             >
                 <View className="max-w-lg mx-auto w-full">
                     <TouchableOpacity
-                        onPress={handleSignUp}
-                        disabled={loading}
-                        className={`w-full ${loading ? 'bg-primary/50' : 'bg-primary'} rounded-xl h-14 flex-row items-center justify-center gap-2 shadow-lg shadow-blue-500/30 active:opacity-90 mb-4`}
+                        className="w-full bg-primary hover:bg-primary/90 rounded-xl h-14 flex-row items-center justify-center gap-2 shadow-lg shadow-blue-500/30 active:opacity-90 mb-4"
                         activeOpacity={0.8}
                     >
-                        {loading ? (
-                            <ActivityIndicator color="white" />
-                        ) : (
-                            <>
-                                <Text className="text-white font-bold text-lg">
-                                    다음
-                                </Text>
-                                <MaterialIcons name="arrow-forward" size={20} color="white" />
-                            </>
-                        )}
+                        <Text className="text-white font-bold text-lg">
+                            다음
+                        </Text>
+                        <MaterialIcons name="arrow-forward" size={20} color="white" />
                     </TouchableOpacity>
 
                     {/* Login Link */}
