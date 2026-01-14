@@ -1,6 +1,6 @@
 # app/services/visual_service.py
-from app.services.llm_service import analyze_general_image
-from app.services.yolo_service import run_yolo_inference # YOLO 실행 로직 분리 가정
+from ai.app.services.llm_service import analyze_general_image
+from ai.app.services.yolo_service import run_yolo_inference # YOLO 실행 로직 분리 가정
 
 async def get_smart_visual_diagnosis(s3_url: str):
     # 1. 우선 YOLO(best.pt)에게 계기판인지 물어봅니다.

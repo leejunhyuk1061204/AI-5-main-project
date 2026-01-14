@@ -1,6 +1,6 @@
 # app/services/yolo_service.py
 from ultralytics import YOLO
-from app.schemas.visual_schema import VisionResponse, DetectionItem
+from ai.app.schemas.visual_schema import VisionResponse, DetectionItem
 import os
 
 # 1. 모델 경로 설정 (학습 후 생성된 best.pt가 위치할 곳)

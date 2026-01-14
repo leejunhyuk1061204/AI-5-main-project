@@ -1,7 +1,7 @@
 # app/api/v1/routes/visual_router.py
 from fastapi import APIRouter
-from app.schemas.visual_schema import VisionResponse
-from app.services.visual_service import get_smart_visual_diagnosis # 스마트 라우팅 서비스
+from ai.app.schemas.visual_schema import VisionResponse
+from ai.app.services.visual_service import get_smart_visual_diagnosis # 스마트 라우팅 서비스
 
 router = APIRouter(prefix="/predict", tags=["Vision Analysis"])
 

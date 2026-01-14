@@ -2,7 +2,7 @@
 import torch
 from transformers import ASTForAudioClassification, ASTFeatureExtractor
 import os
-from app.schemas.audio_schema import AudioResponse, AudioDetail
+from ai.app.schemas.audio_schema import AudioResponse, AudioDetail
 
 # 1. 모델 경로 (학습 후 생성될 경로)
 MODEL_PATH = "Ai/weights/audio/best_ast_model"
