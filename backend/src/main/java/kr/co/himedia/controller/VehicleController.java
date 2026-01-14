@@ -28,6 +28,14 @@ public class VehicleController {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(response));
     }
 
+    @PostMapping("/obd")
+    public ResponseEntity<ApiResponse<VehicleDto.Response>> registerVehicleByObd(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @RequestBody VehicleDto.ObdRegistrationRequest request) {
+        VehicleDto.Response response = vehicleService.registerVehicleByObd(userDetails.getUserId(), request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(response));
+    }
+
     @GetMapping
     public ResponseEntity<ApiResponse<List<VehicleDto.Response>>> getVehicleList(
             @AuthenticationPrincipal CustomUserDetails userDetails) {

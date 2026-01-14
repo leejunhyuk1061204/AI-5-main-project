@@ -36,6 +36,7 @@ logs/
 *.log
 
 # --- RAG Data (ZIP/DB는 제외, JSON은 커밋) ---
+data/postgres/
 data/manuals/zips/
 data/manuals/Sonata_2012/
 data/dtc/*.db

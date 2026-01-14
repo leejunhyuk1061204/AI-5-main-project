@@ -10,6 +10,21 @@
 > - **Base URL**: `https://api.car-sentry.com/api/v1`
 > - **Auth**: `Authorization: Bearer {jwt_token}`
 
+### 📦 공통 응답 규격 (Common Response)
+모든 API 응답은 `ApiResponse` 객체로 래핑되어 전달됩니다.
+```json
+{
+  "success": true,
+  "data": { ... },
+  "error": null
+}
+```
+- **success**: 요청 처리 성공 여부 (boolean)
+- **data**: 실제 결과 데이터 (성공 시에만 존재, 실패 시 null)
+- **error**: 에러 정보 (실패 시에만 존재, 성공 시 null)
+  - `code`: 에러 코드
+  - `message`: 상세 에러 메시지
+
 ## 1. 사용자 및 인증 (Auth & Users)
 
 ### 1.1 인증 (Authentication)
@@ -59,6 +74,9 @@
     - **Body**: `[{timestamp, rpm, speed, ...}, ...]`
 - **GET `/trips` (FR-DRIVE-002)**: 주행 이력 목록 조회 (기간 필터)
 - **GET `/trips/{trip_id}` (FR-DRIVE-003)**: 상세 주행 리포트 (경로, 운전점수, 급가속 횟수 등)
+- **GET `/telemetry/status/{vehicleId}` (FR-OBD-002)**: 차량의 실시간 연결 및 주행 상태 조회
+- **POST `/telemetry/status/{vehicleId}/disconnect` (FR-OBD-005)**: 앱에서 수동으로 연결 해제 시 현재 주행 세션 즉시 종료
+    - **Response**: `{ "success": true, ... }`
 
 ### 3.2 제조사 클라우드 연동 (Cloud)
 - **POST `/cloud/connect` (FR-CLOUD-001)**: OAuth 연동 시작 (Redirect URL 반환)

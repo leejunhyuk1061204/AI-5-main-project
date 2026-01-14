@@ -43,7 +43,8 @@ public class VehicleDto {
 
         private String nickname;
         private String memo;
-        private String carNumber; // Optional for manual? Requirements say default fields. Including it.
+        private String carNumber;
+        private String obdDeviceId;
 
         public Vehicle toEntity(UUID userId) {
             return Vehicle.builder()
@@ -57,7 +58,28 @@ public class VehicleDto {
                     .nickname(nickname)
                     .memo(memo)
                     .registrationSource(RegistrationSource.MANUAL)
-                    .isPrimary(false) // Default false, strictly logic might make first one primary?
+                    .isPrimary(false)
+                    .obdDeviceId(obdDeviceId)
+                    .build();
+        }
+    }
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    public static class ObdRegistrationRequest {
+        @NotBlank(message = "VIN은 필수입니다.")
+        private String vin;
+
+        public Vehicle toEntity(UUID userId) {
+            return Vehicle.builder()
+                    .userId(userId)
+                    .vin(vin)
+                    .manufacturer("Unknown") // API 승인 전까지 임시 값
+                    .modelName("Unknown")
+                    .modelYear(0)
+                    .registrationSource(RegistrationSource.OBD)
+                    .isPrimary(false)
                     .build();
         }
     }
@@ -77,6 +99,7 @@ public class VehicleDto {
         private String memo;
         private Boolean isPrimary;
         private String registrationSource;
+        private String obdDeviceId;
 
         public static Response from(Vehicle vehicle) {
             Response response = new Response();
@@ -92,6 +115,7 @@ public class VehicleDto {
             response.setMemo(vehicle.getMemo());
             response.setIsPrimary(vehicle.getIsPrimary());
             response.setRegistrationSource(vehicle.getRegistrationSource().name());
+            response.setObdDeviceId(vehicle.getObdDeviceId());
             return response;
         }
     }
