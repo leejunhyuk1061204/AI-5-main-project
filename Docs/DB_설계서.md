@@ -1,4 +1,4 @@
-# 데이터베이스 상세 설계서 (v1.4)
+# 데이터베이스 상세 설계서 (v1.5)
 
 > **기반 기술**: PostgreSQL 15+, TimescaleDB (시계열 확장), pgvector (벡터 검색 확장)
 > **식별자 정책**: 모든 주요 테이블은 분산 환경 정합성과 보안을 위해 `UUID`를 기본 PK로 사용함.
@@ -7,7 +7,7 @@
 ---
 
 ## 1. 개요
-본 시스템은 차량의 고주파 시계열 데이터, 비즈니스 메타데이터, 그리고 AI 진단을 위한 증거 및 벡터 데이터를 통합 관리합니다. v1.4에서는 요구사항 정의서(v1.2)의 모든 기능을 수용하기 위해 제조사 클라우드 연동(OAuth) 보안 체계를 강화하고, 사용자 세부 설정 및 대표 차량 기능을 추가하였습니다.
+본 시스템은 차량의 고주파 시계열 데이터, 비즈니스 메타데이터, 그리고 AI 진단을 위한 증거 및 벡터 데이터를 통합 관리합니다. v1.5에서는 백엔드 코드 연동 과정에서 추가된 사용자 프로필 및 차량 세부 정보(별칭, 메모, OBD 기기 식별자)를 문서에 동기화하였습니다.
 
 ---
 
@@ -26,7 +26,9 @@
 | | user_level | ENUM | DEFAULT 'FREE' | FREE / PREMIUM / ADMIN |
 | | membership_expiry | TIMESTAMP | | 멤버십 만료 일시 |
 | | last_login_at | TIMESTAMP | | 최종 로그인 일시 |
-| | created_at | TIMESTAMP | DEFAULT NOW() | 가입 일시 |
+| | created_at | TIMESTAMP | DEFAULT NOW(), NOT NULL | 가입 일시 (BaseEntity) |
+| | updated_at | TIMESTAMP | NOT NULL | 수정 일시 (BaseEntity) |
+| | profile_image | OID | | 프로필 이미지 바이너리 |
 | | deleted_at | TIMESTAMP | | 탈퇴 일시 (Soft Delete) |
 
 #### 2.1.2 사용자 알림 및 서비스 설정 (user_settings - FR-NOTI-001)
@@ -66,6 +68,9 @@
 | | is_primary | BOOLEAN | DEFAULT FALSE | 대표 차량 여부 |
 | | registration_source | ENUM | | MANUAL / OBD / CLOUD |
 | | cloud_linked | BOOLEAN | DEFAULT FALSE | 클라우드 계정 연동 여부 |
+| | nickname | VARCHAR(50) | | 차량 별칭 (사용자 설정) |
+| | memo | TEXT | | 차량 관련 메모 |
+| | obd_device_id | VARCHAR(100) | | OBD 어댑터 하드웨어 식별자 |
 | | created_at | TIMESTAMP | DEFAULT NOW() | 등록 일시 |
 | | deleted_at | TIMESTAMP | | 삭제 일시 (Soft Delete) |
 
@@ -280,7 +285,7 @@ AI 예측 데이터(`consumables_state`)와 연동되는 핵심 항목들은 드
 
 | 테이블명 | 컬럼명 | 타입 | 제약조건 | 설명 |
 |:---|:---|:---|:---|:---|
-| **car_model_master** | model_id | INT | PK | 식별자 (Auto Increment) |
+| **car_model_master** | model_id | BIGINT | PK | 식별자 (Auto Increment) |
 | | manufacturer | VARCHAR(50) | | 제조사 (예: Hyundai, Kia) |
 | | model_name | VARCHAR(100) | | 모델명 (예: Grandeur IG) |
 | | model_year | INT | | 연식 (예: 2020) |
