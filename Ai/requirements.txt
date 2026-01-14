@@ -23,3 +23,6 @@ soundfile           # 오디오 파일 읽기/쓰기
 # --- 6. 정형/시계열 (XGBoost, LSTM 등) ---
 scikit-learn        # 데이터 전처리(StandardScaler 등)에 필요
 xgboost             # (나중에 쓸 수 있으니 미리 넣어둠) 
+
+# ----7. runpod 
+paramiko
