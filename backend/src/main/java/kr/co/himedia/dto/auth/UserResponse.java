@@ -15,4 +15,5 @@ public class UserResponse {
     private UUID userId;
     private String email;
     private String nickname;
+    private String profileImageBase64;
 }
