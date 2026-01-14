@@ -1,18 +1,13 @@
 from fastapi import APIRouter
-from Ai.app.schemas.preprocess import AnomalyRequest, AnomalyResponse
-import random
+
+from Ai.app.api_v1.routes.health import router as health_router
+from Ai.app.api_v1.routes.anomaly import router as anomaly_router
+from Ai.app.api_v1.routes.wear_factor import router as wear_factor_router
+from Ai.app.api_v1.routes.visual_router import router as visual_router  # 네 프로젝트에 이미 있으면
 
 router = APIRouter()
 
-@router.post("/anomaly", response_model=AnomalyResponse)
-def predict_anomaly(req: AnomalyRequest):
-    score = round(random.random(), 4)
-    threshold = 0.7
-
-    return AnomalyResponse(
-        vehicle_id=req.vehicle_id,
-        anomaly_score=score,
-        threshold=threshold,
-        is_anomaly=(score >= threshold),
-        model_version="mock-0.0.1",
-    )
+router.include_router(health_router)
+router.include_router(anomaly_router)
+router.include_router(wear_factor_router)
+router.include_router(visual_router)
