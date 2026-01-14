@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from Ai.app.schemas.preprocess import AnomalyRequest, AnomalyResponse
+from ai.app.schemas.preprocess import AnomalyRequest, AnomalyResponse
 import random
 
 router = APIRouter()
