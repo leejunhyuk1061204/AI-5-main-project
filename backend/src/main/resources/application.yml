@@ -42,13 +42,20 @@ spring:
     username: ${MQ_USER:guest}
     password: ${MQ_PASSWORD:guest}
 
-  data:
-    redis:
-      host: ${REDIS_HOST:localhost}
-      port: ${REDIS_PORT:6379}
-      password: ${REDIS_PASSWORD:}
+
+
+app:
+  storage:
+    type: ${STORAGE_TYPE:local} # local or s3
+
+ai:
+  server:
+    url:
+      visual: ${AI_SERVER_URL_VISUAL:http://localhost:8000/api/v1/predict/visual}
+      audio: ${AI_SERVER_URL_AUDIO:http://localhost:8000/api/v1/predict/audio}
 
 logging:
   level:
     org.hibernate.SQL: DEBUG
     org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+    org.springframework.web: DEBUG # 404 디버깅용 로그 추가
