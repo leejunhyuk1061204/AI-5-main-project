@@ -34,6 +34,12 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.success(token));
     }
 
+    @PostMapping("/refresh")
+    public ResponseEntity<ApiResponse<TokenResponse>> refresh(@Valid @RequestBody TokenRefreshRequest req) {
+        TokenResponse token = userService.refresh(req);
+        return ResponseEntity.ok(ApiResponse.success(token));
+    }
+
     // BE-AU-003 내 정보 조회
     @GetMapping("/me")
     public ResponseEntity<ApiResponse<UserResponse>> getProfile(Authentication auth) {

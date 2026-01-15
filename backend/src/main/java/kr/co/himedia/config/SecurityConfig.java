@@ -40,7 +40,7 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
-                        .requestMatchers("/**").permitAll() // ✅ 디버깅용: 모든 요청 허용
+                        .requestMatchers("/auth/**").permitAll() // HEAD의 경로 반영
                         .requestMatchers("/api/v1/auth/**", "/api/v1/telemetry/**", "/api/v1/vehicles/**",
                                 "/api/v1/master/**",
                                 "/admin/**", "/swagger-ui/**", "/v3/api-docs/**", "/uploads/**")
