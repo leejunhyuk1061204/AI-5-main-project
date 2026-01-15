@@ -12,6 +12,9 @@ public class MaintenanceHistoryRequest {
     private LocalDate maintenanceDate;
     private Double mileageAtMaintenance;
     private MaintenanceItem item;
+    private Boolean isStandardized;
+    private String shopName;
     private Integer cost;
+    private String ocrData;
     private String memo;
 }

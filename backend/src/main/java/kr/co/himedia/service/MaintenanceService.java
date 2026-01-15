@@ -41,7 +41,10 @@ public class MaintenanceService {
                                 .maintenanceDate(request.getMaintenanceDate())
                                 .mileageAtMaintenance(request.getMileageAtMaintenance())
                                 .item(request.getItem())
+                                .isStandardized(request.getIsStandardized())
+                                .shopName(request.getShopName())
                                 .cost(request.getCost())
+                                .ocrData(request.getOcrData())
                                 .memo(request.getMemo())
                                 .build();
 
