@@ -1,0 +1,25 @@
+{
+  "target_item": "ENGINE_OIL",
+  "last_replaced": {
+    "date": "2025-06-01",
+    "mileage": 48000
+  },
+  "vehicle_metadata": {
+    "model_year": 2020,
+    "fuel_type": "GASOLINE",
+    "total_mileage": 52000
+  },
+  "driving_habits": {
+    "avg_rpm": 936.6,
+    "hard_accel_count": 0,
+    "hard_brake_count": 3,
+    "idle_ratio": 0.08
+  },
+  "_debug": {
+    "csv_path": "C:\\Users\\301\\Desktop\\FinalPr\\AI-5-main-project\\ai\\data\\obd\\raw\\nomal\\2018-02-21_Seat_Leon_KA_KA_Normal.csv",
+    "window_seconds": 60,
+    "window_start": "08:51:16.445000",
+    "window_end": "08:52:16.445000",
+    "rows_in_window": 732
+  }
+}
