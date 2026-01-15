@@ -39,7 +39,7 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource())) // ✅ 명시적 설정 사용
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/v1/auth/**").permitAll()
+                        .requestMatchers("/auth/**").permitAll()
                         .anyRequest().authenticated())
                 .addFilterBefore(new JwtAuthenticationFilter(jwtTokenProvider),
                         UsernamePasswordAuthenticationFilter.class);

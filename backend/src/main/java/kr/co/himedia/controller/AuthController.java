@@ -32,6 +32,12 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.success(token));
     }
 
+    @PostMapping("/refresh")
+    public ResponseEntity<ApiResponse<TokenResponse>> refresh(@Valid @RequestBody TokenRefreshRequest req) {
+        TokenResponse token = userService.refresh(req);
+        return ResponseEntity.ok(ApiResponse.success(token));
+    }
+
     @GetMapping("/me")
     public ResponseEntity<ApiResponse<UserResponse>> getProfile(Authentication auth) {
         UserResponse resp = userService.getProfile(UUID.fromString(auth.getName()));
