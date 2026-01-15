@@ -10,6 +10,9 @@ import lombok.AllArgsConstructor;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+/**
+ * 차량 고장 코드(DTC)의 감지 및 조치 이력을 관리하는 엔티티입니다.
+ */
 @Entity
 @Table(name = "dtc_history")
 @Getter
@@ -43,16 +46,21 @@ public class DtcHistory {
     @Column(name = "severity")
     private String severity;
 
+    @Column(name = "rag_guide", columnDefinition = "TEXT")
+    private String ragGuide;
+
     @Column(name = "discovered_at")
     private LocalDateTime discoveredAt;
 
     @Column(name = "resolved_at")
     private LocalDateTime resolvedAt;
 
-    public DtcHistory(UUID vehiclesId, String dtcCode, String description, DtcType dtcType, DtcStatus status) {
+    public DtcHistory(UUID vehiclesId, String dtcCode, String description, String ragGuide, DtcType dtcType,
+            DtcStatus status) {
         this.vehiclesId = vehiclesId;
         this.dtcCode = dtcCode;
         this.description = description;
+        this.ragGuide = ragGuide;
         this.dtcType = dtcType;
         this.status = status;
         this.discoveredAt = LocalDateTime.now();
