@@ -23,24 +23,24 @@ export default function SplashScreen({ onFinish }: { onFinish: () => void }) {
             Animated.timing(fadeAnim, {
                 toValue: 1,
                 duration: 1500,
-                useNativeDriver: true,
+                useNativeDriver: false,
             }),
             Animated.timing(slideAnim, {
                 toValue: 0,
                 duration: 1500,
-                useNativeDriver: true,
+                useNativeDriver: false,
             }),
             Animated.timing(slowFadeAnim, {
                 toValue: 1,
                 duration: 2000,
-                useNativeDriver: true,
+                useNativeDriver: false,
             }),
             Animated.sequence([
                 Animated.delay(500),
                 Animated.timing(delayedFadeAnim, {
                     toValue: 1,
                     duration: 1500,
-                    useNativeDriver: true,
+                    useNativeDriver: false,
                 }),
             ]),
         ]).start(() => {
