@@ -24,8 +24,11 @@ public class JwtTokenProvider {
 
     private SecretKey secretKey;
 
-    @Value("${jwt.expiration:86400000}") // 기본 24시간
-    private long validityInMilliseconds;
+    @Value("${jwt.access-expiration:3600000}") // 1시간
+    private long accessTokenValidityInMilliseconds;
+
+    @Value("${jwt.refresh-expiration:604800000}") // 7일
+    private long refreshTokenValidityInMilliseconds;
 
     private final UserDetailsService userDetailsService;
 
@@ -38,8 +41,17 @@ public class JwtTokenProvider {
         secretKey = Keys.hmacShaKeyFor(salt.getBytes(StandardCharsets.UTF_8));
     }
 
-    // JWT 토큰 생성
-    public String createToken(String userId) {
+    // Access Token 생성
+    public String createAccessToken(String userId) {
+        return createToken(userId, accessTokenValidityInMilliseconds);
+    }
+
+    // Refresh Token 생성
+    public String createRefreshToken(String userId) {
+        return createToken(userId, refreshTokenValidityInMilliseconds);
+    }
+
+    private String createToken(String userId, long validityInMilliseconds) {
         Claims claims = Jwts.claims().subject(userId).build();
         Date now = new Date();
         Date validity = new Date(now.getTime() + validityInMilliseconds);
