@@ -26,7 +26,7 @@ async def run_ast_inference(processed_audio_buffer) -> AudioResponse:
         return AudioResponse(
             status="FAULTY",
             analysis_type="AST",
-            component="ENGINE",
+            category="ENGINE",
             detail=AudioDetail(diagnosed_label="ENGINE_KNOCKING", description="테스트용: 엔진 노킹 소음 감지"),
             confidence=0.95,
             is_critical=True

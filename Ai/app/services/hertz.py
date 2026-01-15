@@ -2,7 +2,7 @@
 import librosa
 import soundfile as sf
 import io
-import os
+import requests  # <-- 추가: 인터넷에서 파일 당겨오는 도구
 
 def process_to_16khz(audio_input):
     """
@@ -10,8 +10,15 @@ def process_to_16khz(audio_input):
     YAMNet, AST 모델 및 대부분의 Audio LLM이 요구하는 표준 규격입니다.
     """
     try:
-        # 1. 파일 로드 및 16kHz로 리샘플링 (sr=16000)
-        # librosa는 자동으로 오디오를 로드하며 지정된 속도로 변환합니다.
+        # [추가됨] 만약 입력값이 "http"로 시작하는 URL이라면? -> 먼저 다운로드!
+        if isinstance(audio_input, str) and audio_input.startswith("http"):
+            print(f"[hertz.py] S3 URL 감지: 다운로드 시작... ({audio_input})")
+            response = requests.get(audio_input)
+            response.raise_for_status() # 다운로드 실패 시 에러 발생
+            
+            # 다운로드 받은 데이터를 메모리(BytesIO)에 담음
+            audio_input = io.BytesIO(response.content)
+        # 1. 파일 로드 (이제 URL이 아니라 메모리에 있는 파일 데이터를 읽음)
         y, sr = librosa.load(audio_input, sr=16000)
 
         # 2. 결과물을 메모리 버퍼(BytesIO)에 저장
