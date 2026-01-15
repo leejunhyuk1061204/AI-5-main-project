@@ -24,6 +24,8 @@ import PassiveReg from './ register/passive/PassiveReg';
 import DiagMain from './diagnosis/DiagMain';
 import HistoryMain from './history/HistoryMain';
 import DrivingHis from './history/DrivingHis';
+import RecallHis from './history/RecallHis';
+import SupManage from './history/SupManage';
 import AlertMain from './alert/AlertMain';
 
 // Keep the splash screen visible while we fetch resources
@@ -130,6 +132,8 @@ export default function App() {
           <Stack.Screen name="DiagMain" component={DiagMain} />
           <Stack.Screen name="HistoryMain" component={HistoryMain} />
           <Stack.Screen name="DrivingHis" component={DrivingHis} />
+          <Stack.Screen name="RecallHis" component={RecallHis} />
+          <Stack.Screen name="SupManage" component={SupManage} />
           <Stack.Screen name="AlertMain" component={AlertMain} />
         </Stack.Navigator>
       </NavigationContainer>
