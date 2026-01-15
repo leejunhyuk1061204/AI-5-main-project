@@ -22,3 +22,13 @@ class VisualResponse(BaseModel):
     
     # 결과 이미지 경로
     processed_image_url: Optional[str] = Field(None, description="분석 결과가 표시된 S3 이미지 URL")
+
+## 출력예시
+# {
+#     "status": "NORMAL",
+#     "analysis_type": "LLM_VISION",
+#     "category": "TIRES",
+#     "description": "이 차량의 타이어에서 슬립 노이즈가 발견되었습니다.",
+#     "recommendation": "이 차량의 엔진에서 슬립 노이즈가 발견되었습니다.",
+#     "processed_image_url": "https://car-sentry.s3.ap-northeast-2.amazonaws.com/processed_image.jpg"
+# }
