@@ -16,17 +16,20 @@ public class TripService {
 
     private final TripSummaryRepository tripSummaryRepository;
 
+    // 차량별 주행 기록 목록 조회
     @Transactional(readOnly = true)
     public List<TripSummary> getTripsByVehicle(UUID vehicleId) {
         return tripSummaryRepository.findByVehicleIdOrderByStartTimeDesc(vehicleId);
     }
 
+    // 주행 기록 상세 조회
     @Transactional(readOnly = true)
     public TripSummary getTripDetail(UUID tripId) {
         return tripSummaryRepository.findByTripId(tripId)
                 .orElseThrow(() -> new IllegalArgumentException("Trip not found: " + tripId));
     }
 
+    // 주행 시작 (Trip ID 발급 및 초기화)
     @Transactional
     public TripSummary startTrip(UUID vehicleId) {
         tripSummaryRepository.findActiveTripByVehicleId(vehicleId)
@@ -43,6 +46,7 @@ public class TripService {
         return tripSummaryRepository.save(newTrip);
     }
 
+    // 주행 종료 처리
     @Transactional
     public TripSummary endTrip(UUID tripId) {
         TripSummary trip = tripSummaryRepository.findByTripId(tripId)
@@ -57,6 +61,7 @@ public class TripService {
         return tripSummaryRepository.save(trip);
     }
 
+    // 수집된 로그 기반 주행 요약(거리, 점수 등) 갱신
     @Transactional
     public void updateTripFromLogs(UUID vehicleId, List<kr.co.himedia.dto.obd.ObdLogDto> logs) {
         if (logs.isEmpty())

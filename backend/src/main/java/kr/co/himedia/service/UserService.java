@@ -29,6 +29,7 @@ public class UserService {
     private final JwtTokenProvider jwtTokenProvider;
     private final RefreshTokenRepository refreshTokenRepository;
 
+    // 사용자 회원가입
     public UserResponse createUser(SignupRequest req) {
         userRepository.findByEmail(req.getEmail()).ifPresent(u -> {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Email already exists");
@@ -50,6 +51,7 @@ public class UserService {
                 .build();
     }
 
+    // 사용자 로그인 및 토큰 발급
     public TokenResponse authenticate(LoginRequest req) {
         User user = userRepository.findByEmail(req.getEmail())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid credentials"));
@@ -108,6 +110,7 @@ public class UserService {
                 .build();
     }
 
+    // 사용자 프로필 조회
     public UserResponse getProfile(UUID userId) {
         User user = userRepository.findById(userId)
                 .filter(u -> u.getDeletedAt() == null)
@@ -123,6 +126,7 @@ public class UserService {
                 .build();
     }
 
+    // 사용자 프로필 정보 수정
     public void updateProfile(UUID userId, UserUpdateRequest req) {
         User user = userRepository.findById(userId)
                 .filter(u -> u.getDeletedAt() == null)
@@ -136,6 +140,7 @@ public class UserService {
         userRepository.save(user);
     }
 
+    // 사용자 회원 탈퇴 (Soft Delete)
     public void deleteUser(UUID userId) {
         User user = userRepository.findById(userId)
                 .filter(u -> u.getDeletedAt() == null)
@@ -145,6 +150,7 @@ public class UserService {
         userRepository.save(user);
     }
 
+    // 사용자 프로필 이미지 업로드
     public void updateProfileImage(UUID userId, MultipartFile file) {
         User user = userRepository.findById(userId)
                 .filter(u -> u.getDeletedAt() == null)

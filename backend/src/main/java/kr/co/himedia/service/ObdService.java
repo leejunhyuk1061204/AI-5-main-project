@@ -26,6 +26,7 @@ public class ObdService {
     private final TripSummaryRepository tripSummaryRepository;
     private final TripService tripService;
 
+    // OBD 로그 대량 저장 및 주행 요약 갱신
     @Transactional
     public void saveObdLogs(List<ObdLogDto> obdLogDtos) {
         if (obdLogDtos == null || obdLogDtos.isEmpty()) {
@@ -44,6 +45,7 @@ public class ObdService {
         }
     }
 
+    // 차량 연결 상태 및 주행 여부 조회
     @Transactional(readOnly = true)
     public ConnectionStatusDto getConnectionStatus(UUID vehicleId) {
         Optional<TripSummary> lastTrip = tripSummaryRepository.findLatestTripByVehicleId(vehicleId);
@@ -68,6 +70,7 @@ public class ObdService {
                 .build();
     }
 
+    // 차량 연결 해제 및 주행 종료 처리
     @Transactional
     public void disconnectVehicle(UUID vehicleId) {
         tripSummaryRepository.findActiveTripByVehicleId(vehicleId)

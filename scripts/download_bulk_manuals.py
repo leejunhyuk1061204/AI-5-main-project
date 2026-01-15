@@ -86,9 +86,16 @@ def download_zip(brand, year, model):
     filepath = os.path.join(OUTPUT_DIR, filename)
     
     if os.path.exists(filepath):
-        size_mb = os.path.getsize(filepath) / 1024 / 1024
-        print(f"  [SKIP] Already exists: {filename} ({size_mb:.0f} MB)")
-        return True
+        size_bytes = os.path.getsize(filepath)
+        size_mb = size_bytes / 1024 / 1024
+        
+        # 1MB 이하면 손상된 파일로 간주하고 삭제 후 다시 다운로드
+        if size_mb < 1:
+             print(f"  [DELETE] Partial file found: {filename} ({size_mb:.2f} MB)")
+             os.remove(filepath)
+        else:
+             print(f"  [SKIP] Already exists: {filename} ({size_mb:.0f} MB)")
+             return True
 
     # 2. 파싱된 데이터 확인 (parsed_manuals.json)
     parsed_filename = filename.replace('.zip', '_full.json')
