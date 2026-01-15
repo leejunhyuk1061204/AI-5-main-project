@@ -4,6 +4,8 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.AccessLevel;
+import lombok.Builder;
+import lombok.AllArgsConstructor;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -11,6 +13,8 @@ import java.util.UUID;
 @Entity
 @Table(name = "dtc_history")
 @Getter
+@Builder
+@AllArgsConstructor
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class DtcHistory {
 
@@ -35,6 +39,9 @@ public class DtcHistory {
     @Enumerated(EnumType.STRING)
     @Column(name = "status")
     private DtcStatus status;
+
+    @Column(name = "severity")
+    private String severity;
 
     @Column(name = "discovered_at")
     private LocalDateTime discoveredAt;

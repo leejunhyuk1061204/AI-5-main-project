@@ -71,5 +71,5 @@ print("AST 모델 학습을 시작합니다...")
 trainer.train()
 
 # 7. 학습된 모델 저장 (이것이 음성판 'best.pt'가 됩니다)
-model.save_pretrained("./Ai/weights/audio/best_ast_model")
+model.save_pretrained("./ai/weights/audio/best_ast_model")
 print("학습 완료 및 모델 저장 완료")

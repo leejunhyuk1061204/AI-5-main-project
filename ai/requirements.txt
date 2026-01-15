@@ -3,6 +3,8 @@ fastapi>=0.100.0
 uvicorn[standard]>=0.20.0
 python-multipart    # 파일 업로드(이미지/오디오) 처리에 필수!
 pydantic>=2.0.0
+python-dotenv       # .env 파일 로드를 위해 추가
+
 
 # --- 2. AWS 연동 (S3 쓰려면 필수) ---
 boto3               # 파이썬으로 AWS S3에 접속하는 표준 도구
