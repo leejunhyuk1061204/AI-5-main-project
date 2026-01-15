@@ -16,6 +16,12 @@ import SignUp from './sign/SignUp';
 import FindPW from './sign/FindPW';
 import MainPage from './mainPage/MainPage';
 import SplashScreenComponent from './splash/SplashScreen';
+import RegisterMain from './ register/RegisterMain';
+import ActiveReg from './ register/active/ActiveReg';
+import ActiveLoading from './ register/active/ActiveLoading';
+import ActiveSuccess from './ register/active/ActiveSuccess';
+import PassiveReg from './ register/passive/PassiveReg';
+import DiagMain from './diagnosis/DiagMain';
 
 // Keep the splash screen visible while we fetch resources
 ExpoSplashScreen.preventAutoHideAsync();
@@ -107,6 +113,12 @@ export default function App() {
             name="MainPage"
             component={MainPage}
           />
+          <Stack.Screen name="RegisterMain" component={RegisterMain} />
+          <Stack.Screen name="ActiveReg" component={ActiveReg} />
+          <Stack.Screen name="ActiveLoading" component={ActiveLoading} />
+          <Stack.Screen name="ActiveSuccess" component={ActiveSuccess} />
+          <Stack.Screen name="PassiveReg" component={PassiveReg} />
+          <Stack.Screen name="DiagMain" component={DiagMain} />
         </Stack.Navigator>
       </NavigationContainer>
     </SafeAreaProvider>
