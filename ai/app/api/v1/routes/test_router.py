@@ -28,3 +28,16 @@ async def analyze_audio_local(file: UploadFile = File(...)):
     
     content = await file.read()
     return await process_audio_mock(content)
+@router.post("/embedding")
+async def get_dummy_embedding(data: dict):
+    """
+    [Local Test] 더미 임베딩 반환 (1024차원)
+    """
+    text = data.get("text", "")
+    # 테스트를 위한 1024차원 더미 벡터 생성 (0.01로 채움)
+    dummy_vector = [0.01] * 1024
+    
+    return {
+        "embedding": dummy_vector,
+        "model": "mxbai-embed-large-dummy"
+    }
