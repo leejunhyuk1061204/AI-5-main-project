@@ -6,6 +6,7 @@ pydantic>=2.0.0
 
 # --- 2. AWS 연동 (S3 쓰려면 필수) ---
 boto3               # 파이썬으로 AWS S3에 접속하는 표준 도구
+requests>=2.28.0    # S3 파일 다운로드용
 
 # --- 3. 데이터 처리 (공통) ---
 numpy
@@ -19,6 +20,8 @@ opencv-python-headless
 # --- 5. 청각 (Audio 전처리) ---
 librosa             # 오디오 분석 표준 라이브러리
 soundfile           # 오디오 파일 읽기/쓰기
+kagglehub           # Kaggle 데이터셋 자동 다운로드용 
+evaluate            # 모델 평가 지표(Accuracy 등) 계산용 
 
 # --- 6. 정형/시계열 (XGBoost, LSTM 등) ---
 scikit-learn        # 데이터 전처리(StandardScaler 등)에 필요
@@ -26,3 +29,7 @@ xgboost             # (나중에 쓸 수 있으니 미리 넣어둠)
 
 # ----7. runpod 
 paramiko
+
+# ----8. OpenAI 
+openai>=1.0.0
+httpx               # 비동기 통신용

@@ -18,6 +18,7 @@ class VisualResponse(BaseModel):
     # LLM 상세 분석 결과 (일반 이미지 분석 시 활용)
     description: Optional[str] = Field(None, description="이미지에 대한 전체적인 설명")
     recommendation: Optional[str] = Field(None, description="정비 권고 사항")
+    category: Optional[str] = Field(None, description="이미지 분류 (TIRES, ENGINE, EXTERIOR 등)")
     
     # 결과 이미지 경로
     processed_image_url: Optional[str] = Field(None, description="분석 결과가 표시된 S3 이미지 URL")
