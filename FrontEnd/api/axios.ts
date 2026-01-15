@@ -2,9 +2,9 @@ import axios from 'axios';
 import { Platform } from 'react-native';
 
 const BASE_URL = Platform.select({
-    android: 'http://10.0.2.2:8080', // Android Emulator Loopback
-    ios: 'http://localhost:8080', // iOS Simulator Loopback
-    default: '', // Web: Use relative path for Proxy (package.json proxy)
+    android: 'http://192.168.0.11:8080', // Physical Device / Emulator (LAN IP)
+    ios: 'http://192.168.0.11:8080', // Physical Device / Emulator (LAN IP)
+    default: 'http://192.168.0.11:8080', // Fallback
 });
 
 // Create axios instance
