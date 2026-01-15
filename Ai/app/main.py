@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 
 from ai.app.api.v1.routes.health import router as health_router
 from ai.app.api.v1.routes.router import router as predict_router
-from ai.app.api.v1.routes.visual_router import router as vision_router
+from ai.app.api.v1.routes.visual_router import router as visual_router
 from ai.app.api.v1.routes.audio_router import router as audio_router
 
 
@@ -49,7 +49,7 @@ def create_app() -> FastAPI:
     # ---- 라우터 등록(기존 OBD + Vision + Audio) ----
     app.include_router(health_router, prefix="/api/v1", tags=["health"])
     app.include_router(predict_router, prefix="/api/v1", tags=["predict"])
-    app.include_router(vision_router, prefix="/api/v1", tags=["vision"])
+    app.include_router(visual_router, prefix="/api/v1", tags=["visual"])
     app.include_router(audio_router, prefix="/api/v1", tags=["audio"])
 
     return app

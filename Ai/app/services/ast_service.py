@@ -22,14 +22,14 @@ async def run_ast_inference(processed_audio_buffer) -> AudioResponse:
     16kHz WAV 버퍼를 받아 AST 모델로 엔진 소리 여부 판별
     """
     if model is None:
-        # 모델 학습 전 임시 응답 (분석이 안되므로 신뢰도 0으로 반환하여 LLM 유도)
+        # [수정] 테스트를 위해 "고장(FAULTY)" 상태를 반환하도록 변경
         return AudioResponse(
-            status="UNKNOWN",
+            status="FAULTY",
             analysis_type="AST",
-            component="UNKNOWN",
-            detail=AudioDetail(diagnosed_label="UNKNOWN", description="모델 준비 중입니다."),
-            confidence=0.0,
-            is_critical=False
+            component="ENGINE",
+            detail=AudioDetail(diagnosed_label="ENGINE_KNOCKING", description="테스트용: 엔진 노킹 소음 감지"),
+            confidence=0.95,
+            is_critical=True
         )
 
     # TODO: 실제 추론 로직 (feature_extractor -> model)

@@ -8,7 +8,7 @@ class DetectionItem(BaseModel):
     confidence: float = Field(..., description="모델의 확신도 (0.0 ~ 1.0)")
     bbox: List[int] = Field(..., description="감지 박스 좌표 [x, y, w, h]")
 
-class VisionResponse(BaseModel):
+class VisualResponse(BaseModel):
     """최종 비전 분석 응답 규격"""
     status: str = Field(..., description="전체 상태 (NORMAL, WARNING, CRITICAL)")
     analysis_type: str = Field(..., description="분석 주체 (DASHBOARD 또는 GENERAL_IMAGE)")
