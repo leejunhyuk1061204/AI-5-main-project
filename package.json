@@ -1,0 +1,20 @@
+{
+    "name": "ai-5-main-project-root",
+    "version": "1.0.0",
+    "description": "Root project to manage multi-service startup",
+    "scripts": {
+        "dev": "npm run dev:front",
+        "server": "concurrently --kill-others-on-fail --prefix \"[{name}]\" --names \"BACK,AI\" --prefix-colors \"bgGreen.bold,bgYellow.bold\" \"npm run dev:back\" \"npm run dev:ai\"",
+        "dev:front": "cd frontend && npx expo start -c --port 3000",
+        "dev:back": "cd backend && ./gradlew clean build bootRun",
+        "dev:ai": "./ai_env/bin/python -m uvicorn app.main:app --app-dir ai --host 0.0.0.0 --port 8000 --reload"
+    },
+    "proxy": "http://localhost:3000",
+    "keywords": [],
+    "author": "",
+    "license": "ISC",
+    "dependencies": {},
+    "devDependencies": {
+        "concurrently": "^8.2.2"
+    }
+}
