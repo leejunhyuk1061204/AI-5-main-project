@@ -1,15 +1,15 @@
 # app/services/llm_service.py
-from ai.app.schemas.visual_schema import VisionResponse
+from ai.app.schemas.visual_schema import VisualResponse
 from ai.app.schemas.audio_schema import AudioResponse, AudioDetail
 
-async def analyze_general_image(s3_url: str) -> VisionResponse:
+async def analyze_general_image(s3_url: str) -> VisualResponse:
     """
-    LLM(Vision)을 통한 일반 이미지 분석 결과를 규격에 맞춰 반환
+    LLM(Visual)을 통한 일반 이미지 분석 결과를 규격에 맞춰 반환
     """
     # TODO: 실제 GPT-4o 등 API 호출 로직이 들어갈 자리
     
     # [Mock Data] 스키마 규격에 완벽히 일치시킴
-    return VisionResponse(
+    return VisualResponse(
         status="INFO",
         analysis_type="GENERAL_IMAGE", # 분석 주체 명시
         detected_count=0,              # LLM은 개별 탐지보다 설명을 우선함

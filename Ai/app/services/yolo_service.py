@@ -1,6 +1,6 @@
 # app/services/yolo_service.py
 from ultralytics import YOLO
-from ai.app.schemas.visual_schema import VisionResponse, DetectionItem
+from ai.app.schemas.visual_schema import VisualResponse, DetectionItem
 import os
 
 # 1. 모델 경로 설정 (학습 후 생성된 best.pt가 위치할 곳)
@@ -13,17 +13,24 @@ else:
     print(f"Warning: {MODEL_PATH}를 찾을 수 없습니다. 학습 전이라면 Mock 모드로 작동합니다.")
     model = None
 
-async def run_yolo_inference(s3_url: str) -> VisionResponse:
+async def run_yolo_inference(s3_url: str) -> VisualResponse:
     """
     S3 URL 이미지를 받아 YOLOv8 모델로 38개 경고등을 감지합니다.
     """
     # 모델이 아직 준비되지 않았을 경우 (학습 전) 처리
     if model is None:
-        return VisionResponse(
-            status="NORMAL",
+        # [수정] 테스트를 위해 "경고(WARNING)" 상태를 반환하도록 변경
+        return VisualResponse(
+            status="WARNING",
             analysis_type="DASHBOARD",
-            detected_count=0,
-            detections=[],
+            detected_count=1,
+            detections=[
+                DetectionItem(
+                    label="Check Engine",
+                    confidence=0.98,
+                    bbox=[100, 100, 50, 50]
+                )
+            ],
             processed_image_url=s3_url
         )
 
@@ -51,7 +58,7 @@ async def run_yolo_inference(s3_url: str) -> VisionResponse:
     # 경고등이 하나라도 발견되면 "WARNING" 상태로 반환합니다.
     status = "WARNING" if len(detections) > 0 else "NORMAL"
     
-    return VisionResponse(
+    return VisualResponse(
         status=status,
         analysis_type="DASHBOARD",
         detected_count=len(detections),
