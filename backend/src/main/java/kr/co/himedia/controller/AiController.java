@@ -7,6 +7,8 @@ import kr.co.himedia.service.AiDiagnosisService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/ai")
 @RequiredArgsConstructor
@@ -28,7 +30,8 @@ public class AiController {
      * Vision (이미지) 또는 Audio (소리) 진단
      */
     @PostMapping("/diagnose")
-    public ApiResponse<Object> requestDiagnosis(@RequestBody DiagnosisRequestDto requestDto) {
+    public ApiResponse<Object> requestDiagnosis(
+            @RequestBody DiagnosisRequestDto requestDto) {
         Object result = aiDiagnosisService.requestDiagnosis(requestDto);
         return ApiResponse.success(result);
     }

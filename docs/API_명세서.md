@@ -199,3 +199,19 @@
             "model_version": "v1.0.2"
         }
         ```
+
+### 5. Text Embedding (Ollama)
+- **POST `/embedding`**
+    - **Description**: 텍스트를 입력받아 벡터(임베딩)를 반환 (RAG 검색용).
+    - **Request (JSON)**:
+        ```json
+        {
+            "text": "엔진 오일 교체 주기"
+        }
+        ```
+    - **Response (JSON)**:
+        ```json
+        {
+            "embedding": [0.123, -0.456, ...], // 1024 dimensions
+        }
+        ```

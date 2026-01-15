@@ -3,11 +3,11 @@ import json
 import base64
 import httpx
 import re
-from openai import AsyncOpenAI
+# from openai import AsyncOpenAI
 from ai.app.schemas.visual_schema import VisualResponse
 from ai.app.schemas.audio_schema import AudioResponse, AudioDetail
 
-client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+# client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY") or "MISSING_KEY")
 
 # ---------------------------------------------------------
 # 1. 시각 전문 진단 (GPT-4o Vision)
