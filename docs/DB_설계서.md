@@ -54,6 +54,16 @@
 | | expires_at | TIMESTAMP | | 토큰 만료 일시 |
 | | last_synced_at | TIMESTAMP | | 최종 데이터 동기화 성공 시각 |
 
+#### 2.1.4 리프레시 토큰 (refresh_tokens - BE-AU-006)
+*사용자의 로그인 유지를 위한 JWT Refresh Token을 관리합니다.*
+
+| 테이블명 | 컬럼명 | 타입 | 제약조건 | 설명 |
+|:---|:---|:---|:---|:---|
+| **refresh_tokens** | id | BIGINT | PK, AUTO_INC | 식별자 |
+| | user_id | UUID | FK, UK, NOT NULL | 사용자 식별자 (users.user_id) |
+| | token | VARCHAR(255) | UK, NOT NULL | Refresh Token 문자열 |
+| | expiry_date | TIMESTAMP | NOT NULL | 토큰 만료 일시 |
+
 | 테이블명 | 컬럼명 | 타입 | 제약조건 | 설명 |
 |:---|:---|:---|:---|:---|
 | **vehicles** | vehicles_id | UUID | PK | 차량 고유 식별자 |

@@ -2,7 +2,9 @@ package kr.co.himedia.service;
 
 import kr.co.himedia.common.ApiResponse;
 import kr.co.himedia.dto.auth.*;
+import kr.co.himedia.entity.RefreshToken;
 import kr.co.himedia.entity.User;
+import kr.co.himedia.repository.RefreshTokenRepository;
 import kr.co.himedia.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -25,6 +27,7 @@ public class UserService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
+    private final RefreshTokenRepository refreshTokenRepository;
 
     // 사용자 회원가입
     public UserResponse createUser(SignupRequest req) {
@@ -57,10 +60,54 @@ public class UserService {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid credentials");
         }
 
-        String token = jwtTokenProvider.createToken(user.getUserId().toString());
+        String accessToken = jwtTokenProvider.createAccessToken(user.getUserId().toString());
+        String refreshToken = jwtTokenProvider.createRefreshToken(user.getUserId().toString());
+
+        // 기존 리프레시 토큰이 있다면 삭제 (또는 중복 로그인 허용 시 업데이트 로직)
+        refreshTokenRepository.deleteByUser(user);
+
+        refreshTokenRepository.save(RefreshToken.builder()
+                .user(user)
+                .token(refreshToken)
+                .expiryDate(java.time.Instant.now().plusMillis(604800000)) // 7일
+                .build());
+
         user.setLastLoginAt(LocalDateTime.now());
         userRepository.save(user);
-        return new TokenResponse(token);
+
+        return TokenResponse.builder()
+                .accessToken(accessToken)
+                .refreshToken(refreshToken)
+                .build();
+    }
+
+    public TokenResponse refresh(TokenRefreshRequest req) {
+        RefreshToken refreshToken = refreshTokenRepository.findByToken(req.getRefreshToken())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid refresh token"));
+
+        if (refreshToken.getExpiryDate().isBefore(java.time.Instant.now())) {
+            refreshTokenRepository.delete(refreshToken);
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Refresh token expired");
+        }
+
+        User user = refreshToken.getUser();
+
+        // Token Rotation: 기존 토큰 삭제 후 새 토큰 발급
+        refreshTokenRepository.delete(refreshToken);
+
+        String newAccessToken = jwtTokenProvider.createAccessToken(user.getUserId().toString());
+        String newRefreshToken = jwtTokenProvider.createRefreshToken(user.getUserId().toString());
+
+        refreshTokenRepository.save(RefreshToken.builder()
+                .user(user)
+                .token(newRefreshToken)
+                .expiryDate(java.time.Instant.now().plusMillis(604800000))
+                .build());
+
+        return TokenResponse.builder()
+                .accessToken(newAccessToken)
+                .refreshToken(newRefreshToken)
+                .build();
     }
 
     // 사용자 프로필 조회

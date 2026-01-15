@@ -19,6 +19,7 @@ async def analyze_general_image(s3_url: str) -> VisualResponse:
 
     [분석 가이드라인]
     1. 분류(Category): 사진 속 주요 부품이 무엇인지 먼저 판단하십시오.
+       - DASHBOARD (대시보드: 엔진오일, 배터리, ABS 등)
        - EXTERIOR (외관: 범퍼, 도어, 휀더, 스크래치 등)
        - TIRES_WHEELS_IMAGE (타이어, 휠)
        - GLASS_WINDOWS (유리, 창문, 썬팅)
@@ -158,4 +159,11 @@ async def analyze_audio_with_llm(s3_url: str) -> AudioResponse:
         )
     except Exception as e:
         print(f"[LLM Audio Error] {e}")
-        return AudioResponse(status="ERROR", confidence=0.0)
+        return AudioResponse(
+            status="ERROR",
+            analysis_type="LLM_AUDIO",
+            category="UNKNOWN_AUDIO",
+            detail=AudioDetail(diagnosed_label="Error", description="오디오 분석 실패"),
+            confidence=0.0,
+            is_critical=False
+        )
