@@ -7,6 +7,9 @@ import { cssInterop } from 'nativewind';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { authService } from '../services/auth';
+import { Alert } from 'react-native';
+
 export default function SignUp() {
     const navigation = useNavigation<any>();
     const insets = useSafeAreaInsets();
@@ -14,9 +17,51 @@ export default function SignUp() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [passwordConfirm, setPasswordConfirm] = useState('');
+    const [loading, setLoading] = useState(false);
 
     const [showPassword, setShowPassword] = useState(false);
     const [showPasswordConfirm, setShowPasswordConfirm] = useState(false);
+
+    const handleSignup = async () => {
+        // Validation
+        if (!name || !email || !password || !passwordConfirm) {
+            Alert.alert("입력 오류", "모든 정보를 입력해주세요.");
+            return;
+        }
+
+        if (password !== passwordConfirm) {
+            Alert.alert("비밀번호 불일치", "비밀번호가 일치하지 않습니다.");
+            return;
+        }
+
+        if (password.length < 8) {
+            Alert.alert("비밀번호 오류", "비밀번호는 8자 이상이어야 합니다.");
+            return;
+        }
+
+        try {
+            setLoading(true);
+            const response = await authService.signup({
+                email,
+                password,
+                nickname: name // Map 'name' to 'nickname' as per API spec
+            });
+
+            if (response.success) {
+                Alert.alert("가입 완료", "회원가입이 완료되었습니다. 로그인해주세요.", [
+                    { text: "확인", onPress: () => navigation.navigate('Login', { fromSignup: true }) }
+                ]);
+            } else {
+                Alert.alert("가입 실패", response.error?.message || "회원가입 중 오류가 발생했습니다.");
+            }
+        } catch (error: any) {
+            // Check for conflict (409) or other errors
+            const errorMsg = error.response?.data?.error?.message || "네트워크 오류가 발생했습니다. 다시 시도해주세요.";
+            Alert.alert("오류", errorMsg);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     return (
         <SafeAreaView className="flex-1 bg-background-dark">
@@ -89,7 +134,11 @@ export default function SignUp() {
                                     keyboardType="email-address"
                                     autoCapitalize="none"
                                 />
-                                <View className="absolute right-4 pointer-events-none">
+                                <View
+                                    className="absolute right-4"
+                                    pointerEvents={Platform.OS === 'web' ? undefined : 'none'}
+                                    style={Platform.OS === 'web' ? { pointerEvents: 'none' } : undefined}
+                                >
                                     <MaterialIcons name="mail" size={20} className="text-slate-500" color="#64748b" />
                                 </View>
                             </View>
@@ -162,14 +211,15 @@ export default function SignUp() {
             >
                 <View className="max-w-lg mx-auto w-full">
                     <TouchableOpacity
-                        className="w-full bg-primary hover:bg-primary/90 rounded-xl h-14 flex-row items-center justify-center gap-2 shadow-lg shadow-blue-500/30 active:opacity-90 mb-4"
+                        className={`w-full bg-primary hover:bg-primary/90 rounded-xl h-14 flex-row items-center justify-center gap-2 shadow-lg shadow-blue-500/30 active:opacity-90 mb-4 ${loading ? 'opacity-70' : ''}`}
                         activeOpacity={0.8}
-                        onPress={() => navigation.navigate('Login', { fromSignup: true })}
+                        onPress={handleSignup}
+                        disabled={loading}
                     >
                         <Text className="text-white font-bold text-lg">
-                            다음
+                            {loading ? "처리중..." : "회원가입 완료"}
                         </Text>
-                        <MaterialIcons name="arrow-forward" size={20} color="white" />
+                        {!loading && <MaterialIcons name="arrow-forward" size={20} color="white" />}
                     </TouchableOpacity>
 
                     {/* Login Link */}

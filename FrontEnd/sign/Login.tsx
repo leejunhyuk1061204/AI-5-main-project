@@ -6,21 +6,57 @@ import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+import { authService } from '../services/auth';
+import { Alert } from 'react-native';
+
 export default function Login() {
     const navigation = useNavigation<any>();
     const route = useRoute<any>();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [loading, setLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
 
-    const handleLogin = () => {
-        // Implement login logic here
+    const handleLogin = async () => {
+        if (!email || !password) {
+            Alert.alert("입력 오류", "이메일과 비밀번호를 입력해주세요.");
+            return;
+        }
 
-        // Check if user came from SignUp (New User)
-        if (route.params?.fromSignup) {
-            navigation.navigate('RegisterMain');
-        } else {
-            navigation.navigate('MainPage');
+        try {
+            setLoading(true);
+            const response = await authService.login({ email, password });
+
+            if (response.success && response.data) {
+                // Store tokens
+                await AsyncStorage.setItem('accessToken', response.data.accessToken);
+                await AsyncStorage.setItem('refreshToken', response.data.refreshToken);
+
+                // Fetch and store user info
+                try {
+                    const profileResponse = await authService.getProfile(response.data.accessToken);
+                    if (profileResponse.success && profileResponse.data) {
+                        await AsyncStorage.setItem('userNickname', profileResponse.data.nickname);
+                    }
+                } catch (e) {
+                    console.error("Failed to fetch profile", e);
+                }
+
+                // Navigate
+                if (route.params?.fromSignup) {
+                    navigation.navigate('RegisterMain'); // Or ActiveReg flow start
+                } else {
+                    navigation.navigate('MainPage');
+                }
+            } else {
+                Alert.alert("로그인 실패", response.error?.message || "이메일 또는 비밀번호를 확인해주세요.");
+            }
+        } catch (error: any) {
+            console.error("Login Error:", error);
+            const errorMsg = error.response?.data?.error?.message || "서버 연결에 실패했습니다.";
+            Alert.alert("오류", errorMsg);
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -65,7 +101,11 @@ export default function Login() {
                         <View className="gap-1.5">
                             <Text className="text-sm font-medium text-gray-300 ml-1">이메일</Text>
                             <View className="relative group">
-                                <View className="absolute inset-y-0 left-0 pl-4 justify-center pointer-events-none z-10">
+                                <View
+                                    className="absolute inset-y-0 left-0 pl-4 justify-center z-10"
+                                    pointerEvents={Platform.OS === 'web' ? undefined : 'none'}
+                                    style={Platform.OS === 'web' ? { pointerEvents: 'none' } : undefined}
+                                >
                                     <MaterialIcons name="mail" size={20} className="text-gray-500" color="#6b7280" />
                                 </View>
                                 <TextInput
@@ -84,7 +124,11 @@ export default function Login() {
                         <View className="gap-1.5">
                             <Text className="text-sm font-medium text-gray-300 ml-1">비밀번호</Text>
                             <View className="relative group">
-                                <View className="absolute inset-y-0 left-0 pl-4 justify-center pointer-events-none z-10">
+                                <View
+                                    className="absolute inset-y-0 left-0 pl-4 justify-center z-10"
+                                    pointerEvents={Platform.OS === 'web' ? undefined : 'none'}
+                                    style={Platform.OS === 'web' ? { pointerEvents: 'none' } : undefined}
+                                >
                                     <MaterialIcons name="lock" size={20} className="text-gray-500" color="#6b7280" />
                                 </View>
                                 <TextInput
@@ -120,9 +164,12 @@ export default function Login() {
                         {/* Login Button */}
                         <TouchableOpacity
                             onPress={handleLogin}
-                            className="w-full rounded-xl bg-primary py-4 items-center justify-center shadow-lg shadow-blue-500/20 active:opacity-90 mt-4"
+                            className={`w-full rounded-xl bg-primary py-4 items-center justify-center shadow-lg shadow-blue-500/20 active:opacity-90 mt-4 ${loading ? 'opacity-70' : ''}`}
+                            disabled={loading}
                         >
-                            <Text className="text-sm font-bold text-white">로그인</Text>
+                            <Text className="text-sm font-bold text-white">
+                                {loading ? "로그인 중..." : "로그인"}
+                            </Text>
                         </TouchableOpacity>
                     </View>
 

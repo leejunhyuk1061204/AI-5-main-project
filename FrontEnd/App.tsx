@@ -22,6 +22,8 @@ import ActiveLoading from './ register/active/ActiveLoading';
 import ActiveSuccess from './ register/active/ActiveSuccess';
 import PassiveReg from './ register/passive/PassiveReg';
 import DiagMain from './diagnosis/DiagMain';
+import HistoryMain from './history/HistoryMain';
+import AlertMain from './alert/AlertMain';
 
 // Keep the splash screen visible while we fetch resources
 ExpoSplashScreen.preventAutoHideAsync();
@@ -119,6 +121,8 @@ export default function App() {
           <Stack.Screen name="ActiveSuccess" component={ActiveSuccess} />
           <Stack.Screen name="PassiveReg" component={PassiveReg} />
           <Stack.Screen name="DiagMain" component={DiagMain} />
+          <Stack.Screen name="HistoryMain" component={HistoryMain} />
+          <Stack.Screen name="AlertMain" component={AlertMain} />
         </Stack.Navigator>
       </NavigationContainer>
     </SafeAreaProvider>
