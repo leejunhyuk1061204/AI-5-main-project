@@ -92,9 +92,7 @@ conda activate ai5
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
 
 # 3. 주요 프레임워크 설치
-pip install ultralytics transformers xgboost lightgbm pytorch-lightning librosa fastapi uvicorn python-multipart
-
-
+pip install ultralytics transformers xgboost lightgbm pytorch-lightning librosa fastapi uvicorn python-multipart openai httpx evaluate kagglehub
 
 ---
 ### Frontend 환경설정 및 실행 (Frontend Setup) ###
