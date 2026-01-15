@@ -97,12 +97,6 @@ export default function ActiveLoading({ navigation }: any) {
                 style={{ paddingTop: insets.top }}
             >
                 <View className="flex-row items-center justify-between px-4 py-3">
-                    <TouchableOpacity
-                        className="w-10 h-10 items-center justify-center rounded-full active:bg-white/10"
-                        onPress={() => navigation.goBack()}
-                    >
-                        <MaterialIcons name="arrow-back" size={24} color="white" />
-                    </TouchableOpacity>
                     <Text className="text-white text-lg font-bold tracking-tight uppercase opacity-90 pr-10 flex-1 text-center">
                         AI Diagnostics
                     </Text>
