@@ -52,3 +52,22 @@ logging:
   level:
     org.hibernate.SQL: DEBUG
     org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+
+encryption:
+  key: ${ENCRYPTION_KEY:car-sentry-default-key-32bytes-!!} # 32바이트 권장
+
+smartcar:
+  client-id: ${SMARTCAR_CLIENT_ID:7a114bab-4496-481e-97d6-665f464f8396}
+  client-secret: ${SMARTCAR_CLIENT_SECRET:your-smartcar-secret-here}
+  redirect-uri: ${SMARTCAR_REDIRECT_URI:http://localhost:8080/api/v1/auth/callback/smartcar}
+  token-uri: https://auth.smartcar.com/oauth/token
+
+high-mobility:
+  client-id: ${HM_CLIENT_ID:3c26eb5b-3af5-48b9-b8e3-1bff90976dce}
+  client-secret: ${HM_CLIENT_SECRET:taDQDeBOG3TEaZqSfQKQ--lg9OjQIgdK}
+  redirect-uri: ${HM_REDIRECT_URI:http://localhost:8080/api/v1/auth/callback/high_mobility}
+  token-uri: https://sandbox.api.high-mobility.com/v1/access_tokens
+
+ai:
+  server:
+    url: ${AI_SERVER_URL:http://car-sentry-ai:8000}
