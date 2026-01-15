@@ -6,4 +6,5 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface ObdLogRepository extends JpaRepository<ObdLog, ObdLog.ObdLogId> {
+    void deleteByTimeBefore(java.time.OffsetDateTime time);
 }

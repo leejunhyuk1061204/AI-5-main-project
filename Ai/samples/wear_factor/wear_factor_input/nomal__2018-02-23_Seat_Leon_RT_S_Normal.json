@@ -1,0 +1,25 @@
+{
+  "target_item": "ENGINE_OIL",
+  "last_replaced": {
+    "date": "2025-06-01",
+    "mileage": 48000
+  },
+  "vehicle_metadata": {
+    "model_year": 2020,
+    "fuel_type": "GASOLINE",
+    "total_mileage": 52000
+  },
+  "driving_habits": {
+    "avg_rpm": 897.8,
+    "hard_accel_count": 0,
+    "hard_brake_count": 1,
+    "idle_ratio": 0.18
+  },
+  "_debug": {
+    "csv_path": "C:\\Users\\301\\Desktop\\FinalPr\\AI-5-main-project\\ai\\data\\obd\\raw\\nomal\\2018-02-23_Seat_Leon_RT_S_Normal.csv",
+    "window_seconds": 60,
+    "window_start": "07:58:07.634000",
+    "window_end": "07:59:07.634000",
+    "rows_in_window": 709
+  }
+}

@@ -18,6 +18,7 @@ public class VehicleService {
 
     private final VehicleRepository vehicleRepository;
 
+    // 차량 수동 등록 (첫 차량일 경우 대표 차량 설정)
     @Transactional
     public VehicleDto.Response registerVehicle(UUID userId, VehicleDto.RegistrationRequest request) {
         // 첫 차량 등록 시 자동으로 대표 차량으로 설정
@@ -32,6 +33,7 @@ public class VehicleService {
         return VehicleDto.Response.from(savedVehicle);
     }
 
+    // OBD 기반 차량 자동 등록
     @Transactional
     public VehicleDto.Response registerVehicleByObd(UUID userId, VehicleDto.ObdRegistrationRequest request) {
         // 첫 차량 등록 시 자동으로 대표 차량으로 설정
@@ -46,18 +48,21 @@ public class VehicleService {
         return VehicleDto.Response.from(savedVehicle);
     }
 
+    // 사용자 소유 차량 목록 조회
     public List<VehicleDto.Response> getVehicleList(UUID userId) {
         return vehicleRepository.findByUserIdAndDeletedAtIsNull(userId).stream()
                 .map(VehicleDto.Response::from)
                 .collect(Collectors.toList());
     }
 
+    // 차량 상세 정보 조회
     public VehicleDto.Response getVehicleDetail(UUID vehicleId) {
         Vehicle vehicle = vehicleRepository.findByVehicleIdAndDeletedAtIsNull(vehicleId)
                 .orElseThrow(() -> new IllegalArgumentException("해당 차량을 찾을 수 없습니다."));
         return VehicleDto.Response.from(vehicle);
     }
 
+    // 차량 정보(별명, 메모) 수정
     @Transactional
     public VehicleDto.Response updateVehicle(UUID vehicleId, VehicleDto.UpdateRequest request) {
         Vehicle vehicle = vehicleRepository.findByVehicleIdAndDeletedAtIsNull(vehicleId)
@@ -67,6 +72,7 @@ public class VehicleService {
         return VehicleDto.Response.from(vehicle);
     }
 
+    // 대표 차량 설정 (기존 대표 차량 해제 후 설정)
     @Transactional
     public void setPrimaryVehicle(UUID userId, UUID vehicleId) {
         Vehicle newPrimary = vehicleRepository.findByVehicleIdAndDeletedAtIsNull(vehicleId)
@@ -84,6 +90,7 @@ public class VehicleService {
         newPrimary.setPrimary(true);
     }
 
+    // 차량 삭제 (Soft Delete)
     @Transactional
     public void deleteVehicle(UUID vehicleId) {
         Vehicle vehicle = vehicleRepository.findByVehicleIdAndDeletedAtIsNull(vehicleId)

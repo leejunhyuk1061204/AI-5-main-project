@@ -17,10 +17,12 @@ public class MasterDataService {
 
     private final CarModelMasterRepository carModelMasterRepository;
 
+    // 제조사 목록 조회 (중복 제거)
     public List<String> getManufacturers() {
         return carModelMasterRepository.findDistinctManufacturers();
     }
 
+    // 제조사별 차량 모델 목록 조회 (연식 내림차순 정렬)
     public List<CarModelDto> getModelsByManufacturer(String manufacturer) {
         List<CarModelMaster> models = carModelMasterRepository
                 .findByManufacturerOrderByModelNameAscModelYearDesc(manufacturer);

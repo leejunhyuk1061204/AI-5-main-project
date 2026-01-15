@@ -10,6 +10,7 @@ import java.time.OffsetDateTime;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
+import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.JdbcTypeCode;
@@ -55,6 +56,7 @@ public class ObdLog {
     @NoArgsConstructor
     @AllArgsConstructor
     @Builder
+    @EqualsAndHashCode
     public static class ObdLogId implements Serializable {
         private OffsetDateTime time;
         private UUID vehicleId;
