@@ -13,4 +13,4 @@ async def analyze_visual(s3_url: str): # S3 URL을 인자로 받음
     result = await get_smart_visual_diagnosis(s3_url)
     
     # 서비스 결과(dict)를 Response 모델 형식에 맞춰 반환
-    return result["data"]
+    return result["content"]
