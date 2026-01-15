@@ -60,16 +60,14 @@ export default function Tos() {
     const handleStart = async () => {
         // Optional: Validate required agreements
         // For now, allowing proceed if user clicks start, or we can enforce service/privacy
-        /*
-        if (!agreements.service || !agreements.privacy) {
-          Alert.alert('알림', '필수 약관에 동의해주세요.');
-          return;
+        if (!agreements.service || !agreements.privacy || !agreements.location) {
+            Alert.alert('알림', '필수 약관에 모두 동의해주세요.');
+            return;
         }
-        */
 
         try {
             await AsyncStorage.setItem('hasAgreedToTos', 'true');
-            navigation.replace('Login');
+            navigation.navigate('SignUp'); // Changed from 'Login' to 'SignUp' (navigate allows back)
         } catch (e) {
             console.error('Failed to save ToS status', e);
         }

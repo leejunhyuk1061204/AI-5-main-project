@@ -3,18 +3,30 @@ import { View, Text, TextInput, TouchableOpacity, ScrollView, Platform, Keyboard
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function Login() {
     const navigation = useNavigation<any>();
+    const route = useRoute<any>();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
 
     const handleLogin = () => {
         // Implement login logic here
-        // For now, navigate to MainPage
-        navigation.navigate('MainPage');
+
+        // Check if user came from SignUp (New User)
+        if (route.params?.fromSignup) {
+            navigation.navigate('RegisterMain');
+        } else {
+            navigation.navigate('MainPage');
+        }
+    };
+
+    const handleReset = async () => {
+        await AsyncStorage.clear();
+        navigation.replace('Tos');
     };
 
     return (
@@ -145,6 +157,14 @@ export default function Login() {
                             <Text className="text-sm font-semibold text-primary">회원가입</Text>
                         </TouchableOpacity>
                     </View>
+
+                    {/* Reset Button (For Testing) */}
+                    <TouchableOpacity
+                        onPress={handleReset}
+                        className="mt-8 mb-4 items-center"
+                    >
+                        <Text className="text-xs text-gray-600 underline">앱 초기화 (테스트용)</Text>
+                    </TouchableOpacity>
 
                 </ScrollView>
             </KeyboardAvoidingView>

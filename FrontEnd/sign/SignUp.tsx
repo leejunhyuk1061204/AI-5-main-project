@@ -27,6 +27,7 @@ export default function SignUp() {
                 <TouchableOpacity
                     className="flex items-center justify-center w-10 h-10 rounded-full hover:bg-white/10"
                     activeOpacity={0.7}
+                    onPress={() => navigation.goBack()}
                 >
                     <MaterialIcons name="arrow-back-ios-new" size={24} className="text-white" />
                 </TouchableOpacity>
@@ -163,6 +164,7 @@ export default function SignUp() {
                     <TouchableOpacity
                         className="w-full bg-primary hover:bg-primary/90 rounded-xl h-14 flex-row items-center justify-center gap-2 shadow-lg shadow-blue-500/30 active:opacity-90 mb-4"
                         activeOpacity={0.8}
+                        onPress={() => navigation.navigate('Login', { fromSignup: true })}
                     >
                         <Text className="text-white font-bold text-lg">
                             다음
