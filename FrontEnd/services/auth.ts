@@ -13,9 +13,7 @@ export interface LoginRequest {
 }
 
 export interface TokenResponse {
-    grantType: string;
-    accessToken: string;
-    refreshToken: string;
+    token: string;
 }
 
 export interface UserResponse {
