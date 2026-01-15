@@ -29,12 +29,13 @@ export default function Login() {
 
             if (response.success && response.data) {
                 // Store tokens
-                await AsyncStorage.setItem('accessToken', response.data.accessToken);
-                await AsyncStorage.setItem('refreshToken', response.data.refreshToken);
+                await AsyncStorage.setItem('accessToken', response.data.token);
+                // RefreshToken is not yet implemented in backend
+                // await AsyncStorage.setItem('refreshToken', response.data.refreshToken);
 
                 // Fetch and store user info
                 try {
-                    const profileResponse = await authService.getProfile(response.data.accessToken);
+                    const profileResponse = await authService.getProfile(response.data.token);
                     if (profileResponse.success && profileResponse.data) {
                         await AsyncStorage.setItem('userNickname', profileResponse.data.nickname);
                     }
