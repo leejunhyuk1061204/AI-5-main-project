@@ -92,7 +92,19 @@ conda activate ai5
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
 
 # 3. 주요 프레임워크 설치
-pip install ultralytics transformers xgboost lightgbm pytorch-lightning librosa fastapi uvicorn python-multipart openai httpx evaluate kagglehub
+ pip install \
+ pandas \
+ ultralytics \
+ transformers \
+ xgboost \
+ lightgbm \
+ pytorch-lightning \
+ librosa \
+ fastapi \
+ uvicorn \
+ python-multipart
+ openai httpx evaluate kagglehub
+
 
 ---
 ### Frontend 환경설정 및 실행 (Frontend Setup) ###
@@ -111,3 +123,4 @@ npm run dev
 # 3. 실기기 테스트 시 주의사항
 # 핸드폰으로 테스트할 경우, PC와 핸드폰이 같은 와이파이에 있어야 합니다.
 # frontend/api/axios.ts 파일에서 본인의 PC IP 주소(예: 192.168.0.11)로 설정을 확인해주세요.
+
