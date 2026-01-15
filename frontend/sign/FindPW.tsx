@@ -69,7 +69,11 @@ export default function FindPW() {
                                 이메일
                             </Text>
                             <View className="relative">
-                                <View className="absolute inset-y-0 left-0 pl-4 justify-center pointer-events-none z-10">
+                                <View
+                                    className="absolute inset-y-0 left-0 pl-4 justify-center z-10"
+                                    pointerEvents={Platform.OS === 'web' ? undefined : 'none'}
+                                    style={Platform.OS === 'web' ? { pointerEvents: 'none' } : undefined}
+                                >
                                     <MaterialIcons name="mail" size={20} className="text-slate-400 group-focus-within:text-primary" color="#94a3b8" />
                                 </View>
                                 <TextInput

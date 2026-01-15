@@ -198,7 +198,7 @@ const styles = StyleSheet.create({
     },
     cardLabel: {
         color: '#94a3b8',
-        fontSize: 12,
+        fontSize: 14,
         textTransform: 'uppercase',
         letterSpacing: 1,
         marginBottom: 4,

@@ -1,11 +1,13 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, ScrollView, Dimensions } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, Dimensions, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import Svg, { Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
 import { useNavigation } from '@react-navigation/native';
 import BottomNav from '../nav/BottomNav';
+
+import Header from '../header/Header';
 
 const { width } = Dimensions.get('window');
 
@@ -24,25 +26,8 @@ export default function MainPage() {
                 showsVerticalScrollIndicator={false}
             >
 
-                {/* Header */}
-                <View className="flex-row items-center justify-between px-6 pt-6 pb-2">
-                    <View>
-                        <TouchableOpacity onPress={() => navigation.navigate('Login')}>
-                            <Text className="text-2xl font-bold text-primary tracking-tight">
-                                로그인
-                            </Text>
-                        </TouchableOpacity>
-                        <Text className="text-gray-400 text-xs mt-1">
-                            Vehicle Status: Connected
-                        </Text>
-                    </View>
-                    <TouchableOpacity
-                        className="w-10 h-10 items-center justify-center rounded-full bg-[#1b2127] border border-white/10 active:scale-95"
-                        activeOpacity={0.7}
-                    >
-                        <MaterialIcons name="notifications-none" size={24} color="white" />
-                    </TouchableOpacity>
-                </View>
+                <Header />
+
 
                 {/* Car Info Card */}
                 <View className="px-6 py-4">
@@ -70,7 +55,12 @@ export default function MainPage() {
                 {/* Health Score Circular Chart */}
                 <View className="items-center justify-center py-6 relative">
                     {/* Background Glow */}
-                    <View className="absolute w-48 h-48 bg-primary/10 rounded-full blur-3xl pointer-events-none" />
+                    {/* Background Glow */}
+                    <View
+                        className="absolute w-48 h-48 bg-primary/10 rounded-full blur-3xl"
+                        pointerEvents={Platform.OS === 'web' ? undefined : 'none'}
+                        style={Platform.OS === 'web' ? { pointerEvents: 'none' } : undefined}
+                    />
 
                     <View className="relative w-64 h-64 items-center justify-center">
                         <Svg width="100%" height="100%" viewBox="0 0 100 100" className="-rotate-90">
