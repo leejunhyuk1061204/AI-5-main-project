@@ -162,5 +162,7 @@ print("[Info] 최종 테스트(Test 20%) 수행 중...")
 metrics = trainer.evaluate(test_dataset) # 여기는 테스트셋(20%)
 print(f"🎯 최종 정확도(Accuracy): {metrics['eval_accuracy']:.4f}")
 
-model.save_pretrained("./Ai/weights/audio/best_ast_model")
+# 7. 학습된 모델 저장 (이것이 음성판 'best.pt'가 됩니다)
+model.save_pretrained("./ai/weights/audio/best_ast_model")
+feature_extractor.save_pretrained("./ai/weights/audio/best_ast_model") # Feature Extractor도 같이 저장
 print("학습 완료 및 모델 저장 완료")

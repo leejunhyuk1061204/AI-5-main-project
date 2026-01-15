@@ -23,6 +23,7 @@ import ActiveSuccess from './ register/active/ActiveSuccess';
 import PassiveReg from './ register/passive/PassiveReg';
 import DiagMain from './diagnosis/DiagMain';
 import HistoryMain from './history/HistoryMain';
+import DrivingHis from './history/DrivingHis';
 import AlertMain from './alert/AlertMain';
 
 // Keep the splash screen visible while we fetch resources
@@ -55,12 +56,18 @@ export default function App() {
           await NavigationBar.setButtonStyleAsync("light");
         }
 
-        // Check Tos agreement
-        const hasAgreed = await AsyncStorage.getItem('hasAgreedToTos');
-        if (hasAgreed === 'true') {
-          setInitialRoute('Login');
+        // Check for persistent login
+        const token = await AsyncStorage.getItem('accessToken');
+        if (token) {
+          setInitialRoute('MainPage');
         } else {
-          setInitialRoute('Tos');
+          // Check Tos agreement
+          const hasAgreed = await AsyncStorage.getItem('hasAgreedToTos');
+          if (hasAgreed === 'true') {
+            setInitialRoute('Login');
+          } else {
+            setInitialRoute('Tos');
+          }
         }
       } catch (e) {
         console.warn(e);
@@ -122,6 +129,7 @@ export default function App() {
           <Stack.Screen name="PassiveReg" component={PassiveReg} />
           <Stack.Screen name="DiagMain" component={DiagMain} />
           <Stack.Screen name="HistoryMain" component={HistoryMain} />
+          <Stack.Screen name="DrivingHis" component={DrivingHis} />
           <Stack.Screen name="AlertMain" component={AlertMain} />
         </Stack.Navigator>
       </NavigationContainer>

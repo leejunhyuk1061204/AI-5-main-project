@@ -5,7 +5,7 @@ import os
 from ai.app.schemas.audio_schema import AudioResponse, AudioDetail
 
 # 1. 모델 경로 (학습 후 생성될 경로)
-MODEL_PATH = "Ai/weights/audio/best_ast_model"
+MODEL_PATH = "ai/weights/audio/best_ast_model"
 
 # 서버 시작 시 모델 로드
 if os.path.exists(MODEL_PATH):

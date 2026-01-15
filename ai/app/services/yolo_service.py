@@ -4,7 +4,7 @@ from ai.app.schemas.visual_schema import VisualResponse, DetectionItem
 import os
 
 # 1. 모델 경로 설정 (학습 후 생성된 best.pt가 위치할 곳)
-MODEL_PATH = "Ai/weights/dashboard/best.pt"
+MODEL_PATH = "ai/weights/dashboard/best.pt"
 
 # 서버 시작 시 모델을 미리 메모리에 올려둡니다 (성능 최적화)
 if os.path.exists(MODEL_PATH):

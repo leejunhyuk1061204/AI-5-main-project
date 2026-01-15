@@ -1,12 +1,14 @@
 import React from 'react';
-import { View, Text, ScrollView, Platform } from 'react-native';
+import { View, Text, ScrollView, Platform, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 import BottomNav from '../nav/BottomNav';
 import Header from '../header/Header';
 
 export default function HistoryMain() {
+    const navigation = useNavigation();
     return (
         <SafeAreaView className="flex-1 bg-background-dark">
             <StatusBar style="light" />
@@ -33,7 +35,10 @@ export default function HistoryMain() {
 
                 <View className="px-6 gap-5 pb-6 mt-4">
                     {/* Card 1: Driving History Analysis */}
-                    <View className="w-full bg-[#ffffff08] border border-[#ffffff14] rounded-2xl p-6 relative overflow-hidden">
+                    <TouchableOpacity
+                        onPress={() => navigation.navigate('DrivingHis' as never)}
+                        className="w-full bg-[#ffffff08] border border-[#ffffff14] rounded-2xl p-6 relative overflow-hidden active:bg-[#ffffff10]"
+                    >
                         {/* Top Section */}
                         <View className="flex-row justify-between items-start mb-6">
                             <View className="flex-col gap-1">
@@ -71,7 +76,7 @@ export default function HistoryMain() {
                                 </View>
                             </View>
                         </View>
-                    </View>
+                    </TouchableOpacity>
 
                     {/* Card 2: Consumables Management */}
                     <View className="w-full bg-[#ffffff08] border border-[#ffffff14] rounded-2xl p-6 relative overflow-hidden">
