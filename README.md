@@ -93,3 +93,23 @@ pip install torch torchvision torchaudio --index-url https://download.pytorch.or
 
 # 3. 주요 프레임워크 설치
 pip install ultralytics transformers xgboost lightgbm pytorch-lightning librosa fastapi uvicorn python-multipart
+
+
+
+---
+### Frontend 환경설정 및 실행 (Frontend Setup) ###
+
+# 1. 필수 설치
+# Node.js LTS 버전 설치 필요
+npm install
+
+# 2. 실행 방법 (터미널 2개 사용 권장)
+# Terminal 1: 백엔드 & AI 서버 실행
+npm run server
+
+# Terminal 2: 프론트엔드 실행 (QR 코드 출력)
+npm run dev
+
+# 3. 실기기 테스트 시 주의사항
+# 핸드폰으로 테스트할 경우, PC와 핸드폰이 같은 와이파이에 있어야 합니다.
+# frontend/api/axios.ts 파일에서 본인의 PC IP 주소(예: 192.168.0.11)로 설정을 확인해주세요.
