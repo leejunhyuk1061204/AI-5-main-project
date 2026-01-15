@@ -1,6 +1,11 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
+import os
+from dotenv import load_dotenv, find_dotenv
+
+# 루트 폴더(.env)를 명시적으로 찾아서 로드
+load_dotenv(find_dotenv())
 
 from ai.app.api.v1.routes.health import router as health_router
 from ai.app.api.v1.routes.router import router as predict_router
@@ -51,6 +56,13 @@ def create_app() -> FastAPI:
     app.include_router(predict_router, prefix="/api/v1", tags=["predict"])
     app.include_router(visual_router, prefix="/api/v1", tags=["visual"])
     app.include_router(audio_router, prefix="/api/v1", tags=["audio"])
+
+    # [Test] 로컬 환경일 경우 테스트 라우터 등록
+    import os
+    if os.getenv("APP_ENV") == "local":
+        from ai.app.api.v1.routes.test_router import router as test_router
+        app.include_router(test_router, prefix="/api/v1", tags=["test"])
+        print("✅ Local Test Router Registered (/api/v1/test/predict/...)")
 
     return app
 
