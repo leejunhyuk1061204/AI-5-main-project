@@ -17,7 +17,7 @@ DB_CONFIG = {
     "port": os.getenv("DB_PORT", 5432),
     "database": os.getenv("DB_NAME", "car_sentry"),
     "user": os.getenv("DB_USER", "Ai-5-main-project"),
-    "password": os.getenv("DB_PASSWORD", "Ai5MainProj")
+    "password": os.getenv("DB_PASSWORD", "Ai5MainProjectPassword")
 }
 
 TRACKER_DB_PATH = "data/sync_tracker.db"
@@ -54,12 +54,12 @@ def init_vector_db():
         # 테이블 생성
         cursor.execute(f"""
             CREATE TABLE IF NOT EXISTS knowledge_vectors (
-                id SERIAL PRIMARY KEY,
+                knowledge_id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
+                category VARCHAR(20),
                 content TEXT,
                 metadata JSONB,
-                category TEXT,
                 embedding vector(1024), -- 1024차원 (mxbai-embed-large)
-                content_hash TEXT UNIQUE
+                content_hash VARCHAR(64) UNIQUE
             );
         """)
         conn.commit()
