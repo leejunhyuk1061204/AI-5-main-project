@@ -1,7 +1,7 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   presets: [require("nativewind/preset")],
-  content: ["./**/*.{js,jsx,ts,tsx}"],
+  content: ["./App.{js,jsx,ts,tsx}", "./**/*.{js,jsx,ts,tsx}", "!./node_modules/**/*"],
   theme: {
     extend: {
       colors: {
@@ -14,10 +14,15 @@ module.exports = {
         "input-dark": "#1e2936",
         "input-border": "#2d3b4e",
         "text-secondary": "#94a3b8",
-        "deep-black": "#020202",
+        "deep-black": "#050505",
         "surface-highlight": "#232d3a",
         "primary-hover": "#0b6bcb",
         "border-dark": "#2A3441",
+        // New Design Colors
+        "navy-dark": "#0d141f",
+        "accent-blue": "#3d7eff",
+        "primary-blue": "#1a4d8c",
+        "muted-blue": "#4a5d7a",
       },
     },
   },

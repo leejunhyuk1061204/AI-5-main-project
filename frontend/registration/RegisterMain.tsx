@@ -50,7 +50,7 @@ export default function RegisterMain() {
                 <View className="gap-4">
                     {/* Card 1: Manual Entry */}
                     <TouchableOpacity
-                        className="group relative flex flex-col items-start gap-4 rounded-2xl border border-surface-highlight bg-surface-dark p-6 active:border-primary/50 active:scale-[0.98]"
+                        className="group relative flex flex-col items-start gap-4 rounded-2xl border border-[#ffffff14] bg-[#ffffff08] p-6 active:bg-[#ffffff10] active:scale-[0.98]"
                         activeOpacity={0.9}
                         onPress={() => navigation.navigate('PassiveReg')}
                     >
@@ -71,7 +71,7 @@ export default function RegisterMain() {
 
                     {/* Card 2: OBD-II Auto Connect */}
                     <TouchableOpacity
-                        className="relative flex flex-col items-start gap-4 rounded-2xl border border-primary/30 bg-surface-dark p-6 shadow-lg shadow-blue-500/10 active:border-primary active:scale-[0.98]"
+                        className="relative flex flex-col items-start gap-4 rounded-2xl border border-primary/30 bg-[#ffffff08] p-6 shadow-lg shadow-blue-500/10 active:bg-[#ffffff10] active:border-primary active:scale-[0.98]"
                         activeOpacity={0.9}
                         onPress={() => navigation.navigate('ActiveReg')}
                     >
