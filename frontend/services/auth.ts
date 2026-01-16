@@ -49,5 +49,23 @@ export const authService = {
             headers: { Authorization: `Bearer ${token}` }
         });
         return response.data;
+    },
+
+    updateProfile: async (token: string, nickname?: string, password?: string): Promise<ApiResponse<string>> => {
+        const payload: any = {};
+        if (nickname) payload.nickname = nickname;
+        if (password) payload.password = password;
+
+        const response = await api.patch<ApiResponse<string>>('/api/v1/auth/me', payload, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+        return response.data;
+    },
+
+    deleteAccount: async (token: string): Promise<ApiResponse<string>> => {
+        const response = await api.delete<ApiResponse<string>>('/api/v1/auth/me', {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+        return response.data;
     }
 };

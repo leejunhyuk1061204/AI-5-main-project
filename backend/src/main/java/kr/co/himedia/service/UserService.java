@@ -1,6 +1,7 @@
 package kr.co.himedia.service;
 
-import kr.co.himedia.common.ApiResponse;
+import kr.co.himedia.common.exception.BaseException;
+import kr.co.himedia.common.exception.ErrorCode;
 import kr.co.himedia.dto.auth.*;
 import kr.co.himedia.entity.RefreshToken;
 import kr.co.himedia.entity.User;
@@ -32,7 +33,7 @@ public class UserService {
     // 사용자 회원가입
     public UserResponse createUser(SignupRequest req) {
         userRepository.findByEmail(req.getEmail()).ifPresent(u -> {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Email already exists");
+            throw new BaseException(ErrorCode.EMAIL_ALREADY_EXISTS);
         });
 
         User user = User.builder()
@@ -54,16 +55,20 @@ public class UserService {
     // 사용자 로그인 및 토큰 발급
     public TokenResponse authenticate(LoginRequest req) {
         User user = userRepository.findByEmail(req.getEmail())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid credentials"));
+                .orElseThrow(() -> new BaseException(ErrorCode.INVALID_CREDENTIALS));
 
         if (!passwordEncoder.matches(req.getPassword(), user.getPasswordHash())) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid credentials");
+            throw new BaseException(ErrorCode.INVALID_CREDENTIALS);
+        }
+
+        if (user.getDeletedAt() != null) {
+            throw new BaseException(ErrorCode.INVALID_CREDENTIALS);
         }
 
         String accessToken = jwtTokenProvider.createAccessToken(user.getUserId().toString());
         String refreshToken = jwtTokenProvider.createRefreshToken(user.getUserId().toString());
 
-        // 기존 리프레시 토큰이 있다면 삭제 (또는 중복 로그인 허용 시 업데이트 로직)
+        // 기존 리프레시 토큰이 있다면 삭제
         refreshTokenRepository.deleteByUser(user);
 
         refreshTokenRepository.save(RefreshToken.builder()
@@ -71,7 +76,6 @@ public class UserService {
                 .token(refreshToken)
                 .expiryDate(java.time.Instant.now().plusMillis(604800000)) // 7일
                 .build());
-
         user.setLastLoginAt(LocalDateTime.now());
         userRepository.save(user);
 
@@ -83,11 +87,11 @@ public class UserService {
 
     public TokenResponse refresh(TokenRefreshRequest req) {
         RefreshToken refreshToken = refreshTokenRepository.findByToken(req.getRefreshToken())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid refresh token"));
+                .orElseThrow(() -> new BaseException(ErrorCode.INVALID_REFRESH_TOKEN));
 
         if (refreshToken.getExpiryDate().isBefore(java.time.Instant.now())) {
             refreshTokenRepository.delete(refreshToken);
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Refresh token expired");
+            throw new BaseException(ErrorCode.REFRESH_TOKEN_EXPIRED);
         }
 
         User user = refreshToken.getUser();
@@ -130,13 +134,26 @@ public class UserService {
     public void updateProfile(UUID userId, UserUpdateRequest req) {
         User user = userRepository.findById(userId)
                 .filter(u -> u.getDeletedAt() == null)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+                .orElseThrow(() -> new BaseException(ErrorCode.USER_NOT_FOUND));
 
         if (req.getNickname() != null)
             user.setNickname(req.getNickname());
         if (req.getFcmToken() != null)
             user.setFcmToken(req.getFcmToken());
+        if (req.getPassword() != null && !req.getPassword().isEmpty()) {
+            user.setPasswordHash(passwordEncoder.encode(req.getPassword()));
+        }
 
+        userRepository.save(user);
+    }
+
+    // FCM 토큰 전용 업데이트
+    public void updateFcmToken(UUID userId, String fcmToken) {
+        User user = userRepository.findById(userId)
+                .filter(u -> u.getDeletedAt() == null)
+                .orElseThrow(() -> new BaseException(ErrorCode.USER_NOT_FOUND));
+
+        user.setFcmToken(fcmToken);
         userRepository.save(user);
     }
 
@@ -144,7 +161,7 @@ public class UserService {
     public void deleteUser(UUID userId) {
         User user = userRepository.findById(userId)
                 .filter(u -> u.getDeletedAt() == null)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+                .orElseThrow(() -> new BaseException(ErrorCode.USER_NOT_FOUND));
 
         user.setDeletedAt(LocalDateTime.now());
         userRepository.save(user);
@@ -154,13 +171,13 @@ public class UserService {
     public void updateProfileImage(UUID userId, MultipartFile file) {
         User user = userRepository.findById(userId)
                 .filter(u -> u.getDeletedAt() == null)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+                .orElseThrow(() -> new BaseException(ErrorCode.USER_NOT_FOUND));
 
         try {
             user.setProfileImage(file.getBytes());
             userRepository.save(user);
         } catch (IOException e) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to upload image");
+            throw new BaseException(ErrorCode.INTERNAL_SERVER_ERROR, "이미지 업로드에 실패했습니다.");
         }
     }
 }

@@ -77,9 +77,7 @@ export default function SupManage() {
         <SafeAreaView className="flex-1 bg-background-dark">
             <StatusBar style="light" />
 
-            {/* Background Gradients */}
-            <View className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-primary/10 rounded-full blur-[100px]" />
-            <View className="absolute bottom-[-10%] right-[-10%] w-[60%] h-[60%] bg-[#151b2e] rounded-full blur-[100px] opacity-60" />
+            {/* Background Gradients Removed */}
 
             {/* Header */}
             <View className="flex-row items-center justify-between px-4 py-3 border-b border-gray-800 bg-[#101922]/95">

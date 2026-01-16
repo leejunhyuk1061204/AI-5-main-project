@@ -1,5 +1,7 @@
 package kr.co.himedia.service;
 
+import kr.co.himedia.common.exception.BaseException;
+import kr.co.himedia.common.exception.ErrorCode;
 import kr.co.himedia.dto.maintenance.MaintenanceHistoryRequest;
 import kr.co.himedia.dto.maintenance.MaintenanceHistoryResponse;
 import kr.co.himedia.dto.maintenance.ConsumableStatusResponse;
@@ -33,7 +35,7 @@ public class MaintenanceService {
         @Transactional
         public MaintenanceHistoryResponse registerMaintenance(UUID vehicleId, MaintenanceHistoryRequest request) {
                 Vehicle vehicle = vehicleRepository.findById(vehicleId)
-                                .orElseThrow(() -> new IllegalArgumentException("해당 차량을 찾을 수 없습니다. ID: " + vehicleId));
+                                .orElseThrow(() -> new BaseException(ErrorCode.VEHICLE_NOT_FOUND));
 
                 // 1. 정비 이력 저장
                 MaintenanceHistory history = MaintenanceHistory.builder()
@@ -167,7 +169,7 @@ public class MaintenanceService {
                         case ENGINE_OIL -> "ENGINE_OIL";
                         case TIRE -> "TIRES";
                         case BRAKE_PAD -> "BRAKE_PADS";
-                        default -> throw new IllegalArgumentException("Unsupported AI item: " + item);
+                        default -> throw new BaseException(ErrorCode.UNSUPPORTED_MAINTENANCE_ITEM);
                 };
         }
 }

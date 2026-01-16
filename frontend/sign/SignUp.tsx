@@ -47,17 +47,33 @@ export default function SignUp() {
                 nickname: name // Map 'name' to 'nickname' as per API spec
             });
 
+            console.log('Signup Response:', response);
             if (response.success) {
-                Alert.alert("가입 완료", "회원가입이 완료되었습니다. 로그인해주세요.", [
-                    { text: "확인", onPress: () => navigation.navigate('Login', { fromSignup: true }) }
-                ]);
+                if (Platform.OS === 'web') {
+                    alert("가입 완료\n회원가입이 완료되었습니다. 로그인해주세요.");
+                    navigation.navigate('Login', { fromSignup: true });
+                } else {
+                    Alert.alert("가입 완료", "회원가입이 완료되었습니다. 로그인해주세요.", [
+                        {
+                            text: "확인",
+                            onPress: () => navigation.navigate('Login', { fromSignup: true })
+                        }
+                    ]);
+                }
             } else {
                 Alert.alert("가입 실패", response.error?.message || "회원가입 중 오류가 발생했습니다.");
             }
         } catch (error: any) {
+            console.log('Signup Error Full:', JSON.stringify(error.response || error, null, 2));
+            console.log('Signup Error Status:', error.response?.status);
+
             // Check for conflict (409) or other errors
-            const errorMsg = error.response?.data?.error?.message || "네트워크 오류가 발생했습니다. 다시 시도해주세요.";
-            Alert.alert("오류", errorMsg);
+            if (error.response?.status === 409) {
+                Alert.alert("가입 실패", "이미 가입된 이메일입니다.\n다른 이메일을 사용하거나 로그인해주세요.");
+            } else {
+                const errorMsg = error.response?.data?.message || error.response?.data?.error?.message || "회원가입 중 오류가 발생했습니다.";
+                Alert.alert("오류", errorMsg);
+            }
         } finally {
             setLoading(false);
         }
