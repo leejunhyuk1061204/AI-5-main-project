@@ -1,9 +1,14 @@
+import sys
+import io
 import requests
-import json
 import re
 
+# Windows 터미널 한글 깨짐 방지
+if sys.platform == "win32":
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+
 OLLAMA_URL = "http://localhost:11434/api/generate"
-MODEL_NAME = "qwen2.5:7b"
+MODEL_NAME = "qwen2.5:3b"
 
 def test_dtc_translation():
     texts = [
@@ -11,7 +16,13 @@ def test_dtc_translation():
         "BARO Circuit Low Input"
     ]
     combined_input = "\n".join([f"[{i}] {text}" for i, text in enumerate(texts)])
-    prompt = f"Translate these automotive Diagnostic Trouble Code (DTC) descriptions into professional Korean. Keep it concise. Format as [index] Translation:\n\n{combined_input}"
+    # 프롬프트 보강: 형식을 더 엄격하게 요청
+    prompt = f"""Translate these automotive Diagnostic Trouble Code (DTC) descriptions into professional Korean.
+Keep it concise and professional.
+Output MUST follow this format for EACH line: [index] Translation
+
+Texts to translate:
+{combined_input}"""
     
     print(f"Testing DTC translation with {MODEL_NAME}...")
     try:
@@ -20,7 +31,10 @@ def test_dtc_translation():
             json={
                 "model": MODEL_NAME,
                 "prompt": prompt,
-                "stream": False
+                "stream": False,
+                "options": {
+                    "temperature": 0.3 # 일관성을 위해 낮은 온도로 설정
+                }
             },
             timeout=30
         )
@@ -30,11 +44,12 @@ def test_dtc_translation():
             
             # 파싱 시도
             translated_lines = {}
-            lines = result_text.split('\n')
+            lines = result_text.strip().split('\n')
             for line in lines:
                 line = line.strip()
                 if not line: continue
-                match = re.search(r'\[?(\d+)\]?[\s\.\:]+(.*)', line)
+                # 다양한 패턴 지원 ([0], [0]:, 0., 0:)
+                match = re.search(r'(?:\[?(\d+)\]?[\s\.\:]+)(.*)', line)
                 if match:
                     idx = int(match.group(1))
                     content = match.group(2).strip()
