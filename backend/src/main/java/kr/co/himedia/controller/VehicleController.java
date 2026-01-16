@@ -1,6 +1,7 @@
 package kr.co.himedia.controller;
 
 import jakarta.validation.Valid;
+import kr.co.himedia.dto.common.VehicleIdRequest;
 import kr.co.himedia.dto.vehicle.VehicleDto;
 import kr.co.himedia.service.VehicleService;
 import kr.co.himedia.common.ApiResponse;
@@ -82,11 +83,11 @@ public class VehicleController {
      * [BE-VH-006] 대표 차량 설정
      * 해당 차량을 사용자의 메인(Primary) 차량으로 설정합니다.
      */
-    @PatchMapping("/{vehicleId}/primary")
+    @PatchMapping("/primary")
     public ResponseEntity<ApiResponse<Void>> setPrimaryVehicle(
             @AuthenticationPrincipal CustomUserDetails userDetails,
-            @PathVariable UUID vehicleId) {
-        vehicleService.setPrimaryVehicle(userDetails.getUserId(), vehicleId);
+            @Valid @RequestBody VehicleIdRequest req) {
+        vehicleService.setPrimaryVehicle(userDetails.getUserId(), req.getVehicleId());
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 

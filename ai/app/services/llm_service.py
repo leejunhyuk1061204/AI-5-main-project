@@ -4,6 +4,8 @@ import base64
 import httpx
 import re
 from openai import AsyncOpenAI
+from ai.app.schemas.visual_schema import VisualResponse
+from ai.app.schemas.audio_schema import AudioResponse, AudioDetail
 
 client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY") or "MISSING_KEY")
 

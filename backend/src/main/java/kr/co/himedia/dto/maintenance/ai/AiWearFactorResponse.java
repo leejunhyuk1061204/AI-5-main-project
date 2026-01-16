@@ -10,7 +10,7 @@ import lombok.Setter;
 @NoArgsConstructor
 public class AiWearFactorResponse {
     @JsonProperty("predicted_wear_factor")
-    private double predictedWearFactor;
+    private Double predictedWearFactor;
 
     @JsonProperty("model_version")
     private String modelVersion;
