@@ -60,6 +60,7 @@ public class UserService {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid credentials");
         }
 
+<<<<<<< Updated upstream
         String accessToken = jwtTokenProvider.createAccessToken(user.getUserId().toString());
         String refreshToken = jwtTokenProvider.createRefreshToken(user.getUserId().toString());
 
@@ -72,6 +73,13 @@ public class UserService {
                 .expiryDate(java.time.Instant.now().plusMillis(604800000)) // 7일
                 .build());
 
+=======
+        if (user.getDeletedAt() != null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid credentials");
+        }
+
+        String token = jwtTokenProvider.createToken(user.getUserId().toString());
+>>>>>>> Stashed changes
         user.setLastLoginAt(LocalDateTime.now());
         userRepository.save(user);
 
@@ -136,6 +144,9 @@ public class UserService {
             user.setNickname(req.getNickname());
         if (req.getFcmToken() != null)
             user.setFcmToken(req.getFcmToken());
+        if (req.getPassword() != null && !req.getPassword().isEmpty()) {
+            user.setPasswordHash(passwordEncoder.encode(req.getPassword()));
+        }
 
         userRepository.save(user);
     }
