@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import kr.co.himedia.security.JwtTokenProvider;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
@@ -31,6 +32,7 @@ public class UserService {
     private final RefreshTokenRepository refreshTokenRepository;
 
     // 사용자 회원가입
+    @Transactional
     public UserResponse createUser(SignupRequest req) {
         userRepository.findByEmail(req.getEmail()).ifPresent(u -> {
             throw new BaseException(ErrorCode.EMAIL_ALREADY_EXISTS);
@@ -53,6 +55,7 @@ public class UserService {
     }
 
     // 사용자 로그인 및 토큰 발급
+    @Transactional
     public TokenResponse authenticate(LoginRequest req) {
         User user = userRepository.findByEmail(req.getEmail())
                 .orElseThrow(() -> new BaseException(ErrorCode.INVALID_CREDENTIALS));
@@ -70,6 +73,7 @@ public class UserService {
 
         // 기존 리프레시 토큰이 있다면 삭제
         refreshTokenRepository.deleteByUser(user);
+        refreshTokenRepository.flush(); // 즉시 반영하여 Unique 제약 조건 충돌 방지
 
         refreshTokenRepository.save(RefreshToken.builder()
                 .user(user)
@@ -85,6 +89,7 @@ public class UserService {
                 .build();
     }
 
+    @Transactional
     public TokenResponse refresh(TokenRefreshRequest req) {
         RefreshToken refreshToken = refreshTokenRepository.findByToken(req.getRefreshToken())
                 .orElseThrow(() -> new BaseException(ErrorCode.INVALID_REFRESH_TOKEN));
@@ -131,6 +136,7 @@ public class UserService {
     }
 
     // 사용자 프로필 정보 수정
+    @Transactional
     public void updateProfile(UUID userId, UserUpdateRequest req) {
         User user = userRepository.findById(userId)
                 .filter(u -> u.getDeletedAt() == null)
@@ -148,6 +154,7 @@ public class UserService {
     }
 
     // FCM 토큰 전용 업데이트
+    @Transactional
     public void updateFcmToken(UUID userId, String fcmToken) {
         User user = userRepository.findById(userId)
                 .filter(u -> u.getDeletedAt() == null)
@@ -158,6 +165,7 @@ public class UserService {
     }
 
     // 사용자 회원 탈퇴 (Soft Delete)
+    @Transactional
     public void deleteUser(UUID userId) {
         User user = userRepository.findById(userId)
                 .filter(u -> u.getDeletedAt() == null)
@@ -168,6 +176,7 @@ public class UserService {
     }
 
     // 사용자 프로필 이미지 업로드
+    @Transactional
     public void updateProfileImage(UUID userId, MultipartFile file) {
         User user = userRepository.findById(userId)
                 .filter(u -> u.getDeletedAt() == null)

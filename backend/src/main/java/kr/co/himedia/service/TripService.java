@@ -15,8 +15,8 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class TripService {
-
     private final TripSummaryRepository tripSummaryRepository;
+    private final AiDiagnosisService aiDiagnosisService;
 
     // 차량별 주행 기록 목록 조회
     @Transactional(readOnly = true)
@@ -59,8 +59,23 @@ public class TripService {
         }
 
         trip.setEndTime(LocalDateTime.now());
-        // TODO: Calculate distance, score, etc. here or via batch job
-        return tripSummaryRepository.save(trip);
+        TripSummary savedTrip = tripSummaryRepository.save(trip);
+
+        // [Trigger 1] 운행 종료 시 자동 진단 비동기 호출
+        try {
+            kr.co.himedia.dto.ai.UnifiedDiagnosisRequestDto requestDto = kr.co.himedia.dto.ai.UnifiedDiagnosisRequestDto
+                    .builder()
+                    .vehicleId(trip.getVehicleId().toString())
+                    // TODO: 해당 Trip 동안 수집된 데이터(OBD/Audio/Visual) 조회 로직 추가 필요
+                    // 현재는 빈 데이터셋으로 진단 트리거만 발생시킴
+                    .build();
+            aiDiagnosisService.requestUnifiedDiagnosisAsync(requestDto);
+        } catch (Exception e) {
+            // 진단 실패가 주행 종료 처리에 영향을 주지 않도록 로깅만 수행
+            // log.error("Auto diagnosis trigger failed", e);
+        }
+
+        return savedTrip;
     }
 
     // 수집된 로그 기반 주행 요약(거리, 점수 등) 갱신
