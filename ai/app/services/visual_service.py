@@ -21,42 +21,38 @@ async def get_smart_visual_diagnosis(s3_url: str):
     if result_content.status != "RE_UPLOAD_REQUIRED" and result_content.status != "ERROR":
          print(f"[Data Collection] 유효한 시각 데이터 수집됨! (Status: {result_content.status})")
          
-         # =========================================================================
-         # [S3 저장 로직] - 주석 해제 후 사용
-         # =========================================================================
-         # import boto3
-         # import uuid
-         # from datetime import datetime
-         # 
-         # s3_client = boto3.client('s3')
-         # BUCKET_NAME = "your-bucket-name"  # TODO: 실제 버킷 이름으로 변경
-         # 
-         # # 카테고리별 폴더 구조: dataset/visual/{CATEGORY}/{filename}.jpg
-         # # DASHBOARD인 경우 경고등 라벨 사용, 일반 이미지는 LLM이 분류한 카테고리 사용
-         # if final_response["type"] == "DASHBOARD":
-         #     category = "DASHBOARD"
-         # else:
-         #     category = getattr(result_content, 'category', 'UNKNOWN')
-         # 
-         # unique_id = str(uuid.uuid4())[:8]
-         # timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-         # s3_key = f"dataset/visual/{category}/{timestamp}_{unique_id}.jpg"
-         # 
-         # # 원본 파일 다운로드 후 S3에 재업로드 (카테고리 폴더로 이동)
-         # import requests
-         # image_data = requests.get(s3_url).content
-         # s3_client.put_object(
-         #     Bucket=BUCKET_NAME,
-         #     Key=s3_key,
-         #     Body=image_data,
-         #     Metadata={
-         #         "status": result_content.status,
-         #         "analysis_type": final_response["type"],
-         #         "source_url": s3_url
-         #     }
-         # )
-         # print(f"[S3 Upload] 저장 완료: s3://{BUCKET_NAME}/{s3_key}")
-         # =========================================================================
+         import boto3
+         import uuid
+         from datetime import datetime
+         
+         s3_client = boto3.client('s3')
+         BUCKET_NAME = "your-bucket-name"  # 중요! TODO: 실제 버킷 이름으로 변경 ###
+         
+         # 카테고리별 폴더 구조: dataset/visual/{CATEGORY}/{filename}.jpg
+         # DASHBOARD인 경우 경고등 라벨 사용, 일반 이미지는 LLM이 분류한 카테고리 사용
+         if final_response["type"] == "DASHBOARD":
+             category = "DASHBOARD"
+         else:
+             category = getattr(result_content, 'category', 'UNKNOWN')
+         
+         unique_id = str(uuid.uuid4())[:8]
+         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+         s3_key = f"dataset/visual/{category}/{timestamp}_{unique_id}.jpg"
+         
+         # 원본 파일 다운로드 후 S3에 재업로드 (카테고리 폴더로 이동)
+         import requests
+         image_data = requests.get(s3_url).content
+         s3_client.put_object(
+             Bucket=BUCKET_NAME,
+             Key=s3_key,
+             Body=image_data,
+             Metadata={
+                 "status": result_content.status,
+                 "analysis_type": final_response["type"],
+                 "source_url": s3_url
+             }
+         )
+         print(f"[S3 Upload] 저장 완료: s3://{BUCKET_NAME}/{s3_key}")
     else:
          print("[Data Collection] 품질 미달로 수집 제외.")
 

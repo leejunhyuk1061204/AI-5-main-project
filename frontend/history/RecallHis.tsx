@@ -28,13 +28,10 @@ export default function RecallHis() {
             <ScrollView className="flex-1 px-4 pt-6" contentContainerStyle={{ paddingBottom: 100 }}>
                 {/* Next Inspection Card */}
                 <View className="relative mb-8">
-                    {/* Glow Effect Background */}
-                    <View className="absolute -inset-0.5 bg-blue-500/20 rounded-2xl blur-lg" />
+                    {/* Glow Effect Background Removed */}
 
                     <View className="bg-surface-dark border border-white/10 rounded-2xl p-6 shadow-lg overflow-hidden">
-                        {/* Decorative Background Elements */}
-                        <View className="absolute -right-6 -top-6 w-32 h-32 bg-primary/10 rounded-full blur-2xl" />
-                        <View className="absolute -left-6 -bottom-6 w-24 h-24 bg-blue-500/10 rounded-full blur-xl" />
+                        {/* Decorative Background Elements Removed */}
 
                         <View className="relative z-10 gap-4">
                             <View className="flex-row justify-between items-start">

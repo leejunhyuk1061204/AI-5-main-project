@@ -1,5 +1,7 @@
 package kr.co.himedia.service;
 
+import kr.co.himedia.common.exception.BaseException;
+import kr.co.himedia.common.exception.ErrorCode;
 import kr.co.himedia.dto.vehicle.VehicleDto;
 import kr.co.himedia.entity.Vehicle;
 import kr.co.himedia.repository.VehicleRepository;
@@ -58,7 +60,7 @@ public class VehicleService {
     // 차량 상세 정보 조회
     public VehicleDto.Response getVehicleDetail(UUID vehicleId) {
         Vehicle vehicle = vehicleRepository.findByVehicleIdAndDeletedAtIsNull(vehicleId)
-                .orElseThrow(() -> new IllegalArgumentException("해당 차량을 찾을 수 없습니다."));
+                .orElseThrow(() -> new BaseException(ErrorCode.VEHICLE_NOT_FOUND));
         return VehicleDto.Response.from(vehicle);
     }
 
@@ -66,7 +68,7 @@ public class VehicleService {
     @Transactional
     public VehicleDto.Response updateVehicle(UUID vehicleId, VehicleDto.UpdateRequest request) {
         Vehicle vehicle = vehicleRepository.findByVehicleIdAndDeletedAtIsNull(vehicleId)
-                .orElseThrow(() -> new IllegalArgumentException("해당 차량을 찾을 수 없습니다."));
+                .orElseThrow(() -> new BaseException(ErrorCode.VEHICLE_NOT_FOUND));
 
         vehicle.updateInfo(request.getNickname(), request.getMemo());
         return VehicleDto.Response.from(vehicle);
@@ -79,7 +81,7 @@ public class VehicleService {
                 .orElseThrow(() -> new IllegalArgumentException("해당 차량을 찾을 수 없습니다."));
 
         if (!newPrimary.getUserId().equals(userId)) {
-            throw new IllegalArgumentException("잘못된 접근입니다."); // User ownership check
+            throw new BaseException(ErrorCode.ACCESS_DENIED);
         }
 
         // 기존 대표 차량 해제
@@ -94,7 +96,7 @@ public class VehicleService {
     @Transactional
     public void deleteVehicle(UUID vehicleId) {
         Vehicle vehicle = vehicleRepository.findByVehicleIdAndDeletedAtIsNull(vehicleId)
-                .orElseThrow(() -> new IllegalArgumentException("해당 차량을 찾을 수 없습니다."));
+                .orElseThrow(() -> new BaseException(ErrorCode.VEHICLE_NOT_FOUND));
         vehicle.delete();
     }
 }

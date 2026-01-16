@@ -32,37 +32,33 @@ class AudioService:
         if final_result.confidence >= 0.9 and final_result.status != "RE_RECORD_REQUIRED":
             print(f"[Data Collection] 유효한 데이터 수집됨! (Confidence: {final_result.confidence})")
             
-            # =========================================================================
-            # [S3 저장 로직] - 주석 해제 후 사용
-            # =========================================================================
-            # import boto3
-            # import uuid
-            # from datetime import datetime
-            # 
-            # s3_client = boto3.client('s3')
-            # BUCKET_NAME = "your-bucket-name"  # TODO: 실제 버킷 이름으로 변경
-            # 
-            # # 카테고리별 폴더 구조: dataset/audio/{CATEGORY}/{filename}.wav
-            # category = final_result.category  # ENGINE, SUSPENSION, BRAKES 등
-            # unique_id = str(uuid.uuid4())[:8]
-            # timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            # s3_key = f"dataset/audio/{category}/{timestamp}_{unique_id}.wav"
-            # 
-            # # 원본 파일 다운로드 후 S3에 재업로드 (카테고리 폴더로 이동)
-            # import requests
-            # audio_data = requests.get(s3_url).content
-            # s3_client.put_object(
-            #     Bucket=BUCKET_NAME,
-            #     Key=s3_key,
-            #     Body=audio_data,
-            #     Metadata={
-            #         "diagnosed_label": final_result.detail.diagnosed_label,
-            #         "confidence": str(final_result.confidence),
-            #         "source_url": s3_url
-            #     }
-            # )
-            # print(f"[S3 Upload] 저장 완료: s3://{BUCKET_NAME}/{s3_key}")
-            # =========================================================================
+            import boto3
+            import uuid
+            from datetime import datetime
+            
+            s3_client = boto3.client('s3')
+            BUCKET_NAME = "your-bucket-name"  # 중요! TODO: 실제 버킷 이름으로 변경 ###
+            
+            # 카테고리별 폴더 구조: dataset/audio/{CATEGORY}/{filename}.wav
+            category = final_result.category  # ENGINE, SUSPENSION, BRAKES 등
+            unique_id = str(uuid.uuid4())[:8]
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            s3_key = f"dataset/audio/{category}/{timestamp}_{unique_id}.wav"
+            
+            # 원본 파일 다운로드 후 S3에 재업로드 (카테고리 폴더로 이동)
+            import requests
+            audio_data = requests.get(s3_url).content
+            s3_client.put_object(
+                Bucket=BUCKET_NAME,
+                Key=s3_key,
+                Body=audio_data,
+                Metadata={
+                    "diagnosed_label": final_result.detail.diagnosed_label,
+                    "confidence": str(final_result.confidence),
+                    "source_url": s3_url
+                }
+            )
+            print(f"[S3 Upload] 저장 완료: s3://{BUCKET_NAME}/{s3_key}")
         else:
             print("[Data Collection] 학습 가치가 낮은 데이터이므로 수집 제외.")
             

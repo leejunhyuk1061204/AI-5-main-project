@@ -7,7 +7,7 @@ import BottomNav from '../nav/BottomNav';
 
 export default function AlertMain() {
     return (
-        <SafeAreaView className="flex-1 bg-[#0c0e12]">
+        <SafeAreaView className="flex-1 bg-background-dark">
             <StatusBar style="light" />
 
             {/* Background Pattern (Simulated) */}
@@ -49,7 +49,7 @@ export default function AlertMain() {
                     showsVerticalScrollIndicator={false}
                 >
                     {/* Unread: Critical Alert */}
-                    <TouchableOpacity activeOpacity={0.9} className="w-full relative overflow-hidden rounded-xl bg-[#1c222b]/60 border border-white/10">
+                    <TouchableOpacity activeOpacity={0.9} className="w-full relative overflow-hidden rounded-xl bg-[#ffffff08] border border-[#ffffff14]">
                         {/* Unread Indicator */}
                         <View className="absolute left-0 top-0 bottom-0 w-1 bg-primary" style={{ shadowColor: '#0d7ff2', shadowOpacity: 1, shadowRadius: 10, elevation: 5 }} />
 
@@ -74,7 +74,7 @@ export default function AlertMain() {
                     </TouchableOpacity>
 
                     {/* Unread: Maintenance Alert */}
-                    <TouchableOpacity activeOpacity={0.9} className="w-full relative overflow-hidden rounded-xl bg-[#1c222b]/60 border border-white/10">
+                    <TouchableOpacity activeOpacity={0.9} className="w-full relative overflow-hidden rounded-xl bg-[#ffffff08] border border-[#ffffff14]">
                         {/* Unread Indicator */}
                         <View className="absolute left-0 top-0 bottom-0 w-1 bg-primary" style={{ shadowColor: '#0d7ff2', shadowOpacity: 1, shadowRadius: 10, elevation: 5 }} />
 
@@ -92,7 +92,7 @@ export default function AlertMain() {
                     </TouchableOpacity>
 
                     {/* Read: Recall Info */}
-                    <TouchableOpacity activeOpacity={0.9} className="w-full relative overflow-hidden rounded-xl bg-[#1c222b]/60 border border-white/10 opacity-90">
+                    <TouchableOpacity activeOpacity={0.9} className="w-full relative overflow-hidden rounded-xl bg-[#ffffff08] border border-[#ffffff14] opacity-90">
                         <View className="flex-row gap-4 p-4 items-start">
                             <View className="items-center justify-center w-12 h-12 rounded-lg bg-white/5 border border-white/10">
                                 <MaterialIcons name="fact-check" size={24} color="#9ca3af" />
@@ -106,7 +106,7 @@ export default function AlertMain() {
                     </TouchableOpacity>
 
                     {/* Read: Tire Pressure */}
-                    <TouchableOpacity activeOpacity={0.9} className="w-full relative overflow-hidden rounded-xl bg-[#1c222b]/60 border border-white/10 opacity-90">
+                    <TouchableOpacity activeOpacity={0.9} className="w-full relative overflow-hidden rounded-xl bg-[#ffffff08] border border-[#ffffff14] opacity-90">
                         <View className="flex-row gap-4 p-4 items-start">
                             <View className="items-center justify-center w-12 h-12 rounded-lg bg-white/5 border border-white/10">
                                 <MaterialCommunityIcons name="car-tire-alert" size={24} color="#9ca3af" />
@@ -120,7 +120,7 @@ export default function AlertMain() {
                     </TouchableOpacity>
 
                     {/* Read: Weekly Report */}
-                    <TouchableOpacity activeOpacity={0.9} className="w-full relative overflow-hidden rounded-xl bg-[#1c222b]/60 border border-white/10 opacity-90">
+                    <TouchableOpacity activeOpacity={0.9} className="w-full relative overflow-hidden rounded-xl bg-[#ffffff08] border border-[#ffffff14] opacity-90">
                         <View className="flex-row gap-4 p-4 items-start">
                             <View className="items-center justify-center w-12 h-12 rounded-lg bg-white/5 border border-white/10">
                                 <MaterialIcons name="insights" size={24} color="#9ca3af" />

@@ -92,15 +92,7 @@ export default function DrivingHis() {
                                 <Text className="text-[#0d7ff2] text-sm font-bold mt-1 tracking-widest uppercase">최우수 등급</Text>
                             </View>
 
-                            {/* Bottom Glow Line */}
-                            <View className="absolute bottom-4 w-32 h-1 rounded-full overflow-hidden">
-                                <ExpoLinearGradient
-                                    colors={['transparent', 'rgba(13, 127, 242, 0.5)', 'transparent']}
-                                    start={{ x: 0, y: 0 }}
-                                    end={{ x: 1, y: 0 }}
-                                    style={{ flex: 1 }}
-                                />
-                            </View>
+                            {/* Bottom Glow Line Removed */}
                         </View>
 
                         {/* Stats Row */}
@@ -190,8 +182,7 @@ export default function DrivingHis() {
                         </View>
 
                         <View className="bg-[#161F29] rounded-xl border border-[#0d7ff2]/30 p-4 relative overflow-hidden">
-                            {/* Gradient Background Effect */}
-                            <View className="absolute top-0 right-0 w-32 h-32 bg-[#0d7ff2]/10 rounded-full -mr-16 -mt-16 blur-2xl" />
+                            {/* Gradient Background Effect Removed */}
 
                             <View className="flex-row justify-between items-center mb-4">
                                 <View className="flex-row items-center gap-3">
