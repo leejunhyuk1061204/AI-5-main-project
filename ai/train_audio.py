@@ -9,10 +9,11 @@ Usage:
     python train_audio.py --mode all       # 전체 실행 (기본값)
 """
 import argparse
-import kagglehub
+# import kagglehub  # 로컬 데이터를 사용하므로 주석 처리
 import os
 import torch
 import numpy as np
+import boto3
 from transformers import ASTForAudioClassification, ASTFeatureExtractor, Trainer, TrainingArguments
 from datasets import Dataset, Audio
 from sklearn.model_selection import train_test_split
@@ -56,16 +57,57 @@ def prepare_data():
     print("[Step 1] 데이터 준비 시작...")
     print("="*50)
     
-    DATA_SOURCE_PATHS = []
+    # =============================================================================
+    # 로컬 데이터 폴더에서 불러오기
+    # 폴더 구조:
+    #   ai/data/ast/
+    #     ├── normal/          (정상 엔진음: .wav 파일들)
+    #     ├── knocking/        (노킹 소리)
+    #     ├── belt/            (벨트 소리)
+    #     ├── misfire/         (실화 소리)
+    #     └── ... (추가 라벨 폴더)
+    # =============================================================================
+    LOCAL_DATA_DIR = "./ai/data/ast"
     
-    # Kaggle 데이터셋 다운로드
+    if not os.path.exists(LOCAL_DATA_DIR):
+        os.makedirs(LOCAL_DATA_DIR, exist_ok=True)
+        print(f"[Warning] 데이터 폴더가 없어서 생성했습니다: {LOCAL_DATA_DIR}")
+        print(f"         여기에 라벨별 하위 폴더(normal, knocking 등)를 만들고 오디오 파일을 넣어주세요.")
+        print(f"         지원 형식: .wav, .mp3, .m4a, .ogg, .flac")
+        return False
+    
+    DATA_SOURCE_PATHS = [LOCAL_DATA_DIR]
+    
+    # (선택적) S3 수집 데이터도 추가로 불러오기 - 나중에 Active Learning 때 사용
     try:
-        kaggle_path = kagglehub.dataset_download("janboubiabderrahim/vehicle-sounds-dataset")
-        print(f"[Info] Kaggle 데이터셋 다운로드 완료: {kaggle_path}")
-        DATA_SOURCE_PATHS.append(kaggle_path)
+        s3_download_dir = "./ai/data/s3_audio"
+        s3 = boto3.client('s3')
+        bucket_name = os.getenv("S3_BUCKET_NAME", "car-sentry-data")
+        
+        objects = s3.list_objects_v2(Bucket=bucket_name, Prefix="dataset/audio/")
+        if 'Contents' in objects:
+            count = 0
+            for obj in objects['Contents']:
+                key = obj['Key']
+                # 다양한 오디오 형식 지원
+                audio_extensions = ('.wav', '.mp3', '.m4a', '.ogg', '.flac')
+                if not key.lower().endswith(audio_extensions): continue
+                
+                rel_path = key.replace("dataset/audio/", "")
+                local_path = os.path.join(s3_download_dir, rel_path)
+                
+                if not os.path.exists(local_path):
+                    os.makedirs(os.path.dirname(local_path), exist_ok=True)
+                    s3.download_file(bucket_name, key, local_path)
+                    count += 1
+            
+            if count > 0:
+                print(f"[Info] S3에서 {count}개의 신규 데이터를 다운로드했습니다.")
+            DATA_SOURCE_PATHS.append(s3_download_dir)
+            
     except Exception as e:
-        print(f"[Warning] Kaggle 다운로드 실패: {e}")
-    
+        print(f"[Info] S3 연결 건너뜀 (로컬 데이터만 사용): {e}")
+
     # 데이터 수집
     data_list = []
     for base_path in DATA_SOURCE_PATHS:
@@ -73,7 +115,9 @@ def prepare_data():
             continue
         for root, dirs, files in os.walk(base_path):
             for file in files:
-                if file.lower().endswith('.wav'):
+                # 다양한 오디오 형식 지원
+                audio_extensions = ('.wav', '.mp3', '.m4a', '.ogg', '.flac')
+                if file.lower().endswith(audio_extensions):
                     folder_name = os.path.basename(root)
                     label = LABEL_MAP.get(folder_name, folder_name)
                     full_path = os.path.join(root, file)
