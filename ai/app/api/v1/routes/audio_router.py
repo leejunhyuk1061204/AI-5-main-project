@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from ai.app.schemas.audio_schema import AudioResponse
 from ai.app.services.audio_service import AudioService
 
@@ -8,6 +8,7 @@ router = APIRouter(prefix="/predict", tags=["Audio Analysis"])
 @router.post("/audio", response_model=AudioResponse)
 async def analyze_audio(
     s3_url: str,  # S3 URL을 직접 받도록 수정
+    request: Request,
     service: AudioService = Depends()
 ):
     """
@@ -19,8 +20,13 @@ async def analyze_audio(
     """
     if not s3_url.startswith("http"):
         raise HTTPException(status_code=400, detail="유효한 S3 URL이 아닙니다.")
+    
+    # Safe Access
+    ast_model = getattr(request.app.state, "ast_model", None)
         
-    return await service.predict_audio_smart(s3_url)
+    return await service.predict_audio_smart(s3_url, ast_model=ast_model)
+
+
 
 @router.post("/audio/test-normal", response_model=AudioResponse)
 async def analyze_audio_normal_mock(

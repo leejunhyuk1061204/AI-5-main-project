@@ -1,11 +1,12 @@
 # app/services/audio_service.py
+import os
 from ai.app.services.hertz import process_to_16khz
 from ai.app.services.ast_service import run_ast_inference
 from ai.app.services.llm_service import analyze_audio_with_llm
 from ai.app.schemas.audio_schema import AudioResponse, AudioDetail
 
 class AudioService:
-    async def predict_audio_smart(self, s3_url: str) -> AudioResponse:
+    async def predict_audio_smart(self, s3_url: str, ast_model=None) -> AudioResponse:
         """
         16kHz 전처리 -> AST 분류 -> LLM 정밀 진단 통합 흐름
         """
@@ -17,7 +18,7 @@ class AudioService:
             return await analyze_audio_with_llm(s3_url)
 
         # 2. 1차 진단: AST 모델
-        ast_result = await run_ast_inference(audio_buffer)
+        ast_result = await run_ast_inference(audio_buffer, ast_model_payload=ast_model)
         
         # 3. 2차 진단 판단: 신뢰도가 낮거나(0.85 미만) 결과가 UNKNOWN일 때 LLM 호출
         if ast_result.confidence < 0.85 or ast_result.status == "UNKNOWN":
@@ -39,11 +40,17 @@ class AudioService:
             s3_client = boto3.client('s3')
             BUCKET_NAME = "your-bucket-name"  # 중요! TODO: 실제 버킷 이름으로 변경 ###
             
-            # 카테고리별 폴더 구조: dataset/audio/{CATEGORY}/{filename}.wav
+            # 카테고리별 폴더 구조: dataset/audio/{CATEGORY}/{filename}.{ext}
             category = final_result.category  # ENGINE, SUSPENSION, BRAKES 등
             unique_id = str(uuid.uuid4())[:8]
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            s3_key = f"dataset/audio/{category}/{timestamp}_{unique_id}.wav"
+            
+            # 원본 파일 확장자 추출 (mp3, wav, m4a 등)
+            from urllib.parse import urlparse
+            url_path = urlparse(s3_url).path
+            file_ext = os.path.splitext(url_path)[1].lower() or ".wav"
+            
+            s3_key = f"dataset/audio/{category}/{timestamp}_{unique_id}{file_ext}"
             
             # 원본 파일 다운로드 후 S3에 재업로드 (카테고리 폴더로 이동)
             import requests

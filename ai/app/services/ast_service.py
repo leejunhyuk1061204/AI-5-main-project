@@ -69,39 +69,35 @@ def get_category_from_label(label_name: str) -> str:
     return "UNKNOWN_AUDIO"
 
 # =============================================================================
-# 모델 로드
-# =============================================================================
-if os.path.exists(MODEL_PATH):
-    feature_extractor = ASTFeatureExtractor.from_pretrained(MODEL_PATH)
-    model = ASTForAudioClassification.from_pretrained(MODEL_PATH)
-    print(f"[AST Service] 모델 로드 완료: {MODEL_PATH}")
-else:
-    feature_extractor = None
-    model = None
-    print(f"[AST Service] Warning: {MODEL_PATH}가 없습니다. Mock 모드로 동작합니다.")
-
-# =============================================================================
 # 추론 함수
 # =============================================================================
-async def run_ast_inference(processed_audio_buffer) -> AudioResponse:
+async def run_ast_inference(processed_audio_buffer, ast_model_payload=None) -> AudioResponse:
     """16kHz WAV 버퍼를 받아 AST 모델로 소리 분류"""
     
     # 모델 미로드 시 Mock 응답
-    if model is None:
+    if ast_model_payload is None:
+        print("[AST Service] Model payload is None! Returning Mock Response.")
         label_name = "Engine_Knocking"
         category = get_category_from_label(label_name)
         
         return AudioResponse(
             status="FAULTY",
-            analysis_type="AST",
+            analysis_type="AST_MOCK",
             category=category,
             detail=AudioDetail(
                 diagnosed_label=label_name,
-                description="테스트용: 엔진 노킹 소음 감지"
+                description="테스트용: 엔진 노킹 소음 감지 (Mock)"
             ),
             confidence=0.95,
             is_critical=True
         )
+
+    model = ast_model_payload.get("model")
+    feature_extractor = ast_model_payload.get("feature_extractor")
+
+    if model is None or feature_extractor is None:
+        print("[AST Service] Model or FeatureExtractor is None! Returning Mock Response.")
+        return AudioResponse(status="ERROR", analysis_type="AST", category="ERROR", detail=AudioDetail(diagnosed_label="Error", description="Model not loaded"), confidence=0, is_critical=False)
 
     # =========================================================================
     # 실제 추론 로직

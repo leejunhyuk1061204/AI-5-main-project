@@ -3,11 +3,9 @@ import json
 import base64
 import httpx
 import re
-# from openai import AsyncOpenAI
-from ai.app.schemas.visual_schema import VisualResponse
-from ai.app.schemas.audio_schema import AudioResponse, AudioDetail
+from openai import AsyncOpenAI
 
-# client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY") or "MISSING_KEY")
+client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY") or "MISSING_KEY")
 
 # ---------------------------------------------------------
 # 1. 시각 전문 진단 (GPT-4o Vision)
@@ -45,23 +43,30 @@ async def analyze_general_image(s3_url: str) -> VisualResponse:
     """
 
     try:
-        # [Correct] Vision Input via 'responses.create' (New SDK Protocol)
-        response = await client.responses.create(
+        # [Correct] Standard OpenAI library usage
+        response = await client.chat.completions.create(
             model="gpt-4o",
-            input=[
+            messages=[
+                {
+                    "role": "system",
+                    "content": SYSTEM_PROMPT
+                },
                 {
                     "role": "user",
                     "content": [
-                        {"type": "input_text", "text": SYSTEM_PROMPT + "\n\n이 차량 외관 사진을 분석해줘."},
-                        {"type": "input_image", "image_url": s3_url}
+                        {"type": "text", "text": "이 차량 외관 사진을 분석해줘."},
+                        {"type": "image_url", "image_url": {"url": s3_url}}
                     ]
                 }
             ],
-            response_format={"type": "json_object"}
+            response_format={"type": "json_object"},
+            max_tokens=1000
         )
         
-        # [Correct] Access output via output_text
-        result = json.loads(response.output_text)
+        # [Correct] Access output via choices
+        content = response.choices[0].message.content
+        result = json.loads(content)
+
         current_status = result.get("status", "WARNING")
         
         return VisualResponse(
@@ -116,23 +121,30 @@ async def analyze_audio_with_llm(s3_url: str) -> AudioResponse:
             audio_response.raise_for_status()
             audio_data = base64.b64encode(audio_response.content).decode('utf-8')
 
-        # [Correct] Audio Input via 'responses.create' (New SDK Protocol)
-        response = await client.responses.create(
+        # [Correct] Audio Input via 'chat.completions.create'
+        response = await client.chat.completions.create(
             model="gpt-4o-audio-preview",
-            input=[{
-                "role": "user",
-                "content": [
-                    {"type": "input_text", "text": SYSTEM_PROMPT + "\n\n이 소리를 진단하고 반드시 JSON 포맷으로 응답하세요."},
-                    {
-                        "type": "input_audio",
-                        "audio": audio_data,
-                        "format": "wav"
-                    }
-                ]
-            }]
+            modalities=["text", "audio"],
+            audio={"voice": "alloy", "format": "wav"},
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": SYSTEM_PROMPT + "\n\n이 소리를 진단하고 반드시 JSON 포맷으로 응답하세요."},
+                        {
+                            "type": "input_audio",
+                            "input_audio": {
+                                "data": audio_data,
+                                "format": "wav"
+                            }
+                        }
+                    ]
+                }
+            ]
         )
         
-        content = response.output_text
+        content = response.choices[0].message.audio.transcript
+
         
         # [Robust] Regex를 이용한 강력한 JSON 추출
         match = re.search(r'\{.*\}', content, re.DOTALL)
