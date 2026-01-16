@@ -11,8 +11,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
-
+import org.springframework.transaction.annotation.Transactional;
 import kr.co.himedia.security.JwtTokenProvider;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -23,6 +22,7 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Transactional
 public class UserService {
 
     private final UserRepository userRepository;
@@ -68,14 +68,16 @@ public class UserService {
         String accessToken = jwtTokenProvider.createAccessToken(user.getUserId().toString());
         String refreshToken = jwtTokenProvider.createRefreshToken(user.getUserId().toString());
 
-        // 기존 리프레시 토큰이 있다면 삭제
-        refreshTokenRepository.deleteByUser(user);
+        // Create refresh token (Upsert: Update if exists, else Insert)
+        RefreshToken refreshTokenEntity = refreshTokenRepository.findByUser(user)
+                .orElse(RefreshToken.builder()
+                        .user(user)
+                        .build());
 
-        refreshTokenRepository.save(RefreshToken.builder()
-                .user(user)
-                .token(refreshToken)
-                .expiryDate(java.time.Instant.now().plusMillis(604800000)) // 7일
-                .build());
+        refreshTokenEntity.setToken(refreshToken);
+        refreshTokenEntity.setExpiryDate(java.time.Instant.now().plusMillis(604800000)); // 7 days
+
+        refreshTokenRepository.save(refreshTokenEntity);
         user.setLastLoginAt(LocalDateTime.now());
         userRepository.save(user);
 
@@ -96,17 +98,14 @@ public class UserService {
 
         User user = refreshToken.getUser();
 
-        // Token Rotation: 기존 토큰 삭제 후 새 토큰 발급
-        refreshTokenRepository.delete(refreshToken);
-
+        // Token Rotation: Update existing token
         String newAccessToken = jwtTokenProvider.createAccessToken(user.getUserId().toString());
         String newRefreshToken = jwtTokenProvider.createRefreshToken(user.getUserId().toString());
 
-        refreshTokenRepository.save(RefreshToken.builder()
-                .user(user)
-                .token(newRefreshToken)
-                .expiryDate(java.time.Instant.now().plusMillis(604800000))
-                .build());
+        refreshToken.setToken(newRefreshToken);
+        refreshToken.setExpiryDate(java.time.Instant.now().plusMillis(604800000));
+
+        refreshTokenRepository.save(refreshToken);
 
         return TokenResponse.builder()
                 .accessToken(newAccessToken)
@@ -118,7 +117,7 @@ public class UserService {
     public UserResponse getProfile(UUID userId) {
         User user = userRepository.findById(userId)
                 .filter(u -> u.getDeletedAt() == null)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+                .orElseThrow(() -> new BaseException(ErrorCode.USER_NOT_FOUND));
 
         return UserResponse.builder()
                 .userId(user.getUserId())

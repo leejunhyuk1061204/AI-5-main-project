@@ -30,6 +30,27 @@ const api = axios.create({
     },
 });
 
+// Request interceptor
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+api.interceptors.request.use(
+    async (config) => {
+        try {
+            const token = await AsyncStorage.getItem('accessToken');
+            if (token && !config.headers.Authorization) {
+                config.headers.Authorization = `Bearer ${token}`;
+                console.log('Added Authorization header:', config.headers.Authorization);
+            }
+        } catch (error) {
+            console.error('Error fetching token:', error);
+        }
+        return config;
+    },
+    (error) => {
+        return Promise.reject(error);
+    }
+);
+
 // Response interceptor
 api.interceptors.response.use(
     (response) => {
@@ -37,7 +58,7 @@ api.interceptors.response.use(
     },
     (error) => {
         // Handle global errors here
-        console.error('API Error:', error);
+        console.error('API Error:', error.response?.status, error.message);
         return Promise.reject(error);
     }
 );
