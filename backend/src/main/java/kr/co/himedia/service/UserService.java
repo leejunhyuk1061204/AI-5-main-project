@@ -140,6 +140,16 @@ public class UserService {
         userRepository.save(user);
     }
 
+    // FCM 토큰 전용 업데이트
+    public void updateFcmToken(UUID userId, String fcmToken) {
+        User user = userRepository.findById(userId)
+                .filter(u -> u.getDeletedAt() == null)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+
+        user.setFcmToken(fcmToken);
+        userRepository.save(user);
+    }
+
     // 사용자 회원 탈퇴 (Soft Delete)
     public void deleteUser(UUID userId) {
         User user = userRepository.findById(userId)
