@@ -7,7 +7,7 @@ import time
 INPUT_FILE = "data/dtc/github_dtc_bulk.json"
 OUTPUT_FILE = "data/dtc/github_dtc_bulk_ko.json"
 OLLAMA_URL = "http://localhost:11434/api/generate"
-MODEL_NAME = "llama3" # 사용자 환경에 따라 변경
+MODEL_NAME = "qwen2.5:7b" # llama3 -> qwen2.5:7b로 변경
 BATCH_SIZE = 50 # 한 번에 처리할 개수
 
 def translate_batch(texts):
@@ -27,13 +27,13 @@ def translate_batch(texts):
         )
         if response.status_code == 200:
             result_text = response.json().get('response', '')
+            print(f"      [Ollama Response Sample] {result_text[:100]}...") # 로그 추가
             # 파싱 로직 보완
             translated_lines = {}
             lines = result_text.split('\n')
             for line in lines:
                 line = line.strip()
                 if not line: continue
-                # "[0] 번역내용" 또는 "0. 번역내용" 또는 "0번: 번역내용" 등 대응
                 import re
                 match = re.search(r'\[?(\d+)\]?[\s\.\:]+(.*)', line)
                 if match:
@@ -46,7 +46,8 @@ def translate_batch(texts):
             
             # 만약 위 방식으로 파싱이 안 되었다면 줄 단위로 매칭 시도
             if not translated_lines:
-                for i, line in enumerate(lines[:len(texts)]):
+                clean_lines = [l.strip() for l in lines if l.strip() and not l.startswith('Translate')]
+                for i, line in enumerate(clean_lines[:len(texts)]):
                     translated_lines[i] = line.strip()
                     
             return translated_lines
