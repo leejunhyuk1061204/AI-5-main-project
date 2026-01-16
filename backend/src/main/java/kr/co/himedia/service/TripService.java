@@ -2,20 +2,28 @@ package kr.co.himedia.service;
 
 import kr.co.himedia.common.exception.BaseException;
 import kr.co.himedia.common.exception.ErrorCode;
+import kr.co.himedia.entity.ObdLog;
 import kr.co.himedia.entity.TripSummary;
+import kr.co.himedia.repository.ObdLogRepository;
 import kr.co.himedia.repository.TripSummaryRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class TripService {
     private final TripSummaryRepository tripSummaryRepository;
+    private final ObdLogRepository obdLogRepository;
     private final AiDiagnosisService aiDiagnosisService;
 
     // 차량별 주행 기록 목록 조회
@@ -63,16 +71,34 @@ public class TripService {
 
         // [Trigger 1] 운행 종료 시 자동 진단 비동기 호출
         try {
+            // 해당 Trip 동안 수집된 OBD 데이터 조회
+            List<ObdLog> tripLogs = obdLogRepository.findByVehicleIdAndTimeBetweenOrderByTimeAsc(
+                    trip.getVehicleId(),
+                    trip.getStartTime().atOffset(ZoneOffset.UTC),
+                    savedTrip.getEndTime().atOffset(ZoneOffset.UTC));
+
+            // LSTM 분석용 데이터 형식으로 변환 (간소화)
+            Map<String, Object> lstmInput = Map.of(
+                    "tripId", trip.getTripId().toString(),
+                    "logCount", tripLogs.size(),
+                    "logs", tripLogs.stream().map(log -> Map.of(
+                            "time", log.getTime().toString(),
+                            "rpm", log.getRpm(),
+                            "speed", log.getSpeed(),
+                            "coolantTemp", log.getCoolantTemp() != null ? log.getCoolantTemp() : 0.0,
+                            "engineLoad", log.getEngineLoad() != null ? log.getEngineLoad() : 0.0))
+                            .collect(Collectors.toList()));
+
             kr.co.himedia.dto.ai.UnifiedDiagnosisRequestDto requestDto = kr.co.himedia.dto.ai.UnifiedDiagnosisRequestDto
                     .builder()
                     .vehicleId(trip.getVehicleId().toString())
-                    // TODO: 해당 Trip 동안 수집된 데이터(OBD/Audio/Visual) 조회 로직 추가 필요
-                    // 현재는 빈 데이터셋으로 진단 트리거만 발생시킴
+                    .lstmAnalysis(lstmInput)
                     .build();
+
             aiDiagnosisService.requestUnifiedDiagnosisAsync(requestDto);
+            log.info("Successfully triggered auto diagnosis for trip: {}", tripId);
         } catch (Exception e) {
-            // 진단 실패가 주행 종료 처리에 영향을 주지 않도록 로깅만 수행
-            // log.error("Auto diagnosis trigger failed", e);
+            log.error("Auto diagnosis trigger failed for trip: {}", tripId, e);
         }
 
         return savedTrip;

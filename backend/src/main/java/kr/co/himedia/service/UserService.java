@@ -11,10 +11,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
-
-import kr.co.himedia.security.JwtTokenProvider;
 import org.springframework.transaction.annotation.Transactional;
+import kr.co.himedia.security.JwtTokenProvider;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
@@ -24,6 +22,7 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Transactional
 public class UserService {
 
     private final UserRepository userRepository;
@@ -32,7 +31,6 @@ public class UserService {
     private final RefreshTokenRepository refreshTokenRepository;
 
     // 사용자 회원가입
-    @Transactional
     public UserResponse createUser(SignupRequest req) {
         userRepository.findByEmail(req.getEmail()).ifPresent(u -> {
             throw new BaseException(ErrorCode.EMAIL_ALREADY_EXISTS);
@@ -55,7 +53,6 @@ public class UserService {
     }
 
     // 사용자 로그인 및 토큰 발급
-    @Transactional
     public TokenResponse authenticate(LoginRequest req) {
         User user = userRepository.findByEmail(req.getEmail())
                 .orElseThrow(() -> new BaseException(ErrorCode.INVALID_CREDENTIALS));
@@ -71,15 +68,16 @@ public class UserService {
         String accessToken = jwtTokenProvider.createAccessToken(user.getUserId().toString());
         String refreshToken = jwtTokenProvider.createRefreshToken(user.getUserId().toString());
 
-        // 기존 리프레시 토큰이 있다면 삭제
-        refreshTokenRepository.deleteByUser(user);
-        refreshTokenRepository.flush(); // 즉시 반영하여 Unique 제약 조건 충돌 방지
+        // Create refresh token (Upsert: Update if exists, else Insert)
+        RefreshToken refreshTokenEntity = refreshTokenRepository.findByUser(user)
+                .orElse(RefreshToken.builder()
+                        .user(user)
+                        .build());
 
-        refreshTokenRepository.save(RefreshToken.builder()
-                .user(user)
-                .token(refreshToken)
-                .expiryDate(java.time.Instant.now().plusMillis(604800000)) // 7일
-                .build());
+        refreshTokenEntity.setToken(refreshToken);
+        refreshTokenEntity.setExpiryDate(java.time.Instant.now().plusMillis(604800000)); // 7 days
+
+        refreshTokenRepository.save(refreshTokenEntity);
         user.setLastLoginAt(LocalDateTime.now());
         userRepository.save(user);
 
@@ -89,7 +87,6 @@ public class UserService {
                 .build();
     }
 
-    @Transactional
     public TokenResponse refresh(TokenRefreshRequest req) {
         RefreshToken refreshToken = refreshTokenRepository.findByToken(req.getRefreshToken())
                 .orElseThrow(() -> new BaseException(ErrorCode.INVALID_REFRESH_TOKEN));
@@ -101,17 +98,14 @@ public class UserService {
 
         User user = refreshToken.getUser();
 
-        // Token Rotation: 기존 토큰 삭제 후 새 토큰 발급
-        refreshTokenRepository.delete(refreshToken);
-
+        // Token Rotation: Update existing token
         String newAccessToken = jwtTokenProvider.createAccessToken(user.getUserId().toString());
         String newRefreshToken = jwtTokenProvider.createRefreshToken(user.getUserId().toString());
 
-        refreshTokenRepository.save(RefreshToken.builder()
-                .user(user)
-                .token(newRefreshToken)
-                .expiryDate(java.time.Instant.now().plusMillis(604800000))
-                .build());
+        refreshToken.setToken(newRefreshToken);
+        refreshToken.setExpiryDate(java.time.Instant.now().plusMillis(604800000));
+
+        refreshTokenRepository.save(refreshToken);
 
         return TokenResponse.builder()
                 .accessToken(newAccessToken)
@@ -123,7 +117,7 @@ public class UserService {
     public UserResponse getProfile(UUID userId) {
         User user = userRepository.findById(userId)
                 .filter(u -> u.getDeletedAt() == null)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+                .orElseThrow(() -> new BaseException(ErrorCode.USER_NOT_FOUND));
 
         return UserResponse.builder()
                 .userId(user.getUserId())
@@ -136,7 +130,6 @@ public class UserService {
     }
 
     // 사용자 프로필 정보 수정
-    @Transactional
     public void updateProfile(UUID userId, UserUpdateRequest req) {
         User user = userRepository.findById(userId)
                 .filter(u -> u.getDeletedAt() == null)
@@ -154,7 +147,6 @@ public class UserService {
     }
 
     // FCM 토큰 전용 업데이트
-    @Transactional
     public void updateFcmToken(UUID userId, String fcmToken) {
         User user = userRepository.findById(userId)
                 .filter(u -> u.getDeletedAt() == null)
@@ -165,7 +157,6 @@ public class UserService {
     }
 
     // 사용자 회원 탈퇴 (Soft Delete)
-    @Transactional
     public void deleteUser(UUID userId) {
         User user = userRepository.findById(userId)
                 .filter(u -> u.getDeletedAt() == null)
@@ -176,7 +167,6 @@ public class UserService {
     }
 
     // 사용자 프로필 이미지 업로드
-    @Transactional
     public void updateProfileImage(UUID userId, MultipartFile file) {
         User user = userRepository.findById(userId)
                 .filter(u -> u.getDeletedAt() == null)

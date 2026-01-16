@@ -60,30 +60,22 @@ def get_category_from_label(label_name: str) -> str:
     return "UNKNOWN_IMAGE"
 
 # =============================================================================
-# 모델 로드
-# =============================================================================
-if os.path.exists(MODEL_PATH):
-    model = YOLO(MODEL_PATH)
-else:
-    print(f"Warning: {MODEL_PATH}를 찾을 수 없습니다. Mock 모드로 작동합니다.")
-    model = None
-
-# =============================================================================
 # 추론 함수
 # =============================================================================
-async def run_yolo_inference(s3_url: str) -> VisualResponse:
+async def run_yolo_inference(s3_url: str, model=None) -> VisualResponse:
     """S3 URL 이미지를 받아 YOLOv8 모델로 감지합니다."""
     
-    # 모델 미로드 시 Mock 응답
+    # 모델 미로드 시 Mock 응답 또는 에러 처리
     if model is None:
+        print("[YOLO Service] Model is None! Returning Mock Response.")
         return VisualResponse(
             status="WARNING",
-            analysis_type="YOLO",
+            analysis_type="YOLO_MOCK",
             category="DASHBOARD",
             detected_count=1,
             detections=[
                 DetectionItem(
-                    label="Check Engine",
+                    label="Check Engine (Mock)",
                     confidence=0.98,
                     bbox=[100, 100, 50, 50]
                 )
@@ -92,7 +84,12 @@ async def run_yolo_inference(s3_url: str) -> VisualResponse:
         )
 
     # YOLO 추론
-    results = model.predict(source=s3_url, save=False, conf=0.25)
+    try:
+        results = model.predict(source=s3_url, save=False, conf=0.25)
+    except Exception as e:
+        print(f"[YOLO Service] Inference Error: {e}")
+        # 에러 발생 시 안전하게 빈 응답 반환 or Mock
+        return VisualResponse(status="ERROR", analysis_type="YOLO", category="ERROR", detected_count=0, detections=[], processed_image_url=s3_url)
     
     detections = []
     detected_categories = set()

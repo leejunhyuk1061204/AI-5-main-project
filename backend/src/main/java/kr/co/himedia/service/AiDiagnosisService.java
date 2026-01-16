@@ -5,7 +5,10 @@ import kr.co.himedia.dto.ai.DiagnosisRequestDto;
 import kr.co.himedia.dto.ai.DtcDto;
 import kr.co.himedia.dto.ai.UnifiedDiagnosisRequestDto;
 import kr.co.himedia.entity.DtcHistory;
+import kr.co.himedia.entity.ObdLog;
 import kr.co.himedia.repository.DtcHistoryRepository;
+import kr.co.himedia.repository.ObdLogRepository;
+import kr.co.himedia.repository.TripSummaryRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,10 +27,11 @@ import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.HashMap;
-
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 
 /**
  * AI 진단 및 DTC 처리 서비스
@@ -41,14 +45,20 @@ public class AiDiagnosisService {
     private final RabbitTemplate rabbitTemplate;
     private final RestTemplate restTemplate;
     private final KnowledgeService knowledgeService;
+    private final ObdLogRepository obdLogRepository;
+    private final TripSummaryRepository tripSummaryRepository;
 
     @Autowired
     public AiDiagnosisService(DtcHistoryRepository dtcHistoryRepository,
             RabbitTemplate rabbitTemplate,
-            KnowledgeService knowledgeService) {
+            KnowledgeService knowledgeService,
+            ObdLogRepository obdLogRepository,
+            TripSummaryRepository tripSummaryRepository) {
         this.dtcHistoryRepository = dtcHistoryRepository;
         this.rabbitTemplate = rabbitTemplate;
         this.knowledgeService = knowledgeService;
+        this.obdLogRepository = obdLogRepository;
+        this.tripSummaryRepository = tripSummaryRepository;
 
         // Timeout 설정 추가 (Hang 방지)
         org.springframework.http.client.SimpleClientHttpRequestFactory factory = new org.springframework.http.client.SimpleClientHttpRequestFactory();
@@ -66,7 +76,7 @@ public class AiDiagnosisService {
     @Value("${ai.server.url.audio:http://localhost:8000/api/v1/predict/audio}")
     private String aiServerAudioUrl;
 
-    @Value("${ai.server.url.openai:http://localhost:8000/api/v1/test/predict/openai}")
+    @Value("${ai.server.url.comprehensive:http://localhost:8000/api/v1/test/predict/comprehensive}")
     private String aiServerUnifiedUrl;
 
     /**
@@ -176,18 +186,56 @@ public class AiDiagnosisService {
 
         // 2. OBD 데이터 조회 (Fallback Logic: 최근 3일 데이터 없으면 TripSummary 사용)
         CompletableFuture<Map<String, Object>> lstmTask = CompletableFuture.supplyAsync(() -> {
-            if (requestDto.getLstmAnalysis() != null) {
+            if (requestDto.getLstmAnalysis() != null && !requestDto.getLstmAnalysis().isEmpty()) {
                 return requestDto.getLstmAnalysis();
             }
-            // TODO: 실제 OBD 로그 조회 로직 구현 필요 (현재는 Mocking 처리)
-            // if (obdRepository.countByVehicleIdAndDateRange(...) > 0) { ... }
 
-            // Fallback: TripSummary 사용
-            log.info("[Fallback] OBD data absent. Using TripSummary for LSTM analysis input.");
-            return Map.of(
-                    "is_anomaly", false,
-                    "data_source", "TRIP_SUMMARY",
-                    "message", "OBD 데이터 부족으로 주행 요약 정보를 사용했습니다.");
+            try {
+                UUID vehicleId = UUID.fromString(requestDto.getVehicleId());
+                java.time.OffsetDateTime treeDaysAgo = java.time.OffsetDateTime.now(java.time.ZoneOffset.UTC)
+                        .minusDays(3);
+                java.time.OffsetDateTime now = java.time.OffsetDateTime.now(java.time.ZoneOffset.UTC);
+
+                List<ObdLog> logs = obdLogRepository.findByVehicleIdAndTimeBetweenOrderByTimeAsc(vehicleId, treeDaysAgo,
+                        now);
+
+                if (!logs.isEmpty()) {
+                    log.info("[LSTM] Found {} logs for the last 3 days.", logs.size());
+                    Map<String, Object> result = new HashMap<>();
+                    result.put("is_anomaly", false);
+                    result.put("data_source", "OBD_LOGS");
+                    result.put("logCount", logs.size());
+                    result.put("logs", logs.stream().limit(100).map(l -> Map.of(
+                            "time", l.getTime().toString(),
+                            "rpm", l.getRpm(),
+                            "speed", l.getSpeed())).collect(Collectors.toList()));
+                    return result;
+                }
+
+                // Fallback: TripSummary 사용
+                return tripSummaryRepository.findLatestTripByVehicleId(vehicleId)
+                        .map(ts -> {
+                            log.info("[Fallback] OBD data absent. Using latest TripSummary.");
+                            Map<String, Object> result = new HashMap<>();
+                            result.put("is_anomaly", false);
+                            result.put("data_source", "TRIP_SUMMARY");
+                            result.put("distance", ts.getDistance() != null ? ts.getDistance() : 0.0);
+                            result.put("avgSpeed", ts.getAverageSpeed() != null ? ts.getAverageSpeed() : 0.0);
+                            result.put("topSpeed", ts.getTopSpeed() != null ? ts.getTopSpeed() : 0.0);
+                            result.put("score", ts.getDriveScore() != null ? ts.getDriveScore() : 100);
+                            return result;
+                        })
+                        .orElseGet(() -> {
+                            Map<String, Object> result = new HashMap<>();
+                            result.put("is_anomaly", false);
+                            result.put("data_source", "NONE");
+                            result.put("message", "최근 주행 데이터가 전혀 없습니다.");
+                            return result;
+                        });
+            } catch (Exception e) {
+                log.error("LSTM data preparation failed", e);
+                return Map.of("error", e.getMessage());
+            }
         });
 
         // 모든 분석 완료 대기

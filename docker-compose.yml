@@ -49,6 +49,10 @@ services:
     networks:
       - car-sentry-network
 
+networks:
+  car-sentry-network:
+    driver: bridge
+
 volumes:
   postgres_data:
   rabbitmq_data:

@@ -75,10 +75,10 @@ async def get_dummy_embedding(data: dict):
         "model": "mxbai-embed-large-dummy"
     }
 
-@router.post("/openai")
-async def unified_openai_mock(data: dict):
+@router.post("/comprehensive")
+async def unified_comprehensive_mock(data: dict):
     """
-    [Local Test] OpenAI 통합 진단 Mock 응답 반환
+    [Local Test] 종합 진단 Mock 응답 반환 (OpenAI 연동 전단계)
     실제 프롬프트 엔지니어링 전 테스트용
     
     Status 종류:
