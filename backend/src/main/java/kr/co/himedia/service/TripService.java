@@ -1,5 +1,7 @@
 package kr.co.himedia.service;
 
+import kr.co.himedia.common.exception.BaseException;
+import kr.co.himedia.common.exception.ErrorCode;
 import kr.co.himedia.entity.TripSummary;
 import kr.co.himedia.repository.TripSummaryRepository;
 import lombok.RequiredArgsConstructor;
@@ -26,7 +28,7 @@ public class TripService {
     @Transactional(readOnly = true)
     public TripSummary getTripDetail(UUID tripId) {
         return tripSummaryRepository.findByTripId(tripId)
-                .orElseThrow(() -> new IllegalArgumentException("Trip not found: " + tripId));
+                .orElseThrow(() -> new BaseException(ErrorCode.TRIP_NOT_FOUND));
     }
 
     // 주행 시작 (Trip ID 발급 및 초기화)

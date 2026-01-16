@@ -43,7 +43,7 @@ public class AuthController {
     // BE-AU-003 내 정보 조회
     @GetMapping("/me")
     public ResponseEntity<ApiResponse<UserResponse>> getProfile(Authentication auth) {
-        if (auth.getPrincipal() instanceof kr.co.himedia.security.CustomUserDetails userDetails) {
+        if (auth != null && auth.getPrincipal() instanceof kr.co.himedia.security.CustomUserDetails userDetails) {
             UserResponse resp = userService.getProfile(userDetails.getUserId());
             return ResponseEntity.ok(ApiResponse.success(resp));
         }
@@ -54,9 +54,20 @@ public class AuthController {
     @PatchMapping("/me")
     public ResponseEntity<ApiResponse<String>> updateProfile(Authentication auth,
             @Valid @RequestBody UserUpdateRequest req) {
-        if (auth.getPrincipal() instanceof kr.co.himedia.security.CustomUserDetails userDetails) {
+        if (auth != null && auth.getPrincipal() instanceof kr.co.himedia.security.CustomUserDetails userDetails) {
             userService.updateProfile(userDetails.getUserId(), req);
             return ResponseEntity.ok(ApiResponse.success("Profile updated"));
+        }
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+    }
+
+    // FCM 토큰 전용 갱신
+    @PatchMapping("/fcm-token")
+    public ResponseEntity<ApiResponse<String>> updateFcmToken(Authentication auth,
+            @Valid @RequestBody FcmTokenRequest req) {
+        if (auth != null && auth.getPrincipal() instanceof kr.co.himedia.security.CustomUserDetails userDetails) {
+            userService.updateFcmToken(userDetails.getUserId(), req.getFcmToken());
+            return ResponseEntity.ok(ApiResponse.success("FCM token updated"));
         }
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
     }
@@ -64,7 +75,7 @@ public class AuthController {
     // BE-AU-007 회원 탈퇴
     @DeleteMapping("/me")
     public ResponseEntity<ApiResponse<String>> deleteUser(Authentication auth) {
-        if (auth.getPrincipal() instanceof kr.co.himedia.security.CustomUserDetails userDetails) {
+        if (auth != null && auth.getPrincipal() instanceof kr.co.himedia.security.CustomUserDetails userDetails) {
             userService.deleteUser(userDetails.getUserId());
             return ResponseEntity.ok(ApiResponse.success("User deleted (Soft delete)"));
         }
@@ -75,7 +86,7 @@ public class AuthController {
     @PostMapping("/me/image")
     public ResponseEntity<ApiResponse<String>> uploadProfileImage(Authentication auth,
             @RequestParam("file") MultipartFile file) {
-        if (auth.getPrincipal() instanceof kr.co.himedia.security.CustomUserDetails userDetails) {
+        if (auth != null && auth.getPrincipal() instanceof kr.co.himedia.security.CustomUserDetails userDetails) {
             userService.updateProfileImage(userDetails.getUserId(), file);
             return ResponseEntity.ok(ApiResponse.success("Profile image updated"));
         }
