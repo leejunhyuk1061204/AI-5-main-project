@@ -13,7 +13,8 @@ export interface LoginRequest {
 }
 
 export interface TokenResponse {
-    token: string;
+    accessToken: string;
+    refreshToken: string;
 }
 
 export interface UserResponse {
@@ -44,10 +45,22 @@ export const authService = {
         return response.data;
     },
 
-    getProfile: async (token: string): Promise<ApiResponse<UserResponse>> => {
-        const response = await api.get<ApiResponse<UserResponse>>('/api/v1/auth/me', {
-            headers: { Authorization: `Bearer ${token}` }
-        });
+    getProfile: async (token?: string): Promise<ApiResponse<UserResponse>> => {
+        const response = await api.get<ApiResponse<UserResponse>>('/api/v1/auth/me');
+        return response.data;
+    },
+
+    updateProfile: async (token: string, nickname?: string, password?: string): Promise<ApiResponse<string>> => {
+        const payload: any = {};
+        if (nickname) payload.nickname = nickname;
+        if (password) payload.password = password;
+
+        const response = await api.patch<ApiResponse<string>>('/api/v1/auth/me', payload);
+        return response.data;
+    },
+
+    deleteAccount: async (token: string): Promise<ApiResponse<string>> => {
+        const response = await api.delete<ApiResponse<string>>('/api/v1/auth/me');
         return response.data;
     }
 };

@@ -9,22 +9,12 @@ import Header from '../header/Header';
 
 export default function HistoryMain() {
     const navigation = useNavigation();
+
     return (
         <SafeAreaView className="flex-1 bg-background-dark">
             <StatusBar style="light" />
 
-            {/* Background Glows */}
-            {/* Background Glows */}
-            <View
-                className="absolute -top-40 -right-40 w-96 h-96 bg-blue-900/10 rounded-full blur-3xl z-0"
-                pointerEvents={Platform.OS === 'web' ? undefined : 'none'}
-                style={Platform.OS === 'web' ? { pointerEvents: 'none' } : undefined}
-            />
-            <View
-                className="absolute top-1/2 -left-40 w-80 h-80 bg-primary/10 rounded-full blur-3xl z-0"
-                pointerEvents={Platform.OS === 'web' ? undefined : 'none'}
-                style={Platform.OS === 'web' ? { pointerEvents: 'none' } : undefined}
-            />
+            {/* Background Glows Removed */}
 
             <ScrollView
                 className="flex-1"
@@ -95,7 +85,25 @@ export default function HistoryMain() {
                         </View>
                     </TouchableOpacity>
 
-                    {/* Card 3: Regular Inspection */}
+                    {/* Card 3: Vehicle Detailed Specs (Moved from DiagMain) */}
+                    <TouchableOpacity
+                        onPress={() => navigation.navigate('Spec' as never)}
+                        className="w-full bg-[#ffffff08] border border-[#ffffff14] rounded-2xl p-6 relative overflow-hidden active:bg-[#ffffff10]"
+                    >
+                        <View className="flex-row justify-between items-center">
+                            <View className="flex-col gap-1">
+                                <View className="flex-row items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 self-start">
+                                    <MaterialIcons name="fact-check" size={10} color="#0d7ff2" />
+                                    <Text className="text-xs font-bold text-primary uppercase tracking-wider">Specs</Text>
+                                </View>
+                                <Text className="text-lg font-bold text-white mt-2">차량 상세 제원</Text>
+                                <Text className="text-sm text-gray-400">제조사 공식 데이터베이스</Text>
+                            </View>
+                            <MaterialIcons name="arrow-forward-ios" size={16} color="#4b5563" />
+                        </View>
+                    </TouchableOpacity>
+
+                    {/* Card 4: Regular Inspection */}
                     <TouchableOpacity
                         onPress={() => navigation.navigate('RecallHis' as never)}
                         className="w-full bg-[#ffffff08] border border-[#ffffff14] rounded-2xl p-6 relative overflow-hidden flex-row items-center justify-between active:bg-[#ffffff10]"

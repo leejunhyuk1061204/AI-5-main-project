@@ -16,17 +16,24 @@ import SignUp from './sign/SignUp';
 import FindPW from './sign/FindPW';
 import MainPage from './mainPage/MainPage';
 import SplashScreenComponent from './splash/SplashScreen';
-import RegisterMain from './ register/RegisterMain';
-import ActiveReg from './ register/active/ActiveReg';
-import ActiveLoading from './ register/active/ActiveLoading';
-import ActiveSuccess from './ register/active/ActiveSuccess';
-import PassiveReg from './ register/passive/PassiveReg';
+import RegisterMain from './registration/RegisterMain';
+import ActiveReg from './registration/active/ActiveReg';
+import ActiveLoading from './registration/active/ActiveLoading';
+import ActiveSuccess from './registration/active/ActiveSuccess';
+import PassiveReg from './registration/passive/PassiveReg';
+import SystemMain from './system/SystemMain';
+import MyPage from './system/MyPage';
 import DiagMain from './diagnosis/DiagMain';
+import EngineSoundDiag from './diagnosis/EngineSoundDiag';
+import AiCompositeDiag from './diagnosis/AiCompositeDiag';
+import Filming from './filming/Filming';
 import HistoryMain from './history/HistoryMain';
 import DrivingHis from './history/DrivingHis';
 import RecallHis from './history/RecallHis';
 import SupManage from './history/SupManage';
 import AlertMain from './alert/AlertMain';
+import Spec from './history/spec';
+import AlertSetting from './system/AlertSetting';
 
 // Keep the splash screen visible while we fetch resources
 ExpoSplashScreen.preventAutoHideAsync();
@@ -54,7 +61,8 @@ export default function App() {
 
         // Set Android Navigation Bar Color
         if (Platform.OS === 'android') {
-          await NavigationBar.setBackgroundColorAsync("#101922");
+          // Edge-to-Edge support: transparent background
+          await NavigationBar.setBackgroundColorAsync("transparent");
           await NavigationBar.setButtonStyleAsync("light");
         }
 
@@ -123,18 +131,42 @@ export default function App() {
           <Stack.Screen
             name="MainPage"
             component={MainPage}
+            options={{ animation: 'none' }}
           />
           <Stack.Screen name="RegisterMain" component={RegisterMain} />
           <Stack.Screen name="ActiveReg" component={ActiveReg} />
           <Stack.Screen name="ActiveLoading" component={ActiveLoading} />
           <Stack.Screen name="ActiveSuccess" component={ActiveSuccess} />
           <Stack.Screen name="PassiveReg" component={PassiveReg} />
-          <Stack.Screen name="DiagMain" component={DiagMain} />
-          <Stack.Screen name="HistoryMain" component={HistoryMain} />
+          <Stack.Screen
+            name="DiagMain"
+            component={DiagMain}
+            options={{ animation: 'none' }}
+          />
+          <Stack.Screen name="EngineSoundDiag" component={EngineSoundDiag} />
+          <Stack.Screen name="AiCompositeDiag" component={AiCompositeDiag} />
+          <Stack.Screen name="Filming" component={Filming} />
+          <Stack.Screen
+            name="HistoryMain"
+            component={HistoryMain}
+            options={{ animation: 'none' }}
+          />
           <Stack.Screen name="DrivingHis" component={DrivingHis} />
           <Stack.Screen name="RecallHis" component={RecallHis} />
           <Stack.Screen name="SupManage" component={SupManage} />
-          <Stack.Screen name="AlertMain" component={AlertMain} />
+          <Stack.Screen
+            name="AlertMain"
+            component={AlertMain}
+            options={{ animation: 'none' }}
+          />
+          <Stack.Screen name="Spec" component={Spec} />
+          <Stack.Screen
+            name="SystemMain"
+            component={SystemMain}
+            options={{ animation: 'none' }}
+          />
+          <Stack.Screen name="MyPage" component={MyPage} />
+          <Stack.Screen name="AlertSetting" component={AlertSetting} />
         </Stack.Navigator>
       </NavigationContainer>
     </SafeAreaProvider>

@@ -32,8 +32,7 @@ export default function MainPage() {
                 {/* Car Info Card */}
                 <View className="px-6 py-4">
                     <View className="relative overflow-hidden rounded-xl bg-[#ffffff08] border border-[#ffffff14] p-4 flex-row items-center justify-between shadow-lg">
-                        {/* Background Glow simulation */}
-                        <View className="absolute right-0 top-0 w-32 h-32 bg-primary/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
+                        {/* Background Glow simulation Removed */}
 
                         <View className="flex-row items-center gap-4 z-10">
                             <View className="w-12 h-12 rounded-lg bg-[#1b2127] border border-white/10 items-center justify-center shadow-inner">
@@ -54,13 +53,7 @@ export default function MainPage() {
 
                 {/* Health Score Circular Chart */}
                 <View className="items-center justify-center py-6 relative">
-                    {/* Background Glow */}
-                    {/* Background Glow */}
-                    <View
-                        className="absolute w-48 h-48 bg-primary/10 rounded-full blur-3xl"
-                        pointerEvents={Platform.OS === 'web' ? undefined : 'none'}
-                        style={Platform.OS === 'web' ? { pointerEvents: 'none' } : undefined}
-                    />
+                    {/* Background Glow Removed */}
 
                     <View className="relative w-64 h-64 items-center justify-center">
                         <Svg width="100%" height="100%" viewBox="0 0 100 100" className="-rotate-90">
@@ -137,9 +130,7 @@ export default function MainPage() {
                     <View className="relative overflow-hidden rounded-xl border border-primary/30 p-5">
                         {/* Gradient Background - simulating bg-gradient-to-br from-[#111923] to-[#0D0D0D] */}
                         <View className="absolute inset-0 bg-slate-900" />
-                        {/* Decorative blurs */}
-                        <View className="absolute top-0 right-0 w-24 h-24 bg-primary/10 blur-2xl rounded-full" />
-                        <View className="absolute bottom-0 left-0 w-20 h-20 bg-blue-500/5 blur-xl rounded-full" />
+                        {/* Decorative blurs Removed */}
 
                         <View className="flex-row items-center justify-between mb-2">
                             <View className="flex-row items-center gap-2">

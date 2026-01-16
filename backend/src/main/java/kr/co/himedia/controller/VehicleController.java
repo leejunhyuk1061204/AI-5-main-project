@@ -1,5 +1,6 @@
 package kr.co.himedia.controller;
 
+import jakarta.validation.Valid;
 import kr.co.himedia.dto.vehicle.VehicleDto;
 import kr.co.himedia.service.VehicleService;
 import kr.co.himedia.common.ApiResponse;
@@ -27,7 +28,7 @@ public class VehicleController {
     @PostMapping
     public ResponseEntity<ApiResponse<VehicleDto.Response>> registerVehicle(
             @AuthenticationPrincipal CustomUserDetails userDetails,
-            @RequestBody VehicleDto.RegistrationRequest request) {
+            @Valid @RequestBody VehicleDto.RegistrationRequest request) {
         VehicleDto.Response response = vehicleService.registerVehicle(userDetails.getUserId(), request);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(response));
     }
@@ -39,7 +40,7 @@ public class VehicleController {
     @PostMapping("/obd")
     public ResponseEntity<ApiResponse<VehicleDto.Response>> registerVehicleByObd(
             @AuthenticationPrincipal CustomUserDetails userDetails,
-            @RequestBody VehicleDto.ObdRegistrationRequest request) {
+            @Valid @RequestBody VehicleDto.ObdRegistrationRequest request) {
         VehicleDto.Response response = vehicleService.registerVehicleByObd(userDetails.getUserId(), request);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(response));
     }
@@ -72,7 +73,7 @@ public class VehicleController {
     @PutMapping("/{vehicleId}")
     public ResponseEntity<ApiResponse<VehicleDto.Response>> updateVehicle(
             @PathVariable UUID vehicleId,
-            @RequestBody VehicleDto.UpdateRequest request) {
+            @Valid @RequestBody VehicleDto.UpdateRequest request) {
         VehicleDto.Response response = vehicleService.updateVehicle(vehicleId, request);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
