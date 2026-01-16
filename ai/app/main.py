@@ -14,23 +14,70 @@ from ai.app.api.v1.routes.audio_router import router as audio_router
 
 
 
-def load_ast_model(sr=16000):
-    print(f"Loading AST Model with SR={sr}...")
-    return "AST_MODEL_OBJECT"
+
+def load_ast_model():
+    """AST 오디오 모델 로드"""
+    print("Loading AST Model...")
+    from transformers import ASTForAudioClassification, ASTFeatureExtractor
+    
+    # 모델 경로 (상대 경로로 설정)
+    model_path = os.path.join("ai", "weights", "audio", "best_ast_model")
+    
+    # 로컬에 학습된 가중치가 없으면 기본 모델 사용 (에러 방지용)
+    if not os.path.exists(model_path):
+        print(f"[Warning] 학습된 모델을 찾을 수 없습니다: {model_path}")
+        print("기본 모델(MIT/ast-finetuned-audioset-10-10-0.4593)을 로드합니다.")
+        model_name = "MIT/ast-finetuned-audioset-10-10-0.4593"
+        model = ASTForAudioClassification.from_pretrained(model_name)
+        feature_extractor = ASTFeatureExtractor.from_pretrained(model_name)
+    else:
+        print(f"학습된 AST 모델 로드 중: {model_path}")
+        model = ASTForAudioClassification.from_pretrained(model_path)
+        feature_extractor = ASTFeatureExtractor.from_pretrained(model_path)
+
+    return {"model": model, "feature_extractor": feature_extractor}
+
 
 def load_yolo_model():
+    """YOLOv8 계기판 모델 로드"""
     print("Loading YOLOv8 Model...")
-    return "YOLO_MODEL_OBJECT"
-
+    from ultralytics import YOLO
+    
+    # 모델 경로
+    model_path = os.path.join("ai", "weights", "dashboard", "best.pt")
+    
+    if not os.path.exists(model_path):
+        print(f"[Warning] 학습된 YOLO 가중치를 찾을 수 없습니다: {model_path}")
+        print("기본 모델(yolov8n.pt)을 로드합니다.")
+        model = YOLO("yolov8n.pt")
+    else:
+        print(f"학습된 YOLO 모델 로드 중: {model_path}")
+        model = YOLO(model_path)
+        
+    return model
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    app.state.ast_model = load_ast_model(sr=16000)
-    app.state.yolo_model = load_yolo_model()
-    print("AI Models (YOLOv8, AST) loaded at 16,000Hz specification.")
+    # 0. 초기화
+    app.state.ast_model = None
+    app.state.yolo_model = None
+
+    # 1. 모델 로드
+
+    try:
+        app.state.ast_model = load_ast_model()
+        app.state.yolo_model = load_yolo_model()
+        print("✅ AI Models (YOLOv8, AST) loaded successfully.")
+    except Exception as e:
+        print(f"❌ Critical Error loading models: {e}")
+        # 모델 로드 실패해도 서버는 뜨게 할지, 죽일지 결정 (여기선 로그만 남김)
+    
     yield
+    
+    # 2. 종료 시 정리 (필요하면)
     print("AI Models unloaded.")
+
 
 
 def create_app() -> FastAPI:
