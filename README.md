@@ -91,19 +91,8 @@ conda activate ai5
 # 2. PyTorch 설치 (CUDA 12.1 기준)
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
 
-# 3. 주요 프레임워크 설치
- pip install \
- pandas \
- ultralytics \
- transformers \
- xgboost \
- lightgbm \
- pytorch-lightning \
- librosa \
- fastapi \
- uvicorn \
- python-multipart
- openai httpx evaluate kagglehub
+# 3. 나머지 전부
+pip install -r requirements.txt
 
 
 ---
