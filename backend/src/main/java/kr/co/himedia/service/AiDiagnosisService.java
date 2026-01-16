@@ -235,12 +235,7 @@ public class AiDiagnosisService {
 
                     if (logs.isEmpty()) {
                         log.warn("[Anomaly] No OBD logs found for vehicle: {}", vehicleId);
-                        Map<String, Object> noDataResult = new HashMap<>();
-                        noDataResult.put("is_anomaly", false);
-                        noDataResult.put("anomaly_score", 0.0);
-                        noDataResult.put("contributing_factors", List.of());
-                        noDataResult.put("data_source", "NONE");
-                        return noDataResult;
+                        throw new BaseException(ErrorCode.INSUFFICIENT_DATA, "이상 탐지를 위한 OBD 데이터가 존재하지 않습니다.");
                     }
 
                     timeSeries = logs.stream().limit(100).map(l -> {
@@ -268,14 +263,12 @@ public class AiDiagnosisService {
                     return response;
                 }
 
-                Map<String, Object> fallback = new HashMap<>();
-                fallback.put("is_anomaly", false);
-                fallback.put("anomaly_score", 0.0);
-                fallback.put("contributing_factors", List.of());
-                return fallback;
+                throw new BaseException(ErrorCode.INTERNAL_SERVER_ERROR, "AI 분석 서버로부터 응답을 받을 수 없습니다.");
+            } catch (BaseException e) {
+                throw e; // 이미 정의된 비즈니스 예외는 그대로 던짐
             } catch (Exception e) {
                 log.error("Anomaly detection failed", e);
-                throw new RuntimeException("이상 탐지 실패", e);
+                throw new BaseException(ErrorCode.INTERNAL_SERVER_ERROR, "이상 탐지 분석 중 오류가 발생했습니다.");
             }
         });
 
@@ -326,7 +319,9 @@ public class AiDiagnosisService {
 
                 log.info("[Step 3/5] RAG 지식 검색 수행 (Query: '{}') [Session: {}]", query, sessionId);
                 java.util.List<String> knowledgeResults = knowledgeService.searchKnowledge(query, 3);
-                aiRequestBuilder.knowledgeData(knowledgeResults);
+                if (knowledgeResults != null && !knowledgeResults.isEmpty()) {
+                    aiRequestBuilder.knowledgeData(knowledgeResults);
+                }
             }
         } catch (Exception e) {
             log.error("[RAG] 지식 검색 실패: {}", e.getMessage());
@@ -414,7 +409,9 @@ public class AiDiagnosisService {
 
                     consumablesStatus.add(status);
                 }
-                builder.consumablesStatus(consumablesStatus);
+                if (!consumablesStatus.isEmpty()) {
+                    builder.consumablesStatus(consumablesStatus);
+                }
                 log.info("Populated vehicle and consumables info for diagnosis. Vehicle: {}", vehicle.getModelName());
             });
         } catch (Exception e) {

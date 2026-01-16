@@ -40,8 +40,7 @@ public class ObdService {
 
         if (!obdLogs.isEmpty()) {
             obdLogRepository.saveAll(obdLogs);
-            // 2. Process Trip Summary
-            tripService.updateTripFromLogs(obdLogDtos.get(0).getVehicleId(), obdLogDtos);
+            // 실시간 주행 요약 갱신은 부하 감소 및 정확도를 위해 종료 시 단회 처리로 변경됨
         }
     }
 

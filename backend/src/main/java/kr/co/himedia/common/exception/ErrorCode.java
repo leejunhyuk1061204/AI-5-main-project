@@ -35,7 +35,10 @@ public enum ErrorCode {
 
     // Maintenance
     MAINTENANCE_NOT_FOUND(HttpStatus.NOT_FOUND, "MNT_001", "해당 정비 내역을 찾을 수 없습니다."),
-    UNSUPPORTED_MAINTENANCE_ITEM(HttpStatus.BAD_REQUEST, "MNT_002", "지원하지 않는 정비 항목입니다.");
+    UNSUPPORTED_MAINTENANCE_ITEM(HttpStatus.BAD_REQUEST, "MNT_002", "지원하지 않는 정비 항목입니다."),
+
+    // Diagnosis
+    INSUFFICIENT_DATA(HttpStatus.BAD_REQUEST, "DIAG_001", "진단을 위한 데이터가 부족합니다.");
 
     private final HttpStatus status;
     private final String code;

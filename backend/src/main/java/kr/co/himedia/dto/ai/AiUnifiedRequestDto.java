@@ -1,5 +1,6 @@
 package kr.co.himedia.dto.ai;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.*;
 import java.util.List;
 import java.util.Map;
@@ -13,6 +14,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public class AiUnifiedRequestDto {
     private UUID vehicleId;
     private Map<String, Object> audioAnalysis;

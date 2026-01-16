@@ -1,6 +1,6 @@
-// 운행 종료 시 XGBoost 마모율 계산 및 저장 서비스
 package kr.co.himedia.service;
 
+import org.springframework.scheduling.annotation.Async;
 import kr.co.himedia.dto.maintenance.ai.AiWearFactorRequest;
 import kr.co.himedia.dto.maintenance.ai.AiWearFactorResponse;
 import kr.co.himedia.entity.MaintenanceItem;
@@ -33,8 +33,9 @@ public class WearFactorService {
             MaintenanceItem.BRAKE_PAD);
 
     /**
-     * 운행 종료 시 호출 - 해당 차량의 모든 AI 지원 소모품에 대해 마모율 계산
+     * 운행 종료 시 호출 - 해당 차량의 모든 AI 지원 소모품에 대해 마모율 계산 (비동기 처리)
      */
+    @Async
     @Transactional
     public void calculateAndSaveWearFactors(UUID vehicleId) {
         log.info("[WearFactor] 마모율 계산 시작 [Vehicle: {}]", vehicleId);
