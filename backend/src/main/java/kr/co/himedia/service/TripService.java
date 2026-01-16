@@ -57,7 +57,6 @@ public class TripService {
         return tripSummaryRepository.save(newTrip);
     }
 
-    // 주행 종료 처리
     @Transactional
     public TripSummary endTrip(UUID tripId) {
         TripSummary trip = tripSummaryRepository.findByTripId(tripId)
@@ -67,22 +66,62 @@ public class TripService {
             return trip; // Already ended
         }
 
-        trip.setEndTime(LocalDateTime.now());
+        LocalDateTime endTime = LocalDateTime.now();
+        trip.setEndTime(endTime);
+
+        // 1. 해당 Trip 동안 수집된 전체 OBD 데이터 조회
+        List<ObdLog> tripLogs = obdLogRepository.findByVehicleIdAndTimeBetweenOrderByTimeAsc(
+                trip.getVehicleId(),
+                trip.getStartTime().atOffset(ZoneOffset.UTC),
+                endTime.atOffset(ZoneOffset.UTC));
+
+        // 2. 전체 로그 기반 통계 재계산 (수학적 결함 해결)
+        if (!tripLogs.isEmpty()) {
+            double sumSpeed = 0.0;
+            double maxSpeed = 0.0;
+            double distance = 0.0;
+            int driveScore = 100;
+
+            for (ObdLog log : tripLogs) {
+                double speed = log.getSpeed() != null ? log.getSpeed() : 0.0;
+                double rpm = log.getRpm() != null ? log.getRpm() : 0.0;
+
+                // 최고 속도
+                if (speed > maxSpeed)
+                    maxSpeed = speed;
+
+                // 속도 합계 (평준화/평균용)
+                sumSpeed += speed;
+
+                // 주행 거리 (1초 주기 가정: speed km/h * 1s / 3600)
+                distance += (speed / 3600.0);
+
+                // 안전 점수 감점 로직 (정교화 가능)
+                if (speed > 140)
+                    driveScore = Math.max(0, driveScore - 1);
+                if (rpm > 5000)
+                    driveScore = Math.max(0, driveScore - 1);
+            }
+
+            trip.setAverageSpeed(sumSpeed / tripLogs.size());
+            trip.setTopSpeed(maxSpeed);
+            trip.setDistance(distance);
+            trip.setDriveScore(driveScore);
+
+            log.info(
+                    "[TripEnd] Final statistics calculated for trip {}: AvgSpeed={}, MaxSpeed={}, Distance={}, Score={}",
+                    tripId, trip.getAverageSpeed(), maxSpeed, distance, driveScore);
+        }
+
         TripSummary savedTrip = tripSummaryRepository.save(trip);
 
-        // [Trigger 1] 운행 종료 시 자동 진단 비동기 호출
+        // [Trigger 1] 운행 종료 시 자동 진단 비동기 호출 (이미 조회한 tripLogs 재사용)
         try {
-            // 해당 Trip 동안 수집된 OBD 데이터 조회
-            List<ObdLog> tripLogs = obdLogRepository.findByVehicleIdAndTimeBetweenOrderByTimeAsc(
-                    trip.getVehicleId(),
-                    trip.getStartTime().atOffset(ZoneOffset.UTC),
-                    savedTrip.getEndTime().atOffset(ZoneOffset.UTC));
-
-            // LSTM 분석용 데이터 형식으로 변환 (간소화)
+            // LSTM 분석용 데이터 형식으로 변환
             Map<String, Object> lstmInput = Map.of(
                     "tripId", trip.getTripId().toString(),
                     "logCount", tripLogs.size(),
-                    "logs", tripLogs.stream().map(log -> Map.of(
+                    "logs", tripLogs.stream().limit(500).map(log -> Map.of(
                             "time", log.getTime().toString(),
                             "rpm", log.getRpm(),
                             "speed", log.getSpeed(),
@@ -104,76 +143,10 @@ public class TripService {
             log.info("Successfully calculated wear factors for vehicle: {}", trip.getVehicleId());
         } catch (Exception e) {
             log.error("Auto diagnosis trigger failed for trip: {}", tripId, e);
-            throw new RuntimeException("자동 진단 트리거 실패: " + tripId, e);
+            // 진단 트리거 실패가 주행 종료 리턴을 막지 않도록 예외 전파 안함 (단, 로그는 남김)
         }
 
         return savedTrip;
     }
 
-    // 수집된 로그 기반 주행 요약(거리, 점수 등) 갱신
-    @Transactional
-    public void updateTripFromLogs(UUID vehicleId, List<kr.co.himedia.dto.obd.ObdLogDto> logs) {
-        if (logs.isEmpty())
-            return;
-
-        // Sort logs by timestamp
-        logs.sort((a, b) -> a.getTimestamp().compareTo(b.getTimestamp()));
-
-        TripSummary trip = tripSummaryRepository.findActiveTripByVehicleId(vehicleId)
-                .orElseGet(() -> {
-                    // Implicit start if no active trip
-                    return startTrip(vehicleId);
-                });
-
-        // Update metrics
-        double currentDistance = trip.getDistance() != null ? trip.getDistance() : 0.0;
-        double maxSpeed = trip.getTopSpeed() != null ? trip.getTopSpeed() : 0.0;
-        double sumSpeed = 0.0;
-        int validCount = 0;
-        int currentScore = trip.getDriveScore() != null ? trip.getDriveScore() : 100;
-
-        for (kr.co.himedia.dto.obd.ObdLogDto dto : logs) {
-            // BE-TD-003: Anomaly Filtering
-            if (dto.getSpeed() != null && (dto.getSpeed() < 0 || dto.getSpeed() > 300))
-                continue;
-            if (dto.getRpm() != null && (dto.getRpm() < 0 || dto.getRpm() > 10000))
-                continue;
-
-            if (dto.getSpeed() != null) {
-                if (dto.getSpeed() > maxSpeed) {
-                    maxSpeed = dto.getSpeed();
-                }
-                sumSpeed += dto.getSpeed();
-                // Distance: speed(km/h) * 1s / 3600
-                currentDistance += (dto.getSpeed() / 3600.0);
-                validCount++;
-
-                // BE-TD-004: Score Calculation (Simple)
-                if (dto.getSpeed() > 140) {
-                    currentScore = Math.max(0, currentScore - 1);
-                }
-            }
-            if (dto.getRpm() != null && dto.getRpm() > 5000) {
-                currentScore = Math.max(0, currentScore - 1);
-            }
-        }
-
-        if (validCount > 0) {
-            // Weighted average for AvgSpeed? Or just simple moving average of valid points
-            // For MVP, simplistic:
-            double batchAvg = sumSpeed / validCount;
-            double prevAvg = trip.getAverageSpeed() != null ? trip.getAverageSpeed() : 0.0;
-            // Assuming equal weight for now (can be improved with count field)
-            trip.setAverageSpeed(prevAvg == 0 ? batchAvg : (prevAvg + batchAvg) / 2.0);
-        }
-
-        trip.setTopSpeed(maxSpeed);
-        trip.setDistance(currentDistance);
-        trip.setDriveScore(currentScore);
-
-        // endTime은 실제 주행 종료(disconnect) 시에만 설정
-        // 여기서 설정하면 활성 Trip으로 인식되지 않아 자동 진단이 트리거되지 않음
-
-        tripSummaryRepository.save(trip);
-    }
 }
