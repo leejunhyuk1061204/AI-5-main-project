@@ -107,6 +107,8 @@ def prepare_data():
     def preprocess_function(examples):
         audio_arrays = [x["array"] for x in examples["audio"]]
         inputs = feature_extractor(audio_arrays, sampling_rate=16000, return_tensors="pt", padding="max_length")
+        # 라벨을 숫자로 변환 (Trainer 학습에 필수!)
+        inputs["labels"] = [label2id[x] for x in examples["label"]]
         return inputs
     
     # Dataset 생성 및 전처리
