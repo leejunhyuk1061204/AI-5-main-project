@@ -61,6 +61,17 @@ public class AuthController {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
     }
 
+    // FCM 토큰 전용 갱신
+    @PatchMapping("/fcm-token")
+    public ResponseEntity<ApiResponse<String>> updateFcmToken(Authentication auth,
+            @Valid @RequestBody FcmTokenRequest req) {
+        if (auth.getPrincipal() instanceof kr.co.himedia.security.CustomUserDetails userDetails) {
+            userService.updateFcmToken(userDetails.getUserId(), req.getFcmToken());
+            return ResponseEntity.ok(ApiResponse.success("FCM token updated"));
+        }
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+    }
+
     // BE-AU-007 회원 탈퇴
     @DeleteMapping("/me")
     public ResponseEntity<ApiResponse<String>> deleteUser(Authentication auth) {
