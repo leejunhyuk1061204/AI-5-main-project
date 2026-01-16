@@ -66,7 +66,8 @@ public class KnowledgeService {
                 }
             }
         } catch (Exception e) {
-            log.warn("Embedding API call failed: {}. Make sure AI server is running.", e.getMessage());
+            log.error("Embedding API call failed: {}. Make sure AI server is running.", e.getMessage());
+            throw new RuntimeException("임베딩 API 호출 실패", e);
         }
         return null;
     }

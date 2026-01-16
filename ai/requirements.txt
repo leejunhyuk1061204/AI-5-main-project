@@ -43,6 +43,8 @@ opencv-python-headless  # 서버 환경용 OpenCV
 # ==================================================
 librosa
 soundfile
+transformers
+accelerate
 
 # ==================================================
 # 8. Evaluation / Dataset Utils

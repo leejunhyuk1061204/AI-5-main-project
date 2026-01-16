@@ -25,6 +25,7 @@ public class TripService {
     private final TripSummaryRepository tripSummaryRepository;
     private final ObdLogRepository obdLogRepository;
     private final AiDiagnosisService aiDiagnosisService;
+    private final WearFactorService wearFactorService;
 
     // 차량별 주행 기록 목록 조회
     @Transactional(readOnly = true)
@@ -91,14 +92,19 @@ public class TripService {
 
             kr.co.himedia.dto.ai.UnifiedDiagnosisRequestDto requestDto = kr.co.himedia.dto.ai.UnifiedDiagnosisRequestDto
                     .builder()
-                    .vehicleId(trip.getVehicleId().toString())
+                    .vehicleId(trip.getVehicleId())
                     .lstmAnalysis(lstmInput)
                     .build();
 
             aiDiagnosisService.requestUnifiedDiagnosisAsync(requestDto);
             log.info("Successfully triggered auto diagnosis for trip: {}", tripId);
+
+            // [Trigger 2] 운행 종료 시 마모율 계산
+            wearFactorService.calculateAndSaveWearFactors(trip.getVehicleId());
+            log.info("Successfully calculated wear factors for vehicle: {}", trip.getVehicleId());
         } catch (Exception e) {
             log.error("Auto diagnosis trigger failed for trip: {}", tripId, e);
+            throw new RuntimeException("자동 진단 트리거 실패: " + tripId, e);
         }
 
         return savedTrip;
@@ -165,10 +171,8 @@ public class TripService {
         trip.setDistance(currentDistance);
         trip.setDriveScore(currentScore);
 
-        // Auto-end if gap is too large?
-        // Logic handled by startTrip closing old ones.
-        // Here just update endTime to latest log time
-        trip.setEndTime(logs.get(logs.size() - 1).getTimestamp());
+        // endTime은 실제 주행 종료(disconnect) 시에만 설정
+        // 여기서 설정하면 활성 Trip으로 인식되지 않아 자동 진단이 트리거되지 않음
 
         tripSummaryRepository.save(trip);
     }

@@ -17,7 +17,8 @@ public class AiClient {
     private String aiServerUrl;
 
     public AiWearFactorResponse getWearFactor(AiWearFactorRequest request) {
-        String url = aiServerUrl + "/api/v1/predict/wear-factor";
+        // 테스트용 Mock 엔드포인트 사용 (실제 XGBoost 모델 연동 전)
+        String url = aiServerUrl + "/api/v1/test/predict/wear-factor";
         return restTemplate.postForObject(url, request, AiWearFactorResponse.class);
     }
 }

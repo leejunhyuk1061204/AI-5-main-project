@@ -40,11 +40,11 @@ public class AiController {
      * 소리, 사진, LSTM 분석 결과를 통합하여 최종 진단 요청
      * Trigger 2: 수동 진단 (파일 업로드 지원)
      */
-    @PostMapping(value = "/diagnose/comprehensive", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PostMapping(value = "/diagnose/unified", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
     public ApiResponse<Object> requestUnifiedDiagnosis(
             @RequestPart(value = "image", required = false) org.springframework.web.multipart.MultipartFile image,
             @RequestPart(value = "audio", required = false) org.springframework.web.multipart.MultipartFile audio,
-            @ModelAttribute UnifiedDiagnosisRequestDto requestDto) {
+            @RequestPart(value = "data") UnifiedDiagnosisRequestDto requestDto) {
         Object result = aiDiagnosisService.requestUnifiedDiagnosis(requestDto, image, audio);
         return ApiResponse.success(result);
     }

@@ -40,6 +40,12 @@ public class VehicleConsumable extends BaseEntity {
     @Column(name = "replacement_interval_months")
     private Integer replacementIntervalMonths;
 
+    @Column(name = "wear_factor")
+    private Double wearFactor;
+
+    @Column(name = "wear_factor_updated_at")
+    private java.time.LocalDateTime wearFactorUpdatedAt;
+
     @Builder
     public VehicleConsumable(Vehicle vehicle, MaintenanceItem item, Double lastMaintenanceMileage,
             LocalDate lastMaintenanceDate, Double replacementIntervalMileage, Integer replacementIntervalMonths) {
@@ -54,5 +60,10 @@ public class VehicleConsumable extends BaseEntity {
     public void updateMaintenanceInfo(Double mileage, LocalDate date) {
         this.lastMaintenanceMileage = mileage;
         this.lastMaintenanceDate = date;
+    }
+
+    public void updateWearFactor(Double wearFactor) {
+        this.wearFactor = wearFactor;
+        this.wearFactorUpdatedAt = java.time.LocalDateTime.now();
     }
 }

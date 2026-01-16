@@ -128,8 +128,9 @@ public class MaintenanceService {
                                                                 wearFactor = aiResponse.getPredictedWearFactor();
                                                         }
                                                 } catch (Exception e) {
-                                                        System.err.println("AI API call failed for item "
-                                                                        + consumable.getItem() + ": " + e.getMessage());
+                                                        throw new RuntimeException(
+                                                                        "AI 소모품 예측 API 호출 실패: " + consumable.getItem(),
+                                                                        e);
                                                 }
                                         }
 

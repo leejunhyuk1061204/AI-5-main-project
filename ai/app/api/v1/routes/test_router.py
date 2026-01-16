@@ -23,27 +23,61 @@ class AnomalyResponse(BaseModel):
     threshold: float
     contributing_factors: List[str]
 
+class FileUrlRequest(BaseModel):
+    file_url: str
+
 @router.post("/visual", response_model=VisualResponse)
-async def analyze_visual_local(file: UploadFile = File(...)):
+async def analyze_visual_local(request: FileUrlRequest):
     """
-    [Local Test] 이미지 파일 직접 수신 -> Mock 응답 반환
+    [Local Test] 이미지 URL 수신 -> 파일 다운로드 -> Mock 응답 반환
     """
-    if not file.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="Invalid image file type")
+    import httpx
+    import os
     
-    content = await file.read()
+    # URL에서 파일명 추출
+    filename = request.file_url.split("/")[-1]
+    uploads_dir = os.path.join(os.path.dirname(__file__), "../../../../uploads")
+    os.makedirs(uploads_dir, exist_ok=True)
+    file_path = os.path.join(uploads_dir, filename)
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(request.file_url)
+            content = response.content
+            # 파일 저장 (덮어쓰기)
+            with open(file_path, "wb") as f:
+                f.write(content)
+    except Exception:
+        # URL 접근 실패 시에도 Mock 응답 반환 (테스트용)
+        content = b"mock_image_data"
+    
     return await process_visual_mock(content)
 
 @router.post("/audio", response_model=AudioResponse)
-async def analyze_audio_local(file: UploadFile = File(...)):
+async def analyze_audio_local(request: FileUrlRequest):
     """
-    [Local Test] 오디오 파일 직접 수신 -> Mock 응답 반환
+    [Local Test] 오디오 URL 수신 -> 파일 다운로드 -> Mock 응답 반환
     """
-    if not file.content_type.startswith("audio/"):
-        # 오디오 타입 체크 완화 (wav, mp3, m4a 등)
-        pass 
+    import httpx
+    import os
     
-    content = await file.read()
+    # URL에서 파일명 추출
+    filename = request.file_url.split("/")[-1]
+    uploads_dir = os.path.join(os.path.dirname(__file__), "../../../../uploads")
+    os.makedirs(uploads_dir, exist_ok=True)
+    file_path = os.path.join(uploads_dir, filename)
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(request.file_url)
+            content = response.content
+            # 파일 저장 (덮어쓰기)
+            with open(file_path, "wb") as f:
+                f.write(content)
+    except Exception:
+        # URL 접근 실패 시에도 Mock 응답 반환 (테스트용)
+        content = b"mock_audio_data"
+    
     return await process_audio_mock(content)
 
 @router.post("/anomaly", response_model=AnomalyResponse)
@@ -88,10 +122,21 @@ async def unified_comprehensive_mock(data: dict):
     vehicle_id = data.get("vehicleId", "unknown")
     audio = data.get("audioAnalysis")
     visual = data.get("visualAnalysis")
-    lstm = data.get("lstmAnalysis")
+    anomaly = data.get("anomalyAnalysis")
+    vehicle_info = data.get("vehicleInfo")
+    consumables_status = data.get("consumablesStatus")
     
-    # 데이터 부족 시 추가 요청 반환
-    if not audio and not visual:
+    # 데이터 유무 확인 로그
+    log_msg = f"[Comprehensive] Request received for vehicle: {vehicle_id}\n"
+    log_msg += f"- Visual: {'YES' if visual else 'NO'}\n"
+    log_msg += f"- Audio: {'YES' if audio else 'NO'}\n"
+    log_msg += f"- Anomaly: {'YES' if anomaly else 'NO'}\n"
+    log_msg += f"- VehicleInfo: {'YES' if vehicle_info else 'NO'}\n"
+    log_msg += f"- Consumables: {'YES' if consumables_status else 'NO'} ({len(consumables_status) if consumables_status else 0} items)"
+    print(log_msg)
+    
+    # 데이터 부족 시 추가 요청 반환 (자동 진단 시에는 무시될 수 있음)
+    if not audio and not visual and not anomaly:
         return {
             "status": "NEED_MORE_DATA",
             "vehicleId": vehicle_id,
@@ -150,4 +195,23 @@ async def unified_comprehensive_mock(data: dict):
         },
         "confidence": 0.85,
         "model": "gpt-4o-mock"
+    }
+
+@router.post("/wear-factor")
+async def predict_wear_factor_mock(data: dict):
+    """
+    [Local Test] XGBoost 마모율 예측 Mock 응답 반환
+    실제 모델 연동 전 테스트용
+    """
+    target_item = data.get("targetItem", "ENGINE_OIL")
+    
+    # Mock 마모율 계산 (0.8 ~ 1.5 범위)
+    import random
+    wear_factor = round(random.uniform(0.8, 1.5), 2)
+    
+    return {
+        "predictedWearFactor": wear_factor,
+        "targetItem": target_item,
+        "modelVersion": "xgboost-mock-0.1.0",
+        "message": f"{target_item} 마모율이 계산되었습니다."
     }
