@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, ScrollView, Dimensions, StyleSheet, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, Dimensions, StyleSheet, Platform, Animated, Easing } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -14,18 +14,33 @@ export default function DiagMain() {
     const navigation = useNavigation<any>();
     const insets = useSafeAreaInsets();
 
+    // Pulse Animation
+    const pulseAnim = React.useRef(new Animated.Value(1)).current;
+
+    React.useEffect(() => {
+        Animated.loop(
+            Animated.sequence([
+                Animated.timing(pulseAnim, {
+                    toValue: 2,
+                    duration: 1000,
+                    useNativeDriver: true,
+                    easing: Easing.inOut(Easing.ease),
+                }),
+                Animated.timing(pulseAnim, {
+                    toValue: 1,
+                    duration: 1000,
+                    useNativeDriver: true,
+                    easing: Easing.inOut(Easing.ease),
+                }),
+            ])
+        ).start();
+    }, []);
+
     return (
-        <View className="flex-1 bg-[#101922]">
+        <View className="flex-1 bg-background-dark">
             <StatusBar style="light" />
 
-            {/* Background Effects matching MainPage */}
-            {/* Subtle top glow */}
-            {/* Subtle top glow */}
-            <View
-                className="absolute top-0 left-0 right-0 h-[400px] bg-primary/5 blur-3xl rounded-b-full"
-                pointerEvents={Platform.OS === 'web' ? undefined : 'none'}
-                style={Platform.OS === 'web' ? { pointerEvents: 'none' } : undefined}
-            />
+            {/* Background Effects Removed */}
 
             {/* content inside safe area */}
             <View style={{ paddingTop: insets.top, flex: 1 }}>
@@ -36,7 +51,13 @@ export default function DiagMain() {
                 <View className="relative z-10 items-center justify-center my-4 mb-6">
                     <View className="flex-row items-center gap-3 rounded-full bg-[#1b2127]/90 border border-white/10 pl-4 pr-5 py-2 shadow-lg backdrop-blur-md">
                         <View className="relative items-center justify-center w-3 h-3">
-                            <View className="absolute w-2.5 h-2.5 rounded-full bg-primary opacity-50 animate-pulse" />
+                            <Animated.View
+                                style={{
+                                    opacity: pulseAnim,
+                                    transform: [{ scale: pulseAnim }],
+                                }}
+                                className="absolute w-full h-full rounded-full bg-primary"
+                            />
                             <View className="w-2 h-2 rounded-full bg-primary shadow-sm" />
                         </View>
                         <View className="flex-row items-center gap-2">
@@ -61,10 +82,9 @@ export default function DiagMain() {
                             className="w-full bg-[#ffffff08] border border-[#ffffff14] rounded-2xl p-5 active:bg-white/5 items-start justify-between min-h-[120px] overflow-hidden relative"
                             style={styles.techCard}
                             activeOpacity={0.9}
-                            onPress={() => navigation.navigate('ActiveLoading')}
+                            onPress={() => navigation.navigate('AiCompositeDiag')}
                         >
-                            {/* Blue Glow Effect - Subtle (Adjusted position for smaller card) */}
-                            <View className="absolute -top-12 -right-12 w-40 h-40 bg-primary/10 blur-3xl rounded-full" />
+                            {/* Blue Glow Effect Removed */}
 
                             <View className="flex-row justify-between items-start w-full mb-3 z-10">
                                 <View className="h-10 w-10 rounded-lg bg-[#1b2127] border border-white/10 items-center justify-center shadow-md">
@@ -81,57 +101,40 @@ export default function DiagMain() {
                             </View>
                         </TouchableOpacity>
 
-                        {/* Row 1: Manual Diagnosis (Previously Real-time Monitoring) */}
+                        {/* Row 1: Engine Sound Diagnosis (Previously Manual Diagnosis) */}
                         <TouchableOpacity
                             className="w-full bg-[#ffffff08] border border-[#ffffff14] rounded-2xl p-5 mb-0 active:bg-white/5 items-start justify-between min-h-[120px]"
                             style={styles.techCard}
                             activeOpacity={0.9}
+                            onPress={() => navigation.navigate('EngineSoundDiag')}
                         >
                             <View className="flex-row justify-between items-start w-full mb-3">
                                 <View className="h-10 w-10 rounded-lg bg-[#1b2127] border border-white/10 items-center justify-center">
-                                    <MaterialIcons name="insights" size={24} color="#0d7ff2" />
+                                    <MaterialIcons name="graphic-eq" size={24} color="#0d7ff2" />
                                 </View>
                                 <MaterialIcons name="arrow-forward" size={20} color="#6b7280" />
                             </View>
                             <View>
-                                <Text className="text-lg font-bold text-white mb-1">수동진단</Text>
-                                <Text className="text-sm font-normal text-gray-400 tracking-wide">엔진/미션 데이터 스트리밍</Text>
+                                <Text className="text-lg font-bold text-white mb-1">엔진 소리 진단</Text>
+                                <Text className="text-sm font-normal text-gray-400 tracking-wide">AI 엔진음 분석 및 상태 점검</Text>
                             </View>
                         </TouchableOpacity>
 
-                        {/* Row 2: DTC Scan */}
+                        {/* Row 2: AI Visual & DTC Diagnosis */}
                         <TouchableOpacity
                             className="w-full bg-[#ffffff08] border border-[#ffffff14] rounded-2xl p-5 active:bg-white/5 items-start justify-between min-h-[120px]"
-                            style={styles.techCard}
                             activeOpacity={0.9}
+                            onPress={() => navigation.navigate('Filming')}
                         >
                             <View className="flex-row justify-between items-start w-full mb-3">
                                 <View className="h-10 w-10 rounded-lg bg-[#1b2127] border border-white/10 items-center justify-center">
-                                    <MaterialIcons name="car-crash" size={24} color="#0d7ff2" />
+                                    <MaterialIcons name="camera-alt" size={24} color="#0d7ff2" />
                                 </View>
                                 <MaterialIcons name="arrow-forward" size={20} color="#6b7280" />
                             </View>
                             <View>
-                                <Text className="text-lg font-bold text-white mb-1">고장 코드(DTC) 스캔</Text>
-                                <Text className="text-sm font-normal text-gray-400 tracking-wide">ECU 전체 시스템 점검</Text>
-                            </View>
-                        </TouchableOpacity>
-
-                        {/* Row 2: Specs */}
-                        <TouchableOpacity
-                            className="w-full bg-[#ffffff08] border border-[#ffffff14] rounded-2xl p-5 mb-0 active:bg-white/5 items-start justify-between min-h-[120px]"
-                            style={styles.techCard}
-                            activeOpacity={0.9}
-                        >
-                            <View className="flex-row justify-between items-start w-full mb-3">
-                                <View className="h-10 w-10 rounded-lg bg-[#1b2127] border border-white/10 items-center justify-center">
-                                    <MaterialIcons name="fact-check" size={24} color="#0d7ff2" />
-                                </View>
-                                <MaterialIcons name="arrow-forward" size={20} color="#6b7280" />
-                            </View>
-                            <View>
-                                <Text className="text-lg font-bold text-white mb-1">차량 상세 제원</Text>
-                                <Text className="text-sm font-normal text-gray-400 tracking-wide">제조사 공식 데이터베이스</Text>
+                                <Text className="text-lg font-bold text-white mb-1">AI 영상 진단</Text>
+                                <Text className="text-sm font-normal text-gray-400 tracking-wide">타이어 마모, 진단 코드 등 시각적 분석</Text>
                             </View>
                         </TouchableOpacity>
 
