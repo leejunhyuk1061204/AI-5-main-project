@@ -37,7 +37,7 @@ class AudioService:
             from datetime import datetime
             
             s3_client = boto3.client('s3')
-            BUCKET_NAME = "your-bucket-name"  # TODO: 실제 버킷 이름으로 변경
+            BUCKET_NAME = "your-bucket-name"  # 중요! TODO: 실제 버킷 이름으로 변경 ###
             
             # 카테고리별 폴더 구조: dataset/audio/{CATEGORY}/{filename}.wav
             category = final_result.category  # ENGINE, SUSPENSION, BRAKES 등
