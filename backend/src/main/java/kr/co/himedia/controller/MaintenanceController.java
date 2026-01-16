@@ -21,7 +21,7 @@ public class MaintenanceController {
     @PostMapping("/{vehicleId}/maintenance")
     public ApiResponse<MaintenanceHistoryResponse> registerMaintenance(
             @PathVariable UUID vehicleId,
-            @RequestBody MaintenanceHistoryRequest request) {
+            @jakarta.validation.Valid @RequestBody MaintenanceHistoryRequest request) {
 
         MaintenanceHistoryResponse response = maintenanceService.registerMaintenance(vehicleId, request);
         return ApiResponse.success(response);

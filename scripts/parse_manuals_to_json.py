@@ -10,7 +10,7 @@ ZIP_DIR = "data/manuals/zips"
 PARSED_DIR = "data/manuals/parsed"
 MAX_CONTENT_LENGTH = 5000
 OLLAMA_URL = "http://localhost:11434/api/generate"
-MODEL_NAME = "llama3" # 사용자 환경에 맞춰 변경 가능 (예: llama3, mistral 등)
+MODEL_NAME = "qwen2.5:7b" # llama3 -> qwen2.5:7b로 변경
 
 def translate_text_ollama(text):
     """Ollama를 사용하여 텍스트 번역 (간결한 요약 번역)"""
