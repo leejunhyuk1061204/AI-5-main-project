@@ -1,29 +1,20 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 
+class AudioRequest(BaseModel):
+    """오디오 분석 요청 스키마"""
+    audioUrl: str = Field(..., description="S3에 저장된 오디오 URL")
+
 class AudioDetail(BaseModel):
-    diagnosed_label: str # SLIP_NOISE 등
-    description: str     # 상세 설명
+    """오디오 상세 분석 내용"""
+    diagnosed_label: str = Field(..., description="진단된 소리 레이블 (예: ENGINE_NORMAL, BRAKE_SQUEAL)")
+    description: str = Field(..., description="소리에 대한 설명 및 상태")
 
 class AudioResponse(BaseModel):
-    status: str          # NORMAL, FAULTY
-    analysis_type: str   # AST 또는 LLM_AUDIO
-    category: str        # 엔진, 벨트, 서스펜션 등 (분류)
+    """오디오 분석 최종 응답"""
+    status: str = Field(..., description="상태: NORMAL, WARNING, CRITICAL")
+    analysis_type: str = Field(..., description="분석 모델: AST (1차), LLM (2차)")
+    category: str = Field(..., description="소리 카테고리: ENGINE, BRAKES, SUSPENSION 등")
     detail: AudioDetail
-    confidence: float
-    is_critical: bool
-    description: Optional[str] = None # LLM용 추가 설명
-
-## 출력 예시
-# {
-#     "status": "NORMAL",
-#     "analysis_type": "LLM_AUDIO",
-#     "category": "엔진",
-#     "detail": {
-#         "diagnosed_label": "SLIP_NOISE",
-#         "description": "슬립 노이즈가 발견되었습니다."
-#     },
-#     "confidence": 0.9,
-#     "is_critical": false,
-#     "description": "이 차량의 엔진에서 슬립 노이즈가 발견되었습니다."
-# }
+    confidence: float = Field(..., description="분석 신뢰도 (0.0 ~ 1.0)")
+    is_critical: bool = Field(False, description="긴급 점검 필요 여부")
