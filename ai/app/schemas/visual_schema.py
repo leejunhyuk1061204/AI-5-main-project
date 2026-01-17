@@ -2,6 +2,10 @@
 from pydantic import BaseModel, Field
 from typing import List, Optional
 
+class VisualRequest(BaseModel):
+    """비전 분석 요청 스키마"""
+    imageUrl: str = Field(..., description="S3에 저장된 이미지 URL")
+
 class DetectionItem(BaseModel):
     """개별 경고등 감지 결과"""
     label: str = Field(..., description="감지된 경고등 명칭 (예: Check Engine)")

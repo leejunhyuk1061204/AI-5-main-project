@@ -1,10 +1,13 @@
 # app/api/v1/routes/visual_router.py
 from fastapi import APIRouter, Request
+from ai.app.schemas.visual_schema import VisualResponse, VisualRequest
+from ai.app.services.visual_service import get_smart_visual_diagnosis
 
 router = APIRouter(prefix="/predict", tags=["Visual Analysis"])
 
 @router.post("/visual", response_model=VisualResponse)
-async def analyze_visual(s3_url: str, request: Request): # Request 객체 추가
+async def analyze_visual(request_body: VisualRequest, request: Request): # Body로 변경
+    s3_url = request_body.imageUrl
     print(f"[Visual Router] Received S3 URL: {s3_url}")
     
     # app.state에서 로드된 모델 가져오기 (Safe Access)
