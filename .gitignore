@@ -87,3 +87,6 @@ yarn-error.*
 # generated native folders
 FrontEnd/ios/
 FrontEnd/android/
+
+# AI-Agent
+GEMINI.md
