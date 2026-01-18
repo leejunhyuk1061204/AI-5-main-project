@@ -1,43 +1,59 @@
 package kr.co.himedia.config;
 
+import org.springframework.amqp.core.*;
 import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
 import org.springframework.amqp.support.converter.MessageConverter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.amqp.core.Binding;
-import org.springframework.amqp.core.BindingBuilder;
-import org.springframework.amqp.core.Queue;
-import org.springframework.amqp.core.TopicExchange;
 
 @Configuration
 public class RabbitConfig {
 
-    /**
-     * RabbitMQ 메시지를 JSON으로 직렬화/역직렬화하기 위한 설정
-     * Python(AI) 등 다른 언어와 통신 시 필수
-     */
+    public static final String EXCHANGE_NAME = "car-sentry.exchange";
+    public static final String QUEUE_NAME = "ai.diagnosis.queue";
+    public static final String ROUTING_KEY = "ai.diagnosis.unified";
+    public static final String DLX_NAME = "ai.diagnosis.dlx";
+    public static final String DLQ_NAME = "ai.diagnosis.dlq";
+
     @Bean
     public MessageConverter jsonMessageConverter() {
         return new Jackson2JsonMessageConverter();
     }
 
-    // --- Exchange ---
     @Bean
     public TopicExchange carSentryExchange() {
-        return new TopicExchange("car-sentry.exchange");
+        return new TopicExchange(EXCHANGE_NAME);
     }
 
-    // --- Queue ---
+    @Bean
+    public TopicExchange aiDiagnosisDlExchange() {
+        return new TopicExchange(DLX_NAME);
+    }
+
+    @Bean
+    public Queue aiDiagnosisDlq() {
+        return new Queue(DLQ_NAME, true);
+    }
+
+    @Bean
+    public Binding aiDiagnosisDlBinding(Queue aiDiagnosisDlq, TopicExchange aiDiagnosisDlExchange) {
+        return BindingBuilder.bind(aiDiagnosisDlq)
+                .to(aiDiagnosisDlExchange)
+                .with("ai.diagnosis.dead");
+    }
+
     @Bean
     public Queue aiDiagnosisQueue() {
-        return new Queue("ai.diagnosis.queue", true); // durable=true
+        return QueueBuilder.durable(QUEUE_NAME)
+                .withArgument("x-dead-letter-exchange", DLX_NAME)
+                .withArgument("x-dead-letter-routing-key", "ai.diagnosis.dead")
+                .build();
     }
 
-    // --- Binding ---
     @Bean
     public Binding aiDiagnosisBinding(Queue aiDiagnosisQueue, TopicExchange carSentryExchange) {
         return BindingBuilder.bind(aiDiagnosisQueue)
                 .to(carSentryExchange)
-                .with("ai.diagnosis.#"); // Routing Key Pattern
+                .with(ROUTING_KEY);
     }
 }

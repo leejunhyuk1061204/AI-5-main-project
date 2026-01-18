@@ -14,7 +14,7 @@ import kr.co.himedia.entity.VehicleConsumable;
 import kr.co.himedia.repository.MaintenanceHistoryRepository;
 import kr.co.himedia.repository.VehicleConsumableRepository;
 import kr.co.himedia.repository.VehicleRepository;
-import kr.co.himedia.service.ai.AiClient;
+import kr.co.himedia.service.AiClient;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

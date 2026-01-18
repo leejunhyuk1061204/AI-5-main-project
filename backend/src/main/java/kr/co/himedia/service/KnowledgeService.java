@@ -5,6 +5,8 @@ import kr.co.himedia.repository.KnowledgeRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.retry.annotation.Backoff;
+import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
@@ -51,6 +53,7 @@ public class KnowledgeService {
      * AI 서버에 임베딩 요청 (BE-AI-008)
      */
     @SuppressWarnings("unchecked")
+    @Retryable(retryFor = Exception.class, maxAttempts = 3, backoff = @Backoff(delay = 2000))
     private double[] getEmbedding(String text) {
         if (text == null)
             return null;
@@ -66,7 +69,7 @@ public class KnowledgeService {
                 }
             }
         } catch (Exception e) {
-            log.error("Embedding API call failed: {}. Make sure AI server is running.", e.getMessage());
+            log.error("Embedding API call failed: {}. Retrying...", e.getMessage());
             throw new RuntimeException("임베딩 API 호출 실패", e);
         }
         return null;
