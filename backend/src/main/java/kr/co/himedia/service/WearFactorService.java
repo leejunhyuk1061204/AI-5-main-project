@@ -8,7 +8,7 @@ import kr.co.himedia.entity.Vehicle;
 import kr.co.himedia.entity.VehicleConsumable;
 import kr.co.himedia.repository.VehicleConsumableRepository;
 import kr.co.himedia.repository.VehicleRepository;
-import kr.co.himedia.service.ai.AiClient;
+import kr.co.himedia.service.AiClient;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;

@@ -10,7 +10,7 @@ import kr.co.himedia.entity.VehicleConsumable;
 import kr.co.himedia.repository.MaintenanceHistoryRepository;
 import kr.co.himedia.repository.VehicleConsumableRepository;
 import kr.co.himedia.repository.VehicleRepository;
-import kr.co.himedia.service.ai.AiClient;
+import kr.co.himedia.service.AiClient;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
