@@ -17,28 +17,25 @@ public class VehicleConsumable extends BaseEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "consumable_id")
+    @Column(name = "vehicle_consumable_id")
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "vehicle_id", nullable = false)
     private Vehicle vehicle;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private MaintenanceItem item;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "consumable_id", nullable = false)
+    private ConsumableItem consumableItem;
 
-    @Column(name = "last_maintenance_mileage")
-    private Double lastMaintenanceMileage;
+    // Last maintenance info is now derived from MaintenanceHistory, removed
+    // redundant columns.
+    // Custom replacement intervals (user overrides)
+    @Column(name = "custom_interval_mileage")
+    private Double customIntervalMileage;
 
-    @Column(name = "last_maintenance_date")
-    private LocalDate lastMaintenanceDate;
-
-    @Column(name = "replacement_interval_mileage")
-    private Double replacementIntervalMileage;
-
-    @Column(name = "replacement_interval_months")
-    private Integer replacementIntervalMonths;
+    @Column(name = "custom_interval_months")
+    private Integer customIntervalMonths;
 
     @Column(name = "wear_factor")
     private Double wearFactor;
@@ -47,19 +44,14 @@ public class VehicleConsumable extends BaseEntity {
     private java.time.LocalDateTime wearFactorUpdatedAt;
 
     @Builder
-    public VehicleConsumable(Vehicle vehicle, MaintenanceItem item, Double lastMaintenanceMileage,
-            LocalDate lastMaintenanceDate, Double replacementIntervalMileage, Integer replacementIntervalMonths) {
+    public VehicleConsumable(Vehicle vehicle, ConsumableItem consumableItem,
+            Double customIntervalMileage, Integer customIntervalMonths, Double wearFactor) {
         this.vehicle = vehicle;
-        this.item = item;
-        this.lastMaintenanceMileage = lastMaintenanceMileage != null ? lastMaintenanceMileage : 0.0;
-        this.lastMaintenanceDate = lastMaintenanceDate != null ? lastMaintenanceDate : LocalDate.now();
-        this.replacementIntervalMileage = replacementIntervalMileage;
-        this.replacementIntervalMonths = replacementIntervalMonths;
-    }
-
-    public void updateMaintenanceInfo(Double mileage, LocalDate date) {
-        this.lastMaintenanceMileage = mileage;
-        this.lastMaintenanceDate = date;
+        this.consumableItem = consumableItem;
+        this.customIntervalMileage = customIntervalMileage;
+        this.customIntervalMonths = customIntervalMonths;
+        this.wearFactor = wearFactor != null ? wearFactor : 1.0;
+        this.wearFactorUpdatedAt = java.time.LocalDateTime.now();
     }
 
     public void updateWearFactor(Double wearFactor) {

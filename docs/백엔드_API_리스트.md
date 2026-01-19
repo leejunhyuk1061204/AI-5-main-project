@@ -16,15 +16,15 @@
 | 정보 수정 | PATCH | `/me` | 사용자 프로필 정보 업데이트 |
 | FCM 토큰 갱신 | PATCH | `/fcm-token` | 알림용 FCM 토큰 전용 업데이트 |
 | 회원 탈퇴 | DELETE | `/me` | 계정 삭제 (Soft Delete 방식) |
-| 프로필 이미지 업로드 | POST | `/me/image` | 프로필 사진 등록/수정 |
+| 프로필 이미지 업로드 | POST | `/me/image` | 프로필 사진 등록/수정 (Multipart) |
 
 ## 2. VehicleController (`/vehicles`)
 차량 등록 및 관리 기능을 담당합니다.
 
 | 기능명 | Method | Endpoint | 설명 |
 | :--- | :--- | :--- | :--- |
-| 차량 수동 등록 | POST | `/` | 사용자 입력 정보로 차량 등록 |
-| OBD 자동 등록 | POST | `/obd` | OBD VIN 정보를 이용한 자동 등록 |
+| 차량 등록 | POST | `/` | 사용자 입력 정보로 차량 등록 |
+| 차대번호 등록 (OBD) | POST | `/obd` | OBD VIN 정보를 이용한 단순 등록 | - VIN으로 차량정보 가져오는 api 불확실. -> 차량등록 + 차대번호 등록 만 구현
 | 차량 목록 조회 | GET | `/` | 사용자가 등록한 모든 차량 리스트 |
 | 차량 상세 조회 | GET | `/{vehicleId}` | 특정 차량의 상세 정보 조회 |
 | 차량 정보 수정 | PUT | `/{vehicleId}` | 차량 닉네임, 메모 등 수정 |
@@ -39,14 +39,14 @@
 | 주행 이력 목록 조회 | GET | `/` | 차량별 전체 주행 기록 조회 |
 | 주행 이력 상세 조회 | GET | `/{tripId}` | 특정 주행의 상세 경로 및 통계 |
 | 주행 세션 시작 | POST | `/start` | 새로운 주행 시작 (ID 발급) |
-| 주행 세션 종료 | POST | `/end` | 주행 종료 및 기록 요약 저장 |
+| 주행 세션 종료 | POST | `/end` | 주행 종료 및 기록 요약 저장 (자동 진단, 소모품 예측 Trigger) |
 
 ## 4. ObdController (`/telemetry`)
 OBD 데이터를 통한 실시간 및 배치 데이터 수집을 담당합니다.
 
 | 기능명 | Method | Endpoint | 설명 |
 | :--- | :--- | :--- | :--- |
-| 벌크 로그 수집 | POST | `/batch` | 3분 단위 OBD 로그 대량 저장 |
+| 벌크 로그 수집 | POST | `/batch` | 3분 단위 OBD 로그 대량 저장 (JSON Body) |
 | 연결 상태 조회 | GET | `/status/{vehicleId}` | 실시간 연결 및 주행 상태 확인 |
 | 수동 연결 해제 | POST | `/status/disconnect` | 사용자에 의한 수동 종료 처리 |
 
@@ -57,7 +57,7 @@ AI 진단 및 데이터 처리를 담당합니다.
 | :--- | :--- | :--- | :--- |
 | DTC 수신 처리 | POST | `/dtc` | 고장 코드 분석 및 처리 |
 | AI 진단 요청 | POST | `/diagnose` | Vision(이미지)/Audio(소리) 개별 진단 |
-| 통합 진단 요청 | POST | `/diagnose/unified` | 멀티모달(소리+사진+데이터) 통합 진단 |
+| 통합 진단 요청 | POST | `/diagnose/unified` | 멀티모달(소리+사진+데이터) 통합 진단 (Multipart) |
 
 ## 6. MaintenanceController (`/api/vehicles`)
 정비 기록 및 소모품 관리를 담당합니다.
@@ -84,10 +84,26 @@ AI 진단 및 데이터 처리를 담당합니다.
 | 리텐션 청소 실행 | POST | `/trigger-cleanup` | 로그 정리 스케줄러 강제 실행 |
 | 리포트 생성 실행 | POST | `/trigger-report` | 주간 리포트 스케줄러 강제 실행 |
 
-## 9. 기타 컨트롤러
-- **CloudAuthController** (`/api/v1/auth/callback`): OAuth 콜백 처리 및 토큰 저장
-- **MediaController** (`/media`): 미디어 파일 업로드 및 URL 반환 (`POST /upload`)
-- **AiTestController** (`/ai/test`): RAG 검색 테스트 (`GET /knowledge/search`)
+## 9. MediaController (`/media`)
+파일 업로드 유틸리티입니다.
 
-> [!NOTE]
-> 모든 API 경로는 전역 설정에 따라 `/api/v1`이 앞에 붙습니다.
+| 기능명 | Method | Endpoint | 설명 |
+| :--- | :--- | :--- | :--- |
+| 미디어 업로드 | POST | `/upload` | 이미지/오디오 파일 업로드 (Multipart) |
+
+## 10. AiTestController (`/ai/test`)
+AI/RAG 기능 단순 테스트용입니다.
+
+| 기능명 | Method | Endpoint | 설명 |
+| :--- | :--- | :--- | :--- |
+| RAG 지식 검색 | GET | `/knowledge/search` | 지식 베이스 검색 테스트 (`?query=...`) |
+
+---
+
+## 11. ⚠️ 테스트가 어렵거나 불가능한 API (Untestable / Requires Setup)
+이 섹션의 API는 Insomnia 등에서 단순 URL 호출로 테스트하기 어렵습니다.
+
+| 컨트롤러 | Method | Endpoint | 사유 |
+| :--- | :--- | :--- | :--- |
+| **CloudAuthController** | GET | `/api/v1/auth/callback/{provider}` | 외부 OAuth 제공자(Google, Naver 등)의 인증 코드(`code`)와 콜백 리다이렉트가 필요함. |
+| **GlobalExceptionHandler** | - | - | 직접 호출 불가. 에러 상황 유발 시 자동 동작. |

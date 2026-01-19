@@ -24,8 +24,8 @@ public class MaintenanceHistoryResponse {
         this.id = history.getId();
         this.maintenanceDate = history.getMaintenanceDate();
         this.mileageAtMaintenance = history.getMileageAtMaintenance();
-        this.item = history.getItem();
-        this.itemDescription = history.getItem().getDescription();
+        this.item = MaintenanceItem.valueOf(history.getConsumableItem().getCode());
+        this.itemDescription = history.getConsumableItem().getName();
         this.isStandardized = history.getIsStandardized();
         this.shopName = history.getShopName();
         this.cost = history.getCost();

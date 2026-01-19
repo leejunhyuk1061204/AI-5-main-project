@@ -56,6 +56,8 @@ spring:
 app:
   storage:
     type: ${STORAGE_TYPE:local} # local or s3
+  firebase:
+    config-path: ${FIREBASE_CONFIG_PATH:firebase-service-account.json}
 
 ai:
   server:

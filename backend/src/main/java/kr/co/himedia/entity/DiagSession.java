@@ -16,7 +16,6 @@ import java.util.UUID;
 public class DiagSession {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.AUTO)
     @Column(name = "diag_session_id")
     private UUID diagSessionId;
 
@@ -42,6 +41,7 @@ public class DiagSession {
     private LocalDateTime createdAt;
 
     public DiagSession(UUID vehiclesId, UUID tripId, DiagTriggerType triggerType) {
+        this.diagSessionId = UUID.randomUUID();
         this.vehiclesId = vehiclesId;
         this.tripId = tripId;
         this.triggerType = triggerType;

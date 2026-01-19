@@ -14,6 +14,7 @@ import java.util.UUID;
 @Builder
 public class UnifiedDiagnosisRequestDto {
     private UUID vehicleId;
+    private UUID tripId; // 주행 ID (Trip 연결용)
     private Map<String, Object> audioAnalysis; // 소리 분석 결과 (Optional)
     private Map<String, Object> visualAnalysis; // 사진 분석 결과 (Optional)
     private Map<String, Object> lstmAnalysis; // LSTM 분석 결과 (Optional)
