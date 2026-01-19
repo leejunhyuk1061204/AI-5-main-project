@@ -36,3 +36,19 @@ class VisualResponse(BaseModel):
 #     "recommendation": "이 차량의 엔진에서 슬립 노이즈가 발견되었습니다.",
 #     "processed_image_url": "https://car-sentry.s3.ap-northeast-2.amazonaws.com/processed_image.jpg"
 # }
+
+# =============================================================================
+# Engine Anomaly Schemas
+# =============================================================================
+from typing import Dict, Any
+
+class EngineAnalysisRequest(BaseModel):
+    imageUrl: str = Field(..., description="Engine room image S3 URL")
+    
+    # Simple validator to ensure it looks like a URL
+    # Note: Complex validators usually go in the service or API layer, but basic format checks are fine here.
+    # Pydantic v2 uses @field_validator, v1 uses @validator. Assuming v1 based on existing code style or v2 compat.
+    
+class EngineAnalysisResponse(BaseModel):
+    status: str = Field(..., description="분석 성공 여부 (SUCCESS/ERROR)")
+    data: Dict[str, Any] = Field(..., description="Path A(부품별 상세) 또는 Path B(범용 진단) 결과 데이터")
