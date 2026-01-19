@@ -31,6 +31,7 @@ public class MaintenanceService {
         private final VehicleConsumableRepository vehicleConsumableRepository;
         private final VehicleRepository vehicleRepository;
         private final AiClient aiClient;
+        private final OcrService ocrService;
 
         @Transactional
         public MaintenanceHistoryResponse registerMaintenance(UUID vehicleId, MaintenanceHistoryRequest request) {
@@ -171,5 +172,14 @@ public class MaintenanceService {
                         case BRAKE_PAD -> "BRAKE_PADS";
                         default -> throw new BaseException(ErrorCode.UNSUPPORTED_MAINTENANCE_ITEM);
                 };
+        }
+
+        /**
+         * 영수증 OCR 분석
+         */
+        public kr.co.himedia.dto.maintenance.MaintenanceReceiptResponse analyzeReceipt(
+                        org.springframework.web.multipart.MultipartFile file) {
+                String ocrText = ocrService.extractTextFromImage(file);
+                return ocrService.parseReceiptData(ocrText);
         }
 }
