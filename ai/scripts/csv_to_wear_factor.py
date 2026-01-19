@@ -15,7 +15,7 @@ COL_MAP = "Intake Manifold Absolute Pressure [kPa]"
 COOLANT_PREFIX = "Engine Coolant Temperature"
 
 # 기본 분류 폴더
-CATEGORIES = ["frei", "nomal", "stau"]
+CATEGORIES = ["frei", "normal", "stau"]
 
 
 def find_col_startswith(columns, prefix: str):
@@ -134,12 +134,12 @@ def main():
         type=str,
         default=None,
         choices=CATEGORIES,
-        help="frei/nomal/stau 중 하나를 골라 그 폴더의 CSV들을 변환",
+        help="frei/normal/stau 중 하나를 골라 그 폴더의 CSV들을 변환",
     )
     parser.add_argument(
         "--all",
         action="store_true",
-        help="frei/nomal/stau 전체 폴더의 CSV를 전부 변환",
+        help="frei/normal/stau 전체 폴더의 CSV를 전부 변환",
     )
     parser.add_argument(
         "--window",
@@ -177,8 +177,8 @@ def main():
             csv_list.extend(sorted((raw_root / cat).glob("*.csv")))
 
     else:
-        # 기본: category 지정했으면 그 폴더, 아니면 nomal 폴더
-        cat = args.category or "nomal"
+        # 기본: category 지정했으면 그 폴더, 아니면 normal 폴더
+        cat = args.category or "normal"
         csv_list = sorted((raw_root / cat).glob("*.csv"))
 
     if not csv_list:
