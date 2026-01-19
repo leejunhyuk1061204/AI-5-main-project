@@ -1,0 +1,7 @@
+{
+    "battery": 0.7,
+    "radiator": 0.6,
+    "engine_cover": 0.5,
+    "inverter": 0.65,
+    "default": 0.7
+}

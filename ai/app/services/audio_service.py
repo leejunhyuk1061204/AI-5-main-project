@@ -27,45 +27,27 @@ class AudioService:
         else:
             final_result = ast_result
 
-        # [Active Learning] 데이터 수집 필터링
-        # 1. 신뢰도가 너무 낮으면(0.9 미만) 학습 데이터로 쓰지 않음 (쓰레기 데이터 방지)
-        # 2. 재녹음 요구(RE_RECORD_REQUIRED)는 당연히 제외
+        # [Active Learning] Manifest 방식 데이터 수집
+        # 오디오 복사 없이 원본 위치만 기록하여 용량 절약!
         if final_result.confidence >= 0.9 and final_result.status != "RE_RECORD_REQUIRED":
-            print(f"[Data Collection] 유효한 데이터 수집됨! (Confidence: {final_result.confidence})")
+            print(f"[Data Collection] 유효한 오디오 데이터! Manifest에 기록합니다.")
             
-            import boto3
-            import uuid
-            from datetime import datetime
-            
-            s3_client = boto3.client('s3')
-            BUCKET_NAME = "your-bucket-name"  # 중요! TODO: 실제 버킷 이름으로 변경 ###
-            
-            # 카테고리별 폴더 구조: dataset/audio/{CATEGORY}/{filename}.{ext}
-            category = final_result.category  # ENGINE, SUSPENSION, BRAKES 등
-            unique_id = str(uuid.uuid4())[:8]
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            
-            # 원본 파일 확장자 추출 (mp3, wav, m4a 등)
-            from urllib.parse import urlparse
-            url_path = urlparse(s3_url).path
-            file_ext = os.path.splitext(url_path)[1].lower() or ".wav"
-            
-            s3_key = f"dataset/audio/{category}/{timestamp}_{unique_id}{file_ext}"
-            
-            # 원본 파일 다운로드 후 S3에 재업로드 (카테고리 폴더로 이동)
-            import requests
-            audio_data = requests.get(s3_url).content
-            s3_client.put_object(
-                Bucket=BUCKET_NAME,
-                Key=s3_key,
-                Body=audio_data,
-                Metadata={
-                    "diagnosed_label": final_result.detail.diagnosed_label,
-                    "confidence": str(final_result.confidence),
-                    "source_url": s3_url
-                }
-            )
-            print(f"[S3 Upload] 저장 완료: s3://{BUCKET_NAME}/{s3_key}")
+            try:
+                from ai.app.services.manifest_service import add_audio_entry
+                
+                # Manifest에 기록 (오디오 복사 없음!)
+                add_audio_entry(
+                    original_url=s3_url,  # 원본 위치만 기록!
+                    category=final_result.category,
+                    diagnosed_label=final_result.detail.diagnosed_label,
+                    status=final_result.status,
+                    analysis_type=final_result.analysis_type,
+                    confidence=final_result.confidence
+                )
+                print(f"[Manifest] 원본 위치 기록 완료: {s3_url}")
+                
+            except Exception as e:
+                print(f"[Error] Manifest 기록 실패: {e}")
         else:
             print("[Data Collection] 학습 가치가 낮은 데이터이므로 수집 제외.")
             
