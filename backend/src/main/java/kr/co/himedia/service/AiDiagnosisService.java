@@ -48,6 +48,10 @@ public class AiDiagnosisService {
     private final AiClient aiClient;
     private final ObjectMapper objectMapper;
 
+    private final FcmService fcmService;
+    private final UserService userService;
+    private final MaintenanceHistoryRepository maintenanceHistoryRepository;
+
     @Autowired
     public AiDiagnosisService(DtcHistoryRepository dtcHistoryRepository,
             RabbitTemplate rabbitTemplate,
@@ -55,20 +59,26 @@ public class AiDiagnosisService {
             ObdLogRepository obdLogRepository,
             VehicleRepository vehicleRepository,
             VehicleConsumableRepository vehicleConsumableRepository,
+            MaintenanceHistoryRepository maintenanceHistoryRepository,
             DiagSessionRepository diagSessionRepository,
             DiagResultRepository diagResultRepository,
             AiClient aiClient,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            FcmService fcmService,
+            UserService userService) {
         this.dtcHistoryRepository = dtcHistoryRepository;
         this.rabbitTemplate = rabbitTemplate;
         this.knowledgeService = knowledgeService;
         this.obdLogRepository = obdLogRepository;
         this.vehicleRepository = vehicleRepository;
         this.vehicleConsumableRepository = vehicleConsumableRepository;
+        this.maintenanceHistoryRepository = maintenanceHistoryRepository;
         this.diagSessionRepository = diagSessionRepository;
         this.diagResultRepository = diagResultRepository;
         this.aiClient = aiClient;
         this.objectMapper = objectMapper;
+        this.fcmService = fcmService;
+        this.userService = userService;
     }
 
     @Value("${app.storage.type:local}")
@@ -87,10 +97,12 @@ public class AiDiagnosisService {
     private String aiServerAnomalyUrl;
 
     /**
-     * DTC 이력 저장 및 AI 분석 이벤트 발행
+     * DTC 이력 저장 및 즉시 AI 분석/알림 (비동기 아님 - 외부 API 포함)
+     * RabbitMQ 제거 후 직접 호출로 변경
      */
     @Transactional
     public void processDtc(DtcDto dtcDto) {
+        // 1. DTC 이력 저장
         DtcHistory history = DtcHistory.builder()
                 .vehiclesId(UUID.fromString(dtcDto.getVehicleId()))
                 .dtcCode(dtcDto.getDtcCode())
@@ -99,9 +111,59 @@ public class AiDiagnosisService {
                 .status(DtcHistory.DtcStatus.valueOf(dtcDto.getStatus()))
                 .build();
         dtcHistoryRepository.save(history);
+        log.info("Saved DTC History: {}", dtcDto.getDtcCode());
 
-        rabbitTemplate.convertAndSend("car-sentry.exchange", "ai.diagnosis.dtc", dtcDto);
-        log.info("Published DTC event to RabbitMQ: {}", dtcDto.getDtcCode());
+        // 2. RAG 및 FCM 알림 발송 (직접 호출)
+        try {
+            sendDtcNotification(dtcDto);
+        } catch (Exception e) {
+            log.error("Failed to send DTC notification", e);
+            // 알림 실패가 Transaction 롤백을 유발하지 않도록 함 (선택 사항)
+            // @Transactional이 걸려있으므로 RuntimeException은 롤백됨.
+            // 알림만 실패하고 저장은 성공하게 하려면 try-catch 필수.
+        }
+    }
+
+    private void sendDtcNotification(DtcDto dtcDto) {
+        // 1. 차량 정보 및 소유주 확인
+        UUID vehicleId = UUID.fromString(dtcDto.getVehicleId());
+        Vehicle vehicle = vehicleRepository.findById(vehicleId)
+                .orElseThrow(() -> new RuntimeException("Vehicle not found: " + vehicleId));
+
+        String fcmToken = userService.getFcmToken(vehicle.getUserId());
+        if (fcmToken == null) {
+            log.info("No FCM token for user. Skip notification. UserID: {}", vehicle.getUserId());
+            return;
+        }
+
+        // 2. RAG 지식 검색 (이미 번역/정제된 텍스트 가정)
+        String query = dtcDto.getDtcCode() + " " + dtcDto.getDescription();
+        List<String> searchResults = knowledgeService.searchKnowledge(query, 1);
+
+        // RAG 결과가 있으면 그것을 '설명'으로 사용, 없으면 기본 설명 사용
+        String explanation = searchResults.isEmpty() ? dtcDto.getDescription() : searchResults.get(0);
+
+        // 3. 알림 메시지 구성 (최소한의 조립)
+        String title = "차량 이상 감지";
+        String body = dtcDto.getDtcCode() + ": " + explanation;
+
+        // 4. TTS용 텍스트 (프론트엔드가 읽을 원문 그대로 전달)
+        String ttsText = explanation;
+
+        Map<String, String> data = new HashMap<>();
+        data.put("type", "DTC_ALERT");
+        data.put("dtcCode", dtcDto.getDtcCode());
+        data.put("tts", ttsText);
+
+        // 5. FCM 발송
+        fcmService.sendMessage("User-" + vehicle.getUserId(), fcmToken, title, body, data);
+    }
+
+    private String simpleSummary(String text) {
+        if (text == null)
+            return "";
+        int dotIndex = text.indexOf(".");
+        return dotIndex > 0 ? text.substring(0, dotIndex + 1) : text;
     }
 
     /**
@@ -156,7 +218,7 @@ public class AiDiagnosisService {
 
         DiagSession session = diagSessionRepository.save(new DiagSession(
                 requestDto.getVehicleId(),
-                null,
+                requestDto.getTripId(),
                 DiagTriggerType.ANOMALY));
 
         DiagnosisTaskMessage message = DiagnosisTaskMessage.builder()
@@ -286,11 +348,34 @@ public class AiDiagnosisService {
 
             log.info("[Step 5/5] AI 통합 진단 최종 완료 [Session: {}]", sessionId);
 
+            // 5. FCM 알림 발송 (진단 완료)
+            sendDiagnosisNotification(requestDto.getVehicleId(), sessionId);
+
         } catch (Exception e) {
             log.error("Unified Diagnosis Pipeline Failed [Session: {}]", sessionId, e);
             session.updateStatus(DiagStatus.FAILED, "진단 실패: " + e.getMessage());
             diagSessionRepository.save(session);
             throw new RuntimeException("진단 파이프라인 오류", e);
+        }
+    }
+
+    private void sendDiagnosisNotification(UUID vehicleId, UUID sessionId) {
+        try {
+            vehicleRepository.findById(vehicleId).ifPresent(vehicle -> {
+                String fcmToken = userService.getFcmToken(vehicle.getUserId());
+                if (fcmToken != null) {
+                    String title = "차량 정밀 진단 완료";
+                    String body = "요청하신 차량의 AI 정밀 진단 분석이 완료되었습니다. 결과를 확인해보세요.";
+                    Map<String, String> data = new HashMap<>();
+                    data.put("type", "DIAG_COMPLETE");
+                    data.put("sessionId", sessionId.toString());
+
+                    fcmService.sendMessage("User-" + vehicle.getUserId(), fcmToken, title, body, data);
+                    log.info("Sent Diagnosis Completion Notification [Vehicle: {}]", vehicleId);
+                }
+            });
+        } catch (Exception e) {
+            log.error("Failed to send diagnosis notification", e);
         }
     }
 
@@ -319,7 +404,7 @@ public class AiDiagnosisService {
                     point.put("rpm", l.getRpm());
                     point.put("load", l.getEngineLoad() != null ? l.getEngineLoad() : 0.0);
                     point.put("coolant", l.getCoolantTemp() != null ? l.getCoolantTemp() : 0.0);
-                    point.put("voltage", l.getSpeed() != null ? l.getSpeed() / 10.0 : 12.0);
+                    point.put("voltage", l.getVoltage() != null ? l.getVoltage() : 12.0); // Fixed: Use real voltage
                     return point;
                 }).collect(Collectors.toList());
             }
@@ -369,37 +454,39 @@ public class AiDiagnosisService {
             List<VehicleConsumable> consumables = vehicleConsumableRepository.findByVehicle(vehicle);
             List<Map<String, Object>> statusList = consumables.stream().map(vc -> {
                 Map<String, Object> status = new HashMap<>();
-                status.put("item", vc.getItem());
+                status.put("item", vc.getConsumableItem().getCode());
                 status.put("wear_factor", vc.getWearFactor());
-                status.put("remaining_life_pct", calculateRemainingLife(vehicle.getTotalMileage(), vc));
+                status.put("remaining_life_pct", calculateRemainingLife(vehicle, vc));
                 return status;
             }).collect(Collectors.toList());
             builder.consumablesStatus(statusList);
         });
     }
 
-    private Double calculateRemainingLife(Double currentMileage, VehicleConsumable vc) {
+    private Double calculateRemainingLife(Vehicle vehicle, VehicleConsumable vc) {
         try {
-            Double mileageLife = null;
-            if (currentMileage != null && vc.getLastMaintenanceMileage() != null
-                    && vc.getReplacementIntervalMileage() != null) {
-                double usedMileage = currentMileage - vc.getLastMaintenanceMileage();
-                mileageLife = 100.0 - (usedMileage / vc.getReplacementIntervalMileage() * 100.0);
-            }
-            Double timeLife = null;
-            if (vc.getLastMaintenanceDate() != null && vc.getReplacementIntervalMonths() != null) {
-                long monthsPassed = ChronoUnit.MONTHS.between(vc.getLastMaintenanceDate(), LocalDate.now());
-                timeLife = 100.0 - ((double) monthsPassed / vc.getReplacementIntervalMonths() * 100.0);
-            }
-            if (mileageLife != null && timeLife != null)
-                return Math.max(0.0, Math.min(mileageLife, timeLife));
-            if (mileageLife != null)
-                return Math.max(0.0, mileageLife);
-            if (timeLife != null)
-                return Math.max(0.0, timeLife);
+            kr.co.himedia.entity.ConsumableItem item = vc.getConsumableItem();
+            // Get Last History
+            MaintenanceHistory lastHistory = maintenanceHistoryRepository
+                    .findTopByVehicleAndConsumableItemOrderByMaintenanceDateDesc(vehicle, item)
+                    .orElse(null);
+
+            double currentMileage = vehicle.getTotalMileage() != null ? vehicle.getTotalMileage() : 0.0;
+            double lastMileage = (lastHistory != null && lastHistory.getMileageAtMaintenance() != null)
+                    ? lastHistory.getMileageAtMaintenance()
+                    : 0.0;
+
+            // Interval
+            double intervalMileage = (vc.getCustomIntervalMileage() != null) ? vc.getCustomIntervalMileage()
+                    : (item.getDefaultIntervalMileage() != null ? item.getDefaultIntervalMileage() : 10000.0);
+
+            // Calculation
+            double usedMileage = (currentMileage - lastMileage)
+                    * (vc.getWearFactor() != null ? vc.getWearFactor() : 1.0);
+            return Math.max(0.0, 100.0 - (usedMileage / intervalMileage * 100.0));
         } catch (Exception e) {
-            log.warn("Remaining life calculation failed for item: {}", vc.getItem());
+            log.warn("Remaining life calculation failed for item: {}", vc.getId());
+            return null;
         }
-        return null;
     }
 }

@@ -70,10 +70,18 @@ public class TripService {
         trip.setEndTime(endTime);
 
         // 1. 해당 Trip 동안 수집된 전체 OBD 데이터 조회
+        // 주의: LocalDateTime을 OffsetDateTime으로 변환 시 시스템 타임존 적용
+        var startOffset = trip.getStartTime().atZone(java.time.ZoneId.systemDefault()).toOffsetDateTime();
+        var endOffset = endTime.atZone(java.time.ZoneId.systemDefault()).toOffsetDateTime();
+
+        log.info("[TripEnd] Query Range: {} ~ {} (vehicleId={})", startOffset, endOffset, trip.getVehicleId());
+
         List<ObdLog> tripLogs = obdLogRepository.findByVehicleIdAndTimeBetweenOrderByTimeAsc(
                 trip.getVehicleId(),
-                trip.getStartTime().atOffset(ZoneOffset.UTC),
-                endTime.atOffset(ZoneOffset.UTC));
+                startOffset,
+                endOffset);
+
+        log.info("[TripEnd] Found {} logs for trip {}", tripLogs.size(), tripId);
 
         // 2. 전체 로그 기반 통계 재계산 (수학적 결함 해결)
         if (!tripLogs.isEmpty()) {
@@ -132,6 +140,7 @@ public class TripService {
             kr.co.himedia.dto.ai.UnifiedDiagnosisRequestDto requestDto = kr.co.himedia.dto.ai.UnifiedDiagnosisRequestDto
                     .builder()
                     .vehicleId(trip.getVehicleId())
+                    .tripId(trip.getTripId())
                     .lstmAnalysis(lstmInput)
                     .build();
 

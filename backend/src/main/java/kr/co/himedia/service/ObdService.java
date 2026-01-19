@@ -78,7 +78,8 @@ public class ObdService {
 
     private ObdLog toEntity(ObdLogDto dto) {
         return ObdLog.builder()
-                .time(dto.getTimestamp().atOffset(ZoneOffset.UTC)) // Assuming UTC for now
+                // 클라이언트가 보낸 LocalDateTime을 시스템 타임존 기준으로 OffsetDateTime 변환
+                .time(dto.getTimestamp().atZone(java.time.ZoneId.systemDefault()).toOffsetDateTime())
                 .vehicleId(dto.getVehicleId())
                 .rpm(dto.getRpm())
                 .speed(dto.getSpeed())
