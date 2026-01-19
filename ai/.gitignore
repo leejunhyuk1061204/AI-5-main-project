@@ -1,8 +1,10 @@
+
 # 데이터 폴더 전체 제외 (ai/ 기준 상대경로)
 data/ast/
 data/yolo/
 data/engine_bay/
 data/s3_audio/
+
 
 # 가상환경 및 캐시 파일 (권장)
 __pycache__/
@@ -21,3 +23,4 @@ kaggle.json
 # 학습 결과 폴더 제외 (체크포인트, 로그 등)
 runs/
 weights/
+
