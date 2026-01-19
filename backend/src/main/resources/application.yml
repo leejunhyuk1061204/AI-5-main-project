@@ -59,11 +59,7 @@ app:
   firebase:
     config-path: ${FIREBASE_CONFIG_PATH:firebase-service-account.json}
 
-ai:
-  server:
-    url:
-      visual: ${AI_SERVER_URL_VISUAL:http://localhost:8000/api/v1/predict/visual}
-      audio: ${AI_SERVER_URL_AUDIO:http://localhost:8000/api/v1/predict/audio}
+# AI 설정은 Java AiClient 클래스의 @Value 기본값(8001 포트)을 사용합니다.
 
 logging:
   level:

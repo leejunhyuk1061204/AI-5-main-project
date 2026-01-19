@@ -61,7 +61,10 @@ dependencies {
 	testImplementation 'org.springframework.security:spring-security-test'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 
-	// Firebase Admin
+	// Google Cloud Vision
+	implementation 'com.google.cloud:google-cloud-vision:3.32.0'
+
+	// Firebase Admin SDK
 	implementation 'com.google.firebase:firebase-admin:9.2.0'
 
 	// Retry & AOP

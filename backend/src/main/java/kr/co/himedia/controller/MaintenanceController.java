@@ -34,4 +34,10 @@ public class MaintenanceController {
         List<ConsumableStatusResponse> response = maintenanceService.getConsumableStatus(vehicleId);
         return ApiResponse.success(response);
     }
+
+    @PostMapping("/maintenance/ocr")
+    public ApiResponse<kr.co.himedia.dto.maintenance.MaintenanceReceiptResponse> analyzeReceipt(
+            @RequestParam("file") org.springframework.web.multipart.MultipartFile file) {
+        return ApiResponse.success(maintenanceService.analyzeReceipt(file));
+    }
 }

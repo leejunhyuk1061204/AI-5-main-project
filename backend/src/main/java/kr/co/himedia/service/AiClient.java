@@ -32,17 +32,20 @@ public class AiClient {
 
     private final RestTemplate restTemplate;
 
-    @Value("${ai.server.url.visual:http://localhost:8000/api/v1/test/predict/visual}")
+    @Value("${ai.server.url.visual:http://localhost:8001/api/v1/connect/predict/visual}")
     private String aiServerVisualUrl;
 
-    @Value("${ai.server.url.audio:http://localhost:8000/api/v1/test/predict/audio}")
+    @Value("${ai.server.url.audio:http://localhost:8001/api/v1/connect/predict/audio}")
     private String aiServerAudioUrl;
 
-    @Value("${ai.server.url.comprehensive:http://localhost:8000/api/v1/test/predict/comprehensive}")
+    @Value("${ai.server.url.comprehensive:http://localhost:8001/api/v1/connect/predict/comprehensive}")
     private String aiServerUnifiedUrl;
 
-    @Value("${ai.server.url.anomaly:http://localhost:8000/api/v1/test/predict/anomaly}")
+    @Value("${ai.server.url.anomaly:http://localhost:8001/api/v1/connect/predict/anomaly}")
     private String aiServerAnomalyUrl;
+
+    @Value("${ai.server.url.wear-factor:http://localhost:8001/api/v1/connect/predict/wear-factor}")
+    private String aiServerWearFactorUrl;
 
     public AiClient() {
         org.springframework.http.client.SimpleClientHttpRequestFactory factory = new org.springframework.http.client.SimpleClientHttpRequestFactory();
@@ -107,8 +110,7 @@ public class AiClient {
      */
     @Retryable(retryFor = Exception.class, maxAttempts = 2, backoff = @Backoff(delay = 2000))
     public AiWearFactorResponse getWearFactor(AiWearFactorRequest request) {
-        log.info("[Retryable] Requesting Wear Factor Prediction: {}", request.getTargetItem());
-        String url = aiServerAnomalyUrl.replace("/anomaly", "/wear-factor");
-        return restTemplate.postForObject(url, request, AiWearFactorResponse.class);
+        log.info("[Retryable] Requesting Batch Wear Factor Prediction");
+        return restTemplate.postForObject(aiServerWearFactorUrl, request, AiWearFactorResponse.class);
     }
 }

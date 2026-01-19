@@ -6,8 +6,8 @@ from datetime import datetime
 
 # 설정
 BASE_URL = "http://localhost:8080/api/v1"
-VEHICLE_ID = "4f3038d7-84b5-4048-b9e4-6276323f834a" # <- 여기에 본인 차량 ID 입력하세요
-ACCESS_TOKEN = "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiI5NmUzNTQyYy0zNzY5LTQwZmEtYmJiYS1hYjA1OWExNmJlYTUiLCJpYXQiOjE3Njg4MTI2MTUsImV4cCI6MTc2ODgxNjIxNX0.umx-JCBzCnL09Hz0_wCWXocuYtJyz884Y8atGUhbZhErLNVmK3LXRRQDE8AlASmM6GXwTseSbOB5kIEDKmW_hA" # <- 여기에 토큰 붙여넣으세요 (Bearer 없이 토큰값만)
+VEHICLE_ID = "0f9ac11b-8b78-47cd-8b88-3eb535c42e65"
+ACCESS_TOKEN = "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiIyOWVlY2M0Ni1mYWU4LTQwYzQtOTIwZC1lNDg0YWVmNzAwZTEiLCJpYXQiOjE3Njg4NDY0NzIsImV4cCI6MTc2ODg1MDA3Mn0.9yCbAH8llpSonzHaGLePy2UVPkZVpwfG3GKZiKHSrtCopi8atnJkikgoyhsrHAZB1Re3rIiJvdQ08chMKMx9iA"
 
 def get_headers():
     # 1. 파일이 있으면 파일 우선
@@ -43,12 +43,10 @@ def send_bulk_logs(vehicle_id):
     headers = get_headers()
     if not headers: return
     
-    LOG_COUNT = 300 # 300개 (5분 분량)
-    print(f"[*] Sending Bulk Logs ({LOG_COUNT} EA / 5 mins driving)...")
+    LOG_COUNT = 500
+    print(f"[*] Sending Bulk Logs ({LOG_COUNT} EA / Aggressive Mode)...")
     
     logs = []
-    # 핵심 수정: 현재 시간 기준 + 밀리초 오프셋으로 고유 타임스탬프 생성
-    # Trip window 안에 들어가면서 PK 중복도 피함
     base_time = time.time()
     
     # 초기 속도/RPM
@@ -56,23 +54,17 @@ def send_bulk_logs(vehicle_id):
     current_rpm = 800.0
     
     for i in range(LOG_COUNT):
-        # 각 로그마다 0.001초(1ms) 씩 증가하여 고유하게 만듦
-        ts = datetime.fromtimestamp(base_time + (i * 0.001)).isoformat()
+        # 짧은 간격 (백엔드 거리 계산 공식 활용)
+        ts = datetime.fromtimestamp(base_time + (i * 0.002)).isoformat()
         
-        # 간단한 주행 시뮬레이션 (가속 -> 정속 -> 감속)
-        if i < 30: # 초반 30초 가속
-            current_speed = min(100.0, current_speed + 3.5)
-            current_rpm = min(3000.0, current_rpm + 80)
-        elif i > LOG_COUNT - 30: # 막판 30초 감속
-            current_speed = max(0.0, current_speed - 3.5)
-            current_rpm = max(800.0, current_rpm - 80)
-        else: # 정속 주행 (약간의 변동)
-            current_speed += random.uniform(-2.0, 2.0)
-            current_rpm += random.uniform(-50, 50)
-            
-            # 범위 제한
-            current_speed = max(0, min(160, current_speed))
-            current_rpm = max(800, min(6000, current_rpm))
+        # 난폭 운전 (점수 깎기: 속도 > 140 또는 RPM > 5000)
+        if i % 5 == 0: # 5번마다 급발진
+            current_speed = random.uniform(145.0, 160.0) # 과속 (점수 감점 트리거)
+            current_rpm = random.uniform(5200.0, 6500.0) # 고RPM (점수 감점 트리거)
+        else:
+            # 평소에도 좀 거칠게
+            current_speed = random.uniform(80.0, 130.0)
+            current_rpm = random.uniform(2000.0, 4500.0)
 
         log = {
             "timestamp": ts,

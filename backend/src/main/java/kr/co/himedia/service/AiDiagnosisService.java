@@ -1,8 +1,6 @@
 package kr.co.himedia.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import kr.co.himedia.common.exception.BaseException;
-import kr.co.himedia.common.exception.ErrorCode;
 import kr.co.himedia.dto.ai.*;
 import kr.co.himedia.entity.*;
 import kr.co.himedia.entity.DiagSession.DiagStatus;
@@ -12,19 +10,14 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.client.RestTemplate;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.time.LocalDate;
-import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 import java.util.concurrent.TimeUnit;
 
 import java.util.stream.Collectors;
@@ -50,7 +43,6 @@ public class AiDiagnosisService {
 
     private final FcmService fcmService;
     private final UserService userService;
-    private final MaintenanceHistoryRepository maintenanceHistoryRepository;
 
     @Autowired
     public AiDiagnosisService(DtcHistoryRepository dtcHistoryRepository,
@@ -59,7 +51,6 @@ public class AiDiagnosisService {
             ObdLogRepository obdLogRepository,
             VehicleRepository vehicleRepository,
             VehicleConsumableRepository vehicleConsumableRepository,
-            MaintenanceHistoryRepository maintenanceHistoryRepository,
             DiagSessionRepository diagSessionRepository,
             DiagResultRepository diagResultRepository,
             AiClient aiClient,
@@ -72,7 +63,6 @@ public class AiDiagnosisService {
         this.obdLogRepository = obdLogRepository;
         this.vehicleRepository = vehicleRepository;
         this.vehicleConsumableRepository = vehicleConsumableRepository;
-        this.maintenanceHistoryRepository = maintenanceHistoryRepository;
         this.diagSessionRepository = diagSessionRepository;
         this.diagResultRepository = diagResultRepository;
         this.aiClient = aiClient;
@@ -84,16 +74,16 @@ public class AiDiagnosisService {
     @Value("${app.storage.type:local}")
     private String storageType;
 
-    @Value("${ai.server.url.visual:http://localhost:8000/api/v1/test/predict/visual}")
+    @Value("${ai.server.url.visual:http://localhost:8001/api/v1/connect/predict/visual}")
     private String aiServerVisualUrl;
 
-    @Value("${ai.server.url.audio:http://localhost:8000/api/v1/test/predict/audio}")
+    @Value("${ai.server.url.audio:http://localhost:8001/api/v1/connect/predict/audio}")
     private String aiServerAudioUrl;
 
-    @Value("${ai.server.url.comprehensive:http://localhost:8000/api/v1/test/predict/comprehensive}")
+    @Value("${ai.server.url.comprehensive:http://localhost:8001/api/v1/connect/predict/comprehensive}")
     private String aiServerUnifiedUrl;
 
-    @Value("${ai.server.url.anomaly:http://localhost:8000/api/v1/test/predict/anomaly}")
+    @Value("${ai.server.url.anomaly:http://localhost:8001/api/v1/connect/predict/anomaly}")
     private String aiServerAnomalyUrl;
 
     /**
@@ -157,13 +147,6 @@ public class AiDiagnosisService {
 
         // 5. FCM 발송
         fcmService.sendMessage("User-" + vehicle.getUserId(), fcmToken, title, body, data);
-    }
-
-    private String simpleSummary(String text) {
-        if (text == null)
-            return "";
-        int dotIndex = text.indexOf(".");
-        return dotIndex > 0 ? text.substring(0, dotIndex + 1) : text;
     }
 
     /**
@@ -455,38 +438,14 @@ public class AiDiagnosisService {
             List<Map<String, Object>> statusList = consumables.stream().map(vc -> {
                 Map<String, Object> status = new HashMap<>();
                 status.put("item", vc.getConsumableItem().getCode());
+                // WearFactor는 AI가 계산한 값 (이제 DB에 저장됨)
                 status.put("wear_factor", vc.getWearFactor());
-                status.put("remaining_life_pct", calculateRemainingLife(vehicle, vc));
+                status.put("remaining_life_pct", vc.getRemainingLife() != null ? vc.getRemainingLife() : 100.0);
                 return status;
             }).collect(Collectors.toList());
             builder.consumablesStatus(statusList);
         });
     }
 
-    private Double calculateRemainingLife(Vehicle vehicle, VehicleConsumable vc) {
-        try {
-            kr.co.himedia.entity.ConsumableItem item = vc.getConsumableItem();
-            // Get Last History
-            MaintenanceHistory lastHistory = maintenanceHistoryRepository
-                    .findTopByVehicleAndConsumableItemOrderByMaintenanceDateDesc(vehicle, item)
-                    .orElse(null);
-
-            double currentMileage = vehicle.getTotalMileage() != null ? vehicle.getTotalMileage() : 0.0;
-            double lastMileage = (lastHistory != null && lastHistory.getMileageAtMaintenance() != null)
-                    ? lastHistory.getMileageAtMaintenance()
-                    : 0.0;
-
-            // Interval
-            double intervalMileage = (vc.getCustomIntervalMileage() != null) ? vc.getCustomIntervalMileage()
-                    : (item.getDefaultIntervalMileage() != null ? item.getDefaultIntervalMileage() : 10000.0);
-
-            // Calculation
-            double usedMileage = (currentMileage - lastMileage)
-                    * (vc.getWearFactor() != null ? vc.getWearFactor() : 1.0);
-            return Math.max(0.0, 100.0 - (usedMileage / intervalMileage * 100.0));
-        } catch (Exception e) {
-            log.warn("Remaining life calculation failed for item: {}", vc.getId());
-            return null;
-        }
-    }
+    // calculateRemainingLife 제거 (VehicleConsumable.currentLife 사용)
 }

@@ -25,7 +25,7 @@ public class KnowledgeService {
     private final KnowledgeRepository knowledgeRepository;
     private final RestTemplate restTemplate = new RestTemplate();
 
-    @Value("${ai.server.url.embedding:http://localhost:8000/api/v1/test/predict/embedding}")
+    @Value("${ai.server.url.embedding:http://localhost:8001/api/v1/connect/predict/embedding}")
     private String embeddingApiUrl;
 
     /**

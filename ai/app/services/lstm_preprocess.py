@@ -2,8 +2,8 @@
 from __future__ import annotations
 
 import os, glob, json
-from dataclasses import dataclass
-from typing import List, Optional, Tuple
+from dataclasses import dataclass, field
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -13,10 +13,17 @@ import pandas as pd
 class PreprocessConfig:
     sampling_hz: float = 10.0
     window_sec: int = 60
-    stride_sec: int = 5              # 윈도우 이동 간격(초) - 너무 크면 샘플 적고, 너무 작으면 많아짐
+    stride_sec: int = 5  # 윈도우 이동 간격(초)
     timestamp_col: Optional[str] = "timestamp"  # 없으면 None
-    fill_method: str = "ffill_then_bfill"       # 결측 처리
-    normalize: str = "zscore"        # zscore만 지원(필요 시 확장)
+    fill_method: str = "ffill_then_bfill"
+    normalize: str = "zscore"  # zscore만 지원(필요 시 확장)
+
+    # raw CSV 컬럼명을 표준 컬럼명으로 바꾸기 위한 매핑
+    rename_map: Dict[str, str] = field(default_factory=dict)
+
+    # timestamp 포맷(알면 지정해서 파싱 경고/속도 개선)
+    # OBD CSV가 보통 "HH:MM:SS.mmm"이면 "%H:%M:%S.%f"
+    timestamp_format: Optional[str] = None
 
 
 def _ensure_dir(p: str) -> None:
@@ -24,24 +31,24 @@ def _ensure_dir(p: str) -> None:
 
 
 def _list_csv_files(root_dir: str) -> List[str]:
-    # 하위폴더 포함 CSV 찾기
     return sorted(glob.glob(os.path.join(root_dir, "**", "*.csv"), recursive=True))
 
 
-def _clean_and_select(df: pd.DataFrame, signals: List[str], ts_col: Optional[str]) -> pd.DataFrame:
-    # 필요한 컬럼만
+def _clean_and_select(df: pd.DataFrame, signals: List[str], ts_col: Optional[str], ts_format: Optional[str]) -> pd.DataFrame:
     cols = ([ts_col] if ts_col and ts_col in df.columns else []) + [c for c in signals if c in df.columns]
     missing = [c for c in signals if c not in df.columns]
     if missing:
-        raise ValueError(f"CSV에 signals 컬럼이 없습니다: {missing}")
+        raise ValueError(f"CSV에 signals 컬럼이 없습니다: {missing}\n현재 컬럼={list(df.columns)}")
 
     df = df[cols].copy()
 
-    # timestamp가 있으면 정렬(있을 때만)
+    # timestamp가 있으면 정렬
     if ts_col and ts_col in df.columns:
-        # timestamp 포맷이 숫자/문자 어느 쪽이든 일단 변환 시도
-        df[ts_col] = pd.to_datetime(df[ts_col], errors="coerce")
-        df = df.sort_values(ts_col).reset_index(drop=True)
+        if ts_format:
+            df[ts_col] = pd.to_datetime(df[ts_col], format=ts_format, errors="coerce")
+        else:
+            df[ts_col] = pd.to_datetime(df[ts_col], errors="coerce")
+        df = df.dropna(subset=[ts_col]).sort_values(ts_col).reset_index(drop=True)
 
     # numeric 변환
     for c in signals:
@@ -74,8 +81,10 @@ def _make_windows(arr: np.ndarray, T: int, stride: int) -> np.ndarray:
     windows = []
     for start in range(0, L - T + 1, stride):
         windows.append(arr[start:start + T])
+
     if not windows:
         return np.empty((0, T, F), dtype=np.float32)
+
     return np.stack(windows).astype(np.float32)
 
 
@@ -87,8 +96,8 @@ def build_lstm_ae_dataset(
     max_files: Optional[int] = None,
 ) -> Tuple[str, str, str]:
     """
-    raw_dir: 예) data/obd/raw/normal
-    out_dir: 예) data/processed/lstm_ae
+    raw_dir: 예) ai/data/obd/raw/normal
+    out_dir: 예) ai/data/processed/lstm_ae
     returns: (train_npz_path, scaler_json_path, meta_json_path)
     """
     _ensure_dir(out_dir)
@@ -107,7 +116,16 @@ def build_lstm_ae_dataset(
 
     for fp in files:
         df = pd.read_csv(fp)
-        df = _clean_and_select(df, signals=signals, ts_col=cfg.timestamp_col)
+
+        # 0) 컬럼명 인코딩 깨짐 정규화: "Â" 제거 (중요!)
+        df.columns = [c.replace("Â", "") if isinstance(c, str) else c for c in df.columns]
+
+        # 1) 컬럼명 표준화(매핑이 있으면 적용)
+        if cfg.rename_map:
+            df = df.rename(columns=cfg.rename_map)
+
+        # 2) 필요한 컬럼만 선택 + timestamp 정렬/파싱
+        df = _clean_and_select(df, signals=signals, ts_col=cfg.timestamp_col, ts_format=cfg.timestamp_format)
         df = _fillna(df, signals=signals, method=cfg.fill_method)
 
         arr = df[signals].to_numpy(dtype=np.float32)
@@ -122,16 +140,13 @@ def build_lstm_ae_dataset(
 
     X = np.concatenate(all_windows, axis=0)  # (N, T, F)
 
-    # --- 정규화 파라미터는 "훈련 데이터 전체" 기준으로 계산 (중요) ---
     scaler = {}
     if cfg.normalize == "zscore":
-        # 전체 (N*T, F)로 펼쳐서 feature별 mean/std 계산
         flat = X.reshape(-1, X.shape[-1])
         mean = flat.mean(axis=0)
         std = flat.std(axis=0)
-        std = np.where(std < 1e-8, 1.0, std)  # 0 방지
+        std = np.where(std < 1e-8, 1.0, std)
 
-        # 정규화 적용
         X = (X - mean) / std
 
         scaler = {
@@ -143,7 +158,6 @@ def build_lstm_ae_dataset(
     else:
         raise ValueError(f"Unknown normalize: {cfg.normalize}")
 
-    # 저장
     train_npz = os.path.join(out_dir, "train.npz")
     np.savez_compressed(train_npz, X=X)
 
@@ -161,6 +175,9 @@ def build_lstm_ae_dataset(
         "T": T,
         "F": len(signals),
         "signals": signals,
+        "timestamp_col": cfg.timestamp_col,
+        "timestamp_format": cfg.timestamp_format,
+        "rename_map": cfg.rename_map,
     }
     meta_path = os.path.join(out_dir, "meta.json")
     with open(meta_path, "w", encoding="utf-8") as f:

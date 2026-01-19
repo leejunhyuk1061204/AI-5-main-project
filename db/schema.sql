@@ -223,14 +223,31 @@ CREATE TABLE IF NOT EXISTS dtc_freeze_frames (
     pids_snapshot JSONB
 );
 
--- 소모품 잔여 수명 (2.4.3)
-CREATE TABLE IF NOT EXISTS consumables_state (
-    consumable_id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
+-- 2.4.3 소모품 항목 마스터 (consumable_items) - Reference
+CREATE TABLE IF NOT EXISTS consumable_items (
+    id SERIAL PRIMARY KEY,
+    code VARCHAR(50) UNIQUE NOT NULL, -- ENGINE_OIL, TIRES...
+    name VARCHAR(100) NOT NULL,
+    default_interval_mileage INT NOT NULL,
+    default_interval_months INT,
+    description TEXT
+);
+
+-- 2.4.4 차량별 소모품 상태 (vehicle_consumables)
+CREATE TABLE IF NOT EXISTS vehicle_consumables (
+    vehicle_consumable_id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
     vehicles_id UUID REFERENCES vehicles (vehicles_id),
-    part_name VARCHAR(50),
-    current_life FLOAT,
-    predicted_date DATE,
-    last_updated TIMESTAMP
+    consumable_item_id INT REFERENCES consumable_items (id),
+    wear_factor FLOAT DEFAULT 1.0, -- AI 계산 마모율 (1.0 = 표준)
+    last_replaced_at TIMESTAMP,
+    last_replaced_mileage FLOAT, -- 교체 시점의 주행거리
+    remaining_life FLOAT, -- (캐싱용) 잔존 수명 %
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP,
+    UNIQUE (
+        vehicles_id,
+        consumable_item_id
+    )
 );
 
 -- 정비 차계부 (2.4.4)

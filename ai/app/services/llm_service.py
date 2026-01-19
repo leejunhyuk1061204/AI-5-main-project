@@ -7,81 +7,251 @@ from openai import AsyncOpenAI
 from ai.app.schemas.visual_schema import VisualResponse
 from ai.app.schemas.audio_schema import AudioResponse, AudioDetail
 
+from ai.app.schemas.visual_schema import VisualResponse
+from ai.app.schemas.audio_schema import AudioResponse, AudioDetail
+
 client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY") or "MISSING_KEY")
 
 # ---------------------------------------------------------
 # 1. 시각 전문 진단 (GPT-4o Vision)
 # ---------------------------------------------------------
+
+async def suggest_anomaly_label(
+    heatmap_url: str,
+    crop_url: str,
+    part_name: str,
+    anomaly_score: float
+) -> dict:
+    """
+    [Path A: Engine Detect]
+    YOLO가 탐지한 부품의 Crop 이미지와 Heatmap을 분석하여 이상 원인을 제안합니다.
+    URL은 반드시 Presigned URL이어야 합니다.
+    """
+    SYSTEM_PROMPT = f"""
+    당신은 'Car-Sentry 엔진룸 결함 분석 전문가'입니다.
+    
+    분석 대상: {part_name}
+    이상 점수: {anomaly_score:.2f}
+
+    [입력 이미지 설명]
+    1. 첫 번째 이미지: 부품 원본 Crop
+    2. 두 번째 이미지: 이상 부위가 붉게 표시된 Heatmap Overlay
+
+    [임무]
+    - Anomaly Detector가 이미 이 부품을 '이상(Anomaly)'으로 판정했습니다.
+    - 당신의 역할은 판정 여부를 따지는 것이 아니라, '어떤 종류의 결함인지' 설명하는 것입니다.
+    - 붉은색 Heatmap 영역에 집중하여 시각적 특징을 서술하세요.
+
+    [결함 분류 기준]
+    - LEAK: 누유, 액체 흔적 (오일, 냉각수)
+    - CORROSION: 녹, 산화, 부식 (배터리 단자 등)
+    - PHYSICAL: 균열, 찌그러짐, 탈락, 파손
+    - CONTAMINATION: 먼지 퇴적, 이물질
+    - WEAR: 벨트 마모, 호스 경화
+    - UNKNOWN: 특징이 불명확함
+
+    [출력 형식 - JSON]
+    {{
+        "defect_category": "카테고리명",
+        "defect_label": "구체적_라벨명 (예: Battery_Acid_Leak)",
+        "description_ko": "한글 설명 (비전문가도 이해하기 쉽게)",
+        "severity": "MINOR|WARNING|CRITICAL",
+        "recommended_action": "권장 조치"
+    }}
+    """
+    
+    try:
+        response = await client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": [
+                    {"type": "text", "text": "이 부품의 이상 영역을 분석해주세요."},
+                    {"type": "image_url", "image_url": {"url": crop_url}}, # Presigned URL
+                    {"type": "image_url", "image_url": {"url": heatmap_url}} # Presigned URL
+                ]}
+            ],
+            response_format={"type": "json_object"},
+            max_tokens=500,
+            timeout=30.0 # Circuit Breaker: Timeout
+        )
+        content = response.choices[0].message.content
+        return json.loads(content)
+        
+    except Exception as e:
+        print(f"[LLM Anomaly Error] {e}")
+        # Fallback Safe JSON
+        return {
+            "defect_category": "UNKNOWN",
+            "defect_label": "Analysis_Failed",
+            "description_ko": "AI 정밀 분석 중 오류가 발생했습니다. (일시적 장애)",
+            "severity": "WARNING",
+            "recommended_action": "육안 점검 권장"
+        }
+
+
+async def suggest_anomaly_label_with_base64(
+    crop_base64: str,
+    heatmap_base64: str,
+    part_name: str,
+    anomaly_score: float
+) -> dict:
+    """
+    [Path A: Engine Detect - Base64 버전]
+    URL 대신 Base64 인코딩된 이미지를 직접 전달합니다.
+    S3 업로드 없이 LLM 분석 가능!
+    """
+    SYSTEM_PROMPT = f"""
+    당신은 'Car-Sentry 엔진룸 결함 분석 전문가'입니다.
+    
+    분석 대상: {part_name}
+    이상 점수: {anomaly_score:.2f}
+
+    [입력 이미지 설명]
+    1. 첫 번째 이미지: 부품 원본 Crop
+    2. 두 번째 이미지: 이상 부위가 붉게 표시된 Heatmap Overlay
+
+    [임무]
+    - Anomaly Detector가 이미 이 부품을 '이상(Anomaly)'으로 판정했습니다.
+    - 당신의 역할은 '어떤 종류의 결함인지' 설명하는 것입니다.
+    - 붉은색 Heatmap 영역에 집중하여 시각적 특징을 서술하세요.
+
+    [결함 분류 기준]
+    - LEAK: 누유, 액체 흔적 (오일, 냉각수)
+    - CORROSION: 녹, 산화, 부식 (배터리 단자 등)
+    - PHYSICAL: 균열, 찌그러짐, 탈락, 파손
+    - CONTAMINATION: 먼지 퇴적, 이물질
+    - WEAR: 벨트 마모, 호스 경화
+    - UNKNOWN: 특징이 불명확함
+
+    [출력 형식 - JSON]
+    {{
+        "defect_category": "카테고리명",
+        "defect_label": "구체적_라벨명 (예: Battery_Acid_Leak)",
+        "description_ko": "한글 설명 (비전문가도 이해하기 쉽게)",
+        "severity": "MINOR|WARNING|CRITICAL",
+        "recommended_action": "권장 조치"
+    }}
+    """
+    
+    try:
+        response = await client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": [
+                    {"type": "text", "text": "이 부품의 이상 영역을 분석해주세요."},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/png;base64,{crop_base64}"}
+                    },
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/png;base64,{heatmap_base64}"}
+                    }
+                ]}
+            ],
+            response_format={"type": "json_object"},
+            max_tokens=500,
+            timeout=30.0
+        )
+        content = response.choices[0].message.content
+        return json.loads(content)
+        
+    except Exception as e:
+        print(f"[LLM Anomaly Base64 Error] {e}")
+        return {
+            "defect_category": "UNKNOWN",
+            "defect_label": "Analysis_Failed",
+            "description_ko": "AI 정밀 분석 중 오류가 발생했습니다.",
+            "severity": "WARNING",
+            "recommended_action": "육안 점검 권장"
+        }
+
 async def analyze_general_image(s3_url: str) -> VisualResponse:
+    """
+    [Path B: Fallback / 범용 분석]
+    YOLO가 놓쳤거나, 별도 모델이 없는 이미지에 대한 LLM 분류.
+    - DASHBOARD (계기판 경고등) 포함: 별도 YOLO 학습 없이 LLM이 분류
+    - ENGINE 포함: Hard Mining용
+    """
     SYSTEM_PROMPT = """
     당신은 'Car-Sentry 시각 분석 팀'의 수석 검수관입니다. 
-    당신의 임무는 제공된 이미지에서 육안으로 식별 가능한 모든 결함을 찾는 것입니다.
+    제공된 이미지를 분석하여 차량 관련 여부를 판단하고 진단하십시오.
 
-    [분석 가이드라인]
-    1. 분류(Category): 사진 속 주요 부품이 무엇인지 먼저 판단하십시오.
-       - DASHBOARD (대시보드: 엔진오일, 배터리, ABS 등)
-       - EXTERIOR (외관: 범퍼, 도어, 휀더, 스크래치 등)
-       - TIRES_WHEELS_IMAGE (타이어, 휠)
-       - GLASS_WINDOWS (유리, 창문, 썬팅)
-       - LIGHTS (헤드램프, 테일램프)
-       - ENGINE_ROOM (엔진룸 내부, 배터리)
-       - UNDERBODY (하부, 배기구, 녹)
-       - INTERIOR (실내: 시트, 핸들, 대시보드)
-       - UNKNOWN_IMAGE (확신없음)
-    2. 결함 식별: 픽셀 단위로 정밀 관찰하여 미세한 균열, 누유, 파손을 찾으십시오.
-    3. 논리적 추론: 시각적 증거에 기반한 원인 분석.
+    [분석 단계]
+    1. Vehicle Validation: 이 이미지가 자동차와 관련이 있습니까? (부품 포함)
+       - NO -> type="IRRELEVANT"
+    
+    2. Classification (Sub Type):
+       - DASHBOARD (계기판 경고등 사진) **예: 엔진 경고등, ABS, 타이어 압력 등**
+       - EXTERIOR (외관 - 범퍼, 도어, 펜더 등)
+       - INTERIOR (실내 - 시트, 핸들 등)
+       - TIRE (타이어/휠)
+       - LAMP (헤드램프/테일램프)
+       - ENGINE (엔진룸/부품) **YOLO가 놓친 엔진 부품일 수 있음**
+    
+    3. Diagnosis: 손상 여부 및 설명
+       - DASHBOARD의 경우: 어떤 경고등이 켜져 있는지 나열
 
-    [데이터 품질 대응]
-    - 화질 저하, 초점 미흡 시 status를 "RE_UPLOAD_REQUIRED"로 설정하십시오.
-
-    [출력 형식]
+    [출력 형식 - JSON]
     {
-        "status": "NORMAL" | "WARNING" | "CRITICAL" | "RE_UPLOAD_REQUIRED",
-        "category": "분류명(위 리스트 중 택1)",
-        "description": "상황 요약",
-        "recommendation": "조치 방법",
-        "analysis_summary": "결론에 도달한 주요 근거 요약"
+        "type": "VEHICLE" | "IRRELEVANT",
+        "sub_type": "DASHBOARD" | "EXTERIOR" | "INTERIOR" | "TIRE" | "LAMP" | "ENGINE" | "NONE",
+        "status": "NORMAL" | "WARNING" | "CRITICAL",
+        "description": "한글 설명",
+        "recommendation": "조치"
     }
     """
 
     try:
-        # [Correct] Standard OpenAI library usage
         response = await client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-4o",  # [비용 절약] Path B는 단순 분류 → 4o-mini로 충분 (1/20 비용)
             messages=[
-                {
-                    "role": "system",
-                    "content": SYSTEM_PROMPT
-                },
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": "이 차량 외관 사진을 분석해줘."},
-                        {"type": "image_url", "image_url": {"url": s3_url}}
-                    ]
-                }
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": [
+                    {"type": "text", "text": "이 이미지를 분류하고 진단해주세요."},
+                    {"type": "image_url", "image_url": {"url": s3_url}}
+                ]}
             ],
             response_format={"type": "json_object"},
-            max_tokens=1000
+            max_tokens=800,
+            timeout=30.0
         )
         
-        # [Correct] Access output via choices
         content = response.choices[0].message.content
         result = json.loads(content)
 
-        current_status = result.get("status", "WARNING")
-        
+        # Map LLM result to VisualResponse
+        # IRRELEVANT 처리
+        if result.get("type") == "IRRELEVANT":
+             return VisualResponse(
+                status="ERROR", # 클라이언트에서 경고창을 띄우기 위해 ERROR로 처리하거나 별도 처리
+                analysis_type="LLM_GENERAL",
+                category="IRRELEVANT",
+                description="차량과 관련 없는 이미지입니다.",
+                recommendation="차량 사진을 업로드해주세요.",
+                processed_image_url=s3_url
+            )
+
         return VisualResponse(
-            status=current_status,
-            analysis_type="LLM_VISION",
-            category=result.get("category", "ETC"), # 카테고리 추가
-            description=result.get("description", "분석 결과가 없습니다."),
-            recommendation=result.get("recommendation", "점검이 필요합니다."),
+            status=result.get("status", "WARNING"),
+            analysis_type="LLM_GENERAL",
+            category=result.get("sub_type", "ETC"),
+            description=result.get("description", ""),
+            recommendation=result.get("recommendation", ""),
             processed_image_url=s3_url
         )
+        
     except Exception as e:
-        print(f"[LLM Vision Error] {e}")
-        return VisualResponse(status="ERROR", description="이미지 분석 중 오류 발생", processed_image_url=s3_url)
+        print(f"[LLM General Error] {e}")
+        return VisualResponse(
+            status="ERROR", 
+            analysis_type="LLM_GENERAL", 
+            category="ERROR", 
+            description="이미지 분석 서비스를 사용할 수 없습니다.", 
+            processed_image_url=s3_url
+        )
 
 # ---------------------------------------------------------
 # 2. 청각 전문 진단 (GPT-4o Audio)

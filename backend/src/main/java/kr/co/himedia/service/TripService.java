@@ -26,6 +26,7 @@ public class TripService {
     private final ObdLogRepository obdLogRepository;
     private final AiDiagnosisService aiDiagnosisService;
     private final WearFactorService wearFactorService;
+    private final kr.co.himedia.repository.VehicleRepository vehicleRepository;
 
     // 차량별 주행 기록 목록 조회
     @Transactional(readOnly = true)
@@ -119,6 +120,24 @@ public class TripService {
             log.info(
                     "[TripEnd] Final statistics calculated for trip {}: AvgSpeed={}, MaxSpeed={}, Distance={}, Score={}",
                     tripId, trip.getAverageSpeed(), maxSpeed, distance, driveScore);
+
+            // [CRITICAL FIX] 차량 총 주행거리(Odometer) 업데이트
+            // 이 부분이 없어서 잔존수명이 안 깎였음
+            vehicleRepository.findById(trip.getVehicleId()).ifPresent(vehicle -> {
+                double currentTotal = vehicle.getTotalMileage() != null ? vehicle.getTotalMileage() : 0.0;
+                double newTotal = currentTotal + trip.getDistance();
+                vehicle.updateTotalMileage(newTotal);
+                vehicleRepository.save(vehicle);
+                log.info("[TripEnd] Updated Vehicle Total Mileage: {} -> {}", currentTotal, newTotal);
+
+                // [Trigger 2] 운행 종료 시 마모율 계산 (비동기, Race Condition 방지를 위해 최신 마일리지 전달)
+                try {
+                    wearFactorService.calculateAndSaveWearFactors(trip.getVehicleId(), newTotal);
+                    log.info("Successfully triggered wear factor calculation for vehicle: {}", trip.getVehicleId());
+                } catch (Exception e) {
+                    log.error("Wear factor trigger failed", e);
+                }
+            });
         }
 
         TripSummary savedTrip = tripSummaryRepository.save(trip);
@@ -147,9 +166,7 @@ public class TripService {
             aiDiagnosisService.requestUnifiedDiagnosisAsync(requestDto);
             log.info("Successfully triggered auto diagnosis for trip: {}", tripId);
 
-            // [Trigger 2] 운행 종료 시 마모율 계산
-            wearFactorService.calculateAndSaveWearFactors(trip.getVehicleId());
-            log.info("Successfully calculated wear factors for vehicle: {}", trip.getVehicleId());
+            // (구 위치: WearFactorService 호출 삭제)
         } catch (Exception e) {
             log.error("Auto diagnosis trigger failed for trip: {}", tripId, e);
             // 진단 트리거 실패가 주행 종료 리턴을 막지 않도록 예외 전파 안함 (단, 로그는 남김)
@@ -157,5 +174,4 @@ public class TripService {
 
         return savedTrip;
     }
-
 }

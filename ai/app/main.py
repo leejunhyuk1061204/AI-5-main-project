@@ -2,10 +2,14 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import os
+from ultralytics import settings
 from dotenv import load_dotenv, find_dotenv
 
 # 루트 폴더(.env)를 명시적으로 찾아서 로드
 load_dotenv(find_dotenv())
+
+# Ultralytics 전역 가중치 경로 설정
+settings.update({'weights_dir': os.path.join(os.getcwd(), 'ai', 'weights')})
 
 from ai.app.api.v1.routes.health import router as health_router
 from ai.app.api.v1.routes.router import router as predict_router
@@ -38,20 +42,19 @@ def load_ast_model():
     return {"model": model, "feature_extractor": feature_extractor}
 
 
-def load_yolo_model():
-    """YOLOv8 계기판 모델 로드"""
-    print("Loading YOLOv8 Model...")
+def load_engine_yolo_model():
+    """YOLOv8 엔진룸 부품 감지 모델 로드"""
+    print("Loading YOLOv8 Engine Model...")
     from ultralytics import YOLO
     
-    # 모델 경로
-    model_path = os.path.join("ai", "weights", "dashboard", "best.pt")
+    model_path = os.path.join("ai", "weights", "engine", "best.pt")
     
     if not os.path.exists(model_path):
-        print(f"[Warning] 학습된 YOLO 가중치를 찾을 수 없습니다: {model_path}")
-        print("기본 모델(yolov8n.pt)을 로드합니다.")
-        model = YOLO("yolov8n.pt")
+        print(f"[Warning] 엔진 YOLO 가중치를 찾을 수 없습니다: {model_path}")
+        print("기본 모델(ai/weights/yolov8n.pt)을 사용합니다. 엔진 부품 감지 정확도가 낮을 수 있습니다.")
+        model = YOLO(os.path.join("ai", "weights", "yolov8n.pt"))
     else:
-        print(f"학습된 YOLO 모델 로드 중: {model_path}")
+        print(f"학습된 엔진 YOLO 모델 로드 중: {model_path}")
         model = YOLO(model_path)
         
     return model
@@ -61,21 +64,19 @@ def load_yolo_model():
 async def lifespan(app: FastAPI):
     # 0. 초기화
     app.state.ast_model = None
-    app.state.yolo_model = None
+    app.state.engine_yolo_model = None  # 엔진 분석용 모델 (Dashboard YOLO 제거됨)
 
     # 1. 모델 로드
-
     try:
         app.state.ast_model = load_ast_model()
-        app.state.yolo_model = load_yolo_model()
-        print("✅ AI Models (YOLOv8, AST) loaded successfully.")
+        app.state.engine_yolo_model = load_engine_yolo_model()
+        print("✅ AI Models (YOLOv8 Engine, AST) loaded successfully.")
     except Exception as e:
         print(f"❌ Critical Error loading models: {e}")
-        # 모델 로드 실패해도 서버는 뜨게 할지, 죽일지 결정 (여기선 로그만 남김)
     
     yield
     
-    # 2. 종료 시 정리 (필요하면)
+    # 2. 종료 시 정리
     print("AI Models unloaded.")
 
 
@@ -104,12 +105,12 @@ def create_app() -> FastAPI:
     app.include_router(visual_router, prefix="/api/v1", tags=["visual"])
     app.include_router(audio_router, prefix="/api/v1", tags=["audio"])
 
-    # [Test] 로컬 환경일 경우 테스트 라우터 등록
-    import os
-    if os.getenv("APP_ENV") == "local":
-        from ai.app.api.v1.routes.test_router import router as test_router
-        app.include_router(test_router, prefix="/api/v1", tags=["test"])
-        print("✅ Local Test Router Registered (/api/v1/test/predict/...)")
+    # [Test] 테스트 라우터 등록 (개발/테스트용)
+    from ai.app.api.v1.routes.test_router import router as test_router
+    from ai.app.api.v1.routes.test_router import connect_router
+    app.include_router(test_router, prefix="/api/v1", tags=["test"])
+    app.include_router(connect_router, prefix="/api/v1", tags=["connect"])
+    print("✅ Test Router Registered (/api/v1/test/... + /api/v1/connect/...)")
 
     return app
 
