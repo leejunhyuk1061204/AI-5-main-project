@@ -148,22 +148,60 @@ def prepare_data():
     # Feature Extractor 로드
     feature_extractor = ASTFeatureExtractor.from_pretrained(MODEL_NAME)
     
-    def preprocess_function(examples):
-        audio_arrays = [x["array"] for x in examples["audio"]]
-        inputs = feature_extractor(audio_arrays, sampling_rate=16000, return_tensors="pt", padding="max_length")
-        # 라벨을 숫자로 변환 (Trainer 학습에 필수!)
-        inputs["labels"] = [label2id[x] for x in examples["label"]]
-        return inputs
+    # librosa로 직접 오디오 로딩 (torchcodec 우회!)
+    import librosa
+    
+    def load_audio_with_librosa(file_path, target_sr=16000):
+        """librosa로 오디오 로드 (Windows 호환)"""
+        try:
+            audio_array, _ = librosa.load(file_path, sr=target_sr)
+            return audio_array
+        except Exception as e:
+            print(f"[Warning] 오디오 로드 실패: {file_path} - {e}")
+            return None
+    
+    def preprocess_batch(data_list, desc="Processing"):
+        """배치 전처리 (librosa 사용)"""
+        processed_data = []
+        
+        for item in data_list:
+            audio_array = load_audio_with_librosa(item["audio"])
+            if audio_array is None:
+                continue
+            
+            # Feature extraction
+            inputs = feature_extractor(
+                audio_array, 
+                sampling_rate=16000, 
+                return_tensors="pt", 
+                padding="max_length"
+            )
+            
+            processed_data.append({
+                "input_values": inputs["input_values"].squeeze(0).numpy(),
+                "labels": label2id[item["label"]]
+            })
+        
+        return processed_data
     
     # Dataset 생성 및 전처리
-    print("[Info] 데이터 전처리 중...")
-    train_ds = Dataset.from_list(train_data).cast_column("audio", Audio(sampling_rate=16000))
-    val_ds = Dataset.from_list(val_data).cast_column("audio", Audio(sampling_rate=16000))
-    test_ds = Dataset.from_list(test_data).cast_column("audio", Audio(sampling_rate=16000))
+    print("[Info] 데이터 전처리 중 (librosa 사용)...")
     
-    train_dataset = train_ds.map(preprocess_function, batched=True)
-    eval_dataset = val_ds.map(preprocess_function, batched=True)
-    test_dataset = test_ds.map(preprocess_function, batched=True)
+    train_processed = preprocess_batch(train_data, "Train")
+    val_processed = preprocess_batch(val_data, "Valid")
+    test_processed = preprocess_batch(test_data, "Test")
+    
+    print(f"[Info] 전처리 완료: Train={len(train_processed)}, Valid={len(val_processed)}, Test={len(test_processed)}")
+    
+    # HuggingFace Dataset으로 변환
+    train_dataset = Dataset.from_list(train_processed)
+    eval_dataset = Dataset.from_list(val_processed)
+    test_dataset = Dataset.from_list(test_processed)
+    
+    # Tensor 형식 설정
+    train_dataset.set_format(type="torch", columns=["input_values", "labels"])
+    eval_dataset.set_format(type="torch", columns=["input_values", "labels"])
+    test_dataset.set_format(type="torch", columns=["input_values", "labels"])
     
     print("[✓] 데이터 준비 완료!")
     return True
@@ -250,7 +288,7 @@ def train_model(epochs=10):
         num_train_epochs=epochs,
         learning_rate=3e-5,
         logging_dir='./logs',
-        evaluation_strategy="epoch",
+        eval_strategy="epoch",  # 최신 버전 호환
         save_strategy="epoch",
         load_best_model_at_end=True,
         metric_for_best_model="accuracy",
