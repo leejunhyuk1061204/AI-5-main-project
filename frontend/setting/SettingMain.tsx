@@ -8,7 +8,7 @@ import Header from '../header/Header';
 import BottomNav from '../nav/BottomNav';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-export default function SystemMain() {
+export default function SettingMain() {
     const navigation = useNavigation<any>();
     const [nickname, setNickname] = React.useState<string>('사용자');
 
@@ -85,11 +85,13 @@ export default function SystemMain() {
                                 title="내 차량 관리"
                                 subtitle="Genesis GV80 • 12가 3456"
                                 isFirst
+                                onPress={() => navigation.navigate('CarManage')}
                             />
                             <SettingsItem
                                 icon="cloud-sync"
                                 title="클라우드 연동"
                                 isLast
+                                onPress={() => navigation.navigate('Cloud')}
                             />
                         </View>
                     </View>

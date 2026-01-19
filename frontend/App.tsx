@@ -21,8 +21,7 @@ import ActiveReg from './registration/active/ActiveReg';
 import ActiveLoading from './registration/active/ActiveLoading';
 import ActiveSuccess from './registration/active/ActiveSuccess';
 import PassiveReg from './registration/passive/PassiveReg';
-import SystemMain from './system/SystemMain';
-import MyPage from './system/MyPage';
+import MyPage from './setting/MyPage';
 import DiagMain from './diagnosis/DiagMain';
 import EngineSoundDiag from './diagnosis/EngineSoundDiag';
 import AiCompositeDiag from './diagnosis/AiCompositeDiag';
@@ -33,7 +32,10 @@ import RecallHis from './history/RecallHis';
 import SupManage from './history/SupManage';
 import AlertMain from './alert/AlertMain';
 import Spec from './history/spec';
-import AlertSetting from './system/AlertSetting';
+import AlertSetting from './setting/AlertSetting';
+import SettingMain from './setting/SettingMain';
+import CarManage from './setting/CarManage';
+import Cloud from './setting/Cloud';
 
 // Keep the splash screen visible while we fetch resources
 ExpoSplashScreen.preventAutoHideAsync();
@@ -161,12 +163,14 @@ export default function App() {
           />
           <Stack.Screen name="Spec" component={Spec} />
           <Stack.Screen
-            name="SystemMain"
-            component={SystemMain}
+            name="SettingMain"
+            component={SettingMain}
             options={{ animation: 'none' }}
           />
           <Stack.Screen name="MyPage" component={MyPage} />
           <Stack.Screen name="AlertSetting" component={AlertSetting} />
+          <Stack.Screen name="CarManage" component={CarManage} />
+          <Stack.Screen name="Cloud" component={Cloud} />
         </Stack.Navigator>
       </NavigationContainer>
     </SafeAreaProvider>
