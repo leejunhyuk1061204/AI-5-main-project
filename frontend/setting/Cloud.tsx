@@ -109,12 +109,16 @@ export default function Cloud() {
         );
     };
 
+    const getServiceCardStyle = (isHighlighted: boolean | undefined) => {
+        const baseStyle = "bg-[#ffffff08] border rounded-2xl p-4 flex-row items-center justify-between";
+        const highlightStyle = "border-l-4 border-l-primary/50 border-t-[#ffffff0a] border-r-[#ffffff0a] border-b-[#ffffff0a]";
+        const normalStyle = "border-[#ffffff0a]";
+        return `${baseStyle} ${isHighlighted ? highlightStyle : normalStyle}`;
+    };
+
     // 서비스 카드 컴포넌트
     const ServiceCard = ({ service }: { service: CloudService }) => (
-        <View
-            className={`bg-[#ffffff08] border rounded-2xl p-4 flex-row items-center justify-between ${service.isHighlighted ? 'border-l-4 border-l-primary/50 border-t-[#ffffff0a] border-r-[#ffffff0a] border-b-[#ffffff0a]' : 'border-[#ffffff0a]'
-                }`}
-        >
+        <View className={getServiceCardStyle(service.isHighlighted)}>
             <View className="flex-row items-center gap-4 flex-1">
                 {/* 아이콘 */}
                 <View className="w-12 h-12 rounded-xl bg-white/5 border border-white/10 items-center justify-center">
