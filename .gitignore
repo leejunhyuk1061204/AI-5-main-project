@@ -90,4 +90,6 @@ FrontEnd/android/
 
 # AI-Agent
 GEMINI.md
-backend/firebase-service-account.json
+
+# Firebase (FCM)
+**/firebase-service-account.json
