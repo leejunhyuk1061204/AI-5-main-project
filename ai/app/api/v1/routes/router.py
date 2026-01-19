@@ -13,3 +13,4 @@ router.include_router(anomaly_router)
 router.include_router(wear_factor_router)
 router.include_router(visual_router)
 router.include_router(audio_router)
+

@@ -1,0 +1,25 @@
+{
+  "raw_dir": "ai/data/obd/raw/normal",
+  "num_files": 56,
+  "avg_length_rows": 35278.42857142857,
+  "sampling_hz": 10.0,
+  "window_sec": 60,
+  "stride_sec": 5,
+  "T": 600,
+  "F": 4,
+  "signals": [
+    "rpm",
+    "speed",
+    "coolant",
+    "map"
+  ],
+  "timestamp_col": "timestamp",
+  "timestamp_format": "%H:%M:%S.%f",
+  "rename_map": {
+    "Time": "timestamp",
+    "Engine RPM [RPM]": "rpm",
+    "Vehicle Speed Sensor [km/h]": "speed",
+    "Engine Coolant Temperature [°C]": "coolant",
+    "Intake Manifold Absolute Pressure [kPa]": "map"
+  }
+}

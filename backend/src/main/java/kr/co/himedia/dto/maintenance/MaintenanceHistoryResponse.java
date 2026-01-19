@@ -24,8 +24,13 @@ public class MaintenanceHistoryResponse {
         this.id = history.getId();
         this.maintenanceDate = history.getMaintenanceDate();
         this.mileageAtMaintenance = history.getMileageAtMaintenance();
-        this.item = MaintenanceItem.valueOf(history.getConsumableItem().getCode());
-        this.itemDescription = history.getConsumableItem().getName();
+        try {
+            this.item = MaintenanceItem.valueOf(history.getPartName());
+            this.itemDescription = this.item.getDescription();
+        } catch (IllegalArgumentException | NullPointerException e) {
+            this.item = null;
+            this.itemDescription = history.getPartName(); // Enum에 없으면 partName 그대로 표시
+        }
         this.isStandardized = history.getIsStandardized();
         this.shopName = history.getShopName();
         this.cost = history.getCost();

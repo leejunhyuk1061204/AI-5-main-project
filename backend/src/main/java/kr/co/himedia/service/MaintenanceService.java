@@ -7,18 +7,20 @@ import kr.co.himedia.dto.maintenance.MaintenanceHistoryResponse;
 import kr.co.himedia.dto.maintenance.ConsumableStatusResponse;
 
 import kr.co.himedia.entity.MaintenanceHistory;
-
-import kr.co.himedia.entity.MaintenanceItem;
+import kr.co.himedia.entity.MaintenanceItem; // Enum은 API 응답용으로 사용 or 삭제 고려
 import kr.co.himedia.entity.Vehicle;
 import kr.co.himedia.entity.VehicleConsumable;
+import kr.co.himedia.entity.ConsumableItem;
 import kr.co.himedia.repository.MaintenanceHistoryRepository;
 import kr.co.himedia.repository.VehicleConsumableRepository;
 import kr.co.himedia.repository.VehicleRepository;
+import kr.co.himedia.repository.ConsumableItemRepository;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -30,24 +32,26 @@ public class MaintenanceService {
         private final MaintenanceHistoryRepository maintenanceHistoryRepository;
         private final VehicleConsumableRepository vehicleConsumableRepository;
         private final VehicleRepository vehicleRepository;
-        private final kr.co.himedia.repository.ConsumableItemRepository consumableItemRepository; // New Repository
+        private final ConsumableItemRepository consumableItemRepository;
+        private final OcrService ocrService;
 
+        /**
+         * 정비 이력 등록
+         */
         @Transactional
         public MaintenanceHistoryResponse registerMaintenance(UUID vehicleId, MaintenanceHistoryRequest request) {
                 Vehicle vehicle = vehicleRepository.findById(vehicleId)
                                 .orElseThrow(() -> new BaseException(ErrorCode.VEHICLE_NOT_FOUND));
 
-                // Enum String(request.getItem()) -> Entity Lookup
-                kr.co.himedia.entity.ConsumableItem consumableItem = consumableItemRepository
-                                .findByCode(request.getItem().name())
-                                .orElseThrow(() -> new BaseException(ErrorCode.UNSUPPORTED_MAINTENANCE_ITEM));
+                // partName lookup
+                String partName = request.getItem().name();
 
                 // 1. 정비 이력 저장
                 MaintenanceHistory history = MaintenanceHistory.builder()
                                 .vehicle(vehicle)
                                 .maintenanceDate(request.getMaintenanceDate())
                                 .mileageAtMaintenance(request.getMileageAtMaintenance())
-                                .consumableItem(consumableItem)
+                                .partName(partName)
                                 .isStandardized(request.getIsStandardized())
                                 .shopName(request.getShopName())
                                 .cost(request.getCost())
@@ -57,95 +61,86 @@ public class MaintenanceService {
 
                 MaintenanceHistory savedHistory = maintenanceHistoryRepository.save(history);
 
-                // 2. VehicleConsumable (상태/AI설정) 확인 및 생성
-                // 이력이 생겼으니, AI 마모도 관리를 위한 Entity가 없으면 만들어준다. (기존값 유지)
-                vehicleConsumableRepository.findByVehicleAndConsumableItem(vehicle, consumableItem)
-                                .orElseGet(() -> {
-                                        VehicleConsumable newConsumable = VehicleConsumable.builder()
-                                                        .vehicle(vehicle)
-                                                        .consumableItem(consumableItem)
-                                                        .wearFactor(1.0) // 기본값
-                                                        .build();
-                                        return vehicleConsumableRepository.save(newConsumable);
+                // 2. VehicleConsumable 상태 갱신 (교체했으므로 리셋)
+                // 3단 구조: ConsumableItemCode = partName (Enum name과 Code가 일치한다고 가정)
+                vehicleConsumableRepository.findByVehicleAndConsumableItem_Code(vehicle, partName)
+                                .ifPresentOrElse(vc -> {
+                                        // 리셋
+                                        vc.setLastReplacedAt(request.getMaintenanceDate().atStartOfDay());
+                                        vc.setLastReplacedMileage(request.getMileageAtMaintenance());
+                                        vc.updateRemainingLife(100.0); // 교체 직후는 100%
+                                        vehicleConsumableRepository.save(vc);
+                                }, () -> {
+                                        // 없으면 새로 생성 (하지만 Master Data에 있어야 함)
+                                        consumableItemRepository.findByCode(partName).ifPresent(item -> {
+                                                VehicleConsumable newVc = new VehicleConsumable();
+                                                newVc.setVehicle(vehicle);
+                                                newVc.setConsumableItem(item);
+                                                newVc.setWearFactor(1.0); // 초기값
+                                                newVc.setLastReplacedAt(request.getMaintenanceDate().atStartOfDay());
+                                                newVc.setLastReplacedMileage(request.getMileageAtMaintenance());
+                                                newVc.setRemainingLife(100.0);
+                                                vehicleConsumableRepository.save(newVc);
+                                        });
                                 });
 
                 return new MaintenanceHistoryResponse(savedHistory);
         }
 
+        /**
+         * 소모품 상태 조회
+         */
         @Transactional(readOnly = true)
         public List<ConsumableStatusResponse> getConsumableStatus(UUID vehicleId) {
                 Vehicle vehicle = vehicleRepository.findById(vehicleId)
                                 .orElseThrow(() -> new IllegalArgumentException("해당 차량을 찾을 수 없습니다. ID: " + vehicleId));
 
-                // 1. 모든 소모품 종류(Master Data) 조회
-                List<kr.co.himedia.entity.ConsumableItem> allItems = consumableItemRepository.findAll();
+                // 1. 모든 Master Data 조회
+                List<ConsumableItem> allItems = consumableItemRepository.findAll();
 
                 return allItems.stream()
                                 .map(item -> {
-                                        // 2. 각 소모품별 차량 상태(AI WearFactor, Custom Interval) 조회 - 없으면 기본값 사용
-                                        VehicleConsumable status = vehicleConsumableRepository
-                                                        .findByVehicleAndConsumableItem(vehicle, item)
+                                        // 2. 매핑 테이블 조회 (없으면 가상 객체 생성하여 보여줌)
+                                        VehicleConsumable vc = vehicleConsumableRepository
+                                                        .findByVehicleAndConsumableItem_Code(vehicle, item.getCode())
                                                         .orElse(null);
 
-                                        double wearFactor = (status != null && status.getWearFactor() != null)
-                                                        ? status.getWearFactor()
-                                                        : 1.0;
-
-                                        // AI 갱신 로직 (필요시 비동기 호출하거나, 여기서 호출) -> 여기서는 생략하고 WearFactorService에 위임하거나 기존 유지
-                                        // 성능상 리스트 조회시마다 AI 호출은 비추천. 별도 스케줄러/이벤트로 갱신됨을 가정하고 저장된 값만 사용.
-
-                                        // 3. 가장 최신 정비 이력 조회 (Dynamic Calculation)
+                                        // 3. 최신 정비 이력 조회 (참고용)
                                         MaintenanceHistory lastHistory = maintenanceHistoryRepository
-                                                        .findTopByVehicleAndConsumableItemOrderByMaintenanceDateDesc(
-                                                                        vehicle, item)
+                                                        .findTopByVehicleAndPartNameOrderByMaintenanceDateDesc(vehicle,
+                                                                        item.getCode())
                                                         .orElse(null);
 
-                                        double lastMileage = (lastHistory != null)
-                                                        ? lastHistory.getMileageAtMaintenance()
-                                                        : 0.0;
-                                        java.time.LocalDate lastDate = (lastHistory != null)
-                                                        ? lastHistory.getMaintenanceDate()
-                                                        : java.time.LocalDate.now().minusYears(10); // 기록 없으면 아주 옛날
+                                        double remainingLife = (vc != null && vc.getRemainingLife() != null)
+                                                        ? vc.getRemainingLife()
+                                                        : 100.0; // 없으면 100%로 표시? or 미등록 상태 표시?
+                                                                 // 여기서는 일단 단순하게 표시
 
-                                        // 4. 교체 주기 결정 (사용자 설정 > DB 기본값)
-                                        double intervalMileage = (status != null
-                                                        && status.getCustomIntervalMileage() != null)
-                                                                        ? status.getCustomIntervalMileage()
-                                                                        : (item.getDefaultIntervalMileage() != null
-                                                                                        ? item.getDefaultIntervalMileage()
-                                                                                        : 999999.0);
+                                        double intervalMileage = item.getDefaultIntervalMileage();
+                                        int intervalMonths = (item.getDefaultIntervalMonths() != null)
+                                                        ? item.getDefaultIntervalMonths()
+                                                        : 12;
 
-                                        int intervalMonths = (status != null
-                                                        && status.getCustomIntervalMonths() != null)
-                                                                        ? status.getCustomIntervalMonths()
-                                                                        : (item.getDefaultIntervalMonths() != null
-                                                                                        ? item.getDefaultIntervalMonths()
-                                                                                        : 999);
-
-                                        // 5. 남은 수명 계산 (주행거리 기준)
-                                        double currentMileage = vehicle.getTotalMileage();
-                                        double usedMileage = (currentMileage - lastMileage) * wearFactor;
-                                        double mileagePct = Math.max(0,
-                                                        (intervalMileage - usedMileage) / intervalMileage * 100);
-
-                                        // 6. 남은 수명 계산 (기간 기준)
-                                        long monthsPassed = java.time.temporal.ChronoUnit.MONTHS.between(lastDate,
-                                                        java.time.LocalDate.now());
-                                        double timePct = Math.max(0, (intervalMonths - monthsPassed)
-                                                        / (double) intervalMonths * 100);
-
-                                        // 둘 중 더 급한 것(작은 것) 선택
-                                        double finalPct = Math.min(mileagePct, timePct);
+                                        // Enum 매핑 (DTO가 Enum을 요구한다면)
+                                        // MaintenanceItem과 Code가 1:1 매핑된다고 가정하고 변환
+                                        MaintenanceItem itemEnum;
+                                        try {
+                                                itemEnum = MaintenanceItem.valueOf(item.getCode());
+                                        } catch (IllegalArgumentException e) {
+                                                // 마스터 데이터 코드가 Enum에 없으면 'OTHER' 등으로 처리하거나 스킵
+                                                // 여기서는 OTHER로 처리
+                                                itemEnum = MaintenanceItem.OTHER;
+                                        }
 
                                         return ConsumableStatusResponse.builder()
-                                                        .item(MaintenanceItem.valueOf(item.getCode())) // e.g.,
-                                                                                                       // "ENGINE_OIL"
-                                                        .itemDescription(item.getName()) // e.g., "엔진오일"
-                                                        .remainingLifePercent(Math.round(finalPct * 10.0) / 10.0)
+                                                        .item(itemEnum)
+                                                        .itemDescription(item.getName())
+                                                        .remainingLifePercent(Math.round(remainingLife * 10.0) / 10.0)
                                                         .lastMaintenanceDate(lastHistory != null
                                                                         ? lastHistory.getMaintenanceDate()
                                                                         : null)
-                                                        .lastMaintenanceMileage(lastMileage)
+                                                        .lastMaintenanceMileage(
+                                                                        vc != null ? vc.getLastReplacedMileage() : 0.0)
                                                         .replacementIntervalMileage(intervalMileage)
                                                         .replacementIntervalMonths(intervalMonths)
                                                         .build();
@@ -153,9 +148,12 @@ public class MaintenanceService {
                                 .collect(Collectors.toList());
         }
 
-        // isAiSupported, mapToAiItem methods removed or moved to WearFactorService
-        // logic as needed.
-        // Or keep them if you still want to call AI here. But for "Status View",
-        // reading saved wear_factor is better.
-
+        /**
+         * 영수증 OCR 분석
+         */
+        public kr.co.himedia.dto.maintenance.MaintenanceReceiptResponse analyzeReceipt(
+                        org.springframework.web.multipart.MultipartFile file) {
+                String ocrText = ocrService.extractTextFromImage(file);
+                return ocrService.parseReceiptData(ocrText);
+        }
 }

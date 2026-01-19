@@ -34,9 +34,8 @@ public class MaintenanceHistory extends BaseEntity {
     @Column(name = "mileage_at_maintenance", nullable = false)
     private Double mileageAtMaintenance;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "consumable_id", nullable = false)
-    private ConsumableItem consumableItem;
+    @Column(name = "part_name")
+    private String partName;
 
     @Column(name = "is_standardized")
     private Boolean isStandardized;
@@ -55,12 +54,12 @@ public class MaintenanceHistory extends BaseEntity {
 
     @Builder
     public MaintenanceHistory(Vehicle vehicle, LocalDate maintenanceDate, Double mileageAtMaintenance,
-            ConsumableItem consumableItem, Boolean isStandardized, String shopName, Integer cost, String ocrData,
+            String partName, Boolean isStandardized, String shopName, Integer cost, String ocrData,
             String memo) {
         this.vehicle = vehicle;
         this.maintenanceDate = maintenanceDate;
         this.mileageAtMaintenance = mileageAtMaintenance;
-        this.consumableItem = consumableItem;
+        this.partName = partName;
         this.isStandardized = isStandardized;
         this.shopName = shopName;
         this.cost = cost;

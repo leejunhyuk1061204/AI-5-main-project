@@ -44,7 +44,7 @@ export default function BottomNav() {
                 <NavItem name="MainPage" label="홈" icon="home" target="MainPage" />
                 <NavItem name="DiagMain" label="진단" icon="car-crash" target="DiagMain" />
                 <NavItem name="HistoryMain" label="기록" icon="history" target="HistoryMain" />
-                <NavItem name="SystemMain" label="설정" icon="settings" target="SystemMain" />
+                <NavItem name="SettingMain" label="설정" icon="settings" target="SettingMain" />
             </View>
         </View>
     );
