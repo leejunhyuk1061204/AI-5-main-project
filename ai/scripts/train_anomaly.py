@@ -36,7 +36,7 @@ DATA_DIR = BASE_DIR / "data" / "anomaly"
 WEIGHTS_DIR = BASE_DIR / "weights" / "anomaly"
 RESULTS_DIR = BASE_DIR / "runs" / "anomaly"
 
-# 엔진룸 부품 목록 (26개)
+# 엔진룸 부품 목록 (26개 + engine_bay 통합)
 ENGINE_PARTS = [
     "Inverter_Coolant_Reservoir", "Battery", "Radiator_Cap",
     "Windshield_Wiper_Fluid", "Fuse_Box", "Power_Steering_Reservoir",
@@ -46,8 +46,14 @@ ENGINE_PARTS = [
     "Clutch_Fluid_Reservoir", "Transmission_Oil_Dip_Stick",
     "Intercooler_Coolant_Reservoir", "Oil_Filter_Housing", "ATF_Oil_Reservoir",
     "Cabin_Air_Filter_Housing", "Secondary_Coolant_Reservoir",
-    "Electric_Motor", "Oil_Filter"
+    "Electric_Motor", "Oil_Filter",
+    "engine_bay"  # 전체 엔진룸 통합 학습용
 ]
+
+# 데이터 경로 매핑 (engine_bay는 다른 구조 사용)
+DATA_PATH_MAP = {
+    "engine_bay": BASE_DIR / "data" / "engine_bay"
+}
 
 # Training Config (RTX 4090 최적화)
 IMAGE_SIZE = 224
@@ -91,11 +97,16 @@ def train_patchcore(part_name: str):
         print("        pip install anomalib")
         return False
     
-    data_path = DATA_DIR / part_name
+    # engine_bay는 다른 경로 구조 사용
+    if part_name == "engine_bay":
+        data_path = DATA_PATH_MAP.get(part_name, DATA_DIR / part_name)
+        train_dir = data_path / "train" / "images"
+    else:
+        data_path = DATA_DIR / part_name
+        train_dir = data_path / "train" / "good"
     
     # 데이터 확인
-    train_images = list((data_path / "train" / "good").glob("*.jpg")) + \
-                   list((data_path / "train" / "good").glob("*.png"))
+    train_images = list(train_dir.glob("*.jpg")) + list(train_dir.glob("*.png"))
     
     if len(train_images) < 10:
         print(f"[Warning] {part_name}: 학습 이미지가 부족합니다 ({len(train_images)}개)")
@@ -179,9 +190,15 @@ def train_patchcore_simple(part_name: str):
         print(f"[Error] 필수 라이브러리가 없습니다: {e}")
         return False
     
-    data_path = DATA_DIR / part_name
-    train_images = list((data_path / "train" / "good").glob("*.jpg")) + \
-                   list((data_path / "train" / "good").glob("*.png"))
+    # engine_bay는 다른 경로 구조 사용
+    if part_name == "engine_bay":
+        data_path = DATA_PATH_MAP.get(part_name, DATA_DIR / part_name)
+        train_dir = data_path / "train" / "images"
+    else:
+        data_path = DATA_DIR / part_name
+        train_dir = data_path / "train" / "good"
+    
+    train_images = list(train_dir.glob("*.jpg")) + list(train_dir.glob("*.png"))
     
     if len(train_images) < 10:
         print(f"[Warning] {part_name}: 학습 이미지가 부족합니다 ({len(train_images)}개)")
@@ -194,7 +211,8 @@ def train_patchcore_simple(part_name: str):
     print(f"[Info] Device: {device}")
     
     # Feature Extractor (ResNet50)
-    backbone = models.wide_resnet50_2(pretrained=True).to(device)
+    # weights 파라미터 사용 (pretrained는 deprecated)
+    backbone = models.wide_resnet50_2(weights='IMAGENET1K_V1').to(device)
     backbone.eval()
     
     # Hook for intermediate features

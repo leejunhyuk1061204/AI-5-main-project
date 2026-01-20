@@ -89,6 +89,10 @@ async def run_yolo_inference(s3_url: str, model=None) -> VisualResponse:
                 bbox=[int(v) for v in bbox]
             ))
 
+    # 신뢰도 낮은 탐지 필터링 (오탐 방지)
+    MIN_CONFIDENCE = 0.5
+    detections = [d for d in detections if d.confidence >= MIN_CONFIDENCE]
+
     status = "WARNING" if len(detections) > 0 else "NORMAL"
     
     return VisualResponse(
