@@ -21,6 +21,32 @@ from PIL import Image
 import io
 import os
 
+# Singleton AnomalyDetector (한 번만 로드)
+from ai.app.services.anomaly_service import AnomalyDetector
+_anomaly_detector = None
+
+def get_anomaly_detector():
+    global _anomaly_detector
+    if _anomaly_detector is None:
+        _anomaly_detector = AnomalyDetector()
+    return _anomaly_detector
+
+# Singleton AST Model (한 번만 로드)
+_ast_model = None
+_ast_feature_extractor = None
+
+def get_ast_model():
+    global _ast_model, _ast_feature_extractor
+    if _ast_model is None:
+        from transformers import ASTForAudioClassification, ASTFeatureExtractor
+        model_path = "ai/weights/audio/best_ast_model"
+        if os.path.exists(model_path):
+            print("[AST Singleton] Loading AST model...")
+            _ast_model = ASTForAudioClassification.from_pretrained(model_path)
+            _ast_feature_extractor = ASTFeatureExtractor.from_pretrained(model_path)
+            print("[AST Singleton] AST model loaded!")
+    return _ast_model, _ast_feature_extractor
+
 
 # ==============================================================================
 # [섹션 1] 사용자님 코드 (main merge 전) - prefix: /connect
@@ -302,11 +328,17 @@ async def analyze_visual_local(file: UploadFile = File(...)):
 @router.post("/predict/yolo")
 async def analyze_yolo_local(file: UploadFile = File(...)):
     """
-    [ISC - Real YOLO + Mock Anomaly] 로컬 이미지 → YOLO 추론 → 실제 파이프라인 형식 JSON 반환
-    실제 /predict/engine과 동일한 형식의 응답을 반환합니다.
+    [ISC - Real YOLO + Real PatchCore] 로컬 이미지 → 실제 파이프라인 (S3/LLM 제외)
+    
+    프로덕션 (/predict/engine)과 동일한 로직:
+    - YOLO: 엔진 부품 탐지
+    - Crop: 부품별 이미지 추출
+    - Anomaly (PatchCore): 이상 탐지
+    - LLM: 건너뜀 (테스트용)
     """
-    import random
     import tempfile
+    import asyncio
+    from dataclasses import asdict
     
     try:
         if not file.content_type or not file.content_type.startswith("image/"):
@@ -318,14 +350,17 @@ async def analyze_yolo_local(file: UploadFile = File(...)):
         if image.mode != "RGB":
             image = image.convert("RGB")
         
+        # 1. YOLO 추론 (로컬 이미지 버전)
         from ultralytics import YOLO
         
         model_path = "ai/weights/engine/best.pt"
         if not os.path.exists(model_path):
-            model_path = os.path.join("ai", "weights", "yolov8n.pt")
-            print(f"[Warning] 학습 모델 없음. 기본 모델 사용: {model_path}")
-        
-        model = YOLO(model_path)
+            # 모델 없으면 기본 모델 사용
+            from ultralytics import YOLO as BaseYOLO
+            model = BaseYOLO("yolov8n.pt")
+            print(f"[Warning] 학습 모델 없음. 기본 모델 사용")
+        else:
+            model = YOLO(model_path)
         
         tmp_path = os.path.join(tempfile.gettempdir(), f"yolo_test_{os.getpid()}.jpg")
         image.save(tmp_path, "JPEG")
@@ -336,13 +371,14 @@ async def analyze_yolo_local(file: UploadFile = File(...)):
             if os.path.exists(tmp_path):
                 os.remove(tmp_path)
         
+        # YOLO 결과 파싱
         detections = []
         for r in yolo_results:
             for box in r.boxes:
                 label_idx = int(box.cls[0])
                 label_name = model.names[label_idx]
                 confidence = float(box.conf[0])
-                bbox = box.xywh[0].tolist()
+                bbox = box.xyxy[0].tolist()  # [x1, y1, x2, y2]
                 
                 detections.append({
                     "label": label_name,
@@ -350,74 +386,79 @@ async def analyze_yolo_local(file: UploadFile = File(...)):
                     "bbox": [int(v) for v in bbox]
                 })
         
-        EV_PARTS = {"Inverter", "Electric_Motor", "Charging_Port", "Inverter_Coolant_Reservoir"}
-        detected_labels = [d["label"] for d in detections]
-        is_ev = any(part in EV_PARTS for part in detected_labels)
-        vehicle_type = "EV" if is_ev else "ICE"
+        # 신뢰도 낮은 탐지 필터링 (오탐 방지)
+        MIN_CONFIDENCE = 0.5
+        detections = [d for d in detections if d["confidence"] >= MIN_CONFIDENCE]
         
-        if len(detections) > 0:
-            results = []
-            anomaly_count = 0
-            
-            for det in detections:
-                mock_score = round(random.uniform(0.2, 0.9), 2)
-                threshold = 0.7
-                is_anomaly = mock_score > threshold
-                
-                if is_anomaly:
-                    anomaly_count += 1
-                    defect_info = {
-                        "defect_category": random.choice(["LEAK", "CORROSION", "WEAR", "CONTAMINATION"]),
-                        "defect_label": f"{det['label']}_Defect",
-                        "description": f"[Mock] {det['label']}에서 이상이 감지되었습니다.",
-                        "severity": random.choice(["MINOR", "WARNING", "CRITICAL"]),
-                        "recommended_action": "정비소 점검 권장"
-                    }
-                else:
-                    defect_info = {
-                        "defect_category": "NORMAL",
-                        "defect_label": "Normal",
-                        "description": f"{det['label']}은(는) 정상 상태입니다.",
-                        "severity": "NORMAL",
-                        "recommended_action": "조치 불필요"
-                    }
-                
-                results.append({
-                    "part_name": det["label"],
-                    "bbox": det["bbox"],
-                    "confidence": det["confidence"],
-                    "is_anomaly": is_anomaly,
-                    "anomaly_score": mock_score,
-                    "threshold": threshold,
-                    **defect_info
-                })
-            
-            return JSONResponse(content={
-                "status": "SUCCESS",
-                "path": "A",
-                "source": f"uploaded:{file.filename}",
-                "vehicle_type": vehicle_type,
-                "parts_detected": len(detections),
-                "anomalies_found": anomaly_count,
-                "results": results
-            })
-        
-        else:
+        # Path B: 부품 미감지
+        if len(detections) == 0:
             return JSONResponse(content={
                 "status": "SUCCESS",
                 "path": "B",
                 "source": f"uploaded:{file.filename}",
                 "vehicle_type": None,
                 "parts_detected": 0,
-                "llm_analysis": {
-                    "type": "VEHICLE",
-                    "sub_type": "ENGINE",
-                    "status": "NORMAL",
-                    "description": "[Mock] 엔진룸 이미지로 보이나 부품을 명확히 감지하지 못했습니다.",
-                    "recommendation": "더 선명한 이미지로 재촬영을 권장합니다."
-                },
-                "is_hard_negative": True
+                "message": "엔진룸 부품을 감지하지 못했습니다. 선명한 이미지로 재촬영해주세요."
             })
+        
+        # Path A: 부품별 분석
+        EV_PARTS = {"Inverter", "Electric_Motor", "Charging_Port", "Inverter_Coolant_Reservoir"}
+        detected_labels = [d["label"] for d in detections]
+        is_ev = any(part in EV_PARTS for part in detected_labels)
+        vehicle_type = "EV" if is_ev else "ICE"
+        
+        # 2. Crop + PatchCore Anomaly Detection (싱글톤 사용)
+        anomaly_detector = get_anomaly_detector()
+        
+        results = []
+        anomaly_count = 0
+        
+        for det in detections:
+            # Crop 이미지 추출
+            x1, y1, x2, y2 = det["bbox"]
+            crop_img = image.crop((x1, y1, x2, y2))
+            
+            # PatchCore 이상 탐지
+            anomaly_result = await anomaly_detector.detect(crop_img, det["label"])
+            
+            is_anomaly = bool(anomaly_result.is_anomaly)
+            if is_anomaly:
+                anomaly_count += 1
+                defect_info = {
+                    "defect_category": "ANOMALY",
+                    "defect_label": f"{det['label']}_Anomaly",
+                    "description": f"{det['label']}에서 이상이 감지되었습니다. (Score: {anomaly_result.score:.2f})",
+                    "severity": "WARNING" if anomaly_result.score < 0.8 else "CRITICAL",
+                    "recommended_action": "정비소 점검 권장"
+                }
+            else:
+                defect_info = {
+                    "defect_category": "NORMAL",
+                    "defect_label": "Normal",
+                    "description": f"{det['label']}은(는) 정상 상태입니다.",
+                    "severity": "NORMAL",
+                    "recommended_action": "조치 불필요"
+                }
+            
+            results.append({
+                "part_name": det["label"],
+                "bbox": det["bbox"],
+                "confidence": det["confidence"],
+                "is_anomaly": is_anomaly,
+                "anomaly_score": round(anomaly_result.score, 4),
+                "threshold": anomaly_result.threshold,
+                **defect_info
+            })
+        
+        return JSONResponse(content={
+            "status": "SUCCESS",
+            "path": "A",
+            "source": f"uploaded:{file.filename}",
+            "vehicle_type": vehicle_type,
+            "parts_detected": len(detections),
+            "anomalies_found": anomaly_count,
+            "results": results
+        })
         
     except Exception as e:
         import traceback
@@ -431,7 +472,7 @@ async def analyze_yolo_local(file: UploadFile = File(...)):
 @router.post("/predict/audio")
 async def analyze_audio_local(file: UploadFile = File(...)):
     """
-    [ISC - Real AST] 로컬 오디오 업로드 → 실제 AST 추론 → 실제 파이프라인 형식 JSON 반환
+    [ISC - Real AST] 로컬 오디오 업로드 → 실제 AST 추론 (ast_service 로직 사용)
     """
     try:
         content = await file.read()
@@ -440,6 +481,7 @@ async def analyze_audio_local(file: UploadFile = File(...)):
         import librosa
         import torch
         import torch.nn.functional as F
+        from ai.app.services.ast_service import NORMAL_LABELS, get_category_from_label
         
         tmp_path = os.path.join(tempfile.gettempdir(), f"audio_test_{os.getpid()}.wav")
         
@@ -449,15 +491,10 @@ async def analyze_audio_local(file: UploadFile = File(...)):
         try:
             audio_array, sr = librosa.load(tmp_path, sr=16000)
             
-            from transformers import ASTForAudioClassification, ASTFeatureExtractor
+            # 싱글톤 AST 모델 사용 (매 요청마다 로드 X)
+            model, feature_extractor = get_ast_model()
             
-            model_path = "ai/weights/audio/best_ast_model"
-            
-            if os.path.exists(model_path):
-                model = ASTForAudioClassification.from_pretrained(model_path)
-                feature_extractor = ASTFeatureExtractor.from_pretrained(model_path)
-                analysis_type = "AST"
-            else:
+            if model is None:
                 return JSONResponse(content={
                     "status": "FAULTY",
                     "analysis_type": "AST_MOCK",
@@ -468,8 +505,10 @@ async def analyze_audio_local(file: UploadFile = File(...)):
                     },
                     "confidence": 0.95,
                     "is_critical": True,
-                    "note": f"모델 경로 없음: {model_path}"
+                    "note": "모델 경로 없음: ai/weights/audio/best_ast_model"
                 })
+            
+            analysis_type = "AST"
             
             inputs = feature_extractor(
                 audio_array,
@@ -487,20 +526,21 @@ async def analyze_audio_local(file: UploadFile = File(...)):
             
             label_name = model.config.id2label[predicted_id]
             
-            label_upper = label_name.upper()
-            if "ENGINE" in label_upper or "KNOCK" in label_upper or "NORMAL" in label_upper:
-                category = "ENGINE"
-            elif "BRAKE" in label_upper:
-                category = "BRAKES"
-            elif "SUSP" in label_upper:
-                category = "SUSPENSION"
-            else:
-                category = "UNKNOWN"
+            # ast_service.py의 함수 사용
+            category = get_category_from_label(label_name)
             
-            if label_name.upper() == "NORMAL":
+            # ast_service.py의 NORMAL_LABELS 사용
+            label_lower = label_name.lower()
+            if confidence < 0.5:
+                status = "UNKNOWN"
+                is_critical = False
+                category = "UNKNOWN_AUDIO"
+                label_name = "unknown"  # 라벨도 unknown으로 변경
+                description = "분류할 수 없는 소리입니다. 차량 관련 소리인지 확인해주세요."
+            elif label_lower in NORMAL_LABELS or "normal" in label_lower:
                 status = "NORMAL"
                 is_critical = False
-                description = "정상적인 엔진 소리입니다."
+                description = "정상적인 소리입니다."
             else:
                 status = "FAULTY"
                 is_critical = True
