@@ -9,8 +9,6 @@ import java.time.LocalDate;
 @Getter
 @Builder
 public class AiWearFactorRequest {
-    @JsonProperty("target_item")
-    private String targetItem;
 
     @JsonProperty("last_replaced")
     private LastReplaced lastReplaced;

@@ -110,7 +110,7 @@ def train_local(epochs: int = EPOCHS):
     print(f"[Info] data.yaml: {data_yaml}")
     
     # 모델 로드 (yolov8n - 가장 가벼움)
-    model = YOLO("yolov8n.pt")
+    model = YOLO(str(BASE_DIR / "weights" / "yolov8n.pt"))
     
     # 학습 시작
     results = model.train(

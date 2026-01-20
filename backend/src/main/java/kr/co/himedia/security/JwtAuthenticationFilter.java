@@ -28,6 +28,11 @@ public class JwtAuthenticationFilter extends GenericFilterBean {
         if (token != null && jwtTokenProvider.validateToken(token)) {
             Authentication authentication = jwtTokenProvider.getAuthentication(token);
             SecurityContextHolder.getContext().setAuthentication(authentication);
+            logger.info("Successfully authenticated user from JWT token");
+        } else if (token != null) {
+            logger.warn("JWT token validation failed for provided token");
+        } else {
+            logger.debug("No JWT token found in request headers");
         }
         chain.doFilter(request, response);
     }

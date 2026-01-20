@@ -87,3 +87,9 @@ yarn-error.*
 # generated native folders
 FrontEnd/ios/
 FrontEnd/android/
+
+# AI-Agent
+GEMINI.md
+
+# Firebase (FCM)
+**/firebase-service-account.json
