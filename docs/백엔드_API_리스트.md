@@ -36,8 +36,8 @@
 
 | 기능명 | Method | Endpoint | 설명 |
 | :--- | :--- | :--- | :--- |
-| 주행 이력 목록 조회 | GET | `/` | 차량별 전체 주행 기록 조회 |
-| 주행 이력 상세 조회 | GET | `/{tripId}` | 특정 주행의 상세 경로 및 통계 |
+| 주행 이력 목록 조회 | GET | `/` | 차량별 전체 주행 기록 조회 `[x]` |
+| 주행 이력 상세 조회 | GET | `/{tripId}` | 특정 주행의 상세 경로 및 통계 `[x]` |
 | 주행 세션 시작 | POST | `/start` | 새로운 주행 시작 (ID 발급) `[x]` |
 | 주행 세션 종료 | POST | `/end` | 주행 종료 및 기록 요약 저장 (자동 진단, 소모품 예측 Trigger) `[x]` |
 
@@ -47,8 +47,8 @@ OBD 데이터를 통한 실시간 및 배치 데이터 수집을 담당합니다
 | 기능명 | Method | Endpoint | 설명 |
 | :--- | :--- | :--- | :--- |
 | 벌크 로그 수집 | POST | `/batch` | 3분 단위 OBD 로그 대량 저장 (JSON Body) `[x]` |
-| 연결 상태 조회 | GET | `/status/{vehicleId}` | 실시간 연결 및 주행 상태 확인 |
-| 수동 연결 해제 | POST | `/status/disconnect` | 사용자에 의한 수동 종료 처리 |
+| 연결 상태 조회 | GET | `/status/{vehicleId}` | 실시간 연결 및 주행 상태 확인 `[x]` |
+| 수동 연결 해제 | POST | `/status/disconnect` | 사용자에 의한 수동 종료 처리 `[x]` |
 
 ## 5. AiController (`/ai`)
 AI 진단 및 데이터 처리를 담당합니다.
@@ -56,24 +56,24 @@ AI 진단 및 데이터 처리를 담당합니다.
 | 기능명 | Method | Endpoint | 설명 |
 | :--- | :--- | :--- | :--- |
 | DTC 수신 처리 | POST | `/dtc` | 고장 코드 분석 및 처리 |
-| AI 진단 요청 | POST | `/diagnose` | Vision(이미지)/Audio(소리) 개별 진단 |
-| 통합 진단 요청 | POST | `/diagnose/unified` | 멀티모달(소리+사진+데이터) 통합 진단 (Multipart) |
+| 통합 진단 요청 | POST | `/diagnose/unified` | 멀티모달(소리+사진+데이터) 통합 진단 (Multipart) `[x]` |
 
 ## 6. MaintenanceController (`/api/vehicles`)
 정비 기록 및 소모품 관리를 담당합니다.
 
 | 기능명 | Method | Endpoint | 설명 |
 | :--- | :--- | :--- | :--- |
-| 정비 기록 등록 | POST | `/{vehicleId}/maintenance` | 신규 정비 내역 추가 |
-| 소모품 상태 조회 | GET | `/{vehicleId}/consumables` | 주요 소모품 교체 주기 상태 확인 |
+| 정비 기록 등록 | POST | `/{vehicleId}/maintenance` | 신규 정비 내역 추가 `[x]` |
+| 소모품 상태 조회 | GET | `/{vehicleId}/consumables` | 주요 소모품 교체 주기 상태 확인 `[x]` |
 
 ## 7. MasterController (`/master`)
 시스템 공통 기초 데이터를 제공합니다.
 
 | 기능명 | Method | Endpoint | 설명 |
 | :--- | :--- | :--- | :--- |
-| 제조사 목록 조회 | GET | `/manufacturers` | 등록된 모든 자동차 제조사 리스트 |
-| 모델 목록 조회 | GET | `/models` | 특정 제조사의 차량 모델 및 연식 정보 |
+| 제조사 목록 조회 | GET | `/manufacturers` | 등록된 모든 자동차 제조사 리스트 `[x]` |
+| 모델 목록 조회 | GET | `/models` | 특정 제조사의 차량 모델 및 연식 정보 `[x]` |
+| 소모품 목록 조회 | GET | `/consumables` | 시스템에 등록된 소모품 마스터 정보 (엔진오일, 타이어 등) `[x]` |
 
 ## 8. AdminController (`/admin/test`)
 시스템 관리 및 테스트용 API입니다.
@@ -97,6 +97,7 @@ AI/RAG 기능 단순 테스트용입니다.
 | 기능명 | Method | Endpoint | 설명 |
 | :--- | :--- | :--- | :--- |
 | RAG 지식 검색 | GET | `/knowledge/search` | 지식 베이스 검색 테스트 (`?query=...`) |
+| AI 진단 요청 | POST | `/diagnose` | Vision(이미지)/Audio(소리) 개별 진단 (테스트용) |
 
 ---
 

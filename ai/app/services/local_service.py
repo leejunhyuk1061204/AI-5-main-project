@@ -29,7 +29,7 @@ async def process_audio_mock(file_bytes: bytes) -> AudioResponse:
     return AudioResponse(
         status="FAULTY",
         analysis_type="AUDIO_MOCK",
-        component="ENGINE_BELT",
+        category="ENGINE",
         detail=AudioDetail(
             diagnosed_label="SLIP_NOISE_MOCK",
             description="Mock diagnosis: Belt slip detected."

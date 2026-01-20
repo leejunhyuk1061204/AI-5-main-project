@@ -2,6 +2,7 @@ package kr.co.himedia.controller;
 
 import kr.co.himedia.common.ApiResponse;
 import kr.co.himedia.dto.master.CarModelDto;
+import kr.co.himedia.dto.master.ConsumableItemDto;
 import kr.co.himedia.service.MasterDataService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -35,5 +36,15 @@ public class MasterController {
             @RequestParam("manufacturer") String manufacturer) {
         List<CarModelDto> models = masterDataService.getModelsByManufacturer(manufacturer);
         return ResponseEntity.ok(ApiResponse.success(models));
+    }
+
+    /**
+     * [BE-VH-003] 소모품 목록 조회
+     * 시스템에 등록된 모든 소모품 마스터 정보를 반환합니다.
+     */
+    @GetMapping("/consumables")
+    public ResponseEntity<ApiResponse<List<ConsumableItemDto>>> getConsumables() {
+        List<ConsumableItemDto> consumables = masterDataService.getAllConsumables();
+        return ResponseEntity.ok(ApiResponse.success(consumables));
     }
 }

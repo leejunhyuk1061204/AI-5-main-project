@@ -1,6 +1,5 @@
 package kr.co.himedia.dto.maintenance;
 
-import kr.co.himedia.entity.MaintenanceItem;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -11,7 +10,7 @@ import java.time.LocalDate;
 public class MaintenanceHistoryRequest {
     private LocalDate maintenanceDate;
     private Double mileageAtMaintenance;
-    private MaintenanceItem item;
+    private Long consumableItemId;
     private Boolean isStandardized;
     private String shopName;
     private Integer cost;

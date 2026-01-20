@@ -32,24 +32,25 @@ public class AiClient {
 
     private final RestTemplate restTemplate;
 
-    @Value("${ai.server.url.visual:http://localhost:8001/api/v1/connect/predict/visual}")
+    @Value("${ai.server.url.visual:http://host.docker.internal:8001/api/v1/connect/predict/visual}")
     private String aiServerVisualUrl;
 
-    @Value("${ai.server.url.audio:http://localhost:8001/api/v1/connect/predict/audio}")
+    @Value("${ai.server.url.audio:http://host.docker.internal:8001/api/v1/connect/predict/audio}")
     private String aiServerAudioUrl;
 
-    @Value("${ai.server.url.comprehensive:http://localhost:8001/api/v1/connect/predict/comprehensive}")
+    @Value("${ai.server.url.comprehensive:http://host.docker.internal:8001/api/v1/connect/predict/comprehensive}")
     private String aiServerUnifiedUrl;
 
-    @Value("${ai.server.url.anomaly:http://localhost:8001/api/v1/connect/predict/anomaly}")
+    @Value("${ai.server.url.anomaly:http://host.docker.internal:8001/api/v1/connect/predict/anomaly}")
     private String aiServerAnomalyUrl;
 
-    @Value("${ai.server.url.wear-factor:http://localhost:8001/api/v1/connect/predict/wear-factor}")
+    @Value("${ai.server.url.wear-factor:http://host.docker.internal:8001/api/v1/connect/predict/wear-factor}")
     private String aiServerWearFactorUrl;
 
     public AiClient() {
         org.springframework.http.client.SimpleClientHttpRequestFactory factory = new org.springframework.http.client.SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(5000);
+        factory.setReadTimeout(60000); // 분석 시간이 길어질 수 있으므로 60초 설정
         factory.setReadTimeout(60000); // 분석 시간이 길어질 수 있으므로 60초 설정
         this.restTemplate = new RestTemplate(factory);
     }
@@ -57,17 +58,27 @@ public class AiClient {
     @Retryable(retryFor = Exception.class, maxAttempts = 3, backoff = @Backoff(delay = 2000))
     public Map<String, Object> callVisualAnalysis(String filename) {
         log.info("[Retryable] Requesting Visual Analysis: {}", filename);
-        @SuppressWarnings("unchecked")
-        Map<String, Object> result = (Map<String, Object>) callMultipartApi(aiServerVisualUrl, filename);
-        return result;
+        try {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> result = (Map<String, Object>) callMultipartApi(aiServerVisualUrl, filename);
+            return result;
+        } catch (Exception e) {
+            log.error("[AiClient] Visual Analysis Failed. URL: {}, Error: {}", aiServerVisualUrl, e.getMessage());
+            throw e;
+        }
     }
 
     @Retryable(retryFor = Exception.class, maxAttempts = 3, backoff = @Backoff(delay = 2000))
     public Map<String, Object> callAudioAnalysis(String filename) {
         log.info("[Retryable] Requesting Audio Analysis: {}", filename);
-        @SuppressWarnings("unchecked")
-        Map<String, Object> result = (Map<String, Object>) callMultipartApi(aiServerAudioUrl, filename);
-        return result;
+        try {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> result = (Map<String, Object>) callMultipartApi(aiServerAudioUrl, filename);
+            return result;
+        } catch (Exception e) {
+            log.error("[AiClient] Audio Analysis Failed. URL: {}, Error: {}", aiServerAudioUrl, e.getMessage());
+            throw e;
+        }
     }
 
     @Retryable(retryFor = Exception.class, maxAttempts = 2, backoff = @Backoff(delay = 3000))
@@ -82,10 +93,16 @@ public class AiClient {
     @Retryable(retryFor = Exception.class, maxAttempts = 2, backoff = @Backoff(delay = 5000))
     public Map<String, Object> callComprehensiveDiagnosis(Map<String, Object> request) {
         log.info("[Retryable] Requesting Comprehensive Diagnosis");
-        @SuppressWarnings("unchecked")
-        Map<String, Object> result = (Map<String, Object>) restTemplate.postForObject(aiServerUnifiedUrl, request,
-                Map.class);
-        return result;
+        try {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> result = (Map<String, Object>) restTemplate.postForObject(aiServerUnifiedUrl, request,
+                    Map.class);
+            return result;
+        } catch (Exception e) {
+            log.error("[AiClient] Comprehensive Diagnosis Failed. URL: {}, Error: {}", aiServerUnifiedUrl,
+                    e.getMessage());
+            throw e;
+        }
     }
 
     private Object callMultipartApi(String url, String filename) {

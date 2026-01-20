@@ -95,7 +95,7 @@ pip install torch torchvision torchaudio --index-url https://download.pytorch.or
 pip install -r requirements.txt
 
 # 4. AI 서버 실행 (8001 포트 사용)
-uvicorn ai.app.main:app --reload --port 8001
+uvicorn ai.app.main:app --reload --host 0.0.0.0 --port 8001
 ```
 
 ---

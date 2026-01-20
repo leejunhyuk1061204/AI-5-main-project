@@ -1,7 +1,6 @@
 package kr.co.himedia.dto.maintenance;
 
 import kr.co.himedia.entity.MaintenanceHistory;
-import kr.co.himedia.entity.MaintenanceItem;
 import lombok.Getter;
 
 import java.time.LocalDate;
@@ -12,7 +11,6 @@ public class MaintenanceHistoryResponse {
     private UUID id;
     private LocalDate maintenanceDate;
     private Double mileageAtMaintenance;
-    private MaintenanceItem item;
     private String itemDescription;
     private Boolean isStandardized;
     private String shopName;
@@ -24,13 +22,13 @@ public class MaintenanceHistoryResponse {
         this.id = history.getId();
         this.maintenanceDate = history.getMaintenanceDate();
         this.mileageAtMaintenance = history.getMileageAtMaintenance();
-        try {
-            this.item = MaintenanceItem.valueOf(history.getPartName());
-            this.itemDescription = this.item.getDescription();
-        } catch (IllegalArgumentException | NullPointerException e) {
-            this.item = null;
-            this.itemDescription = history.getPartName(); // Enum에 없으면 partName 그대로 표시
+
+        if (history.getConsumableItem() != null) {
+            this.itemDescription = history.getConsumableItem().getName();
+        } else {
+            this.itemDescription = "기타 정비";
         }
+
         this.isStandardized = history.getIsStandardized();
         this.shopName = history.getShopName();
         this.cost = history.getCost();

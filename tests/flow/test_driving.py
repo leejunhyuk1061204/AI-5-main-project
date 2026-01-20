@@ -6,8 +6,8 @@ from datetime import datetime
 
 # 설정
 BASE_URL = "http://localhost:8080/api/v1"
-VEHICLE_ID = "0f9ac11b-8b78-47cd-8b88-3eb535c42e65"
-ACCESS_TOKEN = "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiIyOWVlY2M0Ni1mYWU4LTQwYzQtOTIwZC1lNDg0YWVmNzAwZTEiLCJpYXQiOjE3Njg4NDY0NzIsImV4cCI6MTc2ODg1MDA3Mn0.9yCbAH8llpSonzHaGLePy2UVPkZVpwfG3GKZiKHSrtCopi8atnJkikgoyhsrHAZB1Re3rIiJvdQ08chMKMx9iA"
+VEHICLE_ID = "b05431f5-311a-47fe-9ac1-1f182d6147b4"
+ACCESS_TOKEN = "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiIxZDRkZjFiNy02ZTBiLTQyYWYtOTE0Ni1jOTQyOTc5ZGRiNDkiLCJpYXQiOjE3Njg4OTI4MjYsImV4cCI6MTc2ODg5NjQyNn0.l05cC3xZ2efFCxMZLcACSSzL1o_kE6CJmPowt_AvQrI6TgHr_JwcZHLBCmt1nrMyrU2WuFbv1usoy4sZaYAlWg"
 
 def get_headers():
     # 1. 파일이 있으면 파일 우선
@@ -43,10 +43,11 @@ def send_bulk_logs(vehicle_id):
     headers = get_headers()
     if not headers: return
     
-    LOG_COUNT = 500
+    LOG_COUNT = 200
     print(f"[*] Sending Bulk Logs ({LOG_COUNT} EA / Aggressive Mode)...")
     
     logs = []
+    # [Active] 현재 시간 기준으로 +0.1초씩 증가 (sleep 사용)
     base_time = time.time()
     
     # 초기 속도/RPM
@@ -54,8 +55,8 @@ def send_bulk_logs(vehicle_id):
     current_rpm = 800.0
     
     for i in range(LOG_COUNT):
-        # 짧은 간격 (백엔드 거리 계산 공식 활용)
-        ts = datetime.fromtimestamp(base_time + (i * 0.002)).isoformat()
+        # 0.1초 간격 타임스탬프 (현실적인 주행)
+        ts = datetime.fromtimestamp(base_time + (i * 0.1)).isoformat()
         
         # 난폭 운전 (점수 깎기: 속도 > 140 또는 RPM > 5000)
         if i % 5 == 0: # 5번마다 급발진
@@ -87,6 +88,11 @@ def send_bulk_logs(vehicle_id):
              print(f"   [+] Batch {i//chunk_size + 1} sent ({len(chunk)} logs)")
         else:
              print(f"   [-] Batch failed: {res.text}")
+        
+        # [KEY] 서버가 '시간 흐름'을 인지하도록 실제로 10초(100개 * 0.1s) 대기
+        # 한 배치(100개)가 10초 분량 데이터임.
+        print("   ...Waiting 10s for realistic simulation...")
+        time.sleep(10)
 
 def end_trip(trip_id):
     headers = get_headers()

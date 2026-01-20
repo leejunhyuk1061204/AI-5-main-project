@@ -59,11 +59,14 @@ public class ObdService {
         TripSummary trip = lastTrip.get();
         LocalDateTime lastTime = trip.getEndTime() != null ? trip.getEndTime() : trip.getStartTime();
 
-        // If last data was within 5 minutes, consider it "DRIVING"
-        boolean isDriving = lastTime.isAfter(LocalDateTime.now().minusMinutes(5));
+        // 주행 종료 시간(endTime)이 없어야 '주행 중(DRIVING)'으로 판단
+        boolean isDriving = (trip.getEndTime() == null);
+
+        // 연결 상태는 주행 중이면서 마지막 데이터가 5분 이내인 경우로 판단 (임시 로직)
+        boolean isConnected = isDriving && lastTime.isAfter(LocalDateTime.now().minusMinutes(5));
 
         return ConnectionStatusDto.builder()
-                .connected(isDriving)
+                .connected(isConnected)
                 .lastDataTime(lastTime)
                 .statusMessage(isDriving ? "DRIVING" : "PARKED")
                 .build();

@@ -9,10 +9,12 @@ import java.util.List;
 import java.util.UUID;
 import java.util.Optional;
 
+import kr.co.himedia.entity.ConsumableItem;
+
 @Repository
 public interface MaintenanceHistoryRepository extends JpaRepository<MaintenanceHistory, UUID> {
     List<MaintenanceHistory> findByVehicleOrderByMaintenanceDateDesc(Vehicle vehicle);
 
-    Optional<MaintenanceHistory> findTopByVehicleAndPartNameOrderByMaintenanceDateDesc(Vehicle vehicle,
-            String partName);
+    Optional<MaintenanceHistory> findTopByVehicleAndConsumableItemOrderByMaintenanceDateDesc(Vehicle vehicle,
+            ConsumableItem consumableItem);
 }

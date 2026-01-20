@@ -9,39 +9,65 @@ DELAY = 2
 
 # 2025년 한국 점유율 및 2010-2011 인기 모델 기반 리스트
 TARGETS = [
-    # === 현대 (Hyundai) - 국산 1위 ===
-    ("Hyundai", "2024", "Santa%20Fe%20L4-2.5L%20Turbo"), 
-    ("Hyundai", "2024", "Grandeur%20V6-3.5L"),
-    ("Hyundai", "2024", "Avante%20L4-1.6L"),
-    ("Hyundai", "2011", "Elantra%20L4-1.8L"), # 아반떼 MD
-    ("Hyundai", "2010", "Elantra%20L4-2.0L"), # 아반떼 HD/MD 전환기
-    ("Hyundai", "2011", "Sonata%20L4-2.4L"),  # 쏘나타 YF
-    ("Hyundai", "2010", "Sonata%20L4-2.4L"),  # 쏘나타 YF
-    ("Hyundai", "2011", "Azera%20V6-3.3L"),    # 그랜저 HG
-    ("Hyundai", "2010", "Azera%20V6-3.3L"),    # 그랜저 TG/HG 전환기
-    ("Hyundai", "2011", "Tucson%20L4-2.0L"),   # 투싼 ix
-    
-    # === 기아 (Kia) - 국산 2위 ===
-    ("Kia", "2024", "Sorento%20L4-2.5L%20Turbo"),
-    ("Kia", "2024", "Carnival%20V6-3.5L"),
-    ("Kia", "2024", "Sportage%20L4-1.6L%20Turbo"),
-    ("Kia", "2011", "Optima%20L4-2.4L"),      # K5 1세대
-    ("Kia", "2010", "Optima%20L4-2.4L"),      # 로체/K5 전환기
-    ("Kia", "2011", "Sorento%20V6-3.5L"),     # 쏘렌토R
-    ("Kia", "2011", "Sportage%20L4-2.4L"),    # 스포티지R
-    ("Kia", "2011", "Soul%20L4-2.0L"),        # 쏘울
-    
-    # === BMW - 수입 1위 ===
-    ("BMW", "2024", "530i%20xDrive%20%28G60%29%20L4-2.0L%20Turbo"),
-    ("BMW", "2012", "528i%20%28F10%29%20L4-2.0L%20Turbo"), # 인기 중고 모델
-    
-    # === Mercedes Benz - 수입 2위 ===
-    ("Mercedes%20Benz", "2024", "E%20350%204MATIC%20%28214.061%29%20L4-2.0L%20Turbo"),
-    ("Mercedes%20Benz", "2011", "E%20350%20%28212.056%29%20V6-3.5L"), # 인기 중고 모델
-    
-    # === 기타 주요 모델 ===
-    ("Genesis", "2024", "G80%20AWD%20V6-3.5L%20Turbo"),
-    ("Chevrolet", "2011", "Cruze%20L4-1.8L"), # 크루즈 (라세티 프리미어)
+    # === 현대 (Hyundai) ===
+    ("Hyundai", "2010", "Elantra%20L4-2.0L"),
+    ("Hyundai", "2011", "Elantra%20L4-1.8L"),
+    ("Hyundai", "2012", "Elantra%20L4-1.8L"),
+    ("Hyundai", "2013", "Elantra%20L4-1.8L"),
+    ("Hyundai", "2010", "Sonata%20L4-2.4L"),
+    ("Hyundai", "2011", "Sonata%20L4-2.4L"),
+    ("Hyundai", "2012", "Sonata%20L4-2.4L"),
+    ("Hyundai", "2013", "Sonata%20L4-2.4L"),
+    ("Hyundai", "2010", "Azera%20V6-3.3L"),
+    ("Hyundai", "2011", "Azera%20V6-3.3L"),
+    ("Hyundai", "2012", "Azera%20V6-3.3L"),
+    ("Hyundai", "2013", "Azera%20V6-3.3L"),
+    ("Hyundai", "2010", "Tucson%20L4-2.0L"),
+    ("Hyundai", "2011", "Tucson%20L4-2.0L"),
+    ("Hyundai", "2012", "Tucson%20L4-2.0L"),
+    ("Hyundai", "2013", "Tucson%20L4-2.0L"),
+    ("Hyundai", "2010", "Santa%20Fe%20FWD%20L4-2.4L"),
+    ("Hyundai", "2011", "Santa%20Fe%20FWD%20L4-2.4L"),
+    ("Hyundai", "2012", "Santa%20Fe%20FWD%20L4-2.4L"),
+    ("Hyundai", "2013", "Santa%20Fe%20FWD%20L4-2.4L"),
+    ("Hyundai", "2010", "Genesis%20V6-3.8L"),
+    ("Hyundai", "2011", "Genesis%20V6-3.8L"),
+    ("Hyundai", "2012", "Genesis%20V6-3.8L"),
+    ("Hyundai", "2013", "Genesis%20V6-3.8L"),
+
+    # === 기아 (Kia) ===
+    ("Kia", "2010", "Optima%20L4-2.4L"),
+    ("Kia", "2011", "Optima%20L4-2.4L"),
+    ("Kia", "2012", "Optima%20L4-2.4L"),
+    ("Kia", "2013", "Optima%20L4-2.4L"),
+    ("Kia", "2010", "Sorento%20V6-3.5L"),
+    ("Kia", "2011", "Sorento%202WD%20L4-2.4L"),
+    ("Kia", "2012", "Sorento%202WD%20L4-2.4L"),
+    ("Kia", "2013", "Sorento%202WD%20L4-2.4L"),
+    ("Kia", "2010", "Sportage%20L4-2.0L"),
+    ("Kia", "2011", "Sportage%202WD%20L4-2.4L"),
+    ("Kia", "2012", "Sportage%202WD%20L4-2.4L"),
+    ("Kia", "2013", "Sportage%202WD%20L4-2.4L"),
+    ("Kia", "2010", "Sedona%20V6-3.8L"),
+    ("Kia", "2011", "Sedona%20V6-3.5L"),
+    ("Kia", "2012", "Sedona%20V6-3.5L"),
+    ("Kia", "2013", "Sedona%20V6-3.5L"),
+    ("Kia", "2010", "Forte%20L4-2.0L"),
+    ("Kia", "2011", "Forte%20L4-2.0L"),
+    ("Kia", "2012", "Forte%20L4-2.4L"),
+    ("Kia", "2013", "Forte%20L4-2.0L"),
+
+    # === BMW ===
+    ("BMW", "2010", "528i%20%28E60%29%20L6-3.0L"),
+    ("BMW", "2011", "528i%20%28F10%29%20L6-3.0L"),
+    ("BMW", "2012", "528i%20%28F10%29%20L4-2.0L%20Turbo"),
+    ("BMW", "2013", "528i%20%28F10%29%20L4-2.0L%20Turbo"),
+
+    # === Mercedes Benz ===
+    ("Mercedes%20Benz", "2010", "E%20350%20%28212.056%29%20V6-3.5L"),
+    ("Mercedes%20Benz", "2011", "E%20350%20%28212.056%29%20V6-3.5L"),
+    ("Mercedes%20Benz", "2012", "E%20350%20Sedan%20%28212.059%29%20V6-3.5L%20%28276.952%29"),
+    ("Mercedes%20Benz", "2013", "E%20350%20Sedan%20%28212.059%29%20V6-3.5L%20%28276.952%29"),
 ]
 
 def download_zip(brand, year, model):
