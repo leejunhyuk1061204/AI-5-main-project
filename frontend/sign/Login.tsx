@@ -1,5 +1,13 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, Platform, KeyboardAvoidingView } from 'react-native';
+import { GoogleSignin } from '@react-native-google-signin/google-signin';
+import React, { useState, useEffect } from 'react';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, Platform, KeyboardAvoidingView, Alert } from 'react-native';
+
+let login: () => Promise<any>;
+if (Platform.OS !== 'web') {
+    login = require('@react-native-seoul/kakao-login').login;
+} else {
+    login = async () => { console.warn("Kakao Login not supported on web"); return null; };
+}
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
@@ -7,7 +15,6 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { authService } from '../services/auth';
-import { Alert } from 'react-native';
 
 export default function Login() {
     const navigation = useNavigation<any>();
@@ -16,6 +23,100 @@ export default function Login() {
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
+
+    useEffect(() => {
+        GoogleSignin.configure({
+            webClientId: 'YOUR_WEB_CLIENT_ID', // firebase 등에서 발급받은 web client id (선택)
+        });
+    }, []);
+
+    const onGoogleButtonPress = async () => {
+        try {
+            await GoogleSignin.hasPlayServices();
+            const signInResult = await GoogleSignin.signIn();
+
+            // idToken이 있으면 백엔드로 전송
+            if (signInResult.data?.idToken) {
+                setLoading(true);
+                const response = await authService.socialLogin('google', signInResult.data.idToken);
+
+                if (response.success && response.data) {
+                    await AsyncStorage.setItem('accessToken', response.data.accessToken);
+
+                    // Fetch user info needed?
+                    try {
+                        const profileResponse = await authService.getProfile(response.data.accessToken);
+                        if (profileResponse.success && profileResponse.data) {
+                            await AsyncStorage.setItem('userNickname', profileResponse.data.nickname);
+                        }
+                    } catch (e) {
+                        console.error("Failed to fetch profile", e);
+                    }
+
+                    if (route.params?.fromSignup) {
+                        navigation.navigate('RegisterMain');
+                    } else {
+                        navigation.navigate('MainPage');
+                    }
+                } else {
+                    Alert.alert("로그인 실패", response.error?.message || "소셜 로그인에 실패했습니다.");
+                }
+            } else {
+                Alert.alert("로그인 실패", "Google 계정 정보를 가져오지 못했습니다.");
+            }
+        } catch (error: any) {
+            if (error.code !== 'SIGN_IN_CANCELLED') {
+                console.error("Google Sign-In Error", error);
+                Alert.alert("오류", "구글 로그인 중 오류가 발생했습니다.");
+            }
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const onKakaoButtonPress = async () => {
+        try {
+            if (Platform.OS === 'web') {
+                Alert.alert("알림", "카카오 로그인(네이티브)은 앱에서만 가능합니다.");
+                return;
+            }
+
+            const token = await login();
+
+            if (token) {
+                setLoading(true);
+                const response = await authService.socialLogin('kakao', token.accessToken);
+
+                if (response.success && response.data) {
+                    await AsyncStorage.setItem('accessToken', response.data.accessToken);
+
+                    try {
+                        const profileResponse = await authService.getProfile(response.data.accessToken);
+                        if (profileResponse.success && profileResponse.data) {
+                            await AsyncStorage.setItem('userNickname', profileResponse.data.nickname);
+                        }
+                    } catch (e) {
+                        console.error("Failed to fetch profile", e);
+                    }
+
+                    if (route.params?.fromSignup) {
+                        navigation.navigate('RegisterMain');
+                    } else {
+                        navigation.navigate('MainPage');
+                    }
+                } else {
+                    Alert.alert("로그인 실패", response.error?.message || "카카오 로그인에 실패했습니다.");
+                }
+            }
+        } catch (error: any) {
+            if (error.message !== 'user cancelled.') {
+                console.error("Kakao Login Error", error);
+                Alert.alert("로그인 실패", "카카오 로그인 중 오류가 발생했습니다.");
+            }
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const handleLogin = async () => {
         if (!email || !password) {
@@ -188,13 +289,19 @@ export default function Login() {
 
                     {/* Social Login Options */}
                     <View className="flex-row gap-4 w-full">
-                        <TouchableOpacity className="flex-1 flex-row items-center justify-center gap-3 rounded-xl bg-[#182634] border border-[#314d68] px-4 py-3 active:bg-[#203040]">
+                        <TouchableOpacity
+                            onPress={onGoogleButtonPress}
+                            className="flex-1 flex-row items-center justify-center gap-3 rounded-xl bg-[#182634] border border-[#314d68] px-4 py-3 active:bg-[#203040]"
+                        >
                             <Ionicons name="logo-google" size={20} color="white" />
                             <Text className="text-sm font-medium text-white">Google</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity className="flex-1 flex-row items-center justify-center gap-3 rounded-xl bg-[#182634] border border-[#314d68] px-4 py-3 active:bg-[#203040]">
-                            <Ionicons name="logo-apple" size={20} color="white" />
-                            <Text className="text-sm font-medium text-white">Apple</Text>
+                        <TouchableOpacity
+                            onPress={onKakaoButtonPress}
+                            className="flex-1 flex-row items-center justify-center gap-3 rounded-xl bg-[#FEE500] border border-[#FEE500] px-4 py-3 active:bg-[#E6CF00]"
+                        >
+                            <Ionicons name="chatbubble-ellipses" size={20} color="#000000" />
+                            <Text className="text-sm font-bold text-[#000000]">Kakao</Text>
                         </TouchableOpacity>
                     </View>
 
