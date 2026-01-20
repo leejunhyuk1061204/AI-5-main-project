@@ -162,6 +162,7 @@ public class AiDiagnosisService {
 
     /**
      * 통합 진단 요청 (Trigger 2: 수동 진단 - RabbitMQ 발행)
+     * 기존 PENDING/FAILED 세션이 있으면 UPDATE, 없으면 INSERT
      */
     @Transactional
     public Map<String, Object> requestUnifiedDiagnosis(UnifiedDiagnosisRequestDto requestDto,
@@ -169,10 +170,25 @@ public class AiDiagnosisService {
             org.springframework.web.multipart.MultipartFile audio) {
         log.info("Requesting Manual Unified Diagnosis (Async via MQ) for vehicle: {}", requestDto.getVehicleId());
 
-        DiagSession session = diagSessionRepository.save(new DiagSession(
-                requestDto.getVehicleId(),
-                null,
-                DiagTriggerType.MANUAL));
+        // 기존 PENDING 세션이 있으면 재사용
+        DiagSession session = diagSessionRepository
+                .findFirstByVehiclesIdAndTriggerTypeAndStatusOrderByCreatedAtDesc(
+                        requestDto.getVehicleId(), DiagTriggerType.MANUAL, DiagStatus.PENDING)
+                .orElseGet(() -> {
+                    // PENDING이 없으면 FAILED도 확인
+                    return diagSessionRepository
+                            .findFirstByVehiclesIdAndTriggerTypeAndStatusOrderByCreatedAtDesc(
+                                    requestDto.getVehicleId(), DiagTriggerType.MANUAL, DiagStatus.FAILED)
+                            .orElse(null);
+                });
+
+        if (session != null) {
+            log.info("Reusing existing session [{}] with status [{}]", session.getDiagSessionId(), session.getStatus());
+            session.updateStatus(DiagStatus.PENDING, "진단 대기 중 (재요청)");
+        } else {
+            session = new DiagSession(requestDto.getVehicleId(), null, DiagTriggerType.MANUAL);
+        }
+        session = diagSessionRepository.save(session);
 
         String imageFile = saveMultipartFile(image, "visual");
         String audioFile = saveMultipartFile(audio, "audio");
@@ -434,7 +450,7 @@ public class AiDiagnosisService {
             vehicleInfo.put("total_mileage", vehicle.getTotalMileage());
             builder.vehicleInfo(vehicleInfo);
 
-            List<VehicleConsumable> consumables = vehicleConsumableRepository.findByVehicle(vehicle);
+            List<VehicleConsumable> consumables = vehicleConsumableRepository.findByVehicleWithItem(vehicle);
             List<Map<String, Object>> statusList = consumables.stream().map(vc -> {
                 Map<String, Object> status = new HashMap<>();
                 status.put("item", vc.getConsumableItem().getCode());

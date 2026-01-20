@@ -1,7 +1,7 @@
 package kr.co.himedia.controller;
 
 import kr.co.himedia.common.ApiResponse;
-import kr.co.himedia.dto.ai.DiagnosisRequestDto;
+
 import kr.co.himedia.dto.ai.DtcDto;
 import kr.co.himedia.dto.ai.UnifiedDiagnosisRequestDto;
 import kr.co.himedia.service.AiDiagnosisService;
@@ -22,17 +22,6 @@ public class AiController {
     public ApiResponse<Void> receiveDtc(@RequestBody DtcDto dtcDto) {
         aiDiagnosisService.processDtc(dtcDto);
         return ApiResponse.success(null);
-    }
-
-    /**
-     * AI 진단 요청 (BE-AI-001)
-     * Vision (이미지) 또는 Audio (소리) 진단
-     */
-    @PostMapping("/diagnose")
-    public ApiResponse<Object> requestDiagnosis(
-            @RequestBody DiagnosisRequestDto requestDto) {
-        Object result = aiDiagnosisService.requestDiagnosis(requestDto);
-        return ApiResponse.success(result);
     }
 
     /**

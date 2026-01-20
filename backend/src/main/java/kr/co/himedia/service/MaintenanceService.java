@@ -20,7 +20,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -43,15 +42,15 @@ public class MaintenanceService {
                 Vehicle vehicle = vehicleRepository.findById(vehicleId)
                                 .orElseThrow(() -> new BaseException(ErrorCode.VEHICLE_NOT_FOUND));
 
-                // partName lookup
-                String partName = request.getItem().name();
+                // 1. 정비 이력 저장 (Stack)
+                ConsumableItem item = consumableItemRepository.findById(request.getConsumableItemId())
+                                .orElseThrow(() -> new BaseException(ErrorCode.INVALID_INPUT_VALUE));
 
-                // 1. 정비 이력 저장
                 MaintenanceHistory history = MaintenanceHistory.builder()
                                 .vehicle(vehicle)
                                 .maintenanceDate(request.getMaintenanceDate())
                                 .mileageAtMaintenance(request.getMileageAtMaintenance())
-                                .partName(partName)
+                                .consumableItem(item) // FK로 저장
                                 .isStandardized(request.getIsStandardized())
                                 .shopName(request.getShopName())
                                 .cost(request.getCost())
@@ -61,27 +60,24 @@ public class MaintenanceService {
 
                 MaintenanceHistory savedHistory = maintenanceHistoryRepository.save(history);
 
-                // 2. VehicleConsumable 상태 갱신 (교체했으므로 리셋)
-                // 3단 구조: ConsumableItemCode = partName (Enum name과 Code가 일치한다고 가정)
-                vehicleConsumableRepository.findByVehicleAndConsumableItem_Code(vehicle, partName)
+                // 2. 소모품 상태 갱신 (UPSERT)
+                vehicleConsumableRepository.findByVehicleAndConsumableItem_Id(vehicle, request.getConsumableItemId())
                                 .ifPresentOrElse(vc -> {
-                                        // 리셋
+                                        // 기존 데이터가 있으면 업데이트 (Update)
                                         vc.setLastReplacedAt(request.getMaintenanceDate().atStartOfDay());
                                         vc.setLastReplacedMileage(request.getMileageAtMaintenance());
                                         vc.updateRemainingLife(100.0); // 교체 직후는 100%
                                         vehicleConsumableRepository.save(vc);
                                 }, () -> {
-                                        // 없으면 새로 생성 (하지만 Master Data에 있어야 함)
-                                        consumableItemRepository.findByCode(partName).ifPresent(item -> {
-                                                VehicleConsumable newVc = new VehicleConsumable();
-                                                newVc.setVehicle(vehicle);
-                                                newVc.setConsumableItem(item);
-                                                newVc.setWearFactor(1.0); // 초기값
-                                                newVc.setLastReplacedAt(request.getMaintenanceDate().atStartOfDay());
-                                                newVc.setLastReplacedMileage(request.getMileageAtMaintenance());
-                                                newVc.setRemainingLife(100.0);
-                                                vehicleConsumableRepository.save(newVc);
-                                        });
+                                        // 기존 데이터가 없으면 신규 생성 (Insert)
+                                        VehicleConsumable newVc = new VehicleConsumable();
+                                        newVc.setVehicle(vehicle);
+                                        newVc.setConsumableItem(item);
+                                        newVc.setWearFactor(1.0);
+                                        newVc.setLastReplacedAt(request.getMaintenanceDate().atStartOfDay());
+                                        newVc.setLastReplacedMileage(request.getMileageAtMaintenance());
+                                        newVc.setRemainingLife(100.0);
+                                        vehicleConsumableRepository.save(newVc);
                                 });
 
                 return new MaintenanceHistoryResponse(savedHistory);
@@ -107,8 +103,9 @@ public class MaintenanceService {
 
                                         // 3. 최신 정비 이력 조회 (참고용)
                                         MaintenanceHistory lastHistory = maintenanceHistoryRepository
-                                                        .findTopByVehicleAndPartNameOrderByMaintenanceDateDesc(vehicle,
-                                                                        item.getCode())
+                                                        .findTopByVehicleAndConsumableItemOrderByMaintenanceDateDesc(
+                                                                        vehicle,
+                                                                        item)
                                                         .orElse(null);
 
                                         double remainingLife = (vc != null && vc.getRemainingLife() != null)

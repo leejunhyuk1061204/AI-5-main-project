@@ -1,6 +1,8 @@
 package kr.co.himedia.entity;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import kr.co.himedia.common.BaseEntity;
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -34,8 +36,9 @@ public class MaintenanceHistory extends BaseEntity {
     @Column(name = "mileage_at_maintenance", nullable = false)
     private Double mileageAtMaintenance;
 
-    @Column(name = "part_name")
-    private String partName;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "consumable_item_id")
+    private ConsumableItem consumableItem;
 
     @Column(name = "is_standardized")
     private Boolean isStandardized;
@@ -46,7 +49,8 @@ public class MaintenanceHistory extends BaseEntity {
     @Column(name = "cost")
     private Integer cost;
 
-    @Column(name = "ocr_data", columnDefinition = "JSONB")
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "ocr_data", columnDefinition = "jsonb")
     private String ocrData;
 
     @Column(columnDefinition = "TEXT")
@@ -54,12 +58,12 @@ public class MaintenanceHistory extends BaseEntity {
 
     @Builder
     public MaintenanceHistory(Vehicle vehicle, LocalDate maintenanceDate, Double mileageAtMaintenance,
-            String partName, Boolean isStandardized, String shopName, Integer cost, String ocrData,
+            ConsumableItem consumableItem, Boolean isStandardized, String shopName, Integer cost, String ocrData,
             String memo) {
         this.vehicle = vehicle;
         this.maintenanceDate = maintenanceDate;
         this.mileageAtMaintenance = mileageAtMaintenance;
-        this.partName = partName;
+        this.consumableItem = consumableItem;
         this.isStandardized = isStandardized;
         this.shopName = shopName;
         this.cost = cost;

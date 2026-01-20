@@ -59,7 +59,16 @@ app:
   firebase:
     config-path: ${FIREBASE_CONFIG_PATH:firebase-service-account.json}
 
-# AI 설정은 Java AiClient 클래스의 @Value 기본값(8001 포트)을 사용합니다.
+# AI 설정은 Java AiClient 클래스의 @Value 기본값을 사용하지만, 
+# Docker 환경을 고려하여 기본 호스트를 host.docker.internal로 명시적 설정
+ai:
+  server:
+    url:
+      visual: ${AI_SERVER_URL_VISUAL:http://host.docker.internal:8001/api/v1/connect/predict/visual}
+      audio: ${AI_SERVER_URL_AUDIO:http://host.docker.internal:8001/api/v1/connect/predict/audio}
+      comprehensive: ${AI_SERVER_URL_COMPREHENSIVE:http://host.docker.internal:8001/api/v1/connect/predict/comprehensive}
+      anomaly: ${AI_SERVER_URL_ANOMALY:http://host.docker.internal:8001/api/v1/connect/predict/anomaly}
+      wear-factor: ${AI_SERVER_URL_WEAR_FACTOR:http://host.docker.internal:8001/api/v1/connect/predict/wear-factor}
 
 logging:
   level:

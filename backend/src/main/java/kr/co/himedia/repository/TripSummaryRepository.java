@@ -22,4 +22,9 @@ public interface TripSummaryRepository extends JpaRepository<TripSummary, TripSu
 
     @Query("SELECT t FROM TripSummary t WHERE t.vehicleId = :vehicleId ORDER BY t.endTime DESC LIMIT 1")
     Optional<TripSummary> findLatestTripByVehicleId(@Param("vehicleId") UUID vehicleId);
+
+    // [BE-TD-005] 유효 주행 거리(0.1km) 이상인 주행 기록만 조회 (사용자 노출용)
+    @Query("SELECT t FROM TripSummary t WHERE t.vehicleId = :vehicleId AND t.distance >= :minDistance ORDER BY t.startTime DESC")
+    List<TripSummary> findValidTripsByVehicleId(@Param("vehicleId") UUID vehicleId,
+            @Param("minDistance") double minDistance);
 }
