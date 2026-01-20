@@ -1,58 +1,64 @@
 package kr.co.himedia.entity;
 
 import jakarta.persistence.*;
-import kr.co.himedia.common.BaseEntity;
-import lombok.AccessLevel;
-import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
 
-import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.UUID;
 
+/**
+ * 차량별 소모품 상태 엔티티 (vehicle_consumables)
+ * 차량과 소모품 마스터 간의 매핑 및 상태 정보를 관리합니다.
+ */
 @Entity
-@Table(name = "vehicle_consumables")
+@Table(name = "vehicle_consumables", uniqueConstraints = {
+        @UniqueConstraint(columnNames = { "vehicles_id", "consumable_item_id" })
+})
 @Getter
-@NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class VehicleConsumable extends BaseEntity {
+@Setter
+@NoArgsConstructor
+public class VehicleConsumable {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "consumable_id")
-    private Long id;
+    @GeneratedValue(strategy = GenerationType.AUTO)
+    @Column(name = "vehicle_consumable_id")
+    private UUID id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "vehicle_id", nullable = false)
+    @JoinColumn(name = "vehicles_id", nullable = false)
     private Vehicle vehicle;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private MaintenanceItem item;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "consumable_item_id", nullable = false)
+    private ConsumableItem consumableItem;
 
-    @Column(name = "last_maintenance_mileage")
-    private Double lastMaintenanceMileage;
+    @Column(name = "wear_factor", nullable = false)
+    private Double wearFactor = 1.0; // AI 마모 가중치
 
-    @Column(name = "last_maintenance_date")
-    private LocalDate lastMaintenanceDate;
+    @Column(name = "remaining_life")
+    private Double remainingLife; // 잔존 수명 (%) (캐싱용)
 
-    @Column(name = "replacement_interval_mileage")
-    private Double replacementIntervalMileage;
+    @Column(name = "last_replaced_at")
+    private LocalDateTime lastReplacedAt;
 
-    @Column(name = "replacement_interval_months")
-    private Integer replacementIntervalMonths;
+    @Column(name = "last_replaced_mileage")
+    private Double lastReplacedMileage; // 마지막 교체 시점 주행거리
 
-    @Builder
-    public VehicleConsumable(Vehicle vehicle, MaintenanceItem item, Double lastMaintenanceMileage,
-            LocalDate lastMaintenanceDate, Double replacementIntervalMileage, Integer replacementIntervalMonths) {
-        this.vehicle = vehicle;
-        this.item = item;
-        this.lastMaintenanceMileage = lastMaintenanceMileage != null ? lastMaintenanceMileage : 0.0;
-        this.lastMaintenanceDate = lastMaintenanceDate != null ? lastMaintenanceDate : LocalDate.now();
-        this.replacementIntervalMileage = replacementIntervalMileage;
-        this.replacementIntervalMonths = replacementIntervalMonths;
-    }
+    @CreationTimestamp
+    @Column(name = "created_at", updatable = false)
+    private LocalDateTime createdAt;
 
-    public void updateMaintenanceInfo(Double mileage, LocalDate date) {
-        this.lastMaintenanceMileage = mileage;
-        this.lastMaintenanceDate = date;
+    @UpdateTimestamp
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
+
+    // Helper method to set remaining life safely
+    public void updateRemainingLife(Double newLife) {
+        this.remainingLife = newLife;
+        this.updatedAt = LocalDateTime.now();
     }
 }

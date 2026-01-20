@@ -47,10 +47,4 @@ public class AdminController {
         return ResponseEntity.ok("Triggered cleanupOldLogs manually.");
     }
 
-    // 테스트용: 주간 리포트 스케줄러 강제 실행
-    @PostMapping("/trigger-report")
-    public ResponseEntity<String> triggerReport() {
-        tripScheduler.generateWeeklyReports();
-        return ResponseEntity.ok("Triggered generateWeeklyReports manually.");
-    }
 }

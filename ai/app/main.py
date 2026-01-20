@@ -2,10 +2,14 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import os
+from ultralytics import settings
 from dotenv import load_dotenv, find_dotenv
 
 # 루트 폴더(.env)를 명시적으로 찾아서 로드
 load_dotenv(find_dotenv())
+
+# Ultralytics 전역 가중치 경로 설정
+settings.update({'weights_dir': os.path.join(os.getcwd(), 'ai', 'weights')})
 
 from ai.app.api.v1.routes.health import router as health_router
 from ai.app.api.v1.routes.router import router as predict_router
@@ -47,8 +51,8 @@ def load_engine_yolo_model():
     
     if not os.path.exists(model_path):
         print(f"[Warning] 엔진 YOLO 가중치를 찾을 수 없습니다: {model_path}")
-        print("기본 모델(yolov8n.pt)을 사용합니다. 엔진 부품 감지 정확도가 낮을 수 있습니다.")
-        model = YOLO("yolov8n.pt")
+        print("기본 모델(ai/weights/yolov8n.pt)을 사용합니다. 엔진 부품 감지 정확도가 낮을 수 있습니다.")
+        model = YOLO(os.path.join("ai", "weights", "yolov8n.pt"))
     else:
         print(f"학습된 엔진 YOLO 모델 로드 중: {model_path}")
         model = YOLO(model_path)
@@ -103,8 +107,10 @@ def create_app() -> FastAPI:
 
     # [Test] 테스트 라우터 등록 (개발/테스트용)
     from ai.app.api.v1.routes.test_router import router as test_router
+    from ai.app.api.v1.routes.test_router import connect_router
     app.include_router(test_router, prefix="/api/v1", tags=["test"])
-    print("✅ Test Router Registered (/api/v1/test/...)")
+    app.include_router(connect_router, prefix="/api/v1", tags=["connect"])
+    print("✅ Test Router Registered (/api/v1/test/... + /api/v1/connect/...)")
 
     return app
 

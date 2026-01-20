@@ -1,19 +1,13 @@
 # =========================================================================
 # 🚀 AI-5 Car-Sentry 원클릭 인프라 서비스
 # =========================================================================
-# 💡 [필독] 실행 전 다음 단계를 꼭 확인하세요!
+# 💡 [필독] RabbitMQ 에러 시 조치방법 (PRECONDITION_FAILED)
 #
-# STEP 1. 설정 파일 준비 (.env 만들기)
-#         폴더에 있는 '.env.example' 파일을 복사해서 이름을 '.env'로 바꿔주세요.
-#         (명령어: copy .env.example .env)
+# 큐 설정이 변경되어 기존 큐와 충돌이 발생할 경우, 아래 명령어로 큐를 삭제하고 재실행하세요.
+# docker exec car-sentry-mq rabbitmqctl delete_queue ai.diagnosis.queue
 #
-# STEP 2. 서버 실행 (자동 설치 포함)
-#         docker-compose up -d
-#
-# ⚠️ 주의: Docker Desktop이 반드시 켜져 있어야 합니다.
+# (기본 실행: docker-compose up -d)
 # =========================================================================
-
-version: '3.8'
 
 services:
   # 1. 데이터베이스 (PostgreSQL + TimescaleDB + pgvector)
@@ -29,7 +23,8 @@ services:
       - "${DB_PORT:-5432}:5432"
     volumes:
       - ./data/postgres_1024:/var/lib/postgresql/data
-      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql # 초기화 스크립트 마운트
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql
+      - ./db/data.sql:/docker-entrypoint-initdb.d/02_data.sql
     networks:
       - car-sentry-network
 
@@ -48,6 +43,10 @@ services:
       - rabbitmq_data:/var/lib/rabbitmq
     networks:
       - car-sentry-network
+
+networks:
+  car-sentry-network:
+    driver: bridge
 
 volumes:
   postgres_data:

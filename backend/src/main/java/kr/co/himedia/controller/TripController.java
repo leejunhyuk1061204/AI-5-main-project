@@ -1,11 +1,14 @@
 package kr.co.himedia.controller;
 
 import kr.co.himedia.common.ApiResponse;
+import kr.co.himedia.dto.trip.TripEndRequest;
+import kr.co.himedia.dto.trip.TripStartRequest;
 import kr.co.himedia.entity.TripSummary;
 import kr.co.himedia.service.TripService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 
 import java.util.List;
@@ -41,16 +44,16 @@ public class TripController {
      * 새로운 주행 세션을 시작하고 Trip ID를 발급합니다.
      */
     @PostMapping("/start")
-    public ResponseEntity<ApiResponse<TripSummary>> startTrip(@RequestParam("vehicleId") UUID vehicleId) {
-        return ResponseEntity.ok(ApiResponse.success(tripService.startTrip(vehicleId)));
+    public ResponseEntity<ApiResponse<TripSummary>> startTrip(@Valid @RequestBody TripStartRequest req) {
+        return ResponseEntity.ok(ApiResponse.success(tripService.startTrip(req.getVehicleId())));
     }
 
     /**
      * [BE-TD-004] 주행 세션 종료 & 요약
      * 주행 세션을 종료하고 최종 통계(점수, 거리 등)를 확정합니다.
      */
-    @PostMapping("/{tripId}/end")
-    public ResponseEntity<ApiResponse<TripSummary>> endTrip(@PathVariable("tripId") UUID tripId) {
-        return ResponseEntity.ok(ApiResponse.success(tripService.endTrip(tripId)));
+    @PostMapping("/end")
+    public ResponseEntity<ApiResponse<TripSummary>> endTrip(@Valid @RequestBody TripEndRequest req) {
+        return ResponseEntity.ok(ApiResponse.success(tripService.endTrip(req.getTripId())));
     }
 }

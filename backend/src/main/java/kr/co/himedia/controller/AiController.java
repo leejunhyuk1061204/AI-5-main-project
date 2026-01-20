@@ -3,11 +3,10 @@ package kr.co.himedia.controller;
 import kr.co.himedia.common.ApiResponse;
 import kr.co.himedia.dto.ai.DiagnosisRequestDto;
 import kr.co.himedia.dto.ai.DtcDto;
+import kr.co.himedia.dto.ai.UnifiedDiagnosisRequestDto;
 import kr.co.himedia.service.AiDiagnosisService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/ai")
@@ -33,6 +32,20 @@ public class AiController {
     public ApiResponse<Object> requestDiagnosis(
             @RequestBody DiagnosisRequestDto requestDto) {
         Object result = aiDiagnosisService.requestDiagnosis(requestDto);
+        return ApiResponse.success(result);
+    }
+
+    /**
+     * 통합 진단 요청 (BE-AI-005)
+     * 소리, 사진, LSTM 분석 결과를 통합하여 최종 진단 요청
+     * Trigger 2: 수동 진단 (파일 업로드 지원)
+     */
+    @PostMapping(value = "/diagnose/unified", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ApiResponse<Object> requestUnifiedDiagnosis(
+            @RequestPart(value = "image", required = false) org.springframework.web.multipart.MultipartFile image,
+            @RequestPart(value = "audio", required = false) org.springframework.web.multipart.MultipartFile audio,
+            @RequestPart(value = "data") UnifiedDiagnosisRequestDto requestDto) {
+        Object result = aiDiagnosisService.requestUnifiedDiagnosis(requestDto, image, audio);
         return ApiResponse.success(result);
     }
 }

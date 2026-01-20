@@ -34,9 +34,8 @@ public class MaintenanceHistory extends BaseEntity {
     @Column(name = "mileage_at_maintenance", nullable = false)
     private Double mileageAtMaintenance;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private MaintenanceItem item;
+    @Column(name = "part_name")
+    private String partName;
 
     @Column(name = "is_standardized")
     private Boolean isStandardized;
@@ -55,11 +54,12 @@ public class MaintenanceHistory extends BaseEntity {
 
     @Builder
     public MaintenanceHistory(Vehicle vehicle, LocalDate maintenanceDate, Double mileageAtMaintenance,
-            MaintenanceItem item, Boolean isStandardized, String shopName, Integer cost, String ocrData, String memo) {
+            String partName, Boolean isStandardized, String shopName, Integer cost, String ocrData,
+            String memo) {
         this.vehicle = vehicle;
         this.maintenanceDate = maintenanceDate;
         this.mileageAtMaintenance = mileageAtMaintenance;
-        this.item = item;
+        this.partName = partName;
         this.isStandardized = isStandardized;
         this.shopName = shopName;
         this.cost = cost;

@@ -104,4 +104,8 @@ public class Vehicle {
     public void delete() {
         this.deletedAt = LocalDateTime.now();
     }
+
+    public void updateTotalMileage(Double totalMileage) {
+        this.totalMileage = totalMileage;
+    }
 }
