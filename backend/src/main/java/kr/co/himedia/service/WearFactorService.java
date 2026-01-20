@@ -3,6 +3,8 @@ package kr.co.himedia.service;
 import org.springframework.scheduling.annotation.Async;
 import kr.co.himedia.dto.maintenance.ai.AiWearFactorRequest;
 import kr.co.himedia.dto.maintenance.ai.AiWearFactorResponse;
+import kr.co.himedia.entity.Notification.NotificationType;
+import kr.co.himedia.entity.User;
 import kr.co.himedia.entity.Vehicle;
 import kr.co.himedia.entity.VehicleConsumable;
 import kr.co.himedia.repository.VehicleConsumableRepository;
@@ -21,11 +23,15 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class WearFactorService {
 
+    private static final double CONSUMABLE_ALERT_THRESHOLD = 15.0;
+
     private final VehicleRepository vehicleRepository;
     private final VehicleConsumableRepository vehicleConsumableRepository;
     private final kr.co.himedia.repository.TripSummaryRepository tripSummaryRepository;
     private final ConsumableItemRepository consumableItemRepository;
     private final AiClient aiClient;
+    private final NotificationService notificationService;
+    private final kr.co.himedia.repository.UserRepository userRepository;
 
     /**
      * 운행 종료 시 호출 - 해당 차량의 모든 AI 지원 소모품에 대해 마모율 일괄 계산 (비동기 처리)
@@ -98,6 +104,12 @@ public class WearFactorService {
                 // 4. 잔존 수명 재계산 및 업데이트 (캐싱)
                 updateRemainingLife(vehicleConsumable, currentTotalMileage);
 
+                // 5. 잔존 수명 15% 이하 시 알림 발송
+                if (vehicleConsumable.getRemainingLife() != null
+                        && vehicleConsumable.getRemainingLife() <= CONSUMABLE_ALERT_THRESHOLD) {
+                    sendConsumableAlert(vehicle, vehicleConsumable);
+                }
+
                 vehicleConsumableRepository.save(vehicleConsumable);
                 log.info("[WearFactor] Updated {}: factor={}, remainingLife={}%", itemCode, wearFactor,
                         vehicleConsumable.getRemainingLife());
@@ -140,6 +152,30 @@ public class WearFactorService {
 
         // 잔존 수명 업데이트
         vc.updateRemainingLife(lifePercentage);
+    }
+
+    /**
+     * 소모품 수명 임계치 도달 시 FCM 알림 발송
+     */
+    private void sendConsumableAlert(Vehicle vehicle, VehicleConsumable vc) {
+        User owner = userRepository.findById(vehicle.getUserId()).orElse(null);
+        if (owner == null) {
+            log.warn("[WearFactor] 차량 소유자 없음, 알림 스킵: {}", vehicle.getVehicleId());
+            return;
+        }
+
+        String itemName = vc.getConsumableItem().getName();
+        String vehicleName = vehicle.getModelName() != null ? vehicle.getModelName() : "차량";
+        double remainingLife = vc.getRemainingLife();
+
+        String title = "[소모품 교체 알림] " + itemName;
+        String body = String.format("%s %s 잔존 수명이 %.0f%%입니다. 정비를 권장합니다.",
+                vehicleName, itemName, remainingLife);
+
+        notificationService.sendNotification(owner, title, body, NotificationType.MAINTENANCE_ALERT);
+
+        log.info("[WearFactor] 소모품 알림 발송: {} -> {} ({}%)",
+                owner.getNickname(), itemName, remainingLife);
     }
 
     private AiWearFactorRequest.DrivingHabits getRecentDrivingHabits(UUID vehicleId) {
