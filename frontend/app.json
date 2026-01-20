@@ -40,11 +40,34 @@
         "expo-build-properties",
         {
           "android": {
-            "bridgelessEnabled": false
+            "bridgelessEnabled": false,
+            "extraMavenRepos": [
+              "https://devrepo.kakao.com/nexus/content/groups/public/"
+            ],
+            "kotlinVersion": "1.9.0"
           },
           "ios": {
             "bridgelessEnabled": false
           }
+        }
+      ],
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.PLACEHOLDER",
+          "ios": {
+            "bundleIdentifier": "com.lee-kang-hyun.frontend"
+          },
+          "android": {
+            "googleServicesFile": "./google-services.json"
+          }
+        }
+      ],
+      [
+        "@react-native-seoul/kakao-login",
+        {
+          "kakaoAppKey": "35274d2abb1cb3dbed5371df839ca7a3",
+          "kotlinVersion": "1.9.0"
         }
       ]
     ],
