@@ -4,7 +4,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { CameraView, useCameraPermissions } from 'expo-camera';
+import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
 import { LinearGradient } from 'expo-linear-gradient';
 
 const { width, height } = Dimensions.get('window');
@@ -13,7 +13,17 @@ export default function Filming() {
     const navigation = useNavigation();
     const insets = useSafeAreaInsets();
     const [permission, requestPermission] = useCameraPermissions();
+    const [facing, setFacing] = useState<CameraType>('back');
+    const [enableTorch, setEnableTorch] = useState(false);
     const [scanned, setScanned] = useState(false);
+
+    const toggleCameraFacing = () => {
+        setFacing((current) => (current === 'back' ? 'front' : 'back'));
+    };
+
+    const toggleFlash = () => {
+        setEnableTorch((current) => !current);
+    };
 
     useEffect(() => {
         // Request camera permission on mount
@@ -68,7 +78,8 @@ export default function Filming() {
             <View className="absolute inset-0 z-0 bg-black">
                 <CameraView
                     style={StyleSheet.absoluteFill}
-                    facing="back"
+                    facing={facing}
+                    enableTorch={enableTorch}
                 >
                     {/* Camera Grid Overlay - Clean view required */}
 
@@ -109,11 +120,14 @@ export default function Filming() {
             >
                 <View className="flex-row items-center justify-between max-w-sm mx-auto w-full px-8">
                     {/* Flash Button */}
-                    <TouchableOpacity className="items-center gap-2">
-                        <View className="w-12 h-12 rounded-full bg-[#1e2936] border border-white/10 items-center justify-center active:bg-white/20">
-                            <MaterialIcons name="flash-on" size={22} color="white" />
+                    <TouchableOpacity
+                        className="items-center gap-2"
+                        onPress={toggleFlash}
+                    >
+                        <View className={`w-12 h-12 rounded-full border border-white/10 items-center justify-center active:bg-white/20 ${enableTorch ? 'bg-yellow-500/20 border-yellow-500' : 'bg-[#1e2936]'}`}>
+                            <MaterialIcons name={enableTorch ? "flash-on" : "flash-off"} size={22} color={enableTorch ? "#fbbf24" : "white"} />
                         </View>
-                        <Text className="text-[11px] text-slate-400 font-medium tracking-wide">플래시</Text>
+                        <Text className={`text-[11px] font-medium tracking-wide ${enableTorch ? 'text-yellow-500' : 'text-slate-400'}`}>플래시</Text>
                     </TouchableOpacity>
 
                     {/* Shutter Button - Design Update */}
@@ -124,7 +138,10 @@ export default function Filming() {
                     </TouchableOpacity>
 
                     {/* Switch Mode/Camera */}
-                    <TouchableOpacity className="items-center gap-2">
+                    <TouchableOpacity
+                        className="items-center gap-2"
+                        onPress={toggleCameraFacing}
+                    >
                         <View className="w-12 h-12 rounded-full bg-[#1e2936] border border-white/10 items-center justify-center active:bg-white/20">
                             <MaterialIcons name="flip-camera-ios" size={22} color="white" />
                         </View>

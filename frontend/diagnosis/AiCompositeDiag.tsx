@@ -25,13 +25,13 @@ export default function AiCompositeDiag() {
     ]);
 
     return (
-        <View className="flex-1 bg-deep-black">
+        <View className="flex-1 bg-background-dark">
             <StatusBar style="light" />
 
             {/* Background Effects Removed */}
 
             {/* Header */}
-            <SafeAreaView edges={['top']} className="z-20 bg-deep-black/60 border-b border-white/5">
+            <SafeAreaView edges={['top']} className="z-20 bg-[#0c0e12]/80 border-b border-white/5 backdrop-blur-md">
                 <View className="flex-row items-center justify-between px-4 pb-4 pt-2">
                     <TouchableOpacity
                         onPress={() => navigation.goBack()}
@@ -108,49 +108,45 @@ export default function AiCompositeDiag() {
 
             {/* Bottom Actions Area */}
             <View className="absolute bottom-0 left-0 right-0 z-20">
-                {/* Action Buttons Carousel */}
-                <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={{ paddingHorizontal: 20, gap: 12, paddingBottom: 20 }}
-                >
+                {/* Action Buttons Container */}
+                <View className="flex-row justify-between px-5 pb-5 gap-3">
                     <TouchableOpacity
                         onPress={() => navigation.navigate('EngineSoundDiag')}
-                        className="w-[130px] h-[100px] p-4 rounded-2xl bg-[#121a26]/60 border border-white/5 justify-between active:scale-95 overflow-hidden relative group"
+                        className="flex-1 h-[100px] p-3 rounded-2xl bg-[#121a26]/60 border border-white/5 justify-between active:scale-95 overflow-hidden relative group"
                     >
-                        <View className="w-8 h-8 rounded-lg bg-accent-blue/10 items-center justify-center mb-2">
+                        <View className="w-8 h-8 rounded-lg bg-accent-blue/10 items-center justify-center mb-1">
                             <MaterialIcons name="mic" size={20} color="#3d7eff" />
                         </View>
-                        <Text className="text-[13px] font-bold text-white/90 leading-tight">녹음 시작하기</Text>
+                        <Text className="text-[12px] font-bold text-white/90 leading-tight">녹음 시작</Text>
                         <View className="absolute bottom-0 left-0 h-[2px] w-full bg-accent-blue opacity-50" />
                     </TouchableOpacity>
 
                     <TouchableOpacity
                         onPress={() => navigation.navigate('Filming')}
-                        className="w-[130px] h-[100px] p-4 rounded-2xl bg-[#121a26]/60 border border-white/5 justify-between active:scale-95 overflow-hidden relative"
+                        className="flex-1 h-[100px] p-3 rounded-2xl bg-[#121a26]/60 border border-white/5 justify-between active:scale-95 overflow-hidden relative"
                     >
-                        <View className="w-8 h-8 rounded-lg bg-accent-blue/10 items-center justify-center mb-2">
+                        <View className="w-8 h-8 rounded-lg bg-accent-blue/10 items-center justify-center mb-1">
                             <MaterialIcons name="camera-alt" size={20} color="#3d7eff" />
                         </View>
-                        <Text className="text-[13px] font-bold text-white/90 leading-tight">사진 촬영하기</Text>
+                        <Text className="text-[12px] font-bold text-white/90 leading-tight">사진 촬영</Text>
                         <View className="absolute bottom-0 left-0 h-[2px] w-full bg-accent-blue opacity-50" />
                     </TouchableOpacity>
 
                     <TouchableOpacity
                         // Assuming ActiveReg is the OBD connection flow based on context
                         onPress={() => navigation.navigate('ActiveReg')}
-                        className="w-[130px] h-[100px] p-4 rounded-2xl bg-[#121a26]/60 border border-white/5 justify-between active:scale-95 overflow-hidden relative"
+                        className="flex-1 h-[100px] p-3 rounded-2xl bg-[#121a26]/60 border border-white/5 justify-between active:scale-95 overflow-hidden relative"
                     >
-                        <View className="w-8 h-8 rounded-lg bg-accent-blue/10 items-center justify-center mb-2">
+                        <View className="w-8 h-8 rounded-lg bg-accent-blue/10 items-center justify-center mb-1">
                             <MaterialCommunityIcons name="car-connected" size={20} color="#3d7eff" />
                         </View>
-                        <Text className="text-[13px] font-bold text-white/90 leading-tight">OBD 스캔하기</Text>
+                        <Text className="text-[12px] font-bold text-white/90 leading-tight">OBD 스캔</Text>
                         <View className="absolute bottom-0 left-0 h-[2px] w-full bg-accent-blue opacity-50" />
                     </TouchableOpacity>
-                </ScrollView>
+                </View>
 
                 {/* Input Area */}
-                <SafeAreaView edges={['bottom']} className="bg-deep-black/95 border-t border-white/5 px-4 pt-4 pb-2">
+                <SafeAreaView edges={['bottom']} className="bg-background-dark/95 border-t border-white/5 px-4 pt-4 pb-2">
                     <View className="flex-row items-center gap-2 bg-navy-dark/50 border border-white/10 rounded-[24px] p-1.5 pl-4 mb-2">
                         <TouchableOpacity className="w-8 h-8 items-center justify-center rounded-full active:bg-white/5">
                             <MaterialIcons name="add" size={24} color="rgba(255,255,255,0.3)" />

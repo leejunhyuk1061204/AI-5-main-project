@@ -62,7 +62,7 @@ export default function MainPage() {
                 {/* Added bottom padding for navigation bar space */}
                 <ScrollView
                     className="flex-1"
-                    contentContainerStyle={{ paddingBottom: 100 }}
+                    contentContainerStyle={{ paddingBottom: 250 }}
                     showsVerticalScrollIndicator={false}
                 >
 

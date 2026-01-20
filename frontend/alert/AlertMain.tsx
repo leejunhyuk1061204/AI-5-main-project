@@ -19,16 +19,7 @@ export default function AlertMain() {
 
             {/* Glow Effects */}
             {/* Glow Effects */}
-            <View
-                className="absolute top-0 right-0 w-64 h-64 bg-primary/10 rounded-full blur-3xl z-0"
-                pointerEvents={Platform.OS === 'web' ? undefined : 'none'}
-                style={Platform.OS === 'web' ? { pointerEvents: 'none' } : undefined}
-            />
-            <View
-                className="absolute bottom-0 left-0 w-64 h-64 bg-blue-900/10 rounded-full blur-3xl z-0"
-                pointerEvents={Platform.OS === 'web' ? undefined : 'none'}
-                style={Platform.OS === 'web' ? { pointerEvents: 'none' } : undefined}
-            />
+            {/* Glow Effects Removed */}
 
 
             {/* Main Content */}

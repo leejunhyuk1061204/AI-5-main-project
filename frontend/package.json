@@ -7,7 +7,8 @@
     "dev": "expo start --port 3000",
     "android": "expo start --android --port 3000",
     "ios": "expo start --ios --port 3000",
-    "web": "expo start --web --port 3000"
+    "web": "expo start --web --port 3000",
+    "postinstall": "patch-package"
   },
   "dependencies": {
     "@expo/metro-runtime": "~6.1.2",
@@ -32,6 +33,7 @@
     "react-dom": "19.1.0",
     "react-native": "0.81.5",
     "react-native-ble-manager": "^12.4.4",
+    "react-native-bluetooth-classic": "^1.73.0-rc.17",
     "react-native-gesture-handler": "~2.28.0",
     "react-native-reanimated": "~4.1.1",
     "react-native-safe-area-context": "~5.6.0",
@@ -42,6 +44,7 @@
   },
   "devDependencies": {
     "@types/react": "~19.1.10",
+    "patch-package": "^8.0.1",
     "react-refresh": "^0.18.0",
     "tailwindcss": "^3.3.2",
     "typescript": "~5.9.2"
