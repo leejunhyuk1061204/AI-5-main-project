@@ -7,6 +7,8 @@ import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+import ObdConnect from './ObdConnect';
+
 // 차량 데이터 타입
 export interface Vehicle {
     id: string;
@@ -30,6 +32,7 @@ export default function CarManage() {
     const navigation = useNavigation<any>();
     const [selectedVehicle, setSelectedVehicle] = useState<Vehicle>(vehicleList[0]);
     const [modalVisible, setModalVisible] = useState(false);
+    const [obdModalVisible, setObdModalVisible] = useState(false);
 
     // 저장된 대표 차량 불러오기
     useEffect(() => {
@@ -138,6 +141,17 @@ export default function CarManage() {
                             <MaterialIcons name="chevron-right" size={24} color="#475569" />
                         </TouchableOpacity>
 
+                        <TouchableOpacity
+                            className="flex-row items-center gap-4 px-5 py-4 active:bg-white/5 border-b border-white/5"
+                            onPress={() => setObdModalVisible(true)}
+                        >
+                            <View className="w-11 h-11 items-center justify-center rounded-xl bg-slate-800 shrink-0">
+                                <MaterialIcons name="bluetooth-connected" size={24} color="#cbd5e1" />
+                            </View>
+                            <Text className="text-slate-100 text-base font-medium flex-1">OBD 스캐너 등록</Text>
+                            <MaterialIcons name="chevron-right" size={24} color="#475569" />
+                        </TouchableOpacity>
+
                         <TouchableOpacity className="flex-row items-center gap-4 px-5 py-4 active:bg-white/5">
                             <View className="w-11 h-11 items-center justify-center rounded-xl bg-slate-800 shrink-0">
                                 <MaterialIcons name="edit" size={24} color="#cbd5e1" />
@@ -146,6 +160,15 @@ export default function CarManage() {
                             <MaterialIcons name="chevron-right" size={24} color="#475569" />
                         </TouchableOpacity>
                     </View>
+
+                    <ObdConnect
+                        visible={obdModalVisible}
+                        onClose={() => setObdModalVisible(false)}
+                        onConnected={(device) => {
+                            console.log('Connected to', device.name);
+                            // Handle post-connection logic (e.g., store device ID)
+                        }}
+                    />
 
                     {/* Register Button */}
                     <TouchableOpacity

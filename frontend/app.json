@@ -6,8 +6,9 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
-    "newArchEnabled": false,
+    "newArchEnabled": true,
     "splash": {
+      "image": "./assets/splash.png",
       "resizeMode": "contain",
       "backgroundColor": "#101922"
     },
@@ -20,15 +21,37 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#101922"
       },
-      "usesCleartextTraffic": true,
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.BLUETOOTH",
+        "android.permission.BLUETOOTH_ADMIN",
+        "android.permission.BLUETOOTH_CONNECT"
+      ],
+      "package": "com.lee_kang_hyun.frontend"
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-font"
-    ]
+      "expo-font",
+      "./plugins/withBleManager",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "bridgelessEnabled": false
+          },
+          "ios": {
+            "bridgelessEnabled": false
+          }
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "0c0101ed-c848-4c23-893d-64609323b4d4"
+      }
+    }
   }
 }
