@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, TouchableOpacity, Animated, Dimensions, ImageBackground, StyleSheet } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, TouchableOpacity, Dimensions, StyleSheet } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -15,30 +15,11 @@ export default function Filming() {
     const [permission, requestPermission] = useCameraPermissions();
     const [scanned, setScanned] = useState(false);
 
-    // Animation for scanning line
-    const scanAnim = useRef(new Animated.Value(0)).current;
-
     useEffect(() => {
         // Request camera permission on mount
         if (!permission) {
             requestPermission();
         }
-
-        // Start scanning animation
-        Animated.loop(
-            Animated.sequence([
-                Animated.timing(scanAnim, {
-                    toValue: 1,
-                    duration: 2500,
-                    useNativeDriver: true,
-                }),
-                Animated.timing(scanAnim, {
-                    toValue: 0,
-                    duration: 0, // Reset instantly
-                    useNativeDriver: true,
-                })
-            ])
-        ).start();
     }, [permission]);
 
     if (!permission) {
@@ -58,20 +39,14 @@ export default function Filming() {
         );
     }
 
-    // Interpolate scan animation for vertical movement
-    const translateY = scanAnim.interpolate({
-        inputRange: [0, 1],
-        outputRange: [-150, 150], // Adjust based on guide size
-    });
-
     return (
         <View className="flex-1 bg-black">
             <StatusBar style="light" />
 
-            {/* Top Bar with safe area top padding */}
+            {/* Top Bar with safe area top margin */}
             <View
-                className="flex-row items-center justify-between px-4 py-2 z-20 absolute top-0 left-0 right-0 bg-transparent"
-                style={{ paddingTop: insets.top }}
+                className="flex-row items-start justify-between px-4 z-20 absolute top-0 left-0 right-0 bg-transparent"
+                style={{ paddingTop: insets.top + 10 }}
             >
                 <TouchableOpacity
                     onPress={() => navigation.goBack()}
@@ -79,9 +54,11 @@ export default function Filming() {
                 >
                     <MaterialIcons name="arrow-back-ios" size={20} color="white" />
                 </TouchableOpacity>
+
                 <View className="items-center">
                     <Text className="text-white text-lg font-bold">AI 복합 진단</Text>
                 </View>
+
                 <TouchableOpacity className="w-10 h-10 items-center justify-center rounded-full active:bg-white/10">
                     <MaterialIcons name="help-outline" size={24} color="white" />
                 </TouchableOpacity>
@@ -93,42 +70,33 @@ export default function Filming() {
                     style={StyleSheet.absoluteFill}
                     facing="back"
                 >
-                    {/* Camera Grid Overlay (Simulated with simple borders for now or SVG) */}
-                    <View className="absolute inset-0 opacity-20" pointerEvents="none">
-                        {/* We can use simple lines or just leave it clean. Let's add the corners. */}
-                    </View>
+                    {/* Camera Grid Overlay - Clean view required */}
 
-                    {/* Corner Reticles */}
-                    <View className="absolute top-32 left-8 w-8 h-8 border-t-2 border-l-2 border-[#0d7ff2]/60 rounded-tl-lg" />
-                    <View className="absolute top-32 right-8 w-8 h-8 border-t-2 border-r-2 border-[#0d7ff2]/60 rounded-tr-lg" />
-                    <View className="absolute bottom-40 left-8 w-8 h-8 border-b-2 border-l-2 border-[#0d7ff2]/60 rounded-bl-lg" />
-                    <View className="absolute bottom-40 right-8 w-8 h-8 border-b-2 border-r-2 border-[#0d7ff2]/60 rounded-br-lg" />
+                    {/* Corner Reticles - 가시성 개선 (진하게) */}
+                    <View className="absolute top-32 left-8 w-10 h-10 border-t-[3px] border-l-[3px] border-[#0d7ff2] rounded-tl-xl shadow-lg shadow-blue-500/30" />
+                    <View className="absolute top-32 right-8 w-10 h-10 border-t-[3px] border-r-[3px] border-[#0d7ff2] rounded-tr-xl shadow-lg shadow-blue-500/30" />
+                    <View className="absolute bottom-48 left-8 w-10 h-10 border-b-[3px] border-l-[3px] border-[#0d7ff2] rounded-bl-xl shadow-lg shadow-blue-500/30" />
+                    <View className="absolute bottom-48 right-8 w-10 h-10 border-b-[3px] border-r-[3px] border-[#0d7ff2] rounded-br-xl shadow-lg shadow-blue-500/30" />
 
-                    {/* Central Guide (Tire Scan) */}
-                    <View className="absolute inset-0 items-center justify-center pointer-events-none">
-                        <View className="w-[80%] aspect-square max-w-[320px] rounded-full border-2 border-dashed border-[#0d7ff2]/70 items-center justify-center relative shadow-[0_0_30px_rgba(13,127,242,0.2)]">
+                    {/* Central Guide (Tire Scan) - 스캔 라인 제거 및 가시성 개선 */}
+                    <View className="absolute inset-0 items-center justify-center pointer-events-none pb-10">
+                        <View className="w-[85%] aspect-square max-w-[340px] rounded-full border-2 border-dashed border-[#0d7ff2] items-center justify-center relative shadow-[0_0_20px_rgba(13,127,242,0.3)] bg-blue-500/5">
                             {/* Inner Hub Guide */}
-                            <View className="w-[40%] aspect-square rounded-full border border-[#0d7ff2]/30" />
-
-                            {/* Scanning Laser Line */}
-                            <Animated.View
-                                className="absolute w-full h-[2px] bg-[#0d7ff2] shadow-[0_0_10px_#0d7ff2]"
-                                style={{ transform: [{ translateY }] }}
-                            />
+                            <View className="w-[45%] aspect-square rounded-full border border-[#0d7ff2]/50" />
 
                             {/* Floating Label */}
-                            <View className="absolute -top-10 bg-[#0d7ff2]/20 border border-[#0d7ff2]/40 px-3 py-1 rounded-full flex-row items-center gap-1.5 backdrop-blur-md">
+                            <View className="absolute -top-12 bg-[#0d7ff2]/20 border border-[#0d7ff2] px-4 py-1.5 rounded-full flex-row items-center gap-1.5 backdrop-blur-md">
                                 <MaterialIcons name="build" size={14} color="#0d7ff2" />
-                                <Text className="text-[#0d7ff2] text-xs font-bold tracking-widest uppercase">TIRE SCAN</Text>
+                                <Text className="text-[#0d7ff2] text-xs font-bold tracking-widest uppercase">SCAN</Text>
                             </View>
                         </View>
                     </View>
 
                     {/* Instruction Text */}
-                    <View className="absolute bottom-40 w-full px-6 items-center justify-center pointer-events-none">
-                        <View className="bg-black/60 px-6 py-3 rounded-xl items-center border border-white/10 backdrop-blur-md">
-                            <Text className="text-white font-medium text-base mb-0.5">가이드라인에 맞춰 부품을 촬영해 주세요</Text>
-                            <Text className="text-slate-300 text-xs">어두운 곳에서는 플래시를 켜주세요</Text>
+                    <View className="absolute bottom-44 w-full px-6 items-center justify-center pointer-events-none">
+                        <View className="bg-black/70 px-6 py-4 rounded-2xl items-center border border-white/20 backdrop-blur-md w-full max-w-sm">
+                            <Text className="text-white font-bold text-base mb-1 text-center">가이드라인에 맞춰 부품을 촬영해 주세요</Text>
+                            <Text className="text-slate-300 text-xs text-center">어두운 곳에서는 플래시를 켜주세요</Text>
                         </View>
                     </View>
                 </CameraView>
@@ -136,34 +104,31 @@ export default function Filming() {
 
             {/* Bottom Controls Area */}
             <View
-                className="absolute bottom-0 left-0 right-0 bg-[#050F1A]/80 backdrop-blur-md pt-6 rounded-t-3xl border-t border-white/5 z-20"
+                className="absolute bottom-0 left-0 right-0 bg-[#101922] pt-8 rounded-t-[32px] border-t border-white/10 z-20 shadow-2xl"
                 style={{ paddingBottom: insets.bottom + 20 }}
             >
-                <View className="flex-row items-center justify-between max-w-sm mx-auto w-full px-6">
+                <View className="flex-row items-center justify-between max-w-sm mx-auto w-full px-8">
                     {/* Flash Button */}
-                    <TouchableOpacity className="items-center gap-1">
-                        <View className="w-12 h-12 rounded-full bg-[#101922] border border-white/10 items-center justify-center active:bg-white/10">
-                            <MaterialIcons name="flash-on" size={20} color="white" />
+                    <TouchableOpacity className="items-center gap-2">
+                        <View className="w-12 h-12 rounded-full bg-[#1e2936] border border-white/10 items-center justify-center active:bg-white/20">
+                            <MaterialIcons name="flash-on" size={22} color="white" />
                         </View>
-                        <Text className="text-[10px] text-slate-400 font-medium">플래시</Text>
+                        <Text className="text-[11px] text-slate-400 font-medium tracking-wide">플래시</Text>
                     </TouchableOpacity>
 
-                    {/* Shutter Button */}
-                    <TouchableOpacity className="relative w-20 h-20 items-center justify-center active:scale-95 transition-all">
-                        <LinearGradient
-                            colors={['#0d7ff2', '#2563eb']}
-                            className="w-16 h-16 rounded-full shadow-lg border-2 border-white/20 z-10"
-                        />
-                        <View className="absolute w-full h-full rounded-full border-4 border-white/10" />
-                        <View className="absolute w-full h-full rounded-full bg-primary/20 blur-lg" />
+                    {/* Shutter Button - Design Update */}
+                    <TouchableOpacity className="relative items-center justify-center active:scale-95 transition-all -mt-4">
+                        <View className="w-20 h-20 rounded-full border-[3px] border-white/20 items-center justify-center bg-[#101922]">
+                            <View className="w-16 h-16 rounded-full bg-[#0d7ff2] shadow-lg shadow-blue-500/40 border-[3px] border-[#1e2936]" />
+                        </View>
                     </TouchableOpacity>
 
                     {/* Switch Mode/Camera */}
-                    <TouchableOpacity className="items-center gap-1">
-                        <View className="w-12 h-12 rounded-full bg-[#101922] border border-white/10 items-center justify-center active:bg-white/10">
-                            <MaterialIcons name="flip-camera-ios" size={20} color="white" />
+                    <TouchableOpacity className="items-center gap-2">
+                        <View className="w-12 h-12 rounded-full bg-[#1e2936] border border-white/10 items-center justify-center active:bg-white/20">
+                            <MaterialIcons name="flip-camera-ios" size={22} color="white" />
                         </View>
-                        <Text className="text-[10px] text-slate-400 font-medium">전환</Text>
+                        <Text className="text-[11px] text-slate-400 font-medium tracking-wide">전환</Text>
                     </TouchableOpacity>
                 </View>
             </View>
