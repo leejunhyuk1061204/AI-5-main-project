@@ -22,32 +22,52 @@ TARGETS = [
     ("Hyundai", "2011", "Azera%20V6-3.3L"),
     ("Hyundai", "2012", "Azera%20V6-3.3L"),
     ("Hyundai", "2013", "Azera%20V6-3.3L"),
-    ("Hyundai", "2010", "Tucson%20L4-2.0L"),
-    ("Hyundai", "2011", "Tucson%20L4-2.0L"),
-    ("Hyundai", "2012", "Tucson%20L4-2.0L"),
-    ("Hyundai", "2013", "Tucson%20L4-2.0L"),
+    
+    # Tucson (Corrected: Requires FWD/AWD)
+    ("Hyundai", "2010", "Tucson%20FWD%20L4-2.4L"),
+    ("Hyundai", "2011", "Tucson%20FWD%20L4-2.0L"),
+    ("Hyundai", "2012", "Tucson%20FWD%20L4-2.0L"),
+    ("Hyundai", "2013", "Tucson%20FWD%20L4-2.0L"),
+    ("Hyundai", "2010", "Tucson%20AWD%20L4-2.4L"),
+    ("Hyundai", "2011", "Tucson%20AWD%20L4-2.4L"),
+    ("Hyundai", "2012", "Tucson%20AWD%20L4-2.4L"),
+    ("Hyundai", "2013", "Tucson%20AWD%20L4-2.4L"),
+    
     ("Hyundai", "2010", "Santa%20Fe%20FWD%20L4-2.4L"),
     ("Hyundai", "2011", "Santa%20Fe%20FWD%20L4-2.4L"),
     ("Hyundai", "2012", "Santa%20Fe%20FWD%20L4-2.4L"),
     ("Hyundai", "2013", "Santa%20Fe%20FWD%20L4-2.4L"),
-    ("Hyundai", "2010", "Genesis%20V6-3.8L"),
-    ("Hyundai", "2011", "Genesis%20V6-3.8L"),
-    ("Hyundai", "2012", "Genesis%20V6-3.8L"),
-    ("Hyundai", "2013", "Genesis%20V6-3.8L"),
+    
+    # Genesis (Corrected: Requires Sedan/Coupe)
+    ("Hyundai", "2010", "Genesis%20Sedan%20V6-3.8L"),
+    ("Hyundai", "2011", "Genesis%20Sedan%20V6-3.8L"),
+    ("Hyundai", "2012", "Genesis%20Sedan%20V6-3.8L"),
+    ("Hyundai", "2013", "Genesis%20Sedan%20V6-3.8L"),
+    ("Hyundai", "2010", "Genesis%20Coupe%20V6-3.8L"),
+    ("Hyundai", "2011", "Genesis%20Coupe%20V6-3.8L"),
+    ("Hyundai", "2012", "Genesis%20Coupe%20V6-3.8L"),
+    ("Hyundai", "2013", "Genesis%20Coupe%20V6-3.8L"),
 
     # === 기아 (Kia) ===
     ("Kia", "2010", "Optima%20L4-2.4L"),
     ("Kia", "2011", "Optima%20L4-2.4L"),
     ("Kia", "2012", "Optima%20L4-2.4L"),
     ("Kia", "2013", "Optima%20L4-2.4L"),
-    ("Kia", "2010", "Sorento%20V6-3.5L"),
+    
+    # Sorento (Corrected: 2010 missing, 2011-2013 requires 2WD/4WD and specific engine)
+    ("Kia", "2011", "Sorento%202WD%20V6-3.5L"),
+    ("Kia", "2012", "Sorento%202WD%20V6-3.5L"),
+    ("Kia", "2013", "Sorento%202WD%20V6-3.5L"),
     ("Kia", "2011", "Sorento%202WD%20L4-2.4L"),
-    ("Kia", "2012", "Sorento%202WD%20L4-2.4L"),
-    ("Kia", "2013", "Sorento%202WD%20L4-2.4L"),
-    ("Kia", "2010", "Sportage%20L4-2.0L"),
+    ("Kia", "2012", "Sorento%202WD%20L4-2.4L%20VIN%206%20%28GDI%29"),
+    ("Kia", "2013", "Sorento%202WD%20L4-2.4L%20VIN%206%20%28GDI%29"),
+    
+    # Sportage (Corrected: Requires 2WD/4WD)
+    ("Kia", "2010", "Sportage%202WD%20L4-2.0L"),
     ("Kia", "2011", "Sportage%202WD%20L4-2.4L"),
     ("Kia", "2012", "Sportage%202WD%20L4-2.4L"),
     ("Kia", "2013", "Sportage%202WD%20L4-2.4L"),
+    
     ("Kia", "2010", "Sedona%20V6-3.8L"),
     ("Kia", "2011", "Sedona%20V6-3.5L"),
     ("Kia", "2012", "Sedona%20V6-3.5L"),
