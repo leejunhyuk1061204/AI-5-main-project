@@ -1,0 +1,263 @@
+diff --git a/node_modules/react-native-ble-manager/android/src/main/java/it/innove/BleManager.java b/node_modules/react-native-ble-manager/android/src/main/java/it/innove/BleManager.java
+index d5fd4c2..0dde1f4 100644
+--- a/node_modules/react-native-ble-manager/android/src/main/java/it/innove/BleManager.java
++++ b/node_modules/react-native-ble-manager/android/src/main/java/it/innove/BleManager.java
+@@ -32,6 +32,7 @@ import com.facebook.react.bridge.ReadableArray;
+ import com.facebook.react.bridge.ReadableMap;
+ import com.facebook.react.bridge.WritableArray;
+ import com.facebook.react.bridge.WritableMap;
++import com.facebook.react.modules.core.DeviceEventManagerModule;
+ 
+ import java.lang.reflect.Method;
+ import java.util.Iterator;
+@@ -131,7 +132,8 @@ public class BleManager extends NativeBleManagerSpec {
+                         stringState = "turning_on";
+                         break;
+                     default:
+-                        // should not happen as per https://developer.android.com/reference/android/bluetooth/BluetoothAdapter#EXTRA_STATE
++                        // should not happen as per
++                        // https://developer.android.com/reference/android/bluetooth/BluetoothAdapter#EXTRA_STATE
+                         stringState = "off";
+                         break;
+                 }
+@@ -199,7 +201,8 @@ public class BleManager extends NativeBleManagerSpec {
+                 } else {
+                     bluetoothDevice = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
+                 }
+-                if (bondRequest != null && bondRequest.uuid.equals(bluetoothDevice.getAddress()) && bondRequest.pin != null) {
++                if (bondRequest != null && bondRequest.uuid.equals(bluetoothDevice.getAddress())
++                        && bondRequest.pin != null) {
+                     bluetoothDevice.setPin(bondRequest.pin.getBytes());
+                     bluetoothDevice.createBond();
+                 }
+@@ -269,8 +272,10 @@ public class BleManager extends NativeBleManagerSpec {
+         IntentFilter intentFilter = new IntentFilter(BluetoothDevice.ACTION_PAIRING_REQUEST);
+         intentFilter.setPriority(IntentFilter.SYSTEM_HIGH_PRIORITY);
+         if (Build.VERSION.SDK_INT >= 34) {
+-            // Google in 2023 decides that flag RECEIVER_NOT_EXPORTED or RECEIVER_EXPORTED should be explicit set SDK 34(UPSIDE_DOWN_CAKE) on registering receivers.
+-            // Also the export flags are available on Android 8 and higher, should be used with caution so that don't break compability with that devices.
++            // Google in 2023 decides that flag RECEIVER_NOT_EXPORTED or RECEIVER_EXPORTED
++            // should be explicit set SDK 34(UPSIDE_DOWN_CAKE) on registering receivers.
++            // Also the export flags are available on Android 8 and higher, should be used
++            // with caution so that don't break compability with that devices.
+             context.registerReceiver(mReceiver, filter, Context.RECEIVER_EXPORTED);
+             context.registerReceiver(mReceiver, intentFilter, Context.RECEIVER_EXPORTED);
+         } else {
+@@ -317,7 +322,7 @@ public class BleManager extends NativeBleManagerSpec {
+ 
+     @ReactMethod
+     public void scan(ReadableMap scanningOptions,
+-                     Callback callback) {
++            Callback callback) {
+         Log.d(LOG_TAG, "scan");
+         if (getBluetoothAdapter() == null) {
+             Log.d(LOG_TAG, "No bluetooth support");
+@@ -330,7 +335,7 @@ public class BleManager extends NativeBleManagerSpec {
+ 
+         synchronized (peripherals) {
+             for (Iterator<Map.Entry<String, Peripheral>> iterator = peripherals.entrySet().iterator(); iterator
+-                    .hasNext(); ) {
++                    .hasNext();) {
+                 Map.Entry<String, Peripheral> entry = iterator.next();
+                 if (!(entry.getValue().isConnected() || entry.getValue().isConnecting())) {
+                     iterator.remove();
+@@ -377,7 +382,6 @@ public class BleManager extends NativeBleManagerSpec {
+         }
+     }
+ 
+-
+     @SuppressLint("MissingPermission")
+     @ReactMethod
+     public void createBond(String peripheralUUID, String peripheralPin, Callback callback) {
+@@ -400,7 +404,8 @@ public class BleManager extends NativeBleManagerSpec {
+             return;
+         } else if (peripheral.getDevice().createBond()) {
+             Log.d(LOG_TAG, "Request bond successful for: " + peripheralUUID);
+-            bondRequest = new BondRequest(peripheralUUID, peripheralPin, callback); // request bond success, waiting for broadcast
++            bondRequest = new BondRequest(peripheralUUID, peripheralPin, callback); // request bond success, waiting for
++                                                                                    // broadcast
+             return;
+         }
+ 
+@@ -454,7 +459,7 @@ public class BleManager extends NativeBleManagerSpec {
+ 
+     @ReactMethod
+     public void startNotificationWithBuffer(String deviceUUID, String serviceUUID, String characteristicUUID,
+-                                            double bufferLength, Callback callback) {
++            double bufferLength, Callback callback) {
+         Log.d(LOG_TAG, "startNotification");
+         if (serviceUUID == null || characteristicUUID == null) {
+             callback.invoke("ServiceUUID and characteristicUUID required.");
+@@ -508,7 +513,7 @@ public class BleManager extends NativeBleManagerSpec {
+ 
+     @ReactMethod
+     public void write(String deviceUUID, String serviceUUID, String characteristicUUID, ReadableArray message,
+-                      double maxByteSize, Callback callback) {
++            double maxByteSize, Callback callback) {
+         Log.d(LOG_TAG, "Write to: " + deviceUUID);
+         if (serviceUUID == null || characteristicUUID == null) {
+             callback.invoke("ServiceUUID and characteristicUUID required.");
+@@ -533,7 +538,7 @@ public class BleManager extends NativeBleManagerSpec {
+ 
+     @ReactMethod
+     public void writeWithoutResponse(String deviceUUID, String serviceUUID, String characteristicUUID,
+-                                     ReadableArray message, double maxByteSize, double queueSleepTime, Callback callback) {
++            ReadableArray message, double maxByteSize, double queueSleepTime, Callback callback) {
+         Log.d(LOG_TAG, "Write without response to: " + deviceUUID);
+         if (serviceUUID == null || characteristicUUID == null) {
+             callback.invoke("ServiceUUID and characteristicUUID required.");
+@@ -548,7 +553,8 @@ public class BleManager extends NativeBleManagerSpec {
+                 }
+                 Log.d(LOG_TAG, "Message(" + decoded.length + "): " + bytesToHex(decoded));
+                 peripheral.write(UUIDHelper.uuidFromString(serviceUUID), UUIDHelper.uuidFromString(characteristicUUID),
+-                        decoded, (int) maxByteSize, (int) queueSleepTime, callback, BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE);
++                        decoded, (int) maxByteSize, (int) queueSleepTime, callback,
++                        BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE);
+             } else {
+                 callback.invoke("Peripheral not connected", null);
+             }
+@@ -576,7 +582,8 @@ public class BleManager extends NativeBleManagerSpec {
+     }
+ 
+     @ReactMethod
+-    public void readDescriptor(String deviceUUID, String serviceUUID, String characteristicUUID, String descriptorUUID, Callback callback) {
++    public void readDescriptor(String deviceUUID, String serviceUUID, String characteristicUUID, String descriptorUUID,
++            Callback callback) {
+         Log.d(LOG_TAG, "Read descriptor from: " + deviceUUID);
+         if (serviceUUID == null || characteristicUUID == null || descriptorUUID == null) {
+             callback.invoke("ServiceUUID, CharacteristicUUID and descriptorUUID required.", null);
+@@ -598,7 +605,8 @@ public class BleManager extends NativeBleManagerSpec {
+     }
+ 
+     @ReactMethod
+-    public void writeDescriptor(String deviceUUID, String serviceUUID, String characteristicUUID, String descriptorUUID, ReadableArray message, Callback callback) {
++    public void writeDescriptor(String deviceUUID, String serviceUUID, String characteristicUUID, String descriptorUUID,
++            ReadableArray message, Callback callback) {
+         Log.d(LOG_TAG, "Write descriptor from: " + deviceUUID);
+         if (serviceUUID == null || characteristicUUID == null || descriptorUUID == null) {
+             callback.invoke("ServiceUUID, CharacteristicUUID and descriptorUUID required.", null);
+@@ -616,7 +624,9 @@ public class BleManager extends NativeBleManagerSpec {
+                 decoded[i] = Integer.valueOf(message.getInt(i)).byteValue();
+             }
+             Log.d(LOG_TAG, "Message(" + decoded.length + "): " + bytesToHex(decoded));
+-            peripheral.writeDescriptor(UUIDHelper.uuidFromString(serviceUUID), UUIDHelper.uuidFromString(characteristicUUID), UUIDHelper.uuidFromString(descriptorUUID), decoded, callback);
++            peripheral.writeDescriptor(UUIDHelper.uuidFromString(serviceUUID),
++                    UUIDHelper.uuidFromString(characteristicUUID), UUIDHelper.uuidFromString(descriptorUUID), decoded,
++                    callback);
+         }
+     }
+ 
+@@ -714,7 +724,8 @@ public class BleManager extends NativeBleManagerSpec {
+                     break;
+                 case BluetoothAdapter.STATE_OFF:
+                 default:
+-                    // should not happen as per https://developer.android.com/reference/android/bluetooth/BluetoothAdapter#getState()
++                    // should not happen as per
++                    // https://developer.android.com/reference/android/bluetooth/BluetoothAdapter#getState()
+                     state = "off";
+                     if (scanManager != null) {
+                         scanManager.setScanning(false);
+@@ -945,7 +956,6 @@ public class BleManager extends NativeBleManagerSpec {
+         return value;
+     }
+ 
+-
+     private Peripheral retrieveOrCreatePeripheral(String peripheralUUID) {
+         Peripheral peripheral = peripherals.get(peripheralUUID);
+         if (peripheral == null) {
+@@ -967,6 +977,28 @@ public class BleManager extends NativeBleManagerSpec {
+         return peripheral;
+     }
+ 
++    private void sendEvent(String eventName, @Nullable WritableMap params) {
++        getReactContext()
++                .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
++                .emit(eventName, params);
++    }
++
++    public void emitOnDiscoverPeripheral(WritableMap map) {
++        sendEvent("BleManagerDiscoverPeripheral", map);
++    }
++
++    public void emitOnStopScan(WritableMap map) {
++        sendEvent("BleManagerStopScan", map);
++    }
++
++    public void emitOnDidUpdateState(WritableMap map) {
++        sendEvent("BleManagerDidUpdateState", map);
++    }
++
++    public void emitOnPeripheralDidBond(WritableMap map) {
++        sendEvent("BleManagerPeripheralDidBond", map);
++    }
++
+     @ReactMethod
+     public void addListener(String eventName) {
+         // Keep: Required for RN built in Event Emitter Calls.
+@@ -985,7 +1017,8 @@ public class BleManager extends NativeBleManagerSpec {
+             Log.e(LOG_TAG, "Receiver not registered or already unregistered", e);
+         }
+         try {
+-            // Disconnect all known peripherals, otherwise android system will think we are still connected
++            // Disconnect all known peripherals, otherwise android system will think we are
++            // still connected
+             // while we have lost the gatt instance
+             disconnectPeripherals();
+         } catch (Exception e) {
+@@ -993,7 +1026,8 @@ public class BleManager extends NativeBleManagerSpec {
+         }
+ 
+         if (scanManager != null) {
+-            // Stop scan in case one was started to stop events from being emitted after destroy
++            // Stop scan in case one was started to stop events from being emitted after
++            // destroy
+             scanManager.stopScan(args -> {
+             });
+         }
+diff --git a/node_modules/react-native-ble-manager/dist/cjs/index.js b/node_modules/react-native-ble-manager/dist/cjs/index.js
+index 445fe4c..4090871 100644
+--- a/node_modules/react-native-ble-manager/dist/cjs/index.js
++++ b/node_modules/react-native-ble-manager/dist/cjs/index.js
+@@ -1,16 +1,16 @@
+ "use strict";
+-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
++var __createBinding = (this && this.__createBinding) || (Object.create ? (function (o, m, k, k2) {
+     if (k2 === undefined) k2 = k;
+     var desc = Object.getOwnPropertyDescriptor(m, k);
+     if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+-      desc = { enumerable: true, get: function() { return m[k]; } };
++        desc = { enumerable: true, get: function () { return m[k]; } };
+     }
+     Object.defineProperty(o, k2, desc);
+-}) : (function(o, m, k, k2) {
++}) : (function (o, m, k, k2) {
+     if (k2 === undefined) k2 = k;
+     o[k2] = m[k];
+ }));
+-var __exportStar = (this && this.__exportStar) || function(m, exports) {
++var __exportStar = (this && this.__exportStar) || function (m, exports) {
+     for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
+ };
+ Object.defineProperty(exports, "__esModule", { value: true });
+@@ -18,7 +18,7 @@ const react_native_1 = require("react-native");
+ const types_1 = require("./types");
+ __exportStar(require("./types"), exports);
+ // @ts-expect-error This applies the turbo module version only when turbo is enabled for backwards compatibility.
+-const isTurboModuleEnabled = (global === null || global === void 0 ? void 0 : global.__turboModuleProxy) != null;
++const isTurboModuleEnabled = false; // PATCHED: Force Legacy Bridge Mode for Expo 52
+ const BleManagerModule = isTurboModuleEnabled
+     ? require('./NativeBleManager').default
+     : react_native_1.NativeModules.BleManager;
+diff --git a/node_modules/react-native-ble-manager/dist/esm/index.js b/node_modules/react-native-ble-manager/dist/esm/index.js
+index 30aa124..51c50e7 100644
+--- a/node_modules/react-native-ble-manager/dist/esm/index.js
++++ b/node_modules/react-native-ble-manager/dist/esm/index.js
+@@ -2,7 +2,7 @@ import { NativeModules } from 'react-native';
+ import { BleScanCallbackType, BleScanMatchCount, BleScanMatchMode, BleScanMode, } from './types';
+ export * from './types';
+ // @ts-expect-error This applies the turbo module version only when turbo is enabled for backwards compatibility.
+-const isTurboModuleEnabled = (global === null || global === void 0 ? void 0 : global.__turboModuleProxy) != null;
++const isTurboModuleEnabled = false; // PATCHED: Force Legacy Bridge Mode for Expo 52
+ const BleManagerModule = isTurboModuleEnabled
+     ? require('./NativeBleManager').default
+     : NativeModules.BleManager;

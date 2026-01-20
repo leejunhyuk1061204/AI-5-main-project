@@ -55,7 +55,7 @@ export default function AlertSetting() {
     );
 
     return (
-        <View className="flex-1 bg-[#050505]">
+        <View className="flex-1 bg-background-dark">
             <StatusBar style="light" />
             <SafeAreaView className="flex-1" edges={['top']}>
                 {/* Header */}

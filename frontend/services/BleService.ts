@@ -32,9 +32,15 @@ class BleService {
         try {
             await BleManager.start({ showAlert: false });
             this.isInitialized = true;
-            console.log('BleManager initialized');
+            console.log('[BleService] BleManager initialized');
+
+            // DEBUG: Global listener to see if ANY event comes through
+            DeviceEventEmitter.addListener('BleManagerDiscoverPeripheral', (data) => {
+                console.log('[BleService DEBUG] Global Listener Event:', data);
+            });
+
         } catch (error) {
-            console.error('Failed to initialize BleManager', error);
+            console.error('[BleService] Failed to initialize BleManager', error);
         }
     }
 
@@ -64,17 +70,27 @@ class BleService {
     }
 
     async startScan() {
+        // Debug: Check Permissions
         const hasPermission = await this.requestPermissions();
-        if (!hasPermission) return;
+        console.log('[BleService] Permissions granted:', hasPermission);
+        // Alert.alert('Debug', `Permissions granted: ${hasPermission}`); // Uncomment if console is hard to see
 
+        if (!hasPermission) {
+            Alert.alert('Permission Error', 'Bluetooth permissions are required.');
+            return;
+        }
+
+        console.log('[BleService] Starting scan with defaults...');
         // Correct v12+ signature: scan(options: ScanOptions)
         return BleManager.scan({
             serviceUUIDs: [],
             seconds: 5,
             allowDuplicates: true,
-            // scanMode: 2, // Low Latency / Aggressive (Removed for compatibility)
-            // matchMode: 1, // Aggressive (Removed)
-            // callbackType: 1 // All Matches (Removed)
+        }).then(() => {
+            console.log('[BleService] Scan started successfully');
+        }).catch(err => {
+            console.error('[BleService] Scan failed to start', err);
+            Alert.alert('Scan Error', `Failed to start scan: ${err}`);
         });
     }
 
@@ -84,6 +100,14 @@ class BleService {
 
     connect(id: string) {
         return BleManager.connect(id);
+    }
+
+    createBond(id: string) {
+        return BleManager.createBond(id);
+    }
+
+    removeBond(id: string) {
+        return BleManager.removeBond(id);
     }
 
     disconnect(id: string) {
@@ -96,6 +120,14 @@ class BleService {
 
     async startNotification(id: string, serviceUUID: string, charUUID: string) {
         await BleManager.startNotification(id, serviceUUID, charUUID);
+    }
+
+    getBondedPeripherals() {
+        return BleManager.getBondedPeripherals();
+    }
+
+    isPeripheralConnected(id: string, serviceUUIDs: string[] = []) {
+        return BleManager.isPeripheralConnected(id, serviceUUIDs);
     }
 
     addListener(eventType: string, listener: (data: any) => void) {

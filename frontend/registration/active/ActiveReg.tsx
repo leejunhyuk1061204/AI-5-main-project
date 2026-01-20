@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, ImageBackground } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -14,8 +14,11 @@ import Animated, {
     Easing
 } from 'react-native-reanimated';
 
+import ObdConnect from '../../setting/ObdConnect';
+
 export default function ActiveReg({ navigation }: any) {
     const insets = useSafeAreaInsets();
+    const [obdModalVisible, setObdModalVisible] = useState(false);
 
     // Animations
     const pulseScale = useSharedValue(1);
@@ -198,7 +201,7 @@ export default function ActiveReg({ navigation }: any) {
                 <TouchableOpacity
                     className="w-full h-14"
                     activeOpacity={0.9}
-                    onPress={() => navigation.navigate('ActiveLoading')}
+                    onPress={() => setObdModalVisible(true)}
                 >
                     <LinearGradient
                         colors={['#0d7ff2', '#3b82f6', '#06b6d4']}
@@ -228,6 +231,19 @@ export default function ActiveReg({ navigation }: any) {
                     </LinearGradient>
                 </TouchableOpacity>
             </View>
+
+            <ObdConnect
+                visible={obdModalVisible}
+                onClose={() => setObdModalVisible(false)}
+                onConnected={(device) => {
+                    console.log('Connected during registration:', device.name);
+                    setObdModalVisible(false);
+                    // Add a small delay for better UX before transitioning
+                    setTimeout(() => {
+                        navigation.navigate('ActiveLoading');
+                    }, 500);
+                }}
+            />
 
         </View>
     );

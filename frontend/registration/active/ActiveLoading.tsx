@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import { View, Text, TouchableOpacity, ImageBackground, Dimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import { CommonActions } from '@react-navigation/native';
+import { CommonActions, useRoute, RouteProp } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
@@ -14,10 +14,19 @@ import Animated, {
     Easing
 } from 'react-native-reanimated';
 
+import ObdService from '../../services/ObdService';
+
 const { width } = Dimensions.get('window');
+
+// Route 파라미터 타입 정의
+type ActiveLoadingParams = {
+    vehicleId?: string;
+};
 
 export default function ActiveLoading({ navigation }: any) {
     const insets = useSafeAreaInsets();
+    const route = useRoute<RouteProp<{ ActiveLoading: ActiveLoadingParams }, 'ActiveLoading'>>();
+    const vehicleId = route.params?.vehicleId;
 
     // Animations
     const scanLineY = useSharedValue(0);
@@ -25,6 +34,18 @@ export default function ActiveLoading({ navigation }: any) {
     const rotate = useSharedValue(0);
 
     useEffect(() => {
+        // vehicleId가 있으면 ObdService에 설정 (배치 업로드에 필요)
+        if (vehicleId) {
+            console.log(`[ActiveLoading] Setting vehicleId: ${vehicleId}`);
+            ObdService.setVehicleId(vehicleId);
+        } else {
+            console.warn('[ActiveLoading] No vehicleId provided - batch upload will be disabled');
+        }
+
+        // Start Background Polling (No UI Update)
+        console.log("Starting Background OBD Polling...");
+        ObdService.startPolling(1000);
+
         // Scanner Line Animation
         scanLineY.value = withRepeat(
             withTiming(1, { duration: 3000, easing: Easing.linear }),
@@ -48,12 +69,17 @@ export default function ActiveLoading({ navigation }: any) {
             -1,
             false
         );
-        // Auto-navigate to success screen after 5 seconds
+        // Auto-navigate to result screen after 5 seconds
         const timer = setTimeout(() => {
-            navigation.replace('ActiveSuccess');
+            ObdService.stopPolling();
+            console.log("Stopped Background OBD Polling.");
+            navigation.replace('ObdResult');
         }, 5000);
 
-        return () => clearTimeout(timer);
+        return () => {
+            clearTimeout(timer);
+            ObdService.stopPolling();
+        };
     }, []);
 
     const animatedScanLineStyle = useAnimatedStyle(() => ({

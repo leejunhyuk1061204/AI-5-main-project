@@ -20,6 +20,7 @@ import RegisterMain from './registration/RegisterMain';
 import ActiveReg from './registration/active/ActiveReg';
 import ActiveLoading from './registration/active/ActiveLoading';
 import ActiveSuccess from './registration/active/ActiveSuccess';
+import ObdResult from './registration/active/ObdResult';
 import PassiveReg from './registration/passive/PassiveReg';
 import MyPage from './setting/MyPage';
 import DiagMain from './diagnosis/DiagMain';
@@ -139,6 +140,7 @@ export default function App() {
           <Stack.Screen name="ActiveReg" component={ActiveReg} />
           <Stack.Screen name="ActiveLoading" component={ActiveLoading} />
           <Stack.Screen name="ActiveSuccess" component={ActiveSuccess} />
+          <Stack.Screen name="ObdResult" component={ObdResult} />
           <Stack.Screen name="PassiveReg" component={PassiveReg} />
           <Stack.Screen
             name="DiagMain"
