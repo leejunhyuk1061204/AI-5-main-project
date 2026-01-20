@@ -156,6 +156,14 @@ public class UserService {
         userRepository.save(user);
     }
 
+    // FCM 토큰 조회 (내부 서비스용)
+    @Transactional(readOnly = true)
+    public String getFcmToken(UUID userId) {
+        return userRepository.findById(userId)
+                .map(User::getFcmToken)
+                .orElse(null);
+    }
+
     // 사용자 회원 탈퇴 (Soft Delete)
     public void deleteUser(UUID userId) {
         User user = userRepository.findById(userId)

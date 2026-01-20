@@ -44,6 +44,7 @@ public class VehicleDto {
         private String nickname;
         private String memo;
         private String carNumber;
+        private String vin;
         private String obdDeviceId;
 
         public Vehicle toEntity(UUID userId) {
@@ -55,6 +56,7 @@ public class VehicleDto {
                     .fuelType(fuelType)
                     .totalMileage(totalMileage)
                     .carNumber(carNumber)
+                    .vin(vin)
                     .nickname(nickname)
                     .memo(memo)
                     .registrationSource(RegistrationSource.MANUAL)

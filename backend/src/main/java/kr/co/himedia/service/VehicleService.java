@@ -23,6 +23,12 @@ public class VehicleService {
     // 차량 수동 등록 (첫 차량일 경우 대표 차량 설정)
     @Transactional
     public VehicleDto.Response registerVehicle(UUID userId, VehicleDto.RegistrationRequest request) {
+        // VIN 중복 체크 (VIN이 입력된 경우에만)
+        if (request.getVin() != null && !request.getVin().isBlank() &&
+                vehicleRepository.existsByVinAndDeletedAtIsNull(request.getVin())) {
+            throw new BaseException(ErrorCode.DUPLICATE_VIN);
+        }
+
         // 첫 차량 등록 시 자동으로 대표 차량으로 설정
         boolean hasVehicles = !vehicleRepository.findByUserIdAndDeletedAtIsNull(userId).isEmpty();
 
@@ -38,6 +44,11 @@ public class VehicleService {
     // OBD 기반 차량 자동 등록
     @Transactional
     public VehicleDto.Response registerVehicleByObd(UUID userId, VehicleDto.ObdRegistrationRequest request) {
+        // VIN 중복 체크
+        if (vehicleRepository.existsByVinAndDeletedAtIsNull(request.getVin())) {
+            throw new BaseException(ErrorCode.DUPLICATE_VIN);
+        }
+
         // 첫 차량 등록 시 자동으로 대표 차량으로 설정
         boolean hasVehicles = !vehicleRepository.findByUserIdAndDeletedAtIsNull(userId).isEmpty();
 

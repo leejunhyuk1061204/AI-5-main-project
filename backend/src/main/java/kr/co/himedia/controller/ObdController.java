@@ -2,6 +2,7 @@ package kr.co.himedia.controller;
 
 import java.util.List;
 import java.util.UUID;
+import kr.co.himedia.dto.common.VehicleIdRequest;
 import kr.co.himedia.dto.obd.ConnectionStatusDto;
 import kr.co.himedia.dto.obd.ObdLogDto;
 import kr.co.himedia.service.ObdService;
@@ -41,9 +42,9 @@ public class ObdController {
      * 앱 수동 연결 해제
      * 사용자가 앱에서 수동으로 연결을 끊었을 때, 현재 세션을 즉시 종료 처리합니다.
      */
-    @PostMapping("/status/{vehicleId}/disconnect")
-    public ResponseEntity<ApiResponse<Void>> disconnectVehicle(@PathVariable("vehicleId") UUID vehicleId) {
-        obdService.disconnectVehicle(vehicleId);
+    @PostMapping("/status/disconnect")
+    public ResponseEntity<ApiResponse<Void>> disconnectVehicle(@RequestBody VehicleIdRequest req) {
+        obdService.disconnectVehicle(req.getVehicleId());
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 }

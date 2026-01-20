@@ -16,7 +16,6 @@ import java.util.UUID;
 public class DiagSession {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.AUTO)
     @Column(name = "diag_session_id")
     private UUID diagSessionId;
 
@@ -34,19 +33,25 @@ public class DiagSession {
     @Column(name = "status")
     private DiagStatus status;
 
+    @Column(name = "progress_message")
+    private String progressMessage;
+
     @CreationTimestamp
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
     public DiagSession(UUID vehiclesId, UUID tripId, DiagTriggerType triggerType) {
+        this.diagSessionId = UUID.randomUUID();
         this.vehiclesId = vehiclesId;
         this.tripId = tripId;
         this.triggerType = triggerType;
         this.status = DiagStatus.PENDING;
+        this.progressMessage = "진단 대기 중";
     }
 
-    public void updateStatus(DiagStatus status) {
+    public void updateStatus(DiagStatus status, String message) {
         this.status = status;
+        this.progressMessage = message;
     }
 
     public enum DiagTriggerType {

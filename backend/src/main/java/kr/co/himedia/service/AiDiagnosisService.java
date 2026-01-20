@@ -1,29 +1,26 @@
 package kr.co.himedia.service;
 
-import kr.co.himedia.dto.ai.DiagnosisRequestDto;
-import kr.co.himedia.dto.ai.DtcDto;
-import kr.co.himedia.entity.DtcHistory;
-import kr.co.himedia.repository.DtcHistoryRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import kr.co.himedia.dto.ai.*;
+import kr.co.himedia.entity.*;
+import kr.co.himedia.entity.DiagSession.DiagStatus;
+import kr.co.himedia.entity.DiagSession.DiagTriggerType;
+import kr.co.himedia.repository.*;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.io.FileSystemResource;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.LinkedMultiValueMap;
-import org.springframework.util.MultiValueMap;
-import org.springframework.web.client.RestTemplate;
 
-import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
+import java.util.concurrent.TimeUnit;
+
+import java.util.stream.Collectors;
 
 /**
  * AI 진단 및 DTC 처리 서비스
@@ -35,110 +32,420 @@ public class AiDiagnosisService {
 
     private final DtcHistoryRepository dtcHistoryRepository;
     private final RabbitTemplate rabbitTemplate;
-    private final RestTemplate restTemplate;
+    private final KnowledgeService knowledgeService;
+    private final ObdLogRepository obdLogRepository;
+    private final VehicleRepository vehicleRepository;
+    private final VehicleConsumableRepository vehicleConsumableRepository;
+    private final DiagSessionRepository diagSessionRepository;
+    private final DiagResultRepository diagResultRepository;
+    private final AiClient aiClient;
+    private final ObjectMapper objectMapper;
+
+    private final FcmService fcmService;
+    private final UserService userService;
 
     @Autowired
-    public AiDiagnosisService(DtcHistoryRepository dtcHistoryRepository, RabbitTemplate rabbitTemplate) {
+    public AiDiagnosisService(DtcHistoryRepository dtcHistoryRepository,
+            RabbitTemplate rabbitTemplate,
+            KnowledgeService knowledgeService,
+            ObdLogRepository obdLogRepository,
+            VehicleRepository vehicleRepository,
+            VehicleConsumableRepository vehicleConsumableRepository,
+            DiagSessionRepository diagSessionRepository,
+            DiagResultRepository diagResultRepository,
+            AiClient aiClient,
+            ObjectMapper objectMapper,
+            FcmService fcmService,
+            UserService userService) {
         this.dtcHistoryRepository = dtcHistoryRepository;
         this.rabbitTemplate = rabbitTemplate;
-
-        // Timeout 설정 추가 (Hang 방지)
-        org.springframework.http.client.SimpleClientHttpRequestFactory factory = new org.springframework.http.client.SimpleClientHttpRequestFactory();
-        factory.setConnectTimeout(5000); // 5초
-        factory.setReadTimeout(15000); // 15초
-        this.restTemplate = new RestTemplate(factory);
+        this.knowledgeService = knowledgeService;
+        this.obdLogRepository = obdLogRepository;
+        this.vehicleRepository = vehicleRepository;
+        this.vehicleConsumableRepository = vehicleConsumableRepository;
+        this.diagSessionRepository = diagSessionRepository;
+        this.diagResultRepository = diagResultRepository;
+        this.aiClient = aiClient;
+        this.objectMapper = objectMapper;
+        this.fcmService = fcmService;
+        this.userService = userService;
     }
 
     @Value("${app.storage.type:local}")
     private String storageType;
 
-    @Value("${ai.server.url.visual:http://localhost:8000/api/v1/predict/vision}")
+    @Value("${ai.server.url.visual:http://localhost:8001/api/v1/connect/predict/visual}")
     private String aiServerVisualUrl;
 
-    @Value("${ai.server.url.audio:http://localhost:8000/api/v1/predict/audio}")
+    @Value("${ai.server.url.audio:http://localhost:8001/api/v1/connect/predict/audio}")
     private String aiServerAudioUrl;
 
+    @Value("${ai.server.url.comprehensive:http://localhost:8001/api/v1/connect/predict/comprehensive}")
+    private String aiServerUnifiedUrl;
+
+    @Value("${ai.server.url.anomaly:http://localhost:8001/api/v1/connect/predict/anomaly}")
+    private String aiServerAnomalyUrl;
+
     /**
-     * DTC 이력 저장 및 AI 분석 이벤트 발행
+     * DTC 이력 저장 및 즉시 AI 분석/알림 (비동기 아님 - 외부 API 포함)
+     * RabbitMQ 제거 후 직접 호출로 변경
      */
     @Transactional
     public void processDtc(DtcDto dtcDto) {
+        // 1. DTC 이력 저장
         DtcHistory history = DtcHistory.builder()
                 .vehiclesId(UUID.fromString(dtcDto.getVehicleId()))
                 .dtcCode(dtcDto.getDtcCode())
                 .description(dtcDto.getDescription())
                 .severity(dtcDto.getSeverity())
-                .status(DtcHistory.DtcStatus.valueOf(dtcDto.getStatus())) // Enum 변환
+                .status(DtcHistory.DtcStatus.valueOf(dtcDto.getStatus()))
                 .build();
         dtcHistoryRepository.save(history);
+        log.info("Saved DTC History: {}", dtcDto.getDtcCode());
 
-        // RabbitMQ 이벤트 발행
-        rabbitTemplate.convertAndSend("car-sentry.exchange", "ai.diagnosis.dtc", dtcDto);
-        log.info("Published DTC event to RabbitMQ: {}", dtcDto.getDtcCode());
+        // 2. RAG 및 FCM 알림 발송 (직접 호출)
+        try {
+            sendDtcNotification(dtcDto);
+        } catch (Exception e) {
+            log.error("Failed to send DTC notification", e);
+            // 알림 실패가 Transaction 롤백을 유발하지 않도록 함 (선택 사항)
+            // @Transactional이 걸려있으므로 RuntimeException은 롤백됨.
+            // 알림만 실패하고 저장은 성공하게 하려면 try-catch 필수.
+        }
+    }
+
+    private void sendDtcNotification(DtcDto dtcDto) {
+        // 1. 차량 정보 및 소유주 확인
+        UUID vehicleId = UUID.fromString(dtcDto.getVehicleId());
+        Vehicle vehicle = vehicleRepository.findById(vehicleId)
+                .orElseThrow(() -> new RuntimeException("Vehicle not found: " + vehicleId));
+
+        String fcmToken = userService.getFcmToken(vehicle.getUserId());
+        if (fcmToken == null) {
+            log.info("No FCM token for user. Skip notification. UserID: {}", vehicle.getUserId());
+            return;
+        }
+
+        // 2. RAG 지식 검색 (이미 번역/정제된 텍스트 가정)
+        String query = dtcDto.getDtcCode() + " " + dtcDto.getDescription();
+        List<String> searchResults = knowledgeService.searchKnowledge(query, 1);
+
+        // RAG 결과가 있으면 그것을 '설명'으로 사용, 없으면 기본 설명 사용
+        String explanation = searchResults.isEmpty() ? dtcDto.getDescription() : searchResults.get(0);
+
+        // 3. 알림 메시지 구성 (최소한의 조립)
+        String title = "차량 이상 감지";
+        String body = dtcDto.getDtcCode() + ": " + explanation;
+
+        // 4. TTS용 텍스트 (프론트엔드가 읽을 원문 그대로 전달)
+        String ttsText = explanation;
+
+        Map<String, String> data = new HashMap<>();
+        data.put("type", "DTC_ALERT");
+        data.put("dtcCode", dtcDto.getDtcCode());
+        data.put("tts", ttsText);
+
+        // 5. FCM 발송
+        fcmService.sendMessage("User-" + vehicle.getUserId(), fcmToken, title, body, data);
     }
 
     /**
-     * AI 진단 요청 (동기/비동기 혼합 가능)
-     * 현재는 동기적으로 AI 서버 호출 후 결과 반환 (데모용)
+     * AI 진단 요청 (AiClient 사용)
      */
     public Object requestDiagnosis(DiagnosisRequestDto requestDto) {
-        if ("local".equalsIgnoreCase(storageType)) {
-            // Local Mode: Multipart File 전송 -> AI 서버의 /test/predict/... 경로 호출
-            String targetUrl = "VISION".equalsIgnoreCase(requestDto.getType())
-                    ? "http://localhost:8000/api/v1/test/predict/visual"
-                    : "http://localhost:8000/api/v1/test/predict/audio";
-            return sendLocalFileRequest(targetUrl, requestDto.getMediaUrl());
+        if ("VISION".equalsIgnoreCase(requestDto.getType())) {
+            return aiClient.callVisualAnalysis(requestDto.getMediaUrl());
         } else {
-            // S3 Mode: JSON URL 전송 (Prod Router)
-            String targetUrl = "VISION".equalsIgnoreCase(requestDto.getType()) ? aiServerVisualUrl : aiServerAudioUrl;
-            return sendS3UrlRequest(targetUrl, requestDto.getMediaUrl(), requestDto.getType());
+            return aiClient.callAudioAnalysis(requestDto.getMediaUrl());
         }
     }
 
-    private Object sendLocalFileRequest(String url, String localFileUrl) {
-        try {
-            // localFileUrl 예: http://localhost:8080/uploads/uuid_file.jpg
-            // 실제 파일 경로로 변환 필요 (uploads/uuid_file.jpg)
-            // 간단히 파일명만 추출하여 uploads 폴더에서 찾음
-            String filename = localFileUrl.substring(localFileUrl.lastIndexOf("/") + 1);
-            Path filePath = Paths.get("uploads").resolve(filename).toAbsolutePath();
-            File file = filePath.toFile();
+    /**
+     * 통합 진단 요청 (Trigger 2: 수동 진단 - RabbitMQ 발행)
+     */
+    @Transactional
+    public Map<String, Object> requestUnifiedDiagnosis(UnifiedDiagnosisRequestDto requestDto,
+            org.springframework.web.multipart.MultipartFile image,
+            org.springframework.web.multipart.MultipartFile audio) {
+        log.info("Requesting Manual Unified Diagnosis (Async via MQ) for vehicle: {}", requestDto.getVehicleId());
 
-            if (!file.exists()) {
-                throw new RuntimeException("File not found locally: " + filePath);
+        DiagSession session = diagSessionRepository.save(new DiagSession(
+                requestDto.getVehicleId(),
+                null,
+                DiagTriggerType.MANUAL));
+
+        String imageFile = saveMultipartFile(image, "visual");
+        String audioFile = saveMultipartFile(audio, "audio");
+
+        DiagnosisTaskMessage message = DiagnosisTaskMessage.builder()
+                .sessionId(session.getDiagSessionId())
+                .requestDto(requestDto)
+                .imageFilename(imageFile)
+                .audioFilename(audioFile)
+                .build();
+
+        rabbitTemplate.convertAndSend(kr.co.himedia.config.RabbitConfig.EXCHANGE_NAME,
+                kr.co.himedia.config.RabbitConfig.ROUTING_KEY, message);
+
+        return Map.of(
+                "message", "진단 요청이 접수되었습니다. 분석 완료 후 결과가 업데이트됩니다.",
+                "sessionId", session.getDiagSessionId(),
+                "status", "ACCEPTED");
+    }
+
+    /**
+     * 통합 진단 비동기 처리 (Trigger 1: 운행 종료 등 이벤트 기반 - RabbitMQ 발행)
+     */
+    public void requestUnifiedDiagnosisAsync(UnifiedDiagnosisRequestDto requestDto) {
+        log.info("Requesting Auto Unified Diagnosis (Async via MQ) for vehicle: {}", requestDto.getVehicleId());
+
+        DiagSession session = diagSessionRepository.save(new DiagSession(
+                requestDto.getVehicleId(),
+                requestDto.getTripId(),
+                DiagTriggerType.ANOMALY));
+
+        DiagnosisTaskMessage message = DiagnosisTaskMessage.builder()
+                .sessionId(session.getDiagSessionId())
+                .requestDto(requestDto)
+                .build();
+
+        rabbitTemplate.convertAndSend(kr.co.himedia.config.RabbitConfig.EXCHANGE_NAME,
+                kr.co.himedia.config.RabbitConfig.ROUTING_KEY, message);
+    }
+
+    private String saveMultipartFile(org.springframework.web.multipart.MultipartFile file, String prefix) {
+        if (file == null || file.isEmpty())
+            return null;
+        try {
+            Path uploadsDir = Paths.get("uploads").toAbsolutePath();
+            java.nio.file.Files.createDirectories(uploadsDir);
+            String filename = prefix + "_" + System.currentTimeMillis() + "_" + file.getOriginalFilename();
+            Path filePath = uploadsDir.resolve(filename);
+            file.transferTo(filePath.toFile());
+            return filename;
+        } catch (Exception e) {
+            log.error("Failed to save multipart file", e);
+            throw new RuntimeException("파일 저장 실패", e);
+        }
+    }
+
+    /**
+     * 실제 분석 파이프라인 (컨슈머에서 호출)
+     */
+    public void processUnifiedFlow(DiagnosisTaskMessage taskMessage) {
+        UUID sessionId = taskMessage.getSessionId();
+        UnifiedDiagnosisRequestDto requestDto = taskMessage.getRequestDto();
+        String imageFile = taskMessage.getImageFilename();
+        String audioFile = taskMessage.getAudioFilename();
+
+        DiagSession session = diagSessionRepository.findById(sessionId)
+                .orElseThrow(() -> new RuntimeException("Session not found: " + sessionId));
+
+        try {
+            session.updateStatus(DiagStatus.PROCESSING, "[Step 1/5] 병렬 분석 시작 (이미지/음성/OBD)");
+            diagSessionRepository.save(session);
+
+            log.info("[Step 1/5] Parallel analysis starting [Session: {}]", sessionId);
+
+            // 1. 병렬 분석 태스크 생성
+            CompletableFuture<Map<String, Object>> visualTask = CompletableFuture.supplyAsync(() -> {
+                if (imageFile != null) {
+                    return aiClient.callVisualAnalysis(imageFile);
+                }
+                return requestDto.getVisualAnalysis();
+            });
+
+            CompletableFuture<Map<String, Object>> audioTask = CompletableFuture.supplyAsync(() -> {
+                if (audioFile != null) {
+                    return aiClient.callAudioAnalysis(audioFile);
+                }
+                return requestDto.getAudioAnalysis();
+            });
+
+            CompletableFuture<Map<String, Object>> anomalyTask = CompletableFuture.supplyAsync(() -> {
+                return performAnomalyDetection(requestDto);
+            });
+
+            // 모든 결과 대기 (80초 타임아웃 - 개별 재시도는 AiClient에서 처리)
+            try {
+                CompletableFuture.allOf(visualTask, audioTask, anomalyTask).get(80, TimeUnit.SECONDS);
+            } catch (Exception e) {
+                log.error("[Timeout/Error] Parallel analysis failed or timed out", e);
+                throw new RuntimeException("병렬 분석 작업 중 타임아웃 또는 에러 발생", e);
             }
 
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.MULTIPART_FORM_DATA);
+            Map<String, Object> visualResult = visualTask.join();
+            Map<String, Object> audioResult = audioTask.join();
+            Map<String, Object> anomalyResult = anomalyTask.join();
 
-            MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
-            body.add("file", new FileSystemResource(file));
+            // 2. 통합 요청 객체 구축 및 RAG 검색
+            session.updateStatus(DiagStatus.PROCESSING, "[Step 2/5] 분석 완료, 컨텍스트 취합 중...");
+            diagSessionRepository.save(session);
 
-            HttpEntity<MultiValueMap<String, Object>> requestEntity = new HttpEntity<>(body, headers);
+            AiUnifiedRequestDto.AiUnifiedRequestDtoBuilder aiRequestBuilder = AiUnifiedRequestDto.builder()
+                    .vehicleId(requestDto.getVehicleId())
+                    .visualAnalysis(visualResult)
+                    .audioAnalysis(audioResult)
+                    .anomalyAnalysis(anomalyResult);
 
-            log.info("Sending Multipart Request to AI Server (Local): {}", url);
-            return restTemplate.postForObject(url, requestEntity, Map.class);
+            populateVehicleAndConsumableInfo(aiRequestBuilder, requestDto.getVehicleId());
+
+            StringBuilder searchQuery = new StringBuilder();
+            if (visualResult != null && visualResult.containsKey("category")) {
+                searchQuery.append(visualResult.get("category")).append(" ");
+            }
+            if (audioResult != null && audioResult.containsKey("status")) {
+                searchQuery.append(audioResult.get("status")).append(" ");
+            }
+            if (anomalyResult != null && Boolean.TRUE.equals(anomalyResult.get("is_anomaly"))) {
+                @SuppressWarnings("unchecked")
+                List<String> factors = (List<String>) anomalyResult.get("contributing_factors");
+                if (factors != null && !factors.isEmpty()) {
+                    searchQuery.append(String.join(" ", factors)).append(" 이상징후");
+                }
+            }
+
+            String query = searchQuery.toString().trim();
+            if (!query.isEmpty()) {
+                session.updateStatus(DiagStatus.PROCESSING, "[Step 3/5] RAG 지식 검색 수행 중");
+                diagSessionRepository.save(session);
+                log.info("[Step 3/5] RAG 검색 수행 (Query: '{}') [Session: {}]", query, sessionId);
+                List<String> knowledgeResults = knowledgeService.searchKnowledge(query, 3);
+                aiRequestBuilder.knowledgeData(knowledgeResults);
+            }
+
+            // 3. 최종 통합 진단 요청
+            AiUnifiedRequestDto aiRequest = aiRequestBuilder.build();
+            session.updateStatus(DiagStatus.PROCESSING, "[Step 4/5] AI 서버 최종 통합 진단 중");
+            diagSessionRepository.save(session);
+
+            log.info("[Step 4/5] AI 서버 최종 통합 진단 요청 [Session: {}]", sessionId);
+            @SuppressWarnings("unchecked")
+            Map<String, Object> finalResponse = aiClient
+                    .callComprehensiveDiagnosis(objectMapper.convertValue(aiRequest, Map.class));
+
+            // 4. 결과 저장
+            saveDiagnosisResult(sessionId, finalResponse);
+            session.updateStatus(DiagStatus.DONE, "[Step 5/5] 진단 완료 및 저장 성공");
+            diagSessionRepository.save(session);
+
+            log.info("[Step 5/5] AI 통합 진단 최종 완료 [Session: {}]", sessionId);
+
+            // 5. FCM 알림 발송 (진단 완료)
+            sendDiagnosisNotification(requestDto.getVehicleId(), sessionId);
 
         } catch (Exception e) {
-            log.error("Failed to send local file request", e);
-            throw new RuntimeException("AI Server Request Failed (Local)", e);
+            log.error("Unified Diagnosis Pipeline Failed [Session: {}]", sessionId, e);
+            session.updateStatus(DiagStatus.FAILED, "진단 실패: " + e.getMessage());
+            diagSessionRepository.save(session);
+            throw new RuntimeException("진단 파이프라인 오류", e);
         }
     }
 
-    private Object sendS3UrlRequest(String url, String mediaUrl, String type) {
+    private void sendDiagnosisNotification(UUID vehicleId, UUID sessionId) {
         try {
-            Map<String, String> body = new HashMap<>();
-            if ("VISION".equalsIgnoreCase(type)) {
-                body.put("imageUrl", mediaUrl);
+            vehicleRepository.findById(vehicleId).ifPresent(vehicle -> {
+                String fcmToken = userService.getFcmToken(vehicle.getUserId());
+                if (fcmToken != null) {
+                    String title = "차량 정밀 진단 완료";
+                    String body = "요청하신 차량의 AI 정밀 진단 분석이 완료되었습니다. 결과를 확인해보세요.";
+                    Map<String, String> data = new HashMap<>();
+                    data.put("type", "DIAG_COMPLETE");
+                    data.put("sessionId", sessionId.toString());
+
+                    fcmService.sendMessage("User-" + vehicle.getUserId(), fcmToken, title, body, data);
+                    log.info("Sent Diagnosis Completion Notification [Vehicle: {}]", vehicleId);
+                }
+            });
+        } catch (Exception e) {
+            log.error("Failed to send diagnosis notification", e);
+        }
+    }
+
+    private Map<String, Object> performAnomalyDetection(UnifiedDiagnosisRequestDto requestDto) {
+        try {
+            UUID vehicleId = requestDto.getVehicleId();
+            List<Map<String, Object>> timeSeries;
+
+            if (requestDto.getLstmAnalysis() != null && !requestDto.getLstmAnalysis().isEmpty()) {
+                @SuppressWarnings("unchecked")
+                List<Map<String, Object>> logs = (List<Map<String, Object>>) requestDto.getLstmAnalysis().get("logs");
+                timeSeries = logs != null ? logs : List.of();
             } else {
-                body.put("audioUrl", mediaUrl);
+                java.time.OffsetDateTime threeDaysAgo = java.time.OffsetDateTime.now(java.time.ZoneOffset.UTC)
+                        .minusDays(3);
+                java.time.OffsetDateTime now = java.time.OffsetDateTime.now(java.time.ZoneOffset.UTC);
+                List<ObdLog> logs = obdLogRepository.findByVehicleIdAndTimeBetweenOrderByTimeAsc(vehicleId,
+                        threeDaysAgo, now);
+
+                if (logs.isEmpty()) {
+                    return Map.of("is_anomaly", false, "reason", "no_obd_data");
+                }
+
+                timeSeries = logs.stream().limit(100).map(l -> {
+                    Map<String, Object> point = new HashMap<>();
+                    point.put("rpm", l.getRpm());
+                    point.put("load", l.getEngineLoad() != null ? l.getEngineLoad() : 0.0);
+                    point.put("coolant", l.getCoolantTemp() != null ? l.getCoolantTemp() : 0.0);
+                    point.put("voltage", l.getVoltage() != null ? l.getVoltage() : 12.0); // Fixed: Use real voltage
+                    return point;
+                }).collect(Collectors.toList());
             }
 
-            log.info("Sending JSON Request to AI Server (S3): {}", url);
-            return restTemplate.postForObject(url, body, Map.class);
+            return aiClient.callAnomalyDetection(Map.of("time_series", timeSeries));
         } catch (Exception e) {
-            log.error("Failed to send S3 URL request", e);
-            throw new RuntimeException("AI Server Request Failed (S3)", e);
+            log.warn("Anomaly detection failed, continuing with partial results", e);
+            return Map.of("is_anomaly", false, "error", e.getMessage());
         }
     }
+
+    private void saveDiagnosisResult(UUID sessionId, Map<String, Object> response) {
+        try {
+            String finalReport = (String) response.getOrDefault("report", "진단 보고서 생성 실패");
+            String riskStr = (String) response.getOrDefault("risk_level", "LOW");
+            DiagResult.RiskLevel riskLevel = DiagResult.RiskLevel.valueOf(riskStr.toUpperCase());
+
+            Object issuesObj = response.get("detected_issues");
+            Object actionsObj = response.get("recommended_actions");
+
+            DiagResult result = DiagResult.builder()
+                    .diagSessionId(sessionId)
+                    .finalReport(finalReport)
+                    .riskLevel(riskLevel)
+                    .detectedIssues(objectMapper.writeValueAsString(issuesObj))
+                    .actionsJson(objectMapper.writeValueAsString(actionsObj))
+                    .build();
+
+            diagResultRepository.save(result);
+        } catch (Exception e) {
+            log.error("Failed to save diagnosis result", e);
+            throw new RuntimeException("DB 저장 실패", e);
+        }
+    }
+
+    private void populateVehicleAndConsumableInfo(AiUnifiedRequestDto.AiUnifiedRequestDtoBuilder builder,
+            UUID vehicleId) {
+        vehicleRepository.findById(vehicleId).ifPresent(vehicle -> {
+            Map<String, Object> vehicleInfo = new HashMap<>();
+            vehicleInfo.put("manufacturer", vehicle.getManufacturer());
+            vehicleInfo.put("model", vehicle.getModelName());
+            vehicleInfo.put("year", vehicle.getModelYear());
+            vehicleInfo.put("fuel_type", vehicle.getFuelType());
+            vehicleInfo.put("total_mileage", vehicle.getTotalMileage());
+            builder.vehicleInfo(vehicleInfo);
+
+            List<VehicleConsumable> consumables = vehicleConsumableRepository.findByVehicle(vehicle);
+            List<Map<String, Object>> statusList = consumables.stream().map(vc -> {
+                Map<String, Object> status = new HashMap<>();
+                status.put("item", vc.getConsumableItem().getCode());
+                // WearFactor는 AI가 계산한 값 (이제 DB에 저장됨)
+                status.put("wear_factor", vc.getWearFactor());
+                status.put("remaining_life_pct", vc.getRemainingLife() != null ? vc.getRemainingLife() : 100.0);
+                return status;
+            }).collect(Collectors.toList());
+            builder.consumablesStatus(statusList);
+        });
+    }
+
+    // calculateRemainingLife 제거 (VehicleConsumable.currentLife 사용)
 }
