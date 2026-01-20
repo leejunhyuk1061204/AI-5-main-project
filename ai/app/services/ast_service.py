@@ -10,6 +10,15 @@ from ai.app.schemas.audio_schema import AudioResponse, AudioDetail
 MODEL_PATH = "ai/weights/audio/best_ast_model"
 
 # =============================================================================
+# [정상 소리 라벨] - 이 라벨들은 NORMAL 상태로 처리됩니다
+# =============================================================================
+NORMAL_LABELS = {
+    "idle",       # 정상 공회전 소리
+    "normal",     # 명시적 정상
+    "brakes",     # 정상 브레이크 소리 (파일명에 normal_brakes면 정상)
+}
+
+# =============================================================================
 # [자동 카테고리 매핑 함수]
 # 라벨 이름 패턴에서 카테고리를 자동으로 추출합니다.
 # 재학습 시 코드 수정 불필요!
@@ -49,6 +58,11 @@ def get_category_from_label(label_name: str) -> str:
     for kw in engine_keywords:
         if kw in label_upper:
             return "ENGINE"
+    
+    # 2-1. IDLE은 엔진 정상 소리
+    if "IDLE" in label_upper:
+        return "ENGINE"
+    
     for kw in brake_keywords:
         if kw in label_upper:
             return "BRAKES"
@@ -65,8 +79,8 @@ def get_category_from_label(label_name: str) -> str:
         if kw in label_upper:
             return "BODY"
     
-    # 3. 기본값
-    return "UNKNOWN_AUDIO"
+    # 3. 기본값 - UNKNOWN 대신 ENGINE 반환 (대부분 엔진 관련)
+    return "ENGINE"
 
 # =============================================================================
 # 추론 함수
@@ -132,11 +146,22 @@ async def run_ast_inference(processed_audio_buffer, ast_model_payload=None) -> A
         label_name = model.config.id2label[predicted_id]
         category = get_category_from_label(label_name)
         
-        # 5. 상태 결정 (Normal이면 NORMAL, 그 외는 FAULTY)
-        if label_name.upper() == "NORMAL":
+        # 5. 상태 결정
+        label_lower = label_name.lower()
+        
+        # 5-1. 신뢰도가 너무 낮으면 분류 불가 (차량 소리가 아닐 수 있음)
+        if confidence < 0.5:
+            status = "UNKNOWN"
+            is_critical = False
+            category = "UNKNOWN_AUDIO"
+            label_name = "unknown"  # 라벨도 unknown으로 변경
+            description = "분류할 수 없는 소리입니다. 차량 관련 소리인지 확인해주세요."
+        # 5-2. 정상 라벨이면 NORMAL
+        elif label_lower in NORMAL_LABELS or "normal" in label_lower:
             status = "NORMAL"
             is_critical = False
-            description = "정상적인 엔진 소리입니다."
+            description = "정상적인 소리입니다."
+        # 5-3. 그 외는 FAULTY
         else:
             status = "FAULTY"
             is_critical = True

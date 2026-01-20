@@ -4,6 +4,7 @@ data/ast/
 data/yolo/
 data/engine_bay/
 data/s3_audio/
+data/tire/
 
 
 # 가상환경 및 캐시 파일 (권장)
