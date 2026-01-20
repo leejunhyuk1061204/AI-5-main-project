@@ -31,14 +31,4 @@ public class TripScheduler {
         }
     }
 
-    // BE-TD-007: 주간/월간 리포트 (Shell Implementation)
-    // 매주 월요일 새벽 4시에 실행
-    @Scheduled(cron = "0 0 4 * * MON")
-    public void generateWeeklyReports() {
-        log.info("[Scheduler] Starting weekly report generation...");
-        // TODO: Iterate active users -> Calculate weekly stats -> Save to Report Table
-        // or Insight Table
-        // 현재는 로그만 남김 (향후 구현 예정)
-        log.info("[Scheduler] Weekly report generation triggered.");
-    }
 }

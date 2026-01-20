@@ -41,18 +41,25 @@ spring:
     port: ${MQ_PORT:5672}
     username: ${MQ_USER:guest}
     password: ${MQ_PASSWORD:guest}
+    listener:
+      simple:
+        concurrency: 2
+        max-concurrency: 5
+        retry:
+          enabled: true
+          initial-interval: 5000ms
+          max-attempts: 3
+          multiplier: 2.0
 
 
 
 app:
   storage:
     type: ${STORAGE_TYPE:local} # local or s3
+  firebase:
+    config-path: ${FIREBASE_CONFIG_PATH:firebase-service-account.json}
 
-ai:
-  server:
-    url:
-      visual: ${AI_SERVER_URL_VISUAL:http://localhost:8000/api/v1/predict/visual}
-      audio: ${AI_SERVER_URL_AUDIO:http://localhost:8000/api/v1/predict/audio}
+# AI 설정은 Java AiClient 클래스의 @Value 기본값(8001 포트)을 사용합니다.
 
 logging:
   level:
@@ -62,6 +69,11 @@ logging:
 
 encryption:
   key: ${ENCRYPTION_KEY:car-sentry-default-key-32bytes-!!} # 32바이트 권장
+
+jwt:
+  secret: ${JWT_SECRET:vmb70atp-bd59-400a-9450-523a253d0a90-this-is-a-long-secret-key-for-development}
+  access-expiration: 3600000 # 1시간으로 원복
+  refresh-expiration: 604800000 # 7일
 
 smartcar:
   client-id: ${SMARTCAR_CLIENT_ID:7a114bab-4496-481e-97d6-665f464f8396}

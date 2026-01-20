@@ -43,9 +43,9 @@ opencv-python-headless  # 서버 환경용 OpenCV
 # ==================================================
 librosa
 soundfile
+transformers            # AST 모델
 accelerate>=0.26.0      # AST 학습용 (HuggingFace Trainer)
 datasets                # 데이터셋 로드
-transformers            # AST 모델
 
 # ==================================================
 # 8. Database (Async)
@@ -54,25 +54,24 @@ asyncpg
 sqlalchemy
 
 # ==================================================
-# 8. Evaluation / Dataset Utils
+# 9. Evaluation / Dataset Utils
 # ==================================================
 evaluate
 kagglehub
 
 # ==================================================
-# 9. Infra / Remote Execution (RunPod 등)
+# 10. Infra / Remote Execution (RunPod 등)
 # ==================================================
 paramiko
 
 # ==================================================
-# 10. LLM / RAG
+# 11. LLM / RAG
 # ==================================================
 openai>=1.0.0
 
 # ==================================================
-# 11. Security & Visualization
+# 12. Security & Visualization
 # ==================================================
 filetype                # Magic Bytes validation (Malware check)
 matplotlib              # Heatmap visualization
 Pillow                  # Image processing
-

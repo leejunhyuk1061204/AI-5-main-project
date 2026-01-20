@@ -91,9 +91,12 @@ conda activate ai5
 # 2. PyTorch 설치 (CUDA 12.1 기준)
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
 
-# 3. 나머지 전부
+# 3. 나머지 전부 (transformers, accelerate 포함)
 pip install -r requirements.txt
 
+# 4. AI 서버 실행 (8001 포트 사용)
+uvicorn ai.app.main:app --reload --port 8001
+```
 
 ---
 ### Frontend 환경설정 및 실행 (Frontend Setup) ###

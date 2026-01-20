@@ -13,4 +13,6 @@ public interface VehicleRepository extends JpaRepository<Vehicle, UUID> {
     Optional<Vehicle> findByVehicleIdAndDeletedAtIsNull(UUID vehicleId);
 
     Optional<Vehicle> findByUserIdAndIsPrimaryTrueAndDeletedAtIsNull(UUID userId);
+
+    boolean existsByVinAndDeletedAtIsNull(String vin);
 }

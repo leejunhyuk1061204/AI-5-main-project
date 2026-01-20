@@ -40,11 +40,7 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
-                        .requestMatchers("/auth/**").permitAll() // HEAD의 경로 반영
-                        .requestMatchers("/api/v1/auth/**", "/api/v1/telemetry/**", "/api/v1/vehicles/**",
-                                "/api/v1/master/**",
-                                "/admin/**", "/swagger-ui/**", "/v3/api-docs/**", "/uploads/**")
-                        .permitAll()
+                        .requestMatchers("/api/v1/auth/**", "/api/v1/telemetry/**").permitAll()
                         .anyRequest().authenticated())
                 .addFilterBefore(new JwtAuthenticationFilter(jwtTokenProvider),
                         UsernamePasswordAuthenticationFilter.class);

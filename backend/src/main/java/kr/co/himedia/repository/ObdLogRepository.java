@@ -7,4 +7,9 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface ObdLogRepository extends JpaRepository<ObdLog, ObdLog.ObdLogId> {
     void deleteByTimeBefore(java.time.OffsetDateTime time);
+
+    java.util.List<ObdLog> findByVehicleIdAndTimeBetweenOrderByTimeAsc(
+            java.util.UUID vehicleId,
+            java.time.OffsetDateTime startTime,
+            java.time.OffsetDateTime endTime);
 }
