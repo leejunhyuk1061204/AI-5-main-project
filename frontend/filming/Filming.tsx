@@ -146,18 +146,19 @@ export default function Filming() {
                         )}
                     </View>
                 ) : (
-                    <CameraView
-                        ref={cameraRef}
-                        style={StyleSheet.absoluteFill}
-                        facing={facing}
-                        enableTorch={enableTorch}
-                    >
+                    <View style={StyleSheet.absoluteFill}>
+                        <CameraView
+                            ref={cameraRef}
+                            style={StyleSheet.absoluteFill}
+                            facing={facing}
+                            enableTorch={enableTorch}
+                        />
                         {/* Camera Grid Overlay - Clean view required */}
                         {/* Corner Reticles - 가시성 개선 (진하게) */}
-                        <View className="absolute top-32 left-8 w-10 h-10 border-t-[3px] border-l-[3px] border-[#0d7ff2] rounded-tl-xl shadow-lg shadow-blue-500/30" />
-                        <View className="absolute top-32 right-8 w-10 h-10 border-t-[3px] border-r-[3px] border-[#0d7ff2] rounded-tr-xl shadow-lg shadow-blue-500/30" />
-                        <View className="absolute bottom-48 left-8 w-10 h-10 border-b-[3px] border-l-[3px] border-[#0d7ff2] rounded-bl-xl shadow-lg shadow-blue-500/30" />
-                        <View className="absolute bottom-48 right-8 w-10 h-10 border-b-[3px] border-r-[3px] border-[#0d7ff2] rounded-br-xl shadow-lg shadow-blue-500/30" />
+                        <View className="absolute top-32 left-8 w-10 h-10 border-t-[3px] border-l-[3px] border-[#0d7ff2] rounded-tl-xl shadow-lg shadow-blue-500/30 pointer-events-none" />
+                        <View className="absolute top-32 right-8 w-10 h-10 border-t-[3px] border-r-[3px] border-[#0d7ff2] rounded-tr-xl shadow-lg shadow-blue-500/30 pointer-events-none" />
+                        <View className="absolute bottom-48 left-8 w-10 h-10 border-b-[3px] border-l-[3px] border-[#0d7ff2] rounded-bl-xl shadow-lg shadow-blue-500/30 pointer-events-none" />
+                        <View className="absolute bottom-48 right-8 w-10 h-10 border-b-[3px] border-r-[3px] border-[#0d7ff2] rounded-br-xl shadow-lg shadow-blue-500/30 pointer-events-none" />
 
                         {/* Central Guide */}
                         <View className="absolute inset-0 items-center justify-center pointer-events-none pb-10">
@@ -177,7 +178,7 @@ export default function Filming() {
                                 <Text className="text-slate-300 text-xs text-center">어두운 곳에서는 플래시를 켜주세요</Text>
                             </View>
                         </View>
-                    </CameraView>
+                    </View>
                 )}
             </View>
 
@@ -214,7 +215,7 @@ export default function Filming() {
                     </View>
                 ) : (
                     // Camera Mode Controls
-                    <View className="flex-row items-center justify-between max-w-sm mx-auto w-full px-8">
+                    <View className="flex-row items-center justify-between max-w-sm mx-auto w-full px-8 z-50">
                         {/* Flash Button */}
                         <TouchableOpacity
                             className="items-center gap-2"

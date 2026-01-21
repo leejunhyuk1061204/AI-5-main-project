@@ -4,6 +4,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import { Audio } from 'expo-av';
+import { Alert } from 'react-native';
+import { diagnoseEngineSound } from '../api/aiApi';
 
 export default function EngineSoundDiag() {
     const navigation = useNavigation<any>();
@@ -12,71 +15,110 @@ export default function EngineSoundDiag() {
     // State for Diagnosis Flow
     const [step, setStep] = useState(1); // 1: Record, 2: Analyze, 3: Result
     const [isRecording, setIsRecording] = useState(false);
+    const [isProcessing, setIsProcessing] = useState(false); // Validates start/stop actions
+
+    // Recording Ref for thread safety
+    const recordingRef = useRef<Audio.Recording | null>(null);
+
+    // Legacy State (restored for UI compatibility if needed, though Ref is primary)
+    const [recording, setRecording] = useState<Audio.Recording | null>(null);
+    const [diagnosisResult, setDiagnosisResult] = useState<any>(null);
 
     // Animation values for each bar
     const animations = useRef([...Array(9)].map(() => new Animated.Value(1))).current;
 
-    // Recording/Wave Animation Effect
+    // Cleanup on Unmount
     useEffect(() => {
-        const activeAnimations: Animated.CompositeAnimation[] = [];
-
-        // Only animate if in Step 1 or Step 2 (Analysis uses same wave for now)
-        if (step <= 2) {
-            animations.forEach((anim, index) => {
-                const sequence = Animated.sequence([
-                    Animated.timing(anim, {
-                        toValue: step === 1 && !isRecording ? 1 : 1.6, // Static if not recording (Step 1), Moving if recording or analyzing
-                        duration: 900,
-                        easing: Easing.inOut(Easing.ease),
-                        useNativeDriver: true,
-                    }),
-                    Animated.timing(anim, {
-                        toValue: 1,
-                        duration: 900,
-                        easing: Easing.inOut(Easing.ease),
-                        useNativeDriver: true,
-                    }),
-                ]);
-
-                const loop = Animated.loop(sequence);
-                if (step === 2 || isRecording) {
-                    activeAnimations.push(loop);
-                    setTimeout(() => {
-                        loop.start();
-                    }, index * 200);
-                } else {
-                    anim.setValue(1); // Reset to static
-                }
-            });
-        }
-
         return () => {
-            activeAnimations.forEach(anim => anim.stop());
+            if (recordingRef.current) {
+                recordingRef.current.stopAndUnloadAsync();
+            }
         };
-    }, [isRecording, step]);
+    }, []);
 
-    // Handle Record Button Toggle
-    const handleRecordToggle = () => {
-        if (!isRecording) {
+    // Start Recording
+    const startRecording = async () => {
+        if (isProcessing) return;
+        setIsProcessing(true);
+
+        try {
+            const permission = await Audio.requestPermissionsAsync();
+            if (permission.status !== 'granted') {
+                Alert.alert('권한 필요', '마이크 사용 권한이 필요합니다.');
+                setIsProcessing(false);
+                return;
+            }
+
+            await Audio.setAudioModeAsync({
+                allowsRecordingIOS: true,
+                playsInSilentModeIOS: true,
+            });
+
+            const { recording } = await Audio.Recording.createAsync(
+                Audio.RecordingOptionsPresets.HIGH_QUALITY
+            );
+            recordingRef.current = recording; // Update Ref
             setIsRecording(true);
-        } else {
-            // Stop recording -> Go to Step 2
-            setIsRecording(false);
-            setStep(2);
+        } catch (err) {
+            console.error('Failed to start recording', err);
+            Alert.alert('오류', '녹음을 시작할 수 없습니다.');
+        } finally {
+            setIsProcessing(false);
+        }
+    };
 
-            // Simulate Analysis Delay (e.g., 3 seconds) then go to Step 3
-            setTimeout(() => {
-                if (route.params?.from === 'chatbot') {
-                    // Mock result for Chatbot
-                    const mockResult = {
-                        result: 'NORMAL',
-                        description: '엔진 구동음이 매우 정숙하며, 벨트 미끄러짐이나 베어링 소음이 감지되지 않았습니다.'
-                    };
-                    navigation.navigate('AiCompositeDiag', { diagnosisResult: mockResult });
-                } else {
-                    setStep(3);
-                }
-            }, 3000);
+    // Stop Recording & Analyze
+    const stopRecording = async () => {
+        if (!recordingRef.current || isProcessing) return;
+        setIsProcessing(true);
+        setIsRecording(false);
+        setStep(2); // Move to Analysis Step
+
+        try {
+            const recording = recordingRef.current;
+            const uri = recording.getURI(); // Get URI before unloading
+            await recording.stopAndUnloadAsync();
+
+            if (uri) {
+                console.log('Recording stopped and stored at', uri);
+                analyzeSound(uri);
+            } else {
+                throw new Error('No URI found');
+            }
+        } catch (error) {
+            console.error(error);
+            Alert.alert('오류', '녹음 파일을 저장하는 중 문제가 발생했습니다.');
+            setStep(1);
+        } finally {
+            recordingRef.current = null;
+            setIsProcessing(false);
+        }
+    };
+
+    // Analyze Sound via API
+    const analyzeSound = async (uri: string) => {
+        try {
+            const result = await diagnoseEngineSound(uri);
+            setDiagnosisResult(result);
+
+            if (route.params?.from === 'chatbot') {
+                navigation.navigate('AiCompositeDiag', { diagnosisResult: result });
+            } else {
+                setStep(3); // Go to Result Screen
+            }
+        } catch (error) {
+            Alert.alert('진단 실패', '서버 통신 중 오류가 발생했습니다.');
+            setStep(1); // Reset to start
+        }
+    };
+
+    const handleRecordToggle = () => {
+        if (isProcessing) return;
+
+        if (!isRecording && !recordingRef.current) {
+            startRecording();
+        } else {
+            stopRecording();
         }
     };
 
@@ -182,7 +224,9 @@ export default function EngineSoundDiag() {
                             <MaterialIcons name="check-circle" size={64} color="#0d7ff2" />
                         </View>
 
-                        <Text className="text-3xl font-bold text-white mb-2">진단 결과: 정상</Text>
+                        <Text className="text-3xl font-bold text-white mb-2">
+                            진단 결과: {diagnosisResult?.result === 'NORMAL' ? '정상' : '이상 감지'}
+                        </Text>
                         <View className="bg-[#1a2430] px-4 py-1.5 rounded-full border border-slate-700 mb-8">
                             <Text className="text-sm text-slate-300">종합 점수 <Text className="text-[#0d7ff2] font-bold">98점</Text></Text>
                         </View>
@@ -190,18 +234,9 @@ export default function EngineSoundDiag() {
                         <View className="w-full bg-[#1a2430] rounded-2xl p-6 border border-slate-800 mb-8">
                             <Text className="text-lg font-bold text-white mb-3">상세 분석</Text>
                             <View className="gap-3">
-                                <View className="flex-row items-start gap-3">
-                                    <MaterialIcons name="check" size={20} color="#0d7ff2" className="mt-0.5" />
-                                    <Text className="text-slate-300 flex-1 leading-5">엔진 구동음이 매우 부드럽고 규칙적입니다.</Text>
-                                </View>
-                                <View className="flex-row items-start gap-3">
-                                    <MaterialIcons name="check" size={20} color="#0d7ff2" className="mt-0.5" />
-                                    <Text className="text-slate-300 flex-1 leading-5">벨트 슬립이나 베어링 마모 소음이 감지되지 않았습니다.</Text>
-                                </View>
-                                <View className="flex-row items-start gap-3">
-                                    <MaterialIcons name="check" size={20} color="#0d7ff2" className="mt-0.5" />
-                                    <Text className="text-slate-300 flex-1 leading-5">점화 타이밍이 안정적입니다.</Text>
-                                </View>
+                                <Text className="text-slate-300 leading-5">
+                                    {diagnosisResult?.description || '분석 결과가 없습니다.'}
+                                </Text>
                             </View>
                         </View>
 
