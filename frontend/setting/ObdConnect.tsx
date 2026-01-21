@@ -12,7 +12,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import BleService, { Peripheral } from '../services/BleService';
 import ClassicBtService from '../services/ClassicBtService';
 import ObdService from '../services/ObdService';
-import { BluetoothDevice } from 'react-native-bluetooth-classic';
+import type { BluetoothDevice } from 'react-native-bluetooth-classic';
 
 // 통합 기기 타입 (BLE 또는 Classic)
 interface UnifiedDevice {

@@ -3,10 +3,11 @@ import { View, Text, TouchableOpacity, Animated, Easing, ActivityIndicator } fro
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 
 export default function EngineSoundDiag() {
-    const navigation = useNavigation();
+    const navigation = useNavigation<any>();
+    const route = useRoute<any>();
 
     // State for Diagnosis Flow
     const [step, setStep] = useState(1); // 1: Record, 2: Analyze, 3: Result
@@ -65,7 +66,16 @@ export default function EngineSoundDiag() {
 
             // Simulate Analysis Delay (e.g., 3 seconds) then go to Step 3
             setTimeout(() => {
-                setStep(3);
+                if (route.params?.from === 'chatbot') {
+                    // Mock result for Chatbot
+                    const mockResult = {
+                        result: 'NORMAL',
+                        description: '엔진 구동음이 매우 정숙하며, 벨트 미끄러짐이나 베어링 소음이 감지되지 않았습니다.'
+                    };
+                    navigation.navigate('AiCompositeDiag', { diagnosisResult: mockResult });
+                } else {
+                    setStep(3);
+                }
             }, 3000);
         }
     };
