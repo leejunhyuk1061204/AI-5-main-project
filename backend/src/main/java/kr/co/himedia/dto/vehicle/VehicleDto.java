@@ -116,7 +116,8 @@ public class VehicleDto {
             response.setNickname(vehicle.getNickname());
             response.setMemo(vehicle.getMemo());
             response.setIsPrimary(vehicle.getIsPrimary());
-            response.setRegistrationSource(vehicle.getRegistrationSource().name());
+            response.setRegistrationSource(
+                    vehicle.getRegistrationSource() != null ? vehicle.getRegistrationSource().name() : null);
             response.setObdDeviceId(vehicle.getObdDeviceId());
             return response;
         }
