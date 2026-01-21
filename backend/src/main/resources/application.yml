@@ -71,6 +71,8 @@ ai:
       wear-factor: ${AI_SERVER_URL_WEAR_FACTOR:http://host.docker.internal:8001/api/v1/connect/predict/wear-factor}
 
 logging:
+  file:
+    name: logs/backend.log
   level:
     org.hibernate.SQL: DEBUG
     org.hibernate.type.descriptor.sql.BasicBinder: TRACE
