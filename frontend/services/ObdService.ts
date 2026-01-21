@@ -97,6 +97,11 @@ class ObdService {
 
     // ===== BLE 설정 =====
     async setTargetDevice(deviceId: string) {
+        if (Platform.OS === 'web') {
+            console.warn('[ObdService] BLE not supported on web');
+            return;
+        }
+
         this.connectionType = 'ble';
         this.currentDeviceId = deviceId;
         this.currentData = { timestamp: new Date().toISOString() };
@@ -181,6 +186,7 @@ class ObdService {
             if (this.connectionType === 'classic' && this.classicDevice) {
                 return await ClassicBtService.write(this.classicDevice, command);
             } else if (this.connectionType === 'ble' && this.currentDeviceId) {
+                if (Platform.OS === 'web') return false;
                 const bytes = this.stringToBytes(command + '\r');
                 await BleManager.writeWithoutResponse(
                     this.currentDeviceId,
@@ -372,6 +378,10 @@ class ObdService {
 
     // ===== 배치 업로드용 데이터 수집 =====
     private collectData(data: ObdData) {
+        if (this.dataBuffer.length >= 1000) {
+            console.warn('[ObdService] Buffer full, clearing old data to prevent OOM');
+            this.dataBuffer = [];
+        }
         this.dataBuffer.push(data);
         console.log(`[ObdService] Data buffered: ${this.dataBuffer.length}/${this.BATCH_SIZE}`);
 
@@ -382,8 +392,11 @@ class ObdService {
 
     // ===== 배치 업로드 실행 =====
     private async uploadBatch() {
-        if (!this.vehicleId || this.dataBuffer.length === 0) {
-            console.warn('[ObdService] Cannot upload: no vehicleId or empty buffer');
+        if (this.dataBuffer.length === 0) return;
+
+        if (!this.vehicleId) {
+            console.warn('[ObdService] Cannot upload: no vehicleId. Clearing buffer to save memory.');
+            this.dataBuffer = [];
             return;
         }
 
@@ -406,7 +419,11 @@ class ObdService {
             this.dataBuffer = []; // 성공 시 버퍼 비우기
         } catch (error) {
             console.error('[ObdService] Batch upload failed:', error);
-            // 실패 시 버퍼 유지 (다음 시도에서 재전송)
+            // 실패 시 버퍼 유지 (다음 시도에서 재전송) - but safety check
+            if (this.dataBuffer.length > 500) {
+                console.warn('[ObdService] Upload failing repeatedly, clearing buffer.');
+                this.dataBuffer = [];
+            }
         }
     }
 
@@ -439,6 +456,11 @@ class ObdService {
         this.currentDeviceId = null;
         this.dataBuffer = [];
         console.log('[ObdService] Disconnected');
+    }
+
+    // ===== 연결 상태 확인 =====
+    isConnected(): boolean {
+        return this.connectionType !== null;
     }
 }
 
