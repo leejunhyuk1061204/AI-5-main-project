@@ -114,30 +114,37 @@ class BleService {
     }
 
     stopScan() {
+        if (Platform.OS === 'web') return Promise.resolve();
         return BleManager.stopScan();
     }
 
     connect(id: string) {
+        if (Platform.OS === 'web') return Promise.resolve();
         return BleManager.connect(id);
     }
 
     createBond(id: string) {
+        if (Platform.OS === 'web') return Promise.resolve();
         return BleManager.createBond(id);
     }
 
     removeBond(id: string) {
+        if (Platform.OS === 'web') return Promise.resolve();
         return BleManager.removeBond(id);
     }
 
     disconnect(id: string) {
+        if (Platform.OS === 'web') return Promise.resolve();
         return BleManager.disconnect(id);
     }
 
     retrieveServices(id: string) {
+        if (Platform.OS === 'web') return Promise.resolve({ characteristics: [] });
         return BleManager.retrieveServices(id);
     }
 
     async startNotification(id: string, serviceUUID: string, charUUID: string) {
+        if (Platform.OS === 'web') return;
         await BleManager.startNotification(id, serviceUUID, charUUID);
     }
 
@@ -147,6 +154,7 @@ class BleService {
     }
 
     isPeripheralConnected(id: string, serviceUUIDs: string[] = []) {
+        if (Platform.OS === 'web') return Promise.resolve(false);
         return BleManager.isPeripheralConnected(id, serviceUUIDs);
     }
 

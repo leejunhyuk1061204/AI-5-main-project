@@ -47,3 +47,40 @@ export const diagnoseImage = async (imageUri: string): Promise<AiDiagnosisRespon
         throw error;
     }
 };
+
+/**
+ * AI 엔진 소리 진단 요청
+ * @param audioUri 녹음된 오디오 파일의 로컬 URI
+ */
+export const diagnoseEngineSound = async (audioUri: string): Promise<AiDiagnosisResponse> => {
+    try {
+        const formData = new FormData();
+        const filename = audioUri.split('/').pop() || 'engine_sound.m4a';
+
+        // Mime Type 추론
+        let type = 'audio/m4a';
+        if (filename.endsWith('.wav')) type = 'audio/wav';
+        else if (filename.endsWith('.mp3')) type = 'audio/mpeg';
+
+        // React Native의 FormData에 파일 추가 방식
+        formData.append('audio', {
+            uri: audioUri,
+            name: filename,
+            type,
+        } as any);
+
+        console.log('[aiApi] Uploading audio for diagnosis:', filename);
+
+        const response = await api.post('/api/v1/ai/diagnose-sound', formData, {
+            headers: {
+                'Content-Type': 'multipart/form-data',
+            },
+        });
+
+        console.log('[aiApi] Sound Diagnosis successful:', response.data);
+        return response.data.data;
+    } catch (error) {
+        console.error('[aiApi] Sound Diagnosis failed:', error);
+        throw error;
+    }
+};
