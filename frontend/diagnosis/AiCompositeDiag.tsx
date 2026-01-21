@@ -3,11 +3,12 @@ import { View, Text, TouchableOpacity, ScrollView, TextInput, Platform, Image } 
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 
 export default function AiCompositeDiag() {
     const navigation = useNavigation<any>();
+    const route = useRoute<any>();
     const [messages, setMessages] = useState([
         {
             id: 1,
@@ -23,6 +24,23 @@ export default function AiCompositeDiag() {
             isFirst: false
         }
     ]);
+
+    // Handle returned diagnosis results
+    React.useEffect(() => {
+        if (route.params?.diagnosisResult) {
+            const result = route.params.diagnosisResult;
+            const newMsg = {
+                id: messages.length + 1,
+                type: 'ai',
+                text: `진단이 완료되었습니다.\n결과: ${result.result === 'NORMAL' ? '정상' : '이상 감지'}\n\n${result.description}`,
+                isFirst: false
+            };
+            setMessages(prev => [...prev, newMsg]);
+
+            // Clear params to prevent duplicate messages on re-render (needs navigation setParams strategy or just ignore)
+            navigation.setParams({ diagnosisResult: null });
+        }
+    }, [route.params?.diagnosisResult]);
 
     return (
         <View className="flex-1 bg-background-dark">
@@ -111,7 +129,7 @@ export default function AiCompositeDiag() {
                 {/* Action Buttons Container */}
                 <View className="flex-row justify-between px-5 pb-5 gap-3">
                     <TouchableOpacity
-                        onPress={() => navigation.navigate('EngineSoundDiag')}
+                        onPress={() => navigation.navigate('EngineSoundDiag', { from: 'chatbot' })}
                         className="flex-1 h-[100px] p-3 rounded-2xl bg-[#121a26]/60 border border-white/5 justify-between active:scale-95 overflow-hidden relative group"
                     >
                         <View className="w-8 h-8 rounded-lg bg-accent-blue/10 items-center justify-center mb-1">
@@ -122,7 +140,7 @@ export default function AiCompositeDiag() {
                     </TouchableOpacity>
 
                     <TouchableOpacity
-                        onPress={() => navigation.navigate('Filming')}
+                        onPress={() => navigation.navigate('Filming', { from: 'chatbot' })}
                         className="flex-1 h-[100px] p-3 rounded-2xl bg-[#121a26]/60 border border-white/5 justify-between active:scale-95 overflow-hidden relative"
                     >
                         <View className="w-8 h-8 rounded-lg bg-accent-blue/10 items-center justify-center mb-1">

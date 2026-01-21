@@ -149,6 +149,7 @@ export default function App() {
           />
           <Stack.Screen name="EngineSoundDiag" component={EngineSoundDiag} />
           <Stack.Screen name="AiCompositeDiag" component={AiCompositeDiag} />
+          <Stack.Screen name="VisualDiagnosis" component={require('./diagnosis/VisualDiagnosis').default} />
           <Stack.Screen name="Filming" component={Filming} />
           <Stack.Screen
             name="HistoryMain"

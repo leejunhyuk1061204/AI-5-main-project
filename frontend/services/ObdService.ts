@@ -1,6 +1,10 @@
-import { NativeEventEmitter, NativeModules } from 'react-native';
-import BleManager from 'react-native-ble-manager';
-import { BluetoothDevice } from 'react-native-bluetooth-classic';
+import { NativeEventEmitter, NativeModules, Platform } from 'react-native';
+import type { BluetoothDevice } from 'react-native-bluetooth-classic';
+let BleManager: any;
+
+if (Platform.OS !== 'web') {
+    BleManager = require('react-native-ble-manager').default;
+}
 import BleService from './BleService';
 import ClassicBtService from './ClassicBtService';
 import { OBD_PIDS, parseObdResponse, PidDefinition } from './ObdPidHelper';
@@ -50,21 +54,23 @@ class ObdService {
     private readonly BATCH_SIZE = 180; // 3분 (180초)
 
     constructor() {
-        const BleManagerModule = NativeModules.BleManager;
-        if (BleManagerModule) {
-            const bleManagerEmitter = new NativeEventEmitter(BleManagerModule);
+        if (Platform.OS !== 'web') {
+            const BleManagerModule = NativeModules.BleManager;
+            if (BleManagerModule) {
+                const bleManagerEmitter = new NativeEventEmitter(BleManagerModule);
 
-            // BLE 응답 리스너
-            bleManagerEmitter.addListener(
-                'BleManagerDidUpdateValueForCharacteristic',
-                ({ value, peripheral }) => {
-                    if (this.connectionType !== 'ble') return;
-                    if (peripheral !== this.currentDeviceId) return;
+                // BLE 응답 리스너
+                bleManagerEmitter.addListener(
+                    'BleManagerDidUpdateValueForCharacteristic',
+                    ({ value, peripheral }: any) => {
+                        if (this.connectionType !== 'ble') return;
+                        if (peripheral !== this.currentDeviceId) return;
 
-                    const asciiString = String.fromCharCode(...value);
-                    this.handleResponse(asciiString);
-                }
-            );
+                        const asciiString = String.fromCharCode(...value);
+                        this.handleResponse(asciiString);
+                    }
+                );
+            }
         }
     }
 

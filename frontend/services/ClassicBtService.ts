@@ -1,11 +1,23 @@
-import RNBluetoothClassic, { BluetoothDevice } from 'react-native-bluetooth-classic';
+import type { BluetoothDevice } from 'react-native-bluetooth-classic';
 import { PermissionsAndroid, Platform } from 'react-native';
+
+let RNBluetoothClassic: any;
+
+if (Platform.OS !== 'web') {
+    const ClassicModule = require('react-native-bluetooth-classic');
+    RNBluetoothClassic = ClassicModule.default;
+}
 
 class ClassicBtService {
     private isInitialized = false;
 
     async initialize() {
         if (this.isInitialized) return;
+        if (Platform.OS === 'web') {
+            console.log('[ClassicBT] Web environment - mocking disabled');
+            this.isInitialized = true;
+            return;
+        }
 
         try {
             const available = await RNBluetoothClassic.isBluetoothAvailable();
@@ -46,6 +58,7 @@ class ClassicBtService {
     }
 
     async getBondedDevices(): Promise<BluetoothDevice[]> {
+        if (Platform.OS === 'web') return [];
         try {
             const hasPermission = await this.requestPermissions();
             if (!hasPermission) {

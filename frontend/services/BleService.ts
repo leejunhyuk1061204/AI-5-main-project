@@ -1,13 +1,21 @@
-import BleManager from 'react-native-ble-manager';
 import { NativeEventEmitter, NativeModules, Platform, PermissionsAndroid, DeviceEventEmitter, Alert } from 'react-native';
 
-const BleManagerModule = NativeModules.BleManager;
-// Fallback to DeviceEventEmitter if NativeEventEmitter fails or warns significantly
-const bleManagerEmitter = new NativeEventEmitter(BleManagerModule); // Keep this for now, but we will use DeviceEventEmitter in addListener logic if needed
+let BleManager: any;
+let BleManagerModule: any;
 
-if (!BleManagerModule) {
+if (Platform.OS !== 'web') {
+    BleManager = require('react-native-ble-manager').default;
+    BleManagerModule = NativeModules.BleManager;
+}
+
+// Fallback for Web/No-Native environment
+const bleManagerEmitter = (Platform.OS !== 'web' && BleManagerModule)
+    ? new NativeEventEmitter(BleManagerModule)
+    : DeviceEventEmitter;
+
+if (Platform.OS !== 'web' && !BleManagerModule) {
     console.error('BleManagerModule is null! Native module not linked.');
-} else {
+} else if (Platform.OS !== 'web') {
     // Debug: Log available methods
     console.log('BleManagerModule keys:', Object.keys(BleManagerModule));
 }
@@ -29,6 +37,12 @@ class BleService {
 
     async initialize() {
         if (this.isInitialized) return;
+        if (Platform.OS === 'web') {
+            console.log('[BleService] Web environment detected - mocking BLE');
+            this.isInitialized = true;
+            return;
+        }
+
         try {
             await BleManager.start({ showAlert: false });
             this.isInitialized = true;
@@ -70,6 +84,11 @@ class BleService {
     }
 
     async startScan() {
+        if (Platform.OS === 'web') {
+            console.log('[BleService] Web scan simulated');
+            return;
+        }
+
         // Debug: Check Permissions
         const hasPermission = await this.requestPermissions();
         console.log('[BleService] Permissions granted:', hasPermission);
@@ -123,6 +142,7 @@ class BleService {
     }
 
     getBondedPeripherals() {
+        if (Platform.OS === 'web') return Promise.resolve([]);
         return BleManager.getBondedPeripherals();
     }
 
