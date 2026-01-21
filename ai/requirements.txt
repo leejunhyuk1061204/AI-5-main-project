@@ -75,3 +75,13 @@ openai>=1.0.0
 filetype                # Magic Bytes validation (Malware check)
 matplotlib              # Heatmap visualization
 Pillow                  # Image processing
+
+# ==================================================
+# 13. ELM327-emulator (Vehicle Simulation)
+# set PYTHONUTF8=1 필요
+# ==================================================
+ELM327-emulator==3.0.5  # 가상 OBD-II 서버
+obd==0.7.3              # OBD 프로토콜 통신 라이브러리
+pyserial==3.5           # 시리얼 포트 통신용
+pyreadline3==3.5.4      # 윈도우 터미널 인터페이스 지원
+python-daemon==3.1.2    # 백그라운드 프로세스 실행 지원
