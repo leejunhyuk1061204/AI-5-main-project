@@ -22,6 +22,11 @@ TARGETS = [
     ("Hyundai", "2011", "Azera%20V6-3.3L"),
     ("Hyundai", "2012", "Azera%20V6-3.3L"),
     ("Hyundai", "2013", "Azera%20V6-3.3L"),
+    ("Hyundai", "2012", "Veloster%20L4-1.6L"),
+    ("Hyundai", "2013", "Veloster%20L4-1.6L"),
+    ("Hyundai", "2011", "Equus%20V8-5.0L"),
+    ("Hyundai", "2010", "Accent%20L4-1.6L"),
+    ("Hyundai", "2011", "Accent%20L4-1.6L"),
     
     # Tucson (Corrected: Requires FWD/AWD)
     ("Hyundai", "2010", "Tucson%20FWD%20L4-2.4L"),
@@ -53,21 +58,19 @@ TARGETS = [
     ("Kia", "2011", "Optima%20L4-2.4L"),
     ("Kia", "2012", "Optima%20L4-2.4L"),
     ("Kia", "2013", "Optima%20L4-2.4L"),
-    
-    # Sorento (Corrected: 2010 missing, 2011-2013 requires 2WD/4WD and specific engine)
+    ("Kia", "2010", "Sorento%202WD%20L4-2.4L"),
+    ("Kia", "2012", "Sorento%202WD%20L4-2.4L"),
     ("Kia", "2011", "Sorento%202WD%20V6-3.5L"),
     ("Kia", "2012", "Sorento%202WD%20V6-3.5L"),
     ("Kia", "2013", "Sorento%202WD%20V6-3.5L"),
     ("Kia", "2011", "Sorento%202WD%20L4-2.4L"),
     ("Kia", "2012", "Sorento%202WD%20L4-2.4L%20VIN%206%20%28GDI%29"),
     ("Kia", "2013", "Sorento%202WD%20L4-2.4L%20VIN%206%20%28GDI%29"),
-    
-    # Sportage (Corrected: Requires 2WD/4WD)
     ("Kia", "2010", "Sportage%202WD%20L4-2.0L"),
     ("Kia", "2011", "Sportage%202WD%20L4-2.4L"),
     ("Kia", "2012", "Sportage%202WD%20L4-2.4L"),
     ("Kia", "2013", "Sportage%202WD%20L4-2.4L"),
-    
+    ("Kia", "2010", "Sportage%202WD%20L4-2.4L"),
     ("Kia", "2010", "Sedona%20V6-3.8L"),
     ("Kia", "2011", "Sedona%20V6-3.5L"),
     ("Kia", "2012", "Sedona%20V6-3.5L"),
@@ -76,6 +79,16 @@ TARGETS = [
     ("Kia", "2011", "Forte%20L4-2.0L"),
     ("Kia", "2012", "Forte%20L4-2.4L"),
     ("Kia", "2013", "Forte%20L4-2.0L"),
+    ("Kia", "2012", "Rio%20L4-1.6L"),
+    ("Kia", "2011", "Soul%20L4-2.0L"),
+    ("Kia", "2012", "Soul%20L4-2.0L"),
+
+    # === 쉐보레 (Chevrolet/GM Korea) ===
+    ("Chevrolet", "2013", "Spark%20L4-1.2L"),
+    ("Chevrolet", "2011", "Malibu%20L4-2.4L"),
+    ("Chevrolet", "2012", "Malibu%20L4-2.4L"),
+    ("Chevrolet", "2010", "Equinox%20FWD%20L4-2.4L"),
+    ("Chevrolet", "2011", "Equinox%20FWD%20L4-2.4L"),
 
     # === BMW ===
     ("BMW", "2010", "528i%20%28E60%29%20L6-3.0L"),
