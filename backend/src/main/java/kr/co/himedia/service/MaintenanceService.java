@@ -35,7 +35,21 @@ public class MaintenanceService {
         private final OcrService ocrService;
 
         /**
-         * 정비 이력 등록
+         * 정비 이력 다중 등록 (리스트 처리)
+         */
+        @Transactional
+        public List<MaintenanceHistoryResponse> registerMaintenanceList(UUID vehicleId,
+                        List<MaintenanceHistoryRequest> requests) {
+                if (requests == null || requests.isEmpty()) {
+                        return List.of();
+                }
+                return requests.stream()
+                                .map(req -> registerMaintenance(vehicleId, req))
+                                .collect(Collectors.toList());
+        }
+
+        /**
+         * 정비 이력 등록 (단건)
          */
         @Transactional
         public MaintenanceHistoryResponse registerMaintenance(UUID vehicleId, MaintenanceHistoryRequest request) {
@@ -67,6 +81,7 @@ public class MaintenanceService {
                                         vc.setLastReplacedAt(request.getMaintenanceDate().atStartOfDay());
                                         vc.setLastReplacedMileage(request.getMileageAtMaintenance());
                                         vc.updateRemainingLife(100.0); // 교체 직후는 100%
+                                        vc.setIsInferred(false); // 직접 정비했으므로 추론 데이터 아님
                                         vehicleConsumableRepository.save(vc);
                                 }, () -> {
                                         // 기존 데이터가 없으면 신규 생성 (Insert)
@@ -77,6 +92,7 @@ public class MaintenanceService {
                                         newVc.setLastReplacedAt(request.getMaintenanceDate().atStartOfDay());
                                         newVc.setLastReplacedMileage(request.getMileageAtMaintenance());
                                         newVc.setRemainingLife(100.0);
+                                        newVc.setIsInferred(false); // 직접 정비했으므로 추론 데이터 아님
                                         vehicleConsumableRepository.save(newVc);
                                 });
 
@@ -132,6 +148,7 @@ public class MaintenanceService {
                                         return ConsumableStatusResponse.builder()
                                                         .item(itemEnum)
                                                         .itemDescription(item.getName())
+                                                        .consumableItemId(item.getId())
                                                         .remainingLifePercent(Math.round(remainingLife * 10.0) / 10.0)
                                                         .lastMaintenanceDate(lastHistory != null
                                                                         ? lastHistory.getMaintenanceDate()
