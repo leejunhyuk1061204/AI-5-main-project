@@ -4,9 +4,12 @@ import kr.co.himedia.common.ApiResponse;
 
 import kr.co.himedia.dto.ai.DtcDto;
 import kr.co.himedia.dto.ai.UnifiedDiagnosisRequestDto;
+import kr.co.himedia.dto.ai.DiagnosisResponseDto;
 import kr.co.himedia.service.AiDiagnosisService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/ai")
@@ -36,5 +39,22 @@ public class AiController {
             @RequestPart(value = "data") UnifiedDiagnosisRequestDto requestDto) {
         Object result = aiDiagnosisService.requestUnifiedDiagnosis(requestDto, image, audio);
         return ApiResponse.success(result);
+    }
+
+    /**
+     * 진단 결과 조회 (BE-AI-006)
+     */
+    @GetMapping("/diagnose/session/{sessionId}")
+    public ApiResponse<DiagnosisResponseDto> getDiagnosisResult(@PathVariable UUID sessionId) {
+        return ApiResponse.success(aiDiagnosisService.getDiagnosisResult(sessionId));
+    }
+
+    /**
+     * 차량별 진단 목록 조회 (BE-AI-007)
+     */
+    @GetMapping("/diagnose/list")
+    public ApiResponse<java.util.List<kr.co.himedia.dto.ai.DiagnosisListItemDto>> getDiagnosisList(
+            @RequestParam UUID vehicleId) {
+        return ApiResponse.success(aiDiagnosisService.getDiagnosisList(vehicleId));
     }
 }
