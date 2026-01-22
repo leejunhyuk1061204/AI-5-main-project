@@ -57,4 +57,17 @@ public class AiController {
             @RequestParam UUID vehicleId) {
         return ApiResponse.success(aiDiagnosisService.getDiagnosisList(vehicleId));
     }
+
+    /**
+     * INTERACTIVE 모드 사용자 답변 전송 (BE-AI-008)
+     * 데이터 부족 시 AI와 대화형으로 추가 정보를 수집하기 위한 엔드포인트
+     */
+    @PostMapping(value = "/diagnose/session/{sessionId}/reply", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ApiResponse<DiagnosisResponseDto> replyToSession(
+            @PathVariable UUID sessionId,
+            @RequestPart(value = "image", required = false) org.springframework.web.multipart.MultipartFile image,
+            @RequestPart(value = "audio", required = false) org.springframework.web.multipart.MultipartFile audio,
+            @RequestPart(value = "data") kr.co.himedia.dto.ai.ReplyRequestDto replyDto) {
+        return ApiResponse.success(aiDiagnosisService.replyToSession(sessionId, replyDto, image, audio));
+    }
 }

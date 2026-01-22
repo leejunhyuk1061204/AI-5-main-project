@@ -31,6 +31,20 @@ public class VehicleService {
     private final VehicleRepository vehicleRepository;
     private final ConsumableItemRepository consumableItemRepository;
     private final VehicleConsumableRepository vehicleConsumableRepository;
+    private final kr.co.himedia.common.util.EncryptionUtils encryptionUtils;
+
+    // VIN 암호화 업데이트
+    @Transactional
+    public void updateVehicleVin(UUID vehicleId, String plainVin) {
+        Vehicle vehicle = vehicleRepository.findById(vehicleId)
+                .orElseThrow(() -> new kr.co.himedia.common.exception.BaseException(
+                        kr.co.himedia.common.exception.ErrorCode.VEHICLE_NOT_FOUND));
+
+        String encryptedVin = encryptionUtils.encrypt(plainVin);
+        vehicle.updateVin(encryptedVin);
+        vehicleRepository.save(vehicle);
+        log.info("[VehicleService] 차량 VIN 암호화 저장 완료 - vehicleId: {}", vehicleId);
+    }
 
     // 차량 수동 등록 (첫 차량일 경우 대표 차량 설정)
     @Transactional
