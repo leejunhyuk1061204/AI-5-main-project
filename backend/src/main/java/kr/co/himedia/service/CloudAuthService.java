@@ -1,25 +1,22 @@
 package kr.co.himedia.service;
 
 import kr.co.himedia.common.util.EncryptionUtils;
+import kr.co.himedia.dto.cloud.CloudVehicleRegisterRequest;
+import kr.co.himedia.dto.cloud.CloudVehicleResponse;
 import kr.co.himedia.dto.cloud.TokenExchangeResponse;
 import kr.co.himedia.entity.CloudAccount;
+import kr.co.himedia.entity.CloudConnectionStatus;
 import kr.co.himedia.entity.CloudProvider;
 import kr.co.himedia.entity.User;
+import kr.co.himedia.entity.Vehicle;
 import kr.co.himedia.repository.CloudAccountRepository;
 import kr.co.himedia.repository.UserRepository;
+import kr.co.himedia.repository.VehicleRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
-import org.springframework.util.LinkedMultiValueMap;
-import org.springframework.util.MultiValueMap;
-import org.springframework.web.client.RestTemplate;
 
-import java.time.LocalDateTime;
-import java.util.UUID;
+import java.util.*;
 
 @Slf4j
 @Service
@@ -28,87 +25,74 @@ public class CloudAuthService {
 
     private final CloudAccountRepository cloudAccountRepository;
     private final UserRepository userRepository;
+    private final VehicleRepository vehicleRepository;
+    private final VehicleService vehicleService;
     private final EncryptionUtils encryptionUtils;
-    private final RestTemplate restTemplate;
 
-    @Value("${smartcar.client-id}")
-    private String smartcarClientId;
+    /**
+     * 클라우드 서비스에서 연동된 차량 목록을 조회합니다.
+     */
+    public List<CloudVehicleResponse> getConnectedVehicles(UUID userId, CloudProvider provider) {
+        log.info("차량 목록 조회 시작 - userId: {}, provider: {}", userId, provider);
 
-    @Value("${smartcar.client-secret}")
-    private String smartcarClientSecret;
-
-    @Value("${smartcar.redirect-uri}")
-    private String smartcarRedirectUri;
-
-    @Value("${smartcar.token-uri}")
-    private String smartcarTokenUri;
-
-    @Value("${high-mobility.client-id}")
-    private String hmClientId;
-
-    @Value("${high-mobility.client-secret}")
-    private String hmClientSecret;
-
-    @Value("${high-mobility.redirect-uri}")
-    private String hmRedirectUri;
-
-    @Value("${high-mobility.token-uri}")
-    private String hmTokenUri;
-
-    public void exchangeCodeAndSave(UUID userId, String code, CloudProvider provider) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User not found"));
-
-        TokenExchangeResponse response;
-        if (provider == CloudProvider.SMARTCAR) {
-            response = exchangeSmartcarCode(code);
-        } else if (provider == CloudProvider.HIGH_MOBILITY) {
-            response = exchangeHighMobilityCode(code);
-        } else {
-            throw new UnsupportedOperationException("Unknown provider: " + provider);
-        }
+                .orElseThrow(() -> new RuntimeException("User not found: " + userId));
 
         CloudAccount account = cloudAccountRepository.findByUserAndProvider(user, provider)
-                .orElse(CloudAccount.builder().user(user).provider(provider).build());
+                .orElseThrow(() -> new RuntimeException("연동된 클라우드 계정이 없습니다."));
 
-        account.setAccessToken(encryptionUtils.encrypt(response.getAccess_token()));
-        if (response.getRefresh_token() != null) {
-            account.setRefreshToken(encryptionUtils.encrypt(response.getRefresh_token()));
+        // 토큰 유효성 확인 및 필요시 갱신
+        String accessToken = ensureValidToken(account, provider);
+
+        if (provider == CloudProvider.HIGH_MOBILITY) {
+            // TODO: High Mobility 차량 조회 구현 예정 (서비스 분리 고려)
+            return Collections.emptyList();
+        } else {
+            throw new UnsupportedOperationException("지원하지 않는 서비스입니다.");
         }
-        account.setExpiresAt(LocalDateTime.now().plusSeconds(response.getExpires_in()));
-
-        cloudAccountRepository.save(account);
-        log.info("Successfully saved cloud account for user: {}, provider: {}", userId, provider);
     }
 
-    private TokenExchangeResponse exchangeSmartcarCode(String code) {
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
-        headers.setBasicAuth(smartcarClientId, smartcarClientSecret);
+    /**
+     * 사용자가 선택한 클라우드 차량을 우리 시스템에 등록합니다.
+     */
+    public Vehicle registerCloudVehicle(UUID userId, CloudVehicleRegisterRequest request) {
+        log.info("차량 등록 시작 - userId: {}, providerVehicleId: {}", userId, request.getProviderVehicleId());
 
-        MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
-        body.add("grant_type", "authorization_code");
-        body.add("code", code);
-        body.add("redirect_uri", smartcarRedirectUri);
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found: " + userId));
 
-        HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(body, headers);
+        CloudAccount account = cloudAccountRepository.findByUserAndProvider(user, request.getCloudProvider())
+                .orElseThrow(() -> new RuntimeException("연동된 클라우드 계정이 없습니다."));
 
-        return restTemplate.postForObject(smartcarTokenUri, request, TokenExchangeResponse.class);
+        // TODO: 차량 정보 조회 및 등록 로직 구현 (High Mobility 전용 서비스 개발 예정)
+        throw new UnsupportedOperationException("차량 등록 로직은 현재 준비 중입니다.");
     }
 
-    private TokenExchangeResponse exchangeHighMobilityCode(String code) {
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+    /**
+     * 인가 코드를 받아 토큰을 교환하고 저장합니다.
+     * (High Mobility는 Client Credentials Flow를 사용할 예정이므로 이 메서드는 추후 재설계될 수 있음)
+     */
+    public void exchangeCodeAndSave(UUID userId, String code, CloudProvider provider) {
+        if (provider != CloudProvider.HIGH_MOBILITY) {
+            throw new UnsupportedOperationException("현재 High Mobility 연동만 준비 중입니다.");
+        }
 
-        MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
-        body.add("grant_type", "authorization_code");
-        body.add("code", code);
-        body.add("client_id", hmClientId);
-        body.add("client_secret", hmClientSecret);
-        body.add("redirect_uri", hmRedirectUri);
+        // TODO: High Mobility 토큰 교환 로직 구현 예정
+        log.warn("High Mobility 토큰 교환 로직이 아직 구현되지 않았습니다.");
+    }
 
-        HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(body, headers);
+    /**
+     * 토큰 유효성을 확인하고 필요 시 갱신합니다.
+     */
+    private String ensureValidToken(CloudAccount account, CloudProvider provider) {
+        // TODO: 토큰 만료 체크 및 갱신 로직 구현
+        return encryptionUtils.decrypt(account.getAccessToken());
+    }
 
-        return restTemplate.postForObject(hmTokenUri, request, TokenExchangeResponse.class);
+    /**
+     * 차량의 VIN 정보를 기록합니다.
+     */
+    public void updateVehicleVin(UUID vehicleId, String plainVin) {
+        vehicleService.updateVehicleVin(vehicleId, plainVin);
     }
 }

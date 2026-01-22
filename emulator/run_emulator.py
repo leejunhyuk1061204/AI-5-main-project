@@ -70,6 +70,7 @@ class RobustElmEmulator:
             '0104': '00',          # Engine Load
             '0142': '00 00',       # Control Module Voltage
         }
+        self.vin = self.config.get('vehicle', {}).get('vin', '1HM00000000000001')
         self.running = True
         self.ser = None
 
@@ -231,8 +232,15 @@ class RobustElmEmulator:
                 response = f"41 {pid[2:4]} {self.pids[pid]}"
             else:
                 response = "NO DATA"
-                
-        # 3. 기타 명령어
+
+        # 3. OBD 서비스 09 (차량 정보)
+        elif cmd.startswith("0902"):
+            # VIN을 16진수 문자열로 변환 (예: '1' -> '31')
+            vin_hex = " ".join([f"{ord(c):02X}" for c in self.vin])
+            # 49(응답 서비스) + 02(PID) + 01(데이터 인덱스) + VIN 데이터
+            response = f"49 02 01 {vin_hex}"
+            
+        # 4. 기타 명령어
         else:
             response = "OK"
 

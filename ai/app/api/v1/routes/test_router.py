@@ -184,9 +184,14 @@ async def connect_comprehensive_mock(data: dict):
     Response Modes:
     - REPORT: 진단 완료 (Confidence High/Mid)
     - INTERACTIVE: 추가 정보 요청 (Confidence Low)
+    
+    대화 이력(conversation_history) 기반 시나리오:
+    - 답변 0회: INTERACTIVE + 사진 촬영 요청
+    - 답변 1회 (사진 없음): INTERACTIVE + 추가 질문
+    - 답변 2회 이상 또는 사진 있음: REPORT
     """
     import asyncio
-    await asyncio.sleep(3)  # 실제 분석 시간을 시뮬레이션하기 위한 지연
+    await asyncio.sleep(1)  # 분석 지연 시뮬레이션 (테스트용으로 단축)
     
     vehicle_id = data.get("vehicleId", "unknown")
     audio = data.get("analysis_results", {}).get("audioAnalysis") or data.get("audioAnalysis")
@@ -194,48 +199,73 @@ async def connect_comprehensive_mock(data: dict):
     anomaly = data.get("analysis_results", {}).get("anomalyAnalysis") or data.get("anomalyAnalysis")
     rag_context = data.get("rag_context") or data.get("knowledgeData")
     
+    # 대화 이력 파싱
+    conversation = data.get("conversation_history", [])
+    user_reply_count = len([m for m in conversation if m.get("role") == "user"])
+    
     print(f"[Comprehensive] Request for vehicle: {vehicle_id}")
     print(f"- Visual: {'YES' if visual else 'NO'}, Audio: {'YES' if audio else 'NO'}, Anomaly: {'YES' if anomaly else 'NO'}")
+    print(f"- Conversation history: {user_reply_count} user replies")
 
-    # 케이스 1: 데이터가 너무 부족하여 추가 정보가 필요한 경우 (INTERACTIVE)
-    if not audio and not visual and not anomaly:
+    # 시나리오 1: 최초 요청 (데이터 부족 또는 모두 정상) - 사진 촬영 요청
+    is_anomaly_detected = anomaly.get("is_anomaly", False) if anomaly else False
+    if not audio and not visual and not is_anomaly_detected and user_reply_count == 0:
         return {
             "response_mode": "INTERACTIVE",
             "confidence_level": "LOW",
             "summary": "차량 데이터가 부족하여 정확한 진단이 어렵습니다.",
             "report_data": None,
             "interactive_data": {
-                "message": "안전한 진단을 위해 추가 정보가 필요합니다. 엔진룸 사진을 찍거나 소음을 녹음해 주세요.",
+                "message": "정확한 진단을 위해 엔진룸 사진을 찍어서 보내주세요.",
                 "follow_up_questions": [
-                    "이상 증상이 언제부터 시작되었나요?",
-                    "최근에 경고등이 점등된 적이 있나요?"
+                    "이상 증상이 언제부터 시작되었나요?"
                 ],
-                "requested_actions": ["CAPTURE_PHOTO", "RECORD_AUDIO"]
+                "requested_actions": ["CAPTURE_PHOTO"]
             },
             "disclaimer": "본 진단은 데이터 부족 상태에서의 추론이므로 참고용으로만 활용하세요."
         }
-
-    # 케이스 2: 분석 결과가 존재할 때 (REPORT)
-    # 실제로는 복합적인 로직이 들어가겠지만 Mock에서는 간단히 생성
+    
+    # 시나리오 2: 사용자 답변 1회 (사진 없음) - 추가 질문
+    if user_reply_count == 1 and not visual:
+        return {
+            "response_mode": "INTERACTIVE",
+            "confidence_level": "LOW",
+            "summary": "답변 감사합니다. 추가 정보가 필요합니다.",
+            "report_data": None,
+            "interactive_data": {
+                "message": "시동을 끈 상태에서도 소리가 계속 나나요? 그리고 엔진룸 사진을 찍어서 보내주시면 더 정확한 분석이 가능합니다.",
+                "follow_up_questions": [
+                    "시동을 끈 상태에서도 소리가 나나요?",
+                    "최근 냉각수 보충을 하신 적 있나요?"
+                ],
+                "requested_actions": ["CAPTURE_PHOTO", "RECORD_AUDIO"]
+            },
+            "disclaimer": "본 진단은 추론 기반이므로 참고용으로만 활용하세요."
+        }
+    
+    # 시나리오 3: 사용자 답변 2회 이상 또는 분석 결과 있음 - REPORT 생성
     is_anomaly = anomaly.get("is_anomaly") if anomaly else False
+    has_visual_issue = visual.get("status") == "FAULTY" if visual else False
+    has_audio_issue = audio.get("status") == "FAULTY" if audio else False
     
     return {
         "response_mode": "REPORT",
-        "confidence_level": "HIGH" if (audio and visual) else "MEDIUM",
-        "summary": "차량 점검 결과 이상 징후가 감지되었습니다." if is_anomaly else "차량 전반적인 상태는 양호합니다.",
+        "confidence_level": "HIGH" if (audio or visual) else "MEDIUM",
+        "summary": "수집된 데이터를 바탕으로 종합 분석을 완료했습니다.",
         "report_data": {
             "suspected_causes": [
                 {
-                    "cause": "냉각 계통 점검 필요" if is_anomaly else "소모품 관리",
-                    "basis": "OBD 수온 이상 감지" if is_anomaly else "정기 점검 주기 도달",
-                    "source_type": "CONFIRMED" if is_anomaly else "INFERRED",
-                    "reliability": "HIGH"
+                    "cause": "냉각 계통 점검 필요" if (is_anomaly or has_visual_issue) else "정상 상태",
+                    "basis": "사용자 답변 및 분석 결과 종합" if user_reply_count > 0 else "OBD 데이터 분석",
+                    "source_type": "CONFIRMED" if visual else "INFERRED",
+                    "reliability": "HIGH" if visual else "MEDIUM"
                 }
             ],
-            "final_guide": "가까운 정비소를 방문하여 냉각수 및 벨트 상태를 점검받으시길 권장합니다." if is_anomaly else "정기적인 소모품 교체 외에는 특이사항이 없습니다."
+            "final_guide": "대화와 분석 결과를 종합한 결과, 정기적인 냉각수 점검을 권장합니다." if (is_anomaly or has_visual_issue or has_audio_issue) else "차량 상태가 양호합니다. 정기 점검 일정을 유지해주세요.",
+            "risk_level": "MID" if (is_anomaly or has_visual_issue) else "LOW"
         },
         "interactive_data": None,
-        "disclaimer": "본 진단은 2010~2013년식 매뉴얼 및 AI 추론에 기반하며, 실제 정비 전문가의 의견과 다를 수 있습니다."
+        "disclaimer": "본 진단은 AI 추론 및 사용자 답변에 기반하며, 실제 정비 전문가의 의견과 다를 수 있습니다."
     }
 
 # ---- /connect 전용 Phase 2 Mock 스키마 ----

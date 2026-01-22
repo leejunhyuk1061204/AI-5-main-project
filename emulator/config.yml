@@ -8,6 +8,11 @@ connection:
 # 모드 설정 (static: 고정값, replay: CSV 재생, high_mobility: 하이모빌리티 연동)
 mode: "static"
 
+# 가상 차량 정보 (Mode 0902 대응용)
+vehicle:
+  vin: "1HMXOBSGK693TJ7JR"
+  brand: "sandbox"
+
 # [Mode: high_mobility] 하이모빌리티 샌드박스 연동 설정
 high_mobility:
   access_token: "YOUR_HM_SANDBOX_TOKEN_HERE"

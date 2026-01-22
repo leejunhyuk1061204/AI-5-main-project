@@ -170,6 +170,7 @@ CREATE TABLE IF NOT EXISTS diag_sessions (
     trip_id UUID, -- trip_summaries.trip_id
     trigger_type diag_trigger_type,
     status diag_status,
+    progress_message VARCHAR(1000),
     created_at TIMESTAMP DEFAULT NOW()
 );
 
@@ -241,6 +242,7 @@ CREATE TABLE IF NOT EXISTS vehicle_consumables (
     wear_factor FLOAT DEFAULT 1.0, -- AI 계산 마모율 (1.0 = 표준)
     last_replaced_at TIMESTAMP,
     last_replaced_mileage FLOAT, -- 교체 시점의 주행거리
+    is_inferred BOOLEAN DEFAULT FALSE NOT NULL, -- 시스템 추론 데이터 여부
     remaining_life FLOAT, -- (캐싱용) 잔존 수명 %
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP,
