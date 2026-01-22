@@ -50,7 +50,10 @@ public class VehicleService {
         }
 
         Vehicle savedVehicle = vehicleRepository.save(vehicle);
+
+        // 9종 전체 소모품 초기화 (입력된 항목은 그대로, 미입력은 추론)
         registerConsumables(savedVehicle, request.getConsumables());
+
         return VehicleDto.Response.from(savedVehicle);
     }
 
@@ -131,17 +134,26 @@ public class VehicleService {
     public void registerConsumables(Vehicle vehicle, List<VehicleDto.ConsumableRegistrationRequest> requests) {
         log.info("[VehicleService] 소모품 일괄 등록 시작 - Vehicle: {}", vehicle.getVehicleId());
 
-        List<ConsumableItem> allMasterItems = consumableItemRepository.findAll();
+        List<kr.co.himedia.entity.ConsumableItem> allMasterItems = consumableItemRepository.findAll();
+        // [MOD] 코드 매칭을 대소문자 구분 없이 강건하게 처리
         Map<String, VehicleDto.ConsumableRegistrationRequest> requestMap = (requests == null) ? Map.of()
                 : requests.stream()
-                        .collect(Collectors.toMap(VehicleDto.ConsumableRegistrationRequest::getCode, r -> r));
+                        .filter(r -> r.getCode() != null)
+                        .collect(Collectors.toMap(
+                                r -> r.getCode().trim().toUpperCase(),
+                                r -> r,
+                                (existing, replacement) -> existing // 중복 시 첫 번째 것 사용
+                        ));
+
+        log.info("[VehicleService] 수신된 소모품 요청 코드: {}", requestMap.keySet());
 
         double currentMileage = vehicle.getTotalMileage() != null ? vehicle.getTotalMileage() : 0.0;
         LocalDateTime now = LocalDateTime.now();
         double dailyMileage = 41.0; // 일평균 약 41km (연 15,000km 기준)
 
         for (ConsumableItem item : allMasterItems) {
-            VehicleDto.ConsumableRegistrationRequest req = requestMap.get(item.getCode());
+            String itemCode = item.getCode().trim().toUpperCase();
+            VehicleDto.ConsumableRegistrationRequest req = requestMap.get(itemCode);
             VehicleConsumable vc = new VehicleConsumable();
             vc.setVehicle(vehicle);
             vc.setConsumableItem(item);
@@ -178,6 +190,7 @@ public class VehicleService {
 
             vc.setLastReplacedAt(lastAt);
             vc.setLastReplacedMileage(lastMileage);
+            vc.setIsInferred(req == null); // 사용자가 입력하지 않은 항목만 추론(inferred)으로 표시
 
             // 잔존 수명 최초 계산
             double distanceDriven = currentMileage - lastMileage;

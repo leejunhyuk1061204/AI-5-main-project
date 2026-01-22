@@ -44,22 +44,33 @@ public class WearFactorService {
         Vehicle vehicle = vehicleRepository.findById(vehicleId)
                 .orElseThrow(() -> new RuntimeException("차량을 찾을 수 없습니다: " + vehicleId));
 
-        // 1. 공통 데이터 준비 (운전 습관 및 메타데이터)
+        // 1. 해당 차량의 모든 소모품 컨텍스트 빌드
+        List<VehicleConsumable> allConsumables = vehicleConsumableRepository.findByVehicle(vehicle);
+        List<AiWearFactorRequest.ConsumableContext> consumableContexts = allConsumables.stream()
+                .map(vc -> AiWearFactorRequest.ConsumableContext.builder()
+                        .code(vc.getConsumableItem().getCode())
+                        .lastReplacedMileage(vc.getLastReplacedMileage() != null ? vc.getLastReplacedMileage() : 0.0)
+                        .isInferred(vc.getIsInferred() != null ? vc.getIsInferred() : true)
+                        .build())
+                .collect(java.util.stream.Collectors.toList());
+
+        // 2. 공통 데이터 준비 (운전 습관 및 메타데이터)
         AiWearFactorRequest.DrivingHabits habits = getRecentDrivingHabits(vehicle.getVehicleId());
-        AiWearFactorRequest commonRequest = AiWearFactorRequest.builder()
+        AiWearFactorRequest request = AiWearFactorRequest.builder()
                 .vehicleMetadata(AiWearFactorRequest.VehicleMetadata.builder()
                         .modelYear(vehicle.getModelYear() != null ? vehicle.getModelYear() : 2023)
                         .fuelType(vehicle.getFuelType() != null ? vehicle.getFuelType().name() : "GASOLINE")
-                        .totalMileage(currentTotalMileage.intValue()) // Use passed mileage
+                        .totalMileage(currentTotalMileage.intValue())
                         .build())
                 .drivingHabits(habits)
+                .consumables(consumableContexts)
                 .build();
 
-        // 2. AI 서버 일괄 요청
+        // 3. AI 서버 일괄 요청
         try {
-            AiWearFactorResponse response = aiClient.getWearFactor(commonRequest);
+            AiWearFactorResponse response = aiClient.getWearFactor(request);
             if (response != null && response.getWearFactors() != null) {
-                updateAllFactors(vehicle, response.getWearFactors(), currentTotalMileage);
+                updateAllFactors(vehicle, response, currentTotalMileage);
             }
         } catch (Exception e) {
             log.error("[WearFactor] 일괄 마모율 계산 실패: {}", e.getMessage());
@@ -68,27 +79,23 @@ public class WearFactorService {
         log.info("[WearFactor] 마모율 일괄 계산 프로세스 종료 [Vehicle: {}]", vehicleId);
     }
 
+    /**
+     * AI 응답에 따른 소모품 상태 업데이트 (isInferred 분기 로직 포함)
+     */
     @Transactional
-    public void updateAllFactors(Vehicle vehicle, java.util.Map<String, Double> factors, Double currentTotalMileage) {
-        // 거리 정보는 로깅용으로만 조회 (실제 계산은 TotalMileage 사용)
-        Double tripDistanceKm = tripSummaryRepository.findLatestTripByVehicleId(vehicle.getVehicleId())
-                .map(kr.co.himedia.entity.TripSummary::getDistance)
-                .orElse(0.0);
+    public void updateAllFactors(Vehicle vehicle, AiWearFactorResponse response, Double currentTotalMileage) {
+        java.util.Map<String, Double> wearFactors = response.getWearFactors();
+        java.util.Map<String, Double> remainingLifes = response.getRemainingLifes();
 
-        // double currentTotalMileage = vehicle.getTotalMileage(); // REMOVED: Use
-        // passed value
-
-        for (java.util.Map.Entry<String, Double> entry : factors.entrySet()) {
+        for (java.util.Map.Entry<String, Double> entry : wearFactors.entrySet()) {
             String itemCode = entry.getKey();
             Double wearFactor = entry.getValue();
 
             try {
-                // 1. 매핑 테이블 조회 (ConsumableItem Code 기준)
                 VehicleConsumable vehicleConsumable = vehicleConsumableRepository
                         .findByVehicleAndConsumableItem_Code(vehicle, itemCode)
                         .orElse(null);
 
-                // 2. 없으면 생성 (마스터 데이터 참조)
                 if (vehicleConsumable == null) {
                     vehicleConsumable = createDefaultMapping(vehicle, itemCode, currentTotalMileage);
                 }
@@ -98,21 +105,31 @@ public class WearFactorService {
                     continue;
                 }
 
-                // 3. 마모율 업데이트
+                // 마모율 업데이트 (공통)
                 vehicleConsumable.setWearFactor(wearFactor);
 
-                // 4. 잔존 수명 재계산 및 업데이트 (캐싱)
-                updateRemainingLife(vehicleConsumable, currentTotalMileage);
+                // isInferred 분기 로직
+                Boolean isInferred = vehicleConsumable.getIsInferred();
+                if (isInferred != null && isInferred && remainingLifes != null
+                        && remainingLifes.containsKey(itemCode)) {
+                    // 보정 모드: AI가 계산한 잔존 수명을 그대로 적용
+                    Double aiLife = remainingLifes.get(itemCode);
+                    vehicleConsumable.updateRemainingLife(aiLife);
+                    log.info("[WearFactor] 보정 모드 적용 - {}: AI 수명={}%", itemCode, aiLife);
+                } else {
+                    // 누적 모드: 기존 수식 기반으로 잔존 수명 계산
+                    updateRemainingLife(vehicleConsumable, currentTotalMileage);
+                    log.info("[WearFactor] 누적 모드 적용 - {}: 수식 기반 수명={}%", itemCode,
+                            vehicleConsumable.getRemainingLife());
+                }
 
-                // 5. 잔존 수명 15% 이하 시 알림 발송
+                // 잔존 수명 15% 이하 시 알림 발송
                 if (vehicleConsumable.getRemainingLife() != null
                         && vehicleConsumable.getRemainingLife() <= CONSUMABLE_ALERT_THRESHOLD) {
                     sendConsumableAlert(vehicle, vehicleConsumable);
                 }
 
                 vehicleConsumableRepository.save(vehicleConsumable);
-                log.info("[WearFactor] Updated {}: factor={}, remainingLife={}%", itemCode, wearFactor,
-                        vehicleConsumable.getRemainingLife());
 
             } catch (Exception e) {
                 log.error("Failed to process wear factor for " + itemCode, e);

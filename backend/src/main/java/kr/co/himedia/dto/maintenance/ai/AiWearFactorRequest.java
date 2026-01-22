@@ -4,14 +4,14 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Builder;
 import lombok.Getter;
 
-import java.time.LocalDate;
+import java.util.List;
 
+/**
+ * AI 서버 마모율 예측 요청 DTO (Phase 2 - 다중 소모품 컨텍스트 지원)
+ */
 @Getter
 @Builder
 public class AiWearFactorRequest {
-
-    @JsonProperty("last_replaced")
-    private LastReplaced lastReplaced;
 
     @JsonProperty("vehicle_metadata")
     private VehicleMetadata vehicleMetadata;
@@ -19,13 +19,23 @@ public class AiWearFactorRequest {
     @JsonProperty("driving_habits")
     private DrivingHabits drivingHabits;
 
+    @JsonProperty("consumables")
+    private List<ConsumableContext> consumables;
+
+    /**
+     * 소모품별 컨텍스트 (isInferred 플래그 포함)
+     */
     @Getter
     @Builder
-    public static class LastReplaced {
-        @JsonProperty("date")
-        private LocalDate date;
-        @JsonProperty("mileage")
-        private int mileage;
+    public static class ConsumableContext {
+        @JsonProperty("code")
+        private String code;
+
+        @JsonProperty("last_replaced_mileage")
+        private double lastReplacedMileage;
+
+        @JsonProperty("is_inferred")
+        private boolean isInferred;
     }
 
     @Getter
