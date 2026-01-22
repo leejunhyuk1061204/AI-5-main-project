@@ -179,84 +179,63 @@ async def connect_get_embedding(data: dict):
 async def connect_comprehensive_mock(data: dict):
     """
     [사용자 - Mock] 종합 진단 Mock 응답 반환 (수동/자동 진단용)
+    - 4.API 명세서.md (Part 2 - 6. AI 진단 통합)의 스펙을 준수함.
     
-    Status 종류:
-    - SUCCESS: 진단 완료
-    - NEED_MORE_DATA: 추가 증거 필요 (사진/녹음 요청)
+    Response Modes:
+    - REPORT: 진단 완료 (Confidence High/Mid)
+    - INTERACTIVE: 추가 정보 요청 (Confidence Low)
     """
+    import asyncio
+    await asyncio.sleep(3)  # 실제 분석 시간을 시뮬레이션하기 위한 지연
+    
     vehicle_id = data.get("vehicleId", "unknown")
-    audio = data.get("audioAnalysis")
-    visual = data.get("visualAnalysis")
-    anomaly = data.get("anomalyAnalysis")
-    vehicle_info = data.get("vehicleInfo")
-    consumables_status = data.get("consumablesStatus")
+    audio = data.get("analysis_results", {}).get("audioAnalysis") or data.get("audioAnalysis")
+    visual = data.get("analysis_results", {}).get("visualAnalysis") or data.get("visualAnalysis")
+    anomaly = data.get("analysis_results", {}).get("anomalyAnalysis") or data.get("anomalyAnalysis")
+    rag_context = data.get("rag_context") or data.get("knowledgeData")
     
-    log_msg = f"[Comprehensive] Request received for vehicle: {vehicle_id}\n"
-    log_msg += f"- Visual: {'YES' if visual else 'NO'}\n"
-    log_msg += f"- Audio: {'YES' if audio else 'NO'}\n"
-    log_msg += f"- Anomaly: {'YES' if anomaly else 'NO'}\n"
-    log_msg += f"- VehicleInfo: {'YES' if vehicle_info else 'NO'}\n"
-    log_msg += f"- Consumables: {'YES' if consumables_status else 'NO'} ({len(consumables_status) if consumables_status else 0} items)"
-    print(log_msg)
-    
+    print(f"[Comprehensive] Request for vehicle: {vehicle_id}")
+    print(f"- Visual: {'YES' if visual else 'NO'}, Audio: {'YES' if audio else 'NO'}, Anomaly: {'YES' if anomaly else 'NO'}")
+
+    # 케이스 1: 데이터가 너무 부족하여 추가 정보가 필요한 경우 (INTERACTIVE)
     if not audio and not visual and not anomaly:
         return {
-            "status": "NEED_MORE_DATA",
-            "vehicleId": vehicle_id,
-            "mission": {
-                "type": "PHOTO_OR_AUDIO",
-                "message": "정확한 진단을 위해 차량 사진 또는 엔진 소리 녹음이 필요합니다.",
-                "options": [
-                    {"type": "PHOTO", "guide": "엔진룸 또는 이상 부위를 촬영해 주세요."},
-                    {"type": "AUDIO", "guide": "시동을 건 상태에서 10초간 녹음해 주세요."}
-                ]
+            "response_mode": "INTERACTIVE",
+            "confidence_level": "LOW",
+            "summary": "차량 데이터가 부족하여 정확한 진단이 어렵습니다.",
+            "report_data": None,
+            "interactive_data": {
+                "message": "안전한 진단을 위해 추가 정보가 필요합니다. 엔진룸 사진을 찍거나 소음을 녹음해 주세요.",
+                "follow_up_questions": [
+                    "이상 증상이 언제부터 시작되었나요?",
+                    "최근에 경고등이 점등된 적이 있나요?"
+                ],
+                "requested_actions": ["CAPTURE_PHOTO", "RECORD_AUDIO"]
             },
-            "model": "gpt-4o-mock"
+            "disclaimer": "본 진단은 데이터 부족 상태에서의 추론이므로 참고용으로만 활용하세요."
         }
-    
-    if not audio:
-        return {
-            "status": "NEED_MORE_DATA",
-            "vehicleId": vehicle_id,
-            "mission": {
-                "type": "AUDIO",
-                "message": "소리 분석 데이터가 없습니다. 엔진 소리를 녹음해 주세요.",
-                "guide": "시동을 건 상태에서 10초간 녹음해 주세요."
-            },
-            "model": "gpt-4o-mock"
-        }
-    
-    if not visual:
-        return {
-            "status": "NEED_MORE_DATA",
-            "vehicleId": vehicle_id,
-            "mission": {
-                "type": "PHOTO",
-                "message": "사진 분석 데이터가 없습니다. 차량 사진을 촬영해 주세요.",
-                "guide": "엔진룸 또는 이상 부위를 촬영해 주세요."
-            },
-            "model": "gpt-4o-mock"
-        }
+
+    # 케이스 2: 분석 결과가 존재할 때 (REPORT)
+    # 실제로는 복합적인 로직이 들어가겠지만 Mock에서는 간단히 생성
+    is_anomaly = anomaly.get("is_anomaly") if anomaly else False
     
     return {
-        "status": "SUCCESS",
-        "vehicleId": vehicle_id,
-        "diagnosis": {
-            "summary": "차량 전반적인 상태는 양호합니다.",
-            "issues": [
+        "response_mode": "REPORT",
+        "confidence_level": "HIGH" if (audio and visual) else "MEDIUM",
+        "summary": "차량 점검 결과 이상 징후가 감지되었습니다." if is_anomaly else "차량 전반적인 상태는 양호합니다.",
+        "report_data": {
+            "suspected_causes": [
                 {
-                    "category": visual.get("category", "일반") if visual else "일반",
-                    "severity": "LOW",
-                    "description": "경미한 점검 필요"
+                    "cause": "냉각 계통 점검 필요" if is_anomaly else "소모품 관리",
+                    "basis": "OBD 수온 이상 감지" if is_anomaly else "정기 점검 주기 도달",
+                    "source_type": "CONFIRMED" if is_anomaly else "INFERRED",
+                    "reliability": "HIGH"
                 }
             ],
-            "recommendations": [
-                "정기 점검을 권장합니다.",
-                "엔진 오일 상태를 확인해 주세요."
-            ]
+            "final_guide": "가까운 정비소를 방문하여 냉각수 및 벨트 상태를 점검받으시길 권장합니다." if is_anomaly else "정기적인 소모품 교체 외에는 특이사항이 없습니다."
         },
-        "confidence": 0.85,
-        "model": "gpt-4o-mock"
+        "interactive_data": None,
+        "disclaimer": "본 진단은 2010~2013년식 매뉴얼 및 AI 추론에 기반하며, 실제 정비 전문가의 의견과 다를 수 있습니다."
     }
 
 # ---- /connect 전용 Phase 2 Mock 스키마 ----
