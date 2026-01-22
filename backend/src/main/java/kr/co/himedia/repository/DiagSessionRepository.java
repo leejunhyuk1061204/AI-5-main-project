@@ -16,4 +16,7 @@ public interface DiagSessionRepository extends JpaRepository<DiagSession, UUID> 
     /** 차량의 특정 상태+트리거 타입 세션 조회 (UPDATE용) */
     Optional<DiagSession> findFirstByVehiclesIdAndTriggerTypeAndStatusOrderByCreatedAtDesc(
             UUID vehiclesId, DiagTriggerType triggerType, DiagStatus status);
+
+    /** 차량별 진단 세션 목록 조회 (최신순) */
+    java.util.List<DiagSession> findByVehiclesIdOrderByCreatedAtDesc(UUID vehiclesId);
 }

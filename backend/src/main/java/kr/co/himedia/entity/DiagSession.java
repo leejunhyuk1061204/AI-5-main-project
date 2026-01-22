@@ -59,6 +59,6 @@ public class DiagSession {
     }
 
     public enum DiagStatus {
-        PENDING, PROCESSING, DONE, FAILED
+        PENDING, PROCESSING, DONE, ACTION_REQUIRED, FAILED
     }
 }
