@@ -5,6 +5,7 @@ import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
 import org.springframework.amqp.support.converter.MessageConverter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.beans.factory.annotation.Qualifier;
 
 @Configuration
 public class RabbitConfig {
@@ -36,7 +37,8 @@ public class RabbitConfig {
     }
 
     @Bean
-    public Binding aiDiagnosisDlBinding(Queue aiDiagnosisDlq, TopicExchange aiDiagnosisDlExchange) {
+    public Binding aiDiagnosisDlBinding(@Qualifier("aiDiagnosisDlq") Queue aiDiagnosisDlq,
+            @Qualifier("aiDiagnosisDlExchange") TopicExchange aiDiagnosisDlExchange) {
         return BindingBuilder.bind(aiDiagnosisDlq)
                 .to(aiDiagnosisDlExchange)
                 .with("ai.diagnosis.dead");
@@ -51,7 +53,8 @@ public class RabbitConfig {
     }
 
     @Bean
-    public Binding aiDiagnosisBinding(Queue aiDiagnosisQueue, TopicExchange carSentryExchange) {
+    public Binding aiDiagnosisBinding(@Qualifier("aiDiagnosisQueue") Queue aiDiagnosisQueue,
+            @Qualifier("carSentryExchange") TopicExchange carSentryExchange) {
         return BindingBuilder.bind(aiDiagnosisQueue)
                 .to(carSentryExchange)
                 .with(ROUTING_KEY);
