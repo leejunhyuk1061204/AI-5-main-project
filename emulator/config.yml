@@ -5,8 +5,13 @@ connection:
   port: "COM3"
   baudrate: 38400
 
-# 모드 설정 (static: 고정값, replay: CSV 재생)
+# 모드 설정 (static: 고정값, replay: CSV 재생, high_mobility: 하이모빌리티 연동)
 mode: "static"
+
+# [Mode: high_mobility] 하이모빌리티 샌드박스 연동 설정
+high_mobility:
+  access_token: "YOUR_HM_SANDBOX_TOKEN_HERE"
+  refresh_interval: 1.0  # 초 단위
 
 # [Mode: static] 고정 PID 데이터 설정
 pids:
@@ -17,11 +22,15 @@ pids:
   voltage: "3778"     # 14.2V
   throttle: "33"      # 20%
 
-# [Mode: replay] CSV 주행 데이터 재생 설정
+# [Mode: replay] CSV 주행 데이터 재생 및 매핑 설정
 replay:
-  # 재생할 CSV 파일 경로 (ai/data/obd/raw 폴더 내의 파일 권장)
-  csv_file: "../ai/data/obd/raw/normal/2017-07-06_Seat_Leon_KA_KA_Normal.csv"
-  # 데이터 업데이트 간격 (초)
-  interval: 0.1
-  # 무한 반복 여부
+  csv_file: "scenarios/overheating.csv"
+  interval: 0.5
   loop: true
+  # CSV 컬럼명과 PID 데이터 매핑 (사용자의 CSV 형식에 맞춰 수정 가능)
+  mapping:
+    rpm: "Engine RPM [RPM]"
+    speed: "Vehicle Speed Sensor [km/h]"
+    coolant_temp: "Engine Coolant Temperature [°C]"
+    engine_load: "Calculated Engine Load [%]"
+    voltage: "Control Module Voltage [V]"
