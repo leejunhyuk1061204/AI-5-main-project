@@ -15,7 +15,8 @@ from fastapi.responses import JSONResponse
 from ai.app.services.local_service import process_visual_mock, process_audio_mock
 from ai.app.schemas.visual_schema import VisualResponse, DetectionItem
 from ai.app.schemas.audio_schema import AudioResponse
-from pydantic import BaseModel
+from ai.app.schemas.wear_factor import VehicleMetadata, DrivingHabits # 공통 메타데이터는 재사용
+from pydantic import BaseModel, Field
 from typing import List, Dict
 from PIL import Image
 import io
@@ -258,30 +259,55 @@ async def connect_comprehensive_mock(data: dict):
         "model": "gpt-4o-mock"
     }
 
+# ---- /connect 전용 Phase 2 Mock 스키마 ----
+class ConnectConsumableContext(BaseModel):
+    code: str
+    last_replaced_mileage: float
+    is_inferred: bool = False
 
-@connect_router.post("/predict/wear-factor")
-async def connect_predict_wear_factor(data: dict):
+class ConnectWearFactorRequest(BaseModel):
+    vehicle_metadata: VehicleMetadata
+    driving_habits: DrivingHabits
+    consumables: List[ConnectConsumableContext]
+
+class ConnectWearFactorResponse(BaseModel):
+    wear_factors: Dict[str, float]
+    remaining_lifes: Dict[str, float]
+    model_version: str
+
+
+@connect_router.post("/predict/wear-factor", response_model=ConnectWearFactorResponse)
+async def connect_predict_wear_factor(request: ConnectWearFactorRequest):
     """
-    [사용자 - Mock] XGBoost 마모율 예측 Mock 응답 반환
+    [사용자 - Mock] Phase 2용 소모품별 마모도 및 예측 수명 응답
+    - is_inferred=True: AI가 기초 데이터를 보정하여 수명 재계산
+    - is_inferred=False: 사용자 데이터를 존중하여 가중치 누적 차감
     """
-    print(f"[Connect Router] Received Wear-Factor Request")
     import random
     
-    # DB 표준 명칭에 맞게 키값 수정
-    wear_factors = {
-        "ENGINE_OIL": round(random.uniform(0.8, 1.3), 2),
-        "TIRE_FRONT": round(random.uniform(0.9, 1.4), 2),
-        "TIRE_REAR": round(random.uniform(0.9, 1.4), 2),
-        "BRAKE_PAD_FRONT": round(random.uniform(1.0, 1.5), 2),
-        "BRAKE_PAD_REAR": round(random.uniform(1.0, 1.5), 2),
-        "BATTERY_12V": round(random.uniform(0.95, 1.1), 2)
-    }
+    wear_factors = {}
+    remaining_lifes = {}
     
-    return {
-        "wear_factors": wear_factors,
-        "model_version": "xgboost-mock-0.2.0",
-        "message": "부품별 마모성 계수가 계산되었습니다."
-    }
+    for item in request.consumables:
+        # 가중치 (Wear Factor)
+        factor = round(random.uniform(0.8, 1.4), 2)
+        wear_factors[item.code] = factor
+        
+        # 잔존 수명 (Remaining Life)
+        if item.is_inferred:
+            # 보정 모드: AI가 정교하게 예측한 % 제공
+            life = round(random.uniform(40.0, 95.0), 1)
+        else:
+            # 누적 차감 모드: 현재 주행 패턴 기반 차감 시뮬레이션
+            life = round(random.uniform(10.0, 85.0), 1)
+            
+        remaining_lifes[item.code] = life
+    
+    return ConnectWearFactorResponse(
+        wear_factors=wear_factors,
+        remaining_lifes=remaining_lifes,
+        model_version="xgboost-mock-0.3.0-connect"
+    )
 
 
 @connect_router.get("/endpoints")

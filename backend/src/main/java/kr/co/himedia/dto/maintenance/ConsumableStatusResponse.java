@@ -11,6 +11,7 @@ import java.time.LocalDate;
 public class ConsumableStatusResponse {
     private MaintenanceItem item;
     private String itemDescription;
+    private Long consumableItemId;
     private double remainingLifePercent;
     private LocalDate lastMaintenanceDate;
     private double lastMaintenanceMileage;
