@@ -27,6 +27,9 @@ export interface VehicleResponse {
     tireSizeFront?: string;
     tireSizeRear?: string;
     officialFuelEconomy?: number;
+
+    // Added
+    vin: string | null;
 }
 
 // OBD 기반 차량 등록 요청
@@ -51,6 +54,8 @@ export interface ManualRegistrationRequest {
 export interface VehicleUpdateRequest {
     nickname?: string;
     memo?: string;
+    carNumber?: string;
+    vin?: string;
 }
 
 /**

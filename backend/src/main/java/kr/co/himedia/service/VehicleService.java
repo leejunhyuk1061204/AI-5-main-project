@@ -112,6 +112,18 @@ public class VehicleService {
                 .orElseThrow(() -> new BaseException(ErrorCode.VEHICLE_NOT_FOUND));
 
         vehicle.updateInfo(request.getNickname(), request.getMemo());
+
+        if (request.getCarNumber() != null && !request.getCarNumber().isBlank()) {
+            vehicle.updateCarNumber(request.getCarNumber());
+        }
+
+        if (request.getVin() != null && !request.getVin().isBlank() && !request.getVin().equals(vehicle.getVin())) {
+            if (vehicleRepository.existsByVinAndDeletedAtIsNull(request.getVin())) {
+                throw new BaseException(ErrorCode.DUPLICATE_VIN);
+            }
+            vehicle.updateVin(request.getVin());
+        }
+
         return VehicleDto.Response.from(vehicle);
     }
 

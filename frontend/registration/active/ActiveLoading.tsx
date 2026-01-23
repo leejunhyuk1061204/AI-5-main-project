@@ -42,18 +42,32 @@ export default function ActiveLoading({ navigation }: any) {
             console.warn('[ActiveLoading] No vehicleId provided - batch upload will be disabled');
         }
 
-        // Start Background Polling (No UI Update)
+        // 1. Start Background Polling
         console.log("Starting Background OBD Polling...");
         ObdService.startPolling(1000);
 
-        // Scanner Line Animation
+        // 2. Data Listener for Transition
+        const unsubscribe = ObdService.onData((data) => {
+            // Check if we received valid data (any primary field)
+            if (data.rpm !== undefined || data.speed !== undefined || data.voltage !== undefined) {
+                console.log("[ActiveLoading] Valid data received! Transitioning to Real-time Dashboard...");
+
+                // Unsubscribe to avoid double triggers
+                unsubscribe();
+
+                // Navigate immediately - DO NOT stop polling (Keep connection alive)
+                navigation.replace('ObdResult');
+            }
+        });
+
+        // 3. Scanner Line Animation
         scanLineY.value = withRepeat(
             withTiming(1, { duration: 3000, easing: Easing.linear }),
             -1,
             true
         );
 
-        // Particle Pulse
+        // 4. Particle Pulse
         particleOpacity.value = withRepeat(
             withSequence(
                 withTiming(1, { duration: 800 }),
@@ -63,22 +77,25 @@ export default function ActiveLoading({ navigation }: any) {
             true
         );
 
-        // Slow rotation for decorative ring
+        // 5. Slow rotation
         rotate.value = withRepeat(
             withTiming(360, { duration: 20000, easing: Easing.linear }),
             -1,
             false
         );
-        // Auto-navigate to result screen after 5 seconds
-        const timer = setTimeout(() => {
-            ObdService.stopPolling();
-            console.log("Stopped Background OBD Polling.");
-            navigation.replace('ObdResult');
-        }, 5000);
+
+        // Safety Timeout: If no data for 20 seconds, show alert or fallback
+        const safetyTimer = setTimeout(() => {
+            console.warn("[ActiveLoading] No data received within 20s.");
+            // Optional: Alert user or just go to result anyway (as empty)
+            // navigation.replace('ObdResult'); 
+        }, 20000);
 
         return () => {
-            clearTimeout(timer);
-            ObdService.stopPolling();
+            clearTimeout(safetyTimer);
+            unsubscribe();
+            // NOTE: Do NOT call ObdService.stopPolling() here!
+            // We want the connection to persist to the next screen.
         };
     }, []);
 
