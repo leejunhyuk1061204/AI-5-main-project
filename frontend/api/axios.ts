@@ -21,6 +21,12 @@ const getBaseUrl = () => {
 
 const BASE_URL = getBaseUrl();
 
+export interface ApiResponse<T> {
+    success: boolean;
+    data: T;
+    message: string | null;
+}
+
 // Create axios instance
 const api = axios.create({
     baseURL: BASE_URL,
@@ -56,7 +62,65 @@ api.interceptors.response.use(
     (response) => {
         return response;
     },
-    (error) => {
+    async (error) => {
+        const originalRequest = error.config;
+
+        // If error is 401 or 403 and we haven't tried refreshing yet
+        if (
+            error.response &&
+            (error.response.status === 401 || error.response.status === 403) &&
+            !originalRequest._retry
+        ) {
+            originalRequest._retry = true;
+
+            try {
+                const refreshToken = await AsyncStorage.getItem('refreshToken');
+                if (!refreshToken) {
+                    throw new Error('No refresh token available');
+                }
+
+                console.log('Refreshing access token...');
+
+                // Use fetch to avoid circular dependency loop with axios interceptors
+                // Note: BASE_URL is defined above
+                const response = await fetch(`${BASE_URL}/api/v1/auth/refresh`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ refreshToken }),
+                });
+
+                if (!response.ok) {
+                    throw new Error('Refresh failed');
+                }
+
+                const data = await response.json();
+
+                if (data.data && data.data.accessToken) {
+                    const newAccessToken = data.data.accessToken;
+                    const newRefreshToken = data.data.refreshToken;
+
+                    await AsyncStorage.setItem('accessToken', newAccessToken);
+                    if (newRefreshToken) {
+                        await AsyncStorage.setItem('refreshToken', newRefreshToken);
+                    }
+
+                    console.log('Token refreshed successfully');
+
+                    // Update header and retry original request
+                    originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+                    return api(originalRequest);
+                }
+            } catch (refreshError) {
+                console.error('Token refresh failed:', refreshError);
+                // Clear tokens to force logout state
+                await AsyncStorage.multiRemove(['accessToken', 'refreshToken']);
+                // Optionally navigate to login or let UI handle 401/403
+                return Promise.reject(error);
+            }
+        }
+
         // Handle global errors here
         console.error('API Error:', error.response?.status, error.message);
         return Promise.reject(error);

@@ -235,7 +235,7 @@ export default function MyPage() {
                     icon="stars"
                     label="멤버십 등급"
                     value="프리미엄 멤버십"
-                    onPress={() => showAlert('멤버십', '현재 프리미엄 멤버십을 이용 중입니다.')}
+                    onPress={() => navigation.navigate('Membership')}
                 />
 
                 <SettingItem

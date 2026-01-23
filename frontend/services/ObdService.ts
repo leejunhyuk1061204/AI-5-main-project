@@ -458,6 +458,51 @@ class ObdService {
         console.log('[ObdService] Disconnected');
     }
 
+    // ===== 시뮬레이션 모드 =====
+    private simulationTimer: ReturnType<typeof setTimeout> | null = null;
+
+    startSimulation() {
+        if (this.isPolling) {
+            console.warn('[ObdService] Already polling/simulating');
+            return;
+        }
+        this.isPolling = true;
+        console.log('[ObdService] 🚗 Simulation Mode Started');
+        this.simulationLoop();
+    }
+
+    stopSimulation() {
+        this.isPolling = false;
+        if (this.simulationTimer) {
+            clearTimeout(this.simulationTimer);
+            this.simulationTimer = null;
+        }
+        console.log('[ObdService] 🛑 Simulation Stopped');
+    }
+
+    private simulationLoop() {
+        if (!this.isPolling) return;
+
+        // 가짜 OBD 데이터 생성
+        const fakeData: ObdData = {
+            timestamp: new Date().toISOString(),
+            rpm: Math.floor(Math.random() * (3000 - 800) + 800),
+            speed: Math.floor(Math.random() * 120),
+            engine_load: Math.floor(Math.random() * 100),
+            coolant_temp: Math.floor(Math.random() * (110 - 80) + 80),
+            voltage: parseFloat((Math.random() * (14.5 - 12) + 12).toFixed(1)),
+            fuel_trim_short: parseFloat((Math.random() * 10 - 5).toFixed(1)),
+            fuel_trim_long: parseFloat((Math.random() * 10 - 5).toFixed(1)),
+        };
+
+        this.currentData = fakeData;
+        this.notifyListeners(fakeData);
+        this.collectData(fakeData);
+
+        // 1초 후 다음 데이터 생성
+        this.simulationTimer = setTimeout(() => this.simulationLoop(), 1000);
+    }
+
     // ===== 연결 상태 확인 =====
     isConnected(): boolean {
         return this.connectionType !== null;

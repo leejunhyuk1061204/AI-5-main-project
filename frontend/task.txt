@@ -1,26 +1,61 @@
-# 프로젝트 진행 상황 요약
+# 📂 프로젝트 진행 현황 및 향후 계획
 
-## 1. 연동 완료된 기능 (Connected)
-- **인증 (Auth)**: 회원가입, 로그인, 프로필 관리 (`services/auth.ts`)
-- **차량 (Vehicle)**: 차량 등록, 조회, 수정, 삭제 (`api/vehicleApi.ts`)
-- **OBD**: 데이터 전송 및 디바이스 연결 관리 (`api/obdApi.ts`)
+## ✅ 완료된 기능 (Done)
+### 🔐 인증 (Auth)
+- [x] 회원가입, 로그인, 로그아웃 (JWT)
+- [x] **[Hotfix]** 403 Forbidden 에러 해결 (자동 갱신 구현)
 
-## 2. 연동 필요 기능 (Pending)
-- **AI 진단**: 이미지/소리 진단 API 연동 (`AiController`)
-- **주행 이력**: 주행 그래프 및 운전 습관 분석 연동 (`TripController`)
-- **정비 관리**: 소모품 주기 관리 및 영수증 OCR 연동 (`MaintenanceController`)
-- **기타**: 알림, 클라우드 인증, 미디어 관리
+### 🚗 차량 관리 (Vehicle)
+- [x] 차량 등록 (수동/OBD)
+- [x] 내 차 목록 조회 및 대표 차량 설정
 
-## 3. 백로그 (Backlog)
-### 🚀 Epic 1: 연동 (Integration)
-- [ ] AI 진단 API 클라이언트 및 화면 연동 (Visual/Sound)
-- [ ] 주행 이력 API 및 그래프 시각화 연동
-- [ ] 정비/소모품 API 및 OCR 기능 연동
+### 📊 주행 기록 (Trip)
+- [x] **Trip API 구현**: 주행 목록, 상세 조회 API (`tripApi.ts`)
+- [x] **화면 연동**: 주행 이력 그래프 및 통계 데이터 바인딩 (`DrivingHis.tsx`)
 
-### 🛠 Epic 2: 네이티브 (Native)
-- [ ] 카메라 UI 개선 및 이미지 압축
-- [ ] OBD 백그라운드 서비스 및 데이터 검증
+### 🔌 OBD 데이터 전송 (Telemetry)
+- [x] **배치 업로드 로직**: 3분(180개) 단위 데이터 수집 및 전송 (`ObdService.ts`)
+- [x] **시뮬레이션 모드**: 실제 OBD 없이 테스트할 수 있는 가상 주행 버튼 (`ObdResult.tsx`)
 
-### 🎨 Epic 3 & 기타
-- [ ] UI/UX 폴리싱 (다크모드, 스켈레톤, 에러처리)
-- [ ] 더미 코드 정리 및 타입 정의 강화
+### 📱 네이티브 기능 (Native Features)
+- [x] 카메라 (AI 진단 촬영)
+- [x] 엔진 소리 녹음 (Sound 진단)
+- [x] OBD 블루투스 장치 연결
+
+---
+
+## 🔥 우선순위 연동 작업 (Next Up - Backend Integration)
+백엔드 API를 호출하고 데이터를 받아오는 작업입니다.
+
+### 🤖 1순위: AI 진단 (AiController / MediaController)
+- [ ] **엔드포인트 불일치 수정**: 프론트(`diagnoseEngineSound`) → 백엔드(`/ai/diagnose/unified`) 경로 수정
+- [ ] **미디어 업로드**: 진단 외 일반 파일 업로드(`/media/upload`) 필요 시 연동
+
+### 📋 2순위: 기초 데이터 및 알림 (Master / Notification)
+- [ ] **Master Data**: 제조사/모델/소모품 목록 조회 API 연동
+- [ ] **알림**: 내 알림 목록 조회 (`/notifications`) API 연동
+
+### 🔧 3순위: 정비 및 소모품 (MaintenanceController)
+- [ ] **정비 내역**: 소모품 상태 조회 및 OCR 영수증 등록 연동
+
+---
+
+## 💻 프론트엔드 UI/로직 구현 (Frontend Implementation)
+현재 **더미 데이터(Hardcoded)**로 되어 있는 화면들을 실제 데이터로 교체해야 합니다.
+
+### 🏠 메인 홈 (`MainPage.tsx`)
+- [ ] **차량 정보 바인딩**: 더미(`vehicle` state) 제거 후 실제 차량 표시
+- [ ] **종합 점수 연동**: 고정된 '95점' → 계산된 안전 점수 바인딩
+
+### 🛠 소모품 관리 (`SupManage.tsx`)
+- [ ] **목록 렌더링**: `consumables` 배열 하드코딩 제거 및 API 응답 매핑
+
+### 🔔 알림 센터 (`AlertMain.tsx`)
+- [ ] **알림 목록화**: 하드코딩된 UI 요소들을 `FlatList`로 변환하여 동적 렌더링
+
+---
+
+## 🛠 추후 고도화 과제 (Backlog)
+- [ ] SmartCar / High-Mobility OAuth 콜백 처리
+- [ ] OBD 백그라운드 서비스 (앱 최소화 시 수집 유지)
+- [ ] 푸시 알림 (FCM) 연동
