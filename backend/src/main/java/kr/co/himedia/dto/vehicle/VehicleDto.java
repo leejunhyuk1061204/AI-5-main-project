@@ -117,6 +117,8 @@ public class VehicleDto {
         private Boolean isPrimary;
         private String registrationSource;
         private String obdDeviceId;
+        private String vin; // 추가: 복호화된 VIN
+        private Boolean cloudLinked; // 추가: 클라우드 연동 여부
 
         public static Response from(Vehicle vehicle) {
             Response response = new Response();
@@ -134,6 +136,8 @@ public class VehicleDto {
             response.setRegistrationSource(
                     vehicle.getRegistrationSource() != null ? vehicle.getRegistrationSource().name() : null);
             response.setObdDeviceId(vehicle.getObdDeviceId());
+            response.setVin(vehicle.getVin()); // 암호화된 상태, Service에서 복호화 필요
+            response.setCloudLinked(vehicle.getCloudLinked()); // 클라우드 연동 여부 설정
             return response;
         }
     }

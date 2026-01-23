@@ -86,16 +86,4 @@ jwt:
   access-expiration: 3600000 # 1시간으로 원복
   refresh-expiration: 604800000 # 7일
 
-smartcar:
-  client-id: ${SMARTCAR_CLIENT_ID:7a114bab-4496-481e-97d6-665f464f8396}
-  client-secret: ${SMARTCAR_CLIENT_SECRET:your-smartcar-secret-here}
-  redirect-uri: ${SMARTCAR_REDIRECT_URI:http://localhost:8080/api/v1/auth/callback/smartcar}
-  token-uri: https://auth.smartcar.com/oauth/token
-
-high-mobility:
-  client-id: ${HM_CLIENT_ID:cff0cf6d-4a16-46ef-8d04-aa5fef6ef3f6}
-  client-secret: ${HM_CLIENT_SECRET:your-hm-secret-here}
-  redirect-uri: ${HM_REDIRECT_URI:http://localhost:8080/api/v1/auth/cloud/callback/high_mobility}
-  token-uri: https://sandbox.api.high-mobility.com/v1/access_tokens
-
 

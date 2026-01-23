@@ -611,6 +611,18 @@ public class AiDiagnosisService {
 
         log.info("[Reply] 세션 {} 에 대한 사용자 답변 처리 시작", sessionId);
 
+        // 0. 파라미터 유효성 검사 (최소 하나는 있어야 함)
+        boolean hasText = replyDto != null && replyDto.getUserResponse() != null
+                && !replyDto.getUserResponse().trim().isEmpty();
+        boolean hasImage = additionalImage != null && !additionalImage.isEmpty();
+        boolean hasAudio = additionalAudio != null && !additionalAudio.isEmpty();
+
+        if (!hasText && !hasImage && !hasAudio) {
+            throw new kr.co.himedia.common.exception.BaseException(
+                    kr.co.himedia.common.exception.ErrorCode.INVALID_INPUT_VALUE,
+                    "답변 텍스트, 사진, 또는 오디오 중 최소 하나는 제공되어야 합니다.");
+        }
+
         // 1. 기존 세션 및 결과 조회
         DiagSession session = diagSessionRepository.findById(sessionId)
                 .orElseThrow(() -> new RuntimeException("Session not found: " + sessionId));
@@ -649,12 +661,14 @@ public class AiDiagnosisService {
             log.warn("[Reply] 기존 대화 이력 파싱 실패, 빈 대화로 시작", e);
         }
 
-        // 사용자 답변 추가
-        Map<String, Object> userTurn = new HashMap<>();
-        userTurn.put("role", "user");
-        userTurn.put("content", replyDto.getUserResponse());
-        userTurn.put("timestamp", java.time.LocalDateTime.now().toString());
-        conversation.add(userTurn);
+        // 사용자 답변 추가 (텍스트가 있는 경우에만)
+        if (hasText) {
+            Map<String, Object> userTurn = new HashMap<>();
+            userTurn.put("role", "user");
+            userTurn.put("content", replyDto.getUserResponse());
+            userTurn.put("timestamp", java.time.LocalDateTime.now().toString());
+            conversation.add(userTurn);
+        }
 
         log.info("[Reply] 대화 이력 누적 완료. 총 {} 턴", conversation.size());
 

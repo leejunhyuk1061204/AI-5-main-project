@@ -9,108 +9,41 @@ DELAY = 2
 
 # 2010-2013 한국 및 글로벌 인기 모델 대규모 리스트
 TARGETS = [
-    # === 현대 (Hyundai) ===
-    ("Hyundai", "2010", "Elantra%20L4-2.0L"),
-    ("Hyundai", "2011", "Elantra%20L4-1.8L"),
-    ("Hyundai", "2012", "Elantra%20L4-1.8L"),
-    ("Hyundai", "2013", "Elantra%20L4-1.8L"),
-    ("Hyundai", "2011", "Sonata%20L4-2.4L"),
-    ("Hyundai", "2012", "Sonata%20L4-2.4L"),
-    ("Hyundai", "2013", "Sonata%20L4-2.4L"),
-    ("Hyundai", "2011", "Azera%20V6-3.3L"),
-    ("Hyundai", "2012", "Azera%20V6-3.3L"),
-    ("Hyundai", "2013", "Azera%20V6-3.3L"),
-    ("Hyundai", "2011", "Genesis%20Sedan%20V6-3.8L"),
-    ("Hyundai", "2012", "Genesis%20Sedan%20V6-3.8L"),
-    ("Hyundai", "2013", "Genesis%20Sedan%20V6-3.8L"),
-    ("Hyundai", "2011", "Tucson%20FWD%20L4-2.0L"),
-    ("Hyundai", "2012", "Tucson%20FWD%20L4-2.0L"),
-    ("Hyundai", "2013", "Tucson%20FWD%20L4-2.4L"),
-    ("Hyundai", "2012", "Santa%20Fe%20FWD%20L4-2.4L"),
-    ("Hyundai", "2013", "Santa%20Fe%20FWD%20V6-3.3L"),
-    ("Hyundai", "2011", "Accent%20L4-1.6L"),
-    ("Hyundai", "2012", "Accent%20L4-1.6L"),
-    ("Hyundai", "2013", "Accent%20L4-1.6L"),
-    ("Hyundai", "2013", "Veloster%20L4-1.6L"),
+    # === Volvo ===
+    ("Volvo", "2010", "XC60%20AWD%20L6-3.0L%20Turbo%20VIN%2099%20B6304T2"),
+    ("Volvo", "2011", "XC60%20AWD%20L6-3.0L%20Turbo%20VIN%2090%20B6304T4"),
+    ("Volvo", "2012", "S60%20T5%20FWD%20L5-2.5L%20Turbo%20VIN%2062%20B5254T5"),
+    ("Volvo", "2013", "XC60%20AWD%20L6-3.2L%20VIN%2094%20B6324S4"),
 
-    # === 기아 (Kia) ===
-    ("Kia", "2011", "Optima%20L4-2.4L"),
-    ("Kia", "2012", "Optima%20L4-2.4L"),
-    ("Kia", "2013", "Optima%20L4-2.4L"),
-    ("Kia", "2012", "Sorento%202WD%20L4-2.4L"),
-    ("Kia", "2013", "Sorento%202WD%20L4-2.4L"),
-    ("Kia", "2011", "Sportage%202WD%20L4-2.4L"),
-    ("Kia", "2012", "Sportage%202WD%20L4-2.4L"),
-    ("Kia", "2013", "Sportage%202WD%20L4-2.4L"),
-    ("Kia", "2011", "Forte%20L4-2.0L"),
-    ("Kia", "2012", "Forte%20L4-2.0L"),
-    ("Kia", "2013", "Forte%20L4-2.0L"),
-    ("Kia", "2011", "Rio%20L4-1.6L"),
-    ("Kia", "2012", "Rio%20L4-1.6L"),
-    ("Kia", "2013", "Rio%20L4-1.6L"),
-    ("Kia", "2010", "Soul%20L4-2.0L"),
-    ("Kia", "2011", "Soul%20L4-2.0L"),
-    ("Kia", "2012", "Soul%20L4-2.0L"),
-    ("Kia", "2013", "Soul%20L4-2.0L"),
+    # === Porsche ===
+    ("Porsche", "2010", "911%20Carrera%20%28997%29%20F6-3.6L"),
+    ("Porsche", "2011", "Cayenne%20%2892A%29%20V6-3.6L"),
+    ("Porsche", "2012", "911%20Carrera%20%28991%29%20F6-3.4L"),
+    ("Porsche", "2013", "Cayenne%20%2892A%29%20V6-3.6L"),
 
-    # === 쉐보레 (Chevrolet) ===
-    ("Chevrolet", "2011", "Cruze%20L4-1.8L"),
-    ("Chevrolet", "2012", "Cruze%20L4-1.8L"),
-    ("Chevrolet", "2013", "Cruze%20L4-1.8L"),
-    ("Chevrolet", "2011", "Malibu%20L4-2.4L"),
-    ("Chevrolet", "2012", "Malibu%20L4-2.4L"),
-    ("Chevrolet", "2013", "Malibu%20L4-2.5L"),
-    ("Chevrolet", "2011", "Spark%20L4-1.2L"),
-    ("Chevrolet", "2012", "Spark%20L4-1.2L"),
-    ("Chevrolet", "2013", "Spark%20L4-1.2L"),
-    # === 기아 (Kia) ===
-    ("Kia", "2010", "Optima%20L4-2.4L"),
-    ("Kia", "2011", "Optima%20L4-2.4L"),
-    ("Kia", "2012", "Optima%20L4-2.4L"),
-    ("Kia", "2013", "Optima%20L4-2.4L"),
-    ("Kia", "2010", "Sorento%202WD%20L4-2.4L"),
-    ("Kia", "2012", "Sorento%202WD%20L4-2.4L"),
-    ("Kia", "2011", "Sorento%202WD%20V6-3.5L"),
-    ("Kia", "2012", "Sorento%202WD%20V6-3.5L"),
-    ("Kia", "2013", "Sorento%202WD%20V6-3.5L"),
-    ("Kia", "2011", "Sorento%202WD%20L4-2.4L"),
-    ("Kia", "2012", "Sorento%202WD%20L4-2.4L%20VIN%206%20%28GDI%29"),
-    ("Kia", "2013", "Sorento%202WD%20L4-2.4L%20VIN%206%20%28GDI%29"),
-    ("Kia", "2010", "Sportage%202WD%20L4-2.0L"),
-    ("Kia", "2011", "Sportage%202WD%20L4-2.4L"),
-    ("Kia", "2012", "Sportage%202WD%20L4-2.4L"),
-    ("Kia", "2013", "Sportage%202WD%20L4-2.4L"),
-    ("Kia", "2010", "Sportage%202WD%20L4-2.4L"),
-    ("Kia", "2010", "Sedona%20V6-3.8L"),
-    ("Kia", "2011", "Sedona%20V6-3.5L"),
-    ("Kia", "2012", "Sedona%20V6-3.5L"),
-    ("Kia", "2013", "Sedona%20V6-3.5L"),
-    ("Kia", "2010", "Forte%20L4-2.0L"),
-    ("Kia", "2011", "Forte%20L4-2.0L"),
-    ("Kia", "2012", "Forte%20L4-2.4L"),
-    ("Kia", "2013", "Forte%20L4-2.0L"),
-    ("Kia", "2012", "Rio%20L4-1.6L"),
-    ("Kia", "2011", "Soul%20L4-2.0L"),
-    ("Kia", "2012", "Soul%20L4-2.0L"),
+    # === Jeep ===
+    ("Jeep", "2011", "Grand%20Cherokee%204WD%20V6-3.6L"),
+    ("Jeep", "2012", "Grand%20Cherokee%204WD%20V6-3.6L"),
+    ("Jeep", "2013", "Grand%20Cherokee%204WD%20V6-3.6L"),
 
-    # === 쉐보레 (Chevrolet/GM Korea) ===
-    ("Chevrolet", "2013", "Spark%20L4-1.2L"),
-    ("Chevrolet", "2011", "Malibu%20L4-2.4L"),
-    ("Chevrolet", "2012", "Malibu%20L4-2.4L"),
-    ("Chevrolet", "2010", "Equinox%20FWD%20L4-2.4L"),
-    ("Chevrolet", "2011", "Equinox%20FWD%20L4-2.4L"),
+    # === Land Rover ===
+    ("Land%20Rover", "2012", "Range%20Rover%20Evoque%20%28L538%29%20L4-2.0L%20Turbo"),
+    ("Land%20Rover", "2013", "Range%20Rover%20Sport%20%28L320%29%20V8-5.0L%20SC"),
 
-    # === BMW ===
-    ("BMW", "2010", "528i%20%28E60%29%20L6-3.0L"),
+    # === Lexus ===
+    ("Lexus", "2010", "RX%20350%20AWD%20V6-3.5L%20%282GR-FE%29"),
+    ("Lexus", "2011", "ES%20350%20V6-3.5L%20%282GR-FE%29"),
+    ("Lexus", "2012", "CT%20200h%20L4-1.8L%20%282ZR-FXE%29%20Hybrid"),
+
+    # === BMW (Failed ones) ===
     ("BMW", "2011", "528i%20%28F10%29%20L6-3.0L"),
-    ("BMW", "2012", "528i%20%28F10%29%20L4-2.0L%20Turbo"),
-    ("BMW", "2013", "528i%20%28F10%29%20L4-2.0L%20Turbo"),
+    ("BMW", "2012", "528i%20Sedan%20%28F10%29%20L4-2.0L%20Turbo%20%28N20%29"),
+    ("BMW", "2013", "328i%20Sedan%20%28F30%29%20L4-2.0L%20Turbo%20%28N20%29"),
 
-    # === Mercedes Benz ===
-    ("Mercedes%20Benz", "2010", "E%20350%20%28212.056%29%20V6-3.5L"),
+    # === Mercedes Benz (Failed ones) ===
     ("Mercedes%20Benz", "2011", "E%20350%20%28212.056%29%20V6-3.5L"),
     ("Mercedes%20Benz", "2012", "E%20350%20Sedan%20%28212.059%29%20V6-3.5L%20%28276.952%29"),
-    ("Mercedes%20Benz", "2013", "E%20350%20Sedan%20%28212.059%29%20V6-3.5L%20%28276.952%29"),
+    ("Mercedes%20Benz", "2013", "C%20250%20Sedan%20%28204.047%29%20L4-1.8L%20Turbo%20%28271.860%29"),
 ]
 
 def download_zip(brand, year, model):
@@ -137,7 +70,8 @@ def download_zip(brand, year, model):
     
     print(f"  Downloading {brand} {year} {model.replace('%20', ' ')}...")
     try:
-        response = requests.get(url, headers=headers, stream=True, timeout=300)
+        # 타임아웃 600초로 상향
+        response = requests.get(url, headers=headers, stream=True, timeout=600)
         if response.status_code == 200:
             with open(filepath, 'wb') as f:
                 for chunk in response.iter_content(chunk_size=8192):
@@ -155,7 +89,7 @@ def main():
     os.makedirs(PARSED_DIR, exist_ok=True)
     
     print("="*60)
-    print("KR Popular Models Downloader (Ranked & 2010-2011)")
+    print("Manual Downloader (600s Timeout)")
     print("="*60)
     
     for brand, year, model in TARGETS:

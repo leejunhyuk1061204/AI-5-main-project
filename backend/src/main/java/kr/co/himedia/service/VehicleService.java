@@ -68,7 +68,7 @@ public class VehicleService {
         // 9종 전체 소모품 초기화 (입력된 항목은 그대로, 미입력은 추론)
         registerConsumables(savedVehicle, request.getConsumables());
 
-        return VehicleDto.Response.from(savedVehicle);
+        return convertToDtoWithDecryptedVin(savedVehicle);
     }
 
     // OBD 기반 차량 자동 등록
@@ -88,13 +88,13 @@ public class VehicleService {
         }
 
         Vehicle savedVehicle = vehicleRepository.save(vehicle);
-        return VehicleDto.Response.from(savedVehicle);
+        return convertToDtoWithDecryptedVin(savedVehicle);
     }
 
     // 사용자 소유 차량 목록 조회
     public List<VehicleDto.Response> getVehicleList(UUID userId) {
         return vehicleRepository.findByUserIdAndDeletedAtIsNull(userId).stream()
-                .map(VehicleDto.Response::from)
+                .map(this::convertToDtoWithDecryptedVin)
                 .collect(Collectors.toList());
     }
 
@@ -102,7 +102,7 @@ public class VehicleService {
     public VehicleDto.Response getVehicleDetail(UUID vehicleId) {
         Vehicle vehicle = vehicleRepository.findByVehicleIdAndDeletedAtIsNull(vehicleId)
                 .orElseThrow(() -> new BaseException(ErrorCode.VEHICLE_NOT_FOUND));
-        return VehicleDto.Response.from(vehicle);
+        return convertToDtoWithDecryptedVin(vehicle);
     }
 
     // 차량 정보(별명, 메모) 수정
@@ -112,7 +112,7 @@ public class VehicleService {
                 .orElseThrow(() -> new BaseException(ErrorCode.VEHICLE_NOT_FOUND));
 
         vehicle.updateInfo(request.getNickname(), request.getMemo());
-        return VehicleDto.Response.from(vehicle);
+        return convertToDtoWithDecryptedVin(vehicle);
     }
 
     // 대표 차량 설정 (기존 대표 차량 해제 후 설정)
@@ -215,5 +215,21 @@ public class VehicleService {
             log.info("[VehicleService] 소모품 생성 완료: {} (LastMileage: {}, Remaining: {}%)",
                     item.getCode(), lastMileage, String.format("%.1f", vc.getRemainingLife()));
         }
+    }
+
+    // [Helper] Entity -> DTO 변환 시 VIN 복호화 처리
+    private VehicleDto.Response convertToDtoWithDecryptedVin(Vehicle vehicle) {
+        VehicleDto.Response response = VehicleDto.Response.from(vehicle);
+        if (vehicle.getVin() != null) {
+            try {
+                // 암호화된 VIN을 복호화하여 DTO에 설정
+                String decryptedVin = encryptionUtils.decrypt(vehicle.getVin());
+                response.setVin(decryptedVin);
+            } catch (Exception e) {
+                log.warn("VIN 복호화 실패 - vehicleId: {}", vehicle.getVehicleId());
+                // 복호화 실패 시 암호화된 값 그대로 두거나 마스킹 처리 (여기선 일단 그대로)
+            }
+        }
+        return response;
     }
 }
