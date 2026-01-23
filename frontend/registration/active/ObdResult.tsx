@@ -12,6 +12,17 @@ export default function ObdResult({ navigation }: any) {
     const [scoreAnim] = useState(new Animated.Value(0));
     const [isSimulating, setIsSimulating] = useState(false);
 
+    // State for Real-time Data
+    const [liveData, setLiveData] = useState<any>({
+        rpm: 0,
+        speed: 0,
+        temp: 0,
+        voltage: 0,
+        load: 0,
+        fuelShort: 0,
+        fuelLong: 0
+    });
+
     useEffect(() => {
         Animated.timing(scoreAnim, {
             toValue: 94,
@@ -19,14 +30,37 @@ export default function ObdResult({ navigation }: any) {
             useNativeDriver: false,
         }).start();
 
-        // Cleanup simulation on unmount
+        // Subscribe to Real-time Data
+        console.log("[ObdResult] Subscribing to live data...");
+        const unsubscribe = ObdService.onData((data) => {
+            setLiveData({
+                rpm: data.rpm ?? 0,
+                speed: data.speed ?? 0,
+                temp: data.coolant_temp ?? 0,
+                voltage: data.voltage ?? 0,
+                load: data.engine_load ?? 0,
+                fuelShort: data.fuel_trim_short ?? 0,
+                fuelLong: data.fuel_trim_long ?? 0
+            });
+        });
+
+        // Cleanup: Only stop simulation if it was running locally
         return () => {
+            unsubscribe();
+            // Note: We don't stop polling here because we want it to persist if we just background?
+            // Actually, if we leave this screen (unmount), we PROBABLY want to disconnect
+            // UNLESS we are navigating to another dashboard screen.
+            // For now, let's keep connection ALIVE only if needed, but per user request "main으로 이동" stops it.
+            // If component unmounts (e.g. back button), we should probably stop to be safe.
+            // But let's check handleGoMain.
             ObdService.stopSimulation();
         };
     }, []);
 
-    const handleGoMain = () => {
+    const handleGoMain = async () => {
+        console.log("[ObdResult] Exiting to Main... Stopping Service.");
         ObdService.stopSimulation();
+        await ObdService.disconnect(); // Explicitly disconnect and flush
         navigation.dispatch(
             CommonActions.reset({
                 index: 0,
@@ -53,7 +87,7 @@ export default function ObdResult({ navigation }: any) {
         }
     };
 
-    const ResultItem = ({ icon, label, status, isGood }: { icon: any, label: string, status: string, isGood: boolean }) => (
+    const ResultItem = ({ icon, label, status, isGood, value }: { icon: any, label: string, status: string, isGood: boolean, value?: string }) => (
         <View className="flex-row items-center justify-between p-4 mb-3 rounded-2xl bg-[#ffffff08] border border-[#ffffff0d]">
             <View className="flex-row items-center gap-3">
                 <View className={`w-10 h-10 rounded-xl items-center justify-center ${isGood ? 'bg-[#0d7ff2]/10' : 'bg-red-500/10'}`}>
@@ -64,10 +98,13 @@ export default function ObdResult({ navigation }: any) {
                     <Text className="text-slate-400 text-xs">{isGood ? '정상 작동 중' : '점검 필요'}</Text>
                 </View>
             </View>
-            <View className={`px-3 py-1 rounded-full ${isGood ? 'bg-[#0d7ff2]/10' : 'bg-red-500/10'}`}>
-                <Text className={`text-xs font-bold ${isGood ? 'text-[#0d7ff2]' : 'text-red-400'}`}>
-                    {status}
-                </Text>
+            <View className="items-end">
+                {value && <Text className="text-white font-bold text-base mb-0.5">{value}</Text>}
+                <View className={`px-2 py-0.5 rounded-full ${isGood ? 'bg-[#0d7ff2]/10' : 'bg-red-500/10'}`}>
+                    <Text className={`text-[10px] font-bold ${isGood ? 'text-[#0d7ff2]' : 'text-red-400'}`}>
+                        {status}
+                    </Text>
+                </View>
             </View>
         </View>
     );
@@ -80,7 +117,7 @@ export default function ObdResult({ navigation }: any) {
                     <TouchableOpacity onPress={handleGoMain} className="w-10 h-10 items-center justify-center rounded-full bg-[#ffffff08]">
                         <MaterialIcons name="close" size={20} color="white" />
                     </TouchableOpacity>
-                    <Text className="text-white text-lg font-bold">진단 결과</Text>
+                    <Text className="text-white text-lg font-bold">실시간 진단 대시보드</Text>
                     <View className="w-10" />
                 </View>
 
@@ -88,25 +125,24 @@ export default function ObdResult({ navigation }: any) {
                     {/* Score Section */}
                     <View className="items-center justify-center py-8 mb-8">
                         <View className="w-48 h-48 rounded-full items-center justify-center border-4 border-[#0d7ff2]/30 shadow-[0_0_40px_rgba(13,127,242,0.2)] bg-[#101922]">
-                            <Text className="text-slate-400 text-sm font-medium mb-1">차량 종합 점수</Text>
+                            <Text className="text-slate-400 text-sm font-medium mb-1">엔진 회전수 (RPM)</Text>
                             <View className="flex-row items-baseline">
-                                <Text className="text-6xl font-bold text-white tracking-tighter">94</Text>
-                                <Text className="text-2xl font-medium text-slate-500 ml-1">점</Text>
+                                <Text className="text-5xl font-bold text-white tracking-tighter">{liveData.rpm}</Text>
+                                <Text className="text-xl font-medium text-slate-500 ml-1">rpm</Text>
                             </View>
-                            <View className="mt-3 px-3 py-1 bg-[#0d7ff2]/20 rounded-full border border-[#0d7ff2]/30">
-                                <Text className="text-[#0d7ff2] text-xs font-bold">상태 매우 좋음</Text>
+                            <View className="mt-2 flex-row gap-2">
+                                <Text className="text-slate-400 text-xs">Speed: {liveData.speed} km/h</Text>
                             </View>
                         </View>
                     </View>
 
                     {/* Report Summary */}
                     <View className="mb-8">
-                        <Text className="text-white text-lg font-bold mb-4 px-1">상세 진단 내역</Text>
-                        <ResultItem icon="speed" label="엔진 시스템" status="정상" isGood={true} />
-                        <ResultItem icon="settings-input-component" label="변속기 (미션)" status="정상" isGood={true} />
-                        <ResultItem icon="battery-charging-full" label="배터리 전압" status="14.2V (정상)" isGood={true} />
-                        <ResultItem icon="thermostat" label="냉각수 온도" status="90°C (적정)" isGood={true} />
-                        <ResultItem icon="air" label="흡기 시스템" status="주의" isGood={false} />
+                        <Text className="text-white text-lg font-bold mb-4 px-1">실시간 센서 데이터</Text>
+                        <ResultItem icon="speed" label="엔진 부하" status="Load" isGood={liveData.load < 80} value={`${liveData.load}%`} />
+                        <ResultItem icon="settings-input-component" label="연료 보정 (Short)" status="Trim" isGood={Math.abs(liveData.fuelShort) < 10} value={`${liveData.fuelShort}%`} />
+                        <ResultItem icon="battery-charging-full" label="배터리 전압" status={liveData.voltage > 13 ? "정상" : "주의"} isGood={liveData.voltage > 12.0} value={`${liveData.voltage}V`} />
+                        <ResultItem icon="thermostat" label="냉각수 온도" status={liveData.temp < 100 ? "정상" : "과열"} isGood={liveData.temp < 100} value={`${liveData.temp}°C`} />
                     </View>
 
                     {/* Simulation Mode Button */}

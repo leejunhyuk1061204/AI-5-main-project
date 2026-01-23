@@ -7,24 +7,30 @@
 
 ### 🚗 차량 관리 (Vehicle)
 - [x] 차량 등록 (수동/OBD)
-- [x] 내 차 목록 조회 및 대표 차량 설정
+- [x] 내 차 목록 조회 및 대표 차량 설정 (메인 차량 연동)
 - [x] **멤버십 관리**: 멤버십 페이지 UI 및 결제/상태 조회 (`Membership.tsx`)
-
+- [x] **차량 상세 제원**: 제원 조회 UI 및 메인 차량 자동 로드 (`Spec.tsx`)
 
 ### 📊 주행 기록 (Trip)
 - [x] **Trip API 구현**: 주행 목록, 상세 조회 API (`tripApi.ts`)
 - [x] **화면 연동**: 주행 이력 그래프 및 통계 데이터 바인딩 (`DrivingHis.tsx`)
 
-### 🔌 OBD 데이터 전송 (Telemetry)
-- [x] **배치 업로드 로직**: 3분(180개) 단위 데이터 수집 및 전송 (`ObdService.ts`)
-- [x] **시뮬레이션 모드**: 실제 OBD 없이 테스트할 수 있는 가상 주행 버튼 (`ObdResult.tsx`)
+### 🔌 OBD 데이터 전송 (Telemetry) & 블루투스
+- [x] **실시간 모니터링**: 5초 스캔 방식을 연속 연결 대시보드로 변경 (`ObdResult.tsx`)
+- [x] **데이터 안전 전송**: 연결 해제/중단 시 버퍼 자동 플러시 (`ObdService.ts`)
+- [x] **배치 업로드 로직**: 3분 단위 데이터 수집 및 전송
+- [x] **시뮬레이션 모드**: 가상 주행 테스트 버튼
 
 ### 📱 네이티브 기능 (Native Features)
 - [x] 카메라 (AI 진단 촬영)
 - [x] 엔진 소리 녹음 (Sound 진단)
-- [x] OBD 블루투스 장치 연결
-- [x] **진단 리포트**: AI 진단 결과 리포트 모드 구현
+- [x] OBD 블루투스 장치 연결 (BLE / Classic)
+- [x] **진단 리포트**: AI 진단 결과 리포트 모드
+- [x] **진단 탭 리팩토링**: AI 복합 진단 화면을 메인 탭으로 변경 (`AiCompositeDiag.tsx`)
 
+### 🛠 시스템/공통 (System)
+- [x] **크로스 플랫폼**: Windows/Mac 호환 실행 스크립트 (`start-backend.js` 등)
+- [x] **UI 컴포넌트**: `StatusModal` 공통 모달 분리
 
 ---
 
@@ -37,7 +43,7 @@
 
 ### 📋 2순위: 기초 데이터 및 알림 (Master / Notification)
 - [ ] **Master Data**: 제조사/모델/소모품 목록 조회 API 연동
-- [ ] **알림**: 내 알림 목록 조회 (`/notifications`) API 연동
+- [ ] **알림**: 내 알림 목록 조회 (`/notifications`) API 연동 (진행 중)
 
 ### 🔧 3순위: 정비 및 소모품 (MaintenanceController)
 - [ ] **정비 내역**: 소모품 상태 조회 및 OCR 영수증 등록 연동
@@ -62,4 +68,7 @@
 ## 🛠 추후 고도화 과제 (Backlog)
 - [ ] SmartCar / High-Mobility OAuth 콜백 처리
 - [ ] OBD 백그라운드 서비스 (앱 최소화 시 수집 유지)
-- [ ] 푸시 알림 (FCM) 연동
+- [ ] **알림 시스템 고도화**:
+  - [ ] **Backend**: 주요 이벤트(소모품 교체, 진단 완료 등) 발생 시 `sendNotification` 호출 로직 추가
+  - [ ] **Push 알림**: FCM 설정, 토큰 발급 및 서버 전송 로직 구현, 푸시 수신 처리
+

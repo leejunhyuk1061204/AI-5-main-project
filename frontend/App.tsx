@@ -147,7 +147,11 @@ export default function App() {
                 options={{ animation: 'none' }}
               />
               <Stack.Screen name="EngineSoundDiag" component={EngineSoundDiag} />
-              <Stack.Screen name="AiCompositeDiag" component={AiCompositeDiag} />
+              <Stack.Screen
+                name="AiCompositeDiag"
+                component={AiCompositeDiag}
+                options={{ animation: 'none' }}
+              />
               <Stack.Screen name="VisualDiagnosis" component={require('./diagnosis/VisualDiagnosis').default} />
               <Stack.Screen name="Filming" component={Filming} />
               <Stack.Screen
@@ -172,6 +176,7 @@ export default function App() {
               <Stack.Screen name="MyPage" component={MyPage} />
               <Stack.Screen name="AlertSetting" component={AlertSetting} />
               <Stack.Screen name="CarManage" component={CarManage} />
+              <Stack.Screen name="CarEdit" component={require('./setting/CarEdit').default} />
               <Stack.Screen name="Cloud" component={Cloud} />
               <Stack.Screen name="Membership" component={Membership} />
             </Stack.Navigator>
