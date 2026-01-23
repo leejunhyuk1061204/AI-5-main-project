@@ -112,6 +112,23 @@ public class VehicleService {
                 .orElseThrow(() -> new BaseException(ErrorCode.VEHICLE_NOT_FOUND));
 
         vehicle.updateInfo(request.getNickname(), request.getMemo());
+        if (request.getCarNumber() != null && !request.getCarNumber().isBlank()) {
+            vehicle.updateCarNumber(request.getCarNumber());
+        }
+
+        if (request.getVin() != null && !request.getVin().isBlank() && !request.getVin().equals(vehicle.getVin())) {
+            // VIN 중복 체크
+            // [Fix] 암호화된 VIN으로 비교해야 하지만, existsByVinAndDeletedAtIsNull은 DB 값을 기준으로 할 것이므로
+            // 들어온 plain VIN을 먼저 암호화해서 비교하거나, 로직을 확인해야 함.
+            // 현재 DB에는 암호화된 VIN이 저장되므로, 중복 체크 시에도 암호화하여 조회해야 정확함.
+            String encryptedVin = encryptionUtils.encrypt(request.getVin());
+
+            if (vehicleRepository.existsByVinAndDeletedAtIsNull(encryptedVin)) {
+                throw new BaseException(ErrorCode.DUPLICATE_VIN);
+            }
+            vehicle.updateVin(encryptedVin);
+        }
+
         return convertToDtoWithDecryptedVin(vehicle);
     }
 

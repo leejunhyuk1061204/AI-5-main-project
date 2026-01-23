@@ -109,6 +109,10 @@ public class Vehicle {
         this.totalMileage = totalMileage;
     }
 
+    public void updateCarNumber(String carNumber) {
+        this.carNumber = carNumber;
+    }
+
     /**
      * 차량 연동 상태 및 VIN 정보를 업데이트합니다.
      */

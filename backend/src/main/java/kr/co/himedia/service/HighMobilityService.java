@@ -68,6 +68,7 @@ public class HighMobilityService {
 
             tokenCache.put("HM_TOKEN", new TokenCache(token, LocalDateTime.now().plusSeconds(expiresIn)));
             log.info("[HighMobility] Access Token 갱신 성공 (만료: {}초)", expiresIn);
+            log.info("[DEBUG] Access Token: {}", token); // Insomnia 테스트용 토큰 출력
             return token;
         }
 

@@ -216,11 +216,12 @@ class ObdService {
         this.pollingLoop(intervalMs);
     }
 
-    stopPolling() {
+    async stopPolling() {
         this.isPolling = false;
         this.commandQueue = [];
         this.isProcessingQueue = false;
-        console.log('[ObdService] Polling stopped');
+        console.log('[ObdService] Polling stopped, flushing buffer...');
+        await this.flushBuffer();
     }
 
     // ===== 데이터 구독 =====

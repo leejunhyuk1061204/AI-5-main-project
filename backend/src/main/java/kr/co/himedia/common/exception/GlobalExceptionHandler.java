@@ -60,6 +60,6 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status((org.springframework.http.HttpStatusCode) ErrorCode.INTERNAL_SERVER_ERROR.getStatus())
                 .body(ApiResponse.fail(ErrorCode.INTERNAL_SERVER_ERROR.getCode(),
-                        ErrorCode.INTERNAL_SERVER_ERROR.getMessage()));
+                        e.getMessage() != null ? e.getMessage() : "Unknown Internal Server Error"));
     }
 }

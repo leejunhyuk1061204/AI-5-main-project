@@ -2,7 +2,7 @@
 import librosa
 import soundfile as sf
 import io
-import requests  # <-- 추가: 인터넷에서 파일 당겨오는 도구
+import requests
 
 def process_to_16khz(audio_input):
     """
@@ -32,4 +32,25 @@ def process_to_16khz(audio_input):
 
     except Exception as e:
         print(f"[hertz.py] 리샘플링 중 오류 발생: {e}")
+        return None
+
+def convert_bytes_to_16khz(audio_bytes: bytes):
+    """
+    오디오 바이트 데이터를 16,000Hz(16kHz) 모노 WAV로 변환합니다.
+    (이미 메모리에 로드된 데이터를 처리)
+    """
+    try:
+        # 바이트 데이터를 BytesIO로 감싸서 librosa로 로드
+        audio_stream = io.BytesIO(audio_bytes)
+        y, sr = librosa.load(audio_stream, sr=16000)
+
+        buffer = io.BytesIO()
+        sf.write(buffer, y, 16000, format='WAV')
+        buffer.seek(0)
+        
+        print(f"[hertz.py] 바이트 데이터 리샘플링 완료")
+        return buffer
+
+    except Exception as e:
+        print(f"[hertz.py] 바이트 변환 중 오류: {e}")
         return None

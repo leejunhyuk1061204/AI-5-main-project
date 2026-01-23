@@ -40,6 +40,13 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.success(token));
     }
 
+    // BE-AU-005 소셜 로그인 (Google/Kakao)
+    @PostMapping("/social-login")
+    public ResponseEntity<ApiResponse<TokenResponse>> socialLogin(@Valid @RequestBody SocialLoginRequest req) {
+        TokenResponse token = userService.socialLogin(req);
+        return ResponseEntity.ok(ApiResponse.success(token));
+    }
+
     // BE-AU-003 내 정보 조회
     @GetMapping("/me")
     public ResponseEntity<ApiResponse<UserResponse>> getProfile(Authentication auth) {
