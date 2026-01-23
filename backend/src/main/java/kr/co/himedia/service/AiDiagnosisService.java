@@ -708,45 +708,85 @@ public class AiDiagnosisService {
         @SuppressWarnings("unchecked")
         Map<String, Object> aiResponse = aiClient.callComprehensiveDiagnosis(aiRequest);
 
-        // 5. 응답에 따라 세션 상태 및 결과 업데이트
+        // 5. 사용자 턴 수 카운트 (대화 제한 체크용)
+        long userTurnCount = conversation.stream()
+                .filter(turn -> "user".equals(turn.get("role")))
+                .count();
+        log.info("[Reply] 현재 사용자 턴 수: {}", userTurnCount);
+
+        // 6. 응답에 따라 세션 상태 및 결과 업데이트
         String mode = (String) aiResponse.getOrDefault("response_mode", "REPORT");
         String confidence = (String) aiResponse.getOrDefault("confidence_level", "LOW");
         String summary = (String) aiResponse.getOrDefault("summary", "");
 
+        // 3턴 제한: 사용자가 3번 답변했는데도 AI가 INTERACTIVE로 응답하면 강제 REPORT 변환
+        boolean forceReport = userTurnCount >= 3 && "INTERACTIVE".equalsIgnoreCase(mode);
+        if (forceReport) {
+            log.info("[Reply] 대화 3턴 초과 + INTERACTIVE 응답 -> 강제 REPORT 변환");
+            mode = "REPORT";
+            confidence = "LOW";
+        }
+
         DiagStatus newStatus;
         if ("REPORT".equalsIgnoreCase(mode)) {
             newStatus = DiagStatus.DONE;
-            // 최종 리포트 저장
-            @SuppressWarnings("unchecked")
-            Map<String, Object> reportData = (Map<String, Object>) aiResponse.get("report_data");
-            if (reportData != null) {
-                // 기존 DiagResult 삭제 후 새로 생성 (JPA에서 업데이트가 복잡하므로)
-                diagResultRepository.delete(existingResult);
 
-                DiagResult newResult = DiagResult.builder()
-                        .diagSessionId(sessionId)
-                        .responseMode(mode)
-                        .confidenceLevel(confidence)
-                        .summary(summary)
-                        .finalReport((String) reportData.get("final_guide"))
-                        .riskLevel(DiagResult.RiskLevel.LOW)
-                        .build();
+            String finalReport;
+            String detectedIssuesJson;
+
+            if (forceReport) {
+                // 강제 종료: AI가 수집한 정보 + 안내 멘트 생성
+                @SuppressWarnings("unchecked")
+                Map<String, Object> interactiveData = (Map<String, Object>) aiResponse.get("interactive_data");
+                String lastAiMessage = interactiveData != null ? (String) interactiveData.get("message") : "";
+
+                finalReport = "수집된 정보만으로는 정확한 원인을 파악하기 어렵습니다. " +
+                        "증상을 바탕으로 가까운 정비소 방문을 권장합니다.";
+                // summary 포함 로직 삭제 (사용자 요청)
+
+                // FE 호환성을 위해 단순 String이 아닌 객체 구조로 생성
+                Map<String, String> causeMap = new HashMap<>();
+                causeMap.put("cause", "원인 미상 - 정비소 점검 필요");
+                causeMap.put("basis", "사용자 답변 정보 부족");
+                causeMap.put("source_type", "INFERRED");
+                causeMap.put("reliability", "LOW");
+
+                List<Map<String, String>> forcedCauses = List.of(causeMap);
                 try {
-                    newResult = DiagResult.builder()
-                            .diagSessionId(sessionId)
-                            .responseMode(mode)
-                            .confidenceLevel(confidence)
-                            .summary(summary)
-                            .finalReport((String) reportData.get("final_guide"))
-                            .detectedIssues(objectMapper.writeValueAsString(reportData.get("suspected_causes")))
-                            .riskLevel(DiagResult.RiskLevel.LOW)
-                            .build();
+                    detectedIssuesJson = objectMapper.writeValueAsString(forcedCauses);
+                } catch (Exception e) {
+                    detectedIssuesJson = "[]";
+                }
+                log.info("[Reply] 강제 REPORT 생성 완료 (3턴 초과)");
+            } else {
+                // 정상 REPORT 처리
+                @SuppressWarnings("unchecked")
+                Map<String, Object> reportData = (Map<String, Object>) aiResponse.get("report_data");
+                finalReport = reportData != null ? (String) reportData.get("final_guide") : "";
+                try {
+                    detectedIssuesJson = reportData != null
+                            ? objectMapper.writeValueAsString(reportData.get("suspected_causes"))
+                            : null;
                 } catch (Exception e) {
                     log.error("[Reply] 결과 직렬화 실패", e);
+                    detectedIssuesJson = null;
                 }
-                diagResultRepository.save(newResult);
+                log.info("[Reply] 최종 REPORT 생성 완료");
             }
-            log.info("[Reply] 최종 REPORT 생성 완료");
+
+            // 기존 DiagResult 삭제 후 새로 생성
+            diagResultRepository.delete(existingResult);
+            DiagResult newResult = DiagResult.builder()
+                    .diagSessionId(sessionId)
+                    .responseMode("REPORT")
+                    .confidenceLevel(confidence)
+                    .summary(summary)
+                    .finalReport(finalReport)
+                    .detectedIssues(detectedIssuesJson)
+                    .riskLevel(forceReport ? DiagResult.RiskLevel.MID : DiagResult.RiskLevel.LOW)
+                    .build();
+            diagResultRepository.save(newResult);
+
         } else {
             newStatus = DiagStatus.ACTION_REQUIRED;
             // INTERACTIVE 데이터 업데이트 (대화 이력 포함)
@@ -768,7 +808,7 @@ public class AiDiagnosisService {
             } catch (Exception e) {
                 log.error("[Reply] INTERACTIVE 데이터 저장 실패", e);
             }
-            log.info("[Reply] INTERACTIVE 모드 유지, 추가 질문 발송");
+            log.info("[Reply] INTERACTIVE 모드 유지, 추가 질문 발송 (턴 {}/3)", userTurnCount);
         }
 
         session.updateStatus(newStatus, newStatus == DiagStatus.DONE ? "진단 완료" : "추가 정보 요청 중");
