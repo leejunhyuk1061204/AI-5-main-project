@@ -1,38 +1,15 @@
+# ai/scripts/train_engine.py
 """
-Engine Bay Training Script (YOLOv8s Optimized for RTX 4090)
+엔진룸 부품 감지 YOLO 모델 학습 도구 (Engine YOLO Trainer)
 
-[최적화 세팅]
-- 모델: YOLOv8s (빠른 프로토타입, 추후 Hard Negative Mining 후 YOLOv8m으로 업그레이드)
-- Batch: 32 (RTX 4090 24GB 최적)
-- Epochs: 150 (s 모델 기준)
-- Optimizer: AdamW (안정적)
-- Augmentation: Mosaic, Mixup, HSV, Flip
+[역할]
+1. 부품 식별 학습: 엔진룸 내 26가지 주요 부품의 위치를 탐지하는 YOLOv8 모델을 학습합니다.
+2. GPU 최적화: RTX 4090(24GB) 환경에서 최대 성능을 낼 수 있는 배치 사이즈(32)와 하이퍼파라미터를 제공합니다.
+3. 성능 검증: mAP50 지표를 기준으로 모델의 정확도를 정밀 측정하며, 이전 모델과의 성능 비교 기능을 포함합니다.
 
-[사용법 / Usage]
-1. 초기 성능 확인:
-   python ai/scripts/train_engine.py --mode baseline
-
-2. 학습 (기본 150 epochs):
-   python ai/scripts/train_engine.py --mode train
-   
-   # 커스텀 epochs:
-   python ai/scripts/train_engine.py --mode train --epochs 200
-
-3. 최종 평가:
-   python ai/scripts/train_engine.py --mode test
-
-4. 전체 실행:
-   python ai/scripts/train_engine.py --mode all
-
-[재학습 가이드 - Hard Negative Mining]
-1. 실서비스에서 Path B로 빠진 ENGINE 이미지가 s3://hard_negatives/에 수집됨
-2. 해당 이미지를 ai/data/engine_bay/train/images에 추가 (라벨링 필요)
-3. 위 학습 명령어 재실행 → 정확도 향상
-
-[YOLOv8m 업그레이드]
-Hard Negative 수집 완료 후:
-  BASE_MODEL = "yolov8m.pt"  # s → m 변경
-  EPOCHS = 100  # m은 적은 epoch로도 안정
+[사용법]
+- 전체 프로세스 실행: python ai/scripts/train_engine.py --mode all
+- 데이터셋 변경 시: ai/data/engine_bay/data.yaml 수정 후 실행
 """
 import argparse
 import os

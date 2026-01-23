@@ -1,19 +1,13 @@
+# ai/scripts/local_yolo_test.py
 """
-YOLO 로컬 테스트 스크립트 (LLM/S3 없이)
+YOLO 로컬 독립 테스트 도구 (Local YOLO Sandbox)
+
+[역할]
+1. 샌드박스 테스트: S3나 DB 등 외부 인프라 연결 없이, 로컬 이미지와 라벨만으로 YOLO 모델의 학습 및 추론을 즉시 테스트합니다.
+2. 퀵 가이드: 새로운 데이터셋이 들어왔을 때, 모델이 정상적으로 학습되는지 소량의 데이터(예: 10장)로 빠르게 검증할 때 사용합니다.
+3. 시각화: 추론 결과를 로컬 디렉토리(ai/runs/local_test)에 저장하여 감지 결과를 육안으로 확인합니다.
 
 [사용법]
-1. 이미지 준비:
-   ai/data/engine_bay/train/images/  ← 학습 이미지 10장
-   ai/data/engine_bay/train/labels/  ← 라벨 파일 10개
-   ai/data/engine_bay/valid/images/  ← 검증 이미지 2~3장
-   ai/data/engine_bay/valid/labels/  ← 라벨 파일 2~3개
-
-2. 라벨 생성 (labelImg, Roboflow 등 사용):
-   예: Battery가 있는 이미지 → labels/image1.txt
-   내용: 0 0.5 0.5 0.3 0.2  (class x_center y_center width height)
-
-3. 학습:
-   python ai/scripts/local_yolo_test.py --train --epochs 50
 
 4. 추론:
    python ai/scripts/local_yolo_test.py --infer --image path/to/image.jpg
