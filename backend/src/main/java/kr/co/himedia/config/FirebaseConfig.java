@@ -10,7 +10,9 @@ import org.springframework.context.annotation.Configuration;
 
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 
 @Slf4j
@@ -24,17 +26,55 @@ public class FirebaseConfig {
     public void initialize() {
         try {
             if (FirebaseApp.getApps().isEmpty()) {
-                // 1. Check if file exists
-                if (!Files.exists(Paths.get(firebaseConfigPath))) {
-                    log.warn("Firebase config file not found at: {}. FCM features will be disabled.",
+                InputStream serviceAccountStream = null;
+
+                // 1. Try ClassPath (Standard Spring Boot)
+                try {
+                    org.springframework.core.io.ClassPathResource resource = new org.springframework.core.io.ClassPathResource(
+                            firebaseConfigPath);
+                    if (resource.exists()) {
+                        serviceAccountStream = resource.getInputStream();
+                        log.info("Loaded Firebase config from ClassPath: {}", firebaseConfigPath);
+                    }
+                } catch (Exception e) {
+                    log.warn("Failed to load from ClassPath: {}", e.getMessage());
+                }
+
+                // 2. Try filesystem (src/main/resources - Local Dev)
+                if (serviceAccountStream == null) {
+                    try {
+                        Path path = Paths.get("src/main/resources", firebaseConfigPath);
+                        if (Files.exists(path)) {
+                            serviceAccountStream = Files.newInputStream(path);
+                            log.info("Loaded Firebase config from filesystem (dev): {}", path);
+                        }
+                    } catch (Exception e) {
+                        log.warn("Failed to load from filesystem (dev): {}", e.getMessage());
+                    }
+                }
+
+                // 3. Try filesystem (Root - Fallback)
+                if (serviceAccountStream == null) {
+                    try {
+                        Path path = Paths.get(firebaseConfigPath);
+                        if (Files.exists(path)) {
+                            serviceAccountStream = Files.newInputStream(path);
+                            log.info("Loaded Firebase config from filesystem (root): {}", path);
+                        }
+                    } catch (Exception e) {
+                        log.warn("Failed to load from filesystem (root): {}", e.getMessage());
+                    }
+                }
+
+                if (serviceAccountStream == null) {
+                    log.error(
+                            "Firebase config file not found. Checked ClassPath, src/main/resources, and root. Path: {}",
                             firebaseConfigPath);
                     return;
                 }
 
-                // 2. Initialize Firebase
-                FileInputStream serviceAccount = new FileInputStream(firebaseConfigPath);
                 FirebaseOptions options = FirebaseOptions.builder()
-                        .setCredentials(GoogleCredentials.fromStream(serviceAccount))
+                        .setCredentials(GoogleCredentials.fromStream(serviceAccountStream))
                         .build();
 
                 FirebaseApp.initializeApp(options);
