@@ -14,7 +14,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.util.UUID;
 
 @RestController
-@RequestMapping("/auth")
+@RequestMapping("/api/v1/auth")
 @RequiredArgsConstructor
 public class AuthController {
 
@@ -37,6 +37,13 @@ public class AuthController {
     @PostMapping("/refresh")
     public ResponseEntity<ApiResponse<TokenResponse>> refresh(@Valid @RequestBody TokenRefreshRequest req) {
         TokenResponse token = userService.refresh(req);
+        return ResponseEntity.ok(ApiResponse.success(token));
+    }
+
+    // BE-AU-005 소셜 로그인 (Google/Kakao)
+    @PostMapping("/social-login")
+    public ResponseEntity<ApiResponse<TokenResponse>> socialLogin(@Valid @RequestBody SocialLoginRequest req) {
+        TokenResponse token = userService.socialLogin(req);
         return ResponseEntity.ok(ApiResponse.success(token));
     }
 

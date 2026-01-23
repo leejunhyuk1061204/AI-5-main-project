@@ -26,7 +26,7 @@ export default function Login() {
 
     useEffect(() => {
         GoogleSignin.configure({
-            webClientId: 'YOUR_WEB_CLIENT_ID', // firebase 등에서 발급받은 web client id (선택)
+            webClientId: '415824813180-to8ea5houck16m7as32t9cavi7aq87e5.apps.googleusercontent.com', // firebase 등에서 발급받은 web client id (선택)
         });
     }, []);
 
