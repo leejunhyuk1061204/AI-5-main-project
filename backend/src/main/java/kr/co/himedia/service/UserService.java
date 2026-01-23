@@ -19,6 +19,8 @@ import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.Base64;
 import java.util.UUID;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseToken;
 
 @Service
 @RequiredArgsConstructor
@@ -111,6 +113,83 @@ public class UserService {
                 .accessToken(newAccessToken)
                 .refreshToken(newRefreshToken)
                 .build();
+    }
+
+    // 소셜 로그인 (Google)
+    public TokenResponse socialLogin(SocialLoginRequest req) {
+        String email = "";
+        String nickname = "";
+
+        // 1. 소셜 제공자에 따른 토큰 검증
+        try {
+            if ("google".equalsIgnoreCase(req.getProvider())) {
+                // Firebase Admin SDK를 사용하여 ID Token 검증
+                FirebaseToken decodedToken = FirebaseAuth.getInstance().verifyIdToken(req.getToken());
+                email = decodedToken.getEmail();
+                nickname = decodedToken.getName();
+
+                if (nickname == null) {
+                    nickname = "Google User";
+                }
+            } else if ("kakao".equalsIgnoreCase(req.getProvider())) {
+                // 카카오 검증 로직 (여기서는 생략, 추후 구현)
+                throw new BaseException(ErrorCode.INTERNAL_SERVER_ERROR,
+                        "Kakao login not fully implemented on backend yet.");
+            } else {
+                throw new BaseException(ErrorCode.INVALID_INPUT_VALUE, "Unsupported provider: " + req.getProvider());
+            }
+        } catch (Exception e) {
+            // 검증 실패 시 예외 처리
+            e.printStackTrace(); // 서버 로그에 스택 트레이스 출력
+            throw new BaseException(ErrorCode.INVALID_CREDENTIALS,
+                    "Token Verification Failed: " + e.getMessage());
+        }
+
+        try {
+            // 2. 이메일로 사용자 조회 또는 자동 회원가입
+            String finalEmail = email;
+            String finalNickname = nickname;
+
+            User user = userRepository.findByEmail(email).orElseGet(() -> {
+                // 신규 회원이면 자동 가입 처리
+                User newUser = User.builder()
+                        .userId(UUID.randomUUID())
+                        .email(finalEmail)
+                        .passwordHash(passwordEncoder.encode(UUID.randomUUID().toString())) // 임의의 비밀번호 생성
+                        .nickname(finalNickname)
+                        .build();
+                return userRepository.save(newUser);
+            });
+
+            if (user.getDeletedAt() != null) {
+                throw new BaseException(ErrorCode.INVALID_CREDENTIALS, "User is deleted.");
+            }
+
+            // 3. 토큰 발급 (로그인 처리)
+            String accessToken = jwtTokenProvider.createAccessToken(user.getUserId().toString());
+            String refreshToken = jwtTokenProvider.createRefreshToken(user.getUserId().toString());
+
+            RefreshToken refreshTokenEntity = refreshTokenRepository.findByUser(user)
+                    .orElse(RefreshToken.builder()
+                            .user(user)
+                            .build());
+
+            refreshTokenEntity.setToken(refreshToken);
+            refreshTokenEntity.setExpiryDate(java.time.Instant.now().plusMillis(604800000)); // 7 days
+
+            refreshTokenRepository.save(refreshTokenEntity);
+            user.setLastLoginAt(LocalDateTime.now());
+            userRepository.save(user);
+
+            return TokenResponse.builder()
+                    .accessToken(accessToken)
+                    .refreshToken(refreshToken)
+                    .build();
+
+        } catch (Exception e) {
+            e.printStackTrace(); // DB 저장이나 토큰 생성 중 에러 로그 출력
+            throw new BaseException(ErrorCode.INTERNAL_SERVER_ERROR, "Social Login Failed: " + e.getMessage());
+        }
     }
 
     // 사용자 프로필 조회
