@@ -108,4 +108,19 @@ public class Vehicle {
     public void updateTotalMileage(Double totalMileage) {
         this.totalMileage = totalMileage;
     }
+
+    /**
+     * 차량 연동 상태 및 VIN 정보를 업데이트합니다.
+     */
+    public void updateCloudLinkStatus(boolean linked) {
+        this.cloudLinked = linked;
+        this.registrationSource = RegistrationSource.CLOUD;
+    }
+
+    /**
+     * 복호화된 VIN을 받아 암호화하여 저장합니다.
+     */
+    public void updateVin(String encryptedVin) {
+        this.vin = encryptedVin;
+    }
 }

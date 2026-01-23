@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, Modal, FlatList, Pressable } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, Modal, FlatList, Pressable, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
+import { registerVehicle } from '../../api/vehicleApi';
+import StatusModal from '../../components/StatusModal';
 
 // Vehicle Options
 const VEHICLE_MAKES = [
@@ -26,6 +28,37 @@ export default function PassiveReg() {
     const [selectedMake, setSelectedMake] = useState<{ label: string; value: string } | null>(null);
     const [fuelType, setFuelType] = useState('gasoline');
     const [isMakeModalVisible, setMakeModalVisible] = useState(false);
+    const [modelName, setModelName] = useState('');
+
+    const [modelYear, setModelYear] = useState('');
+    const [registrationStatus, setRegistrationStatus] = useState<'idle' | 'success' | 'error'>('idle');
+    const [resultModalVisible, setResultModalVisible] = useState(false);
+    const [errorMessage, setErrorMessage] = useState('');
+
+    const handleRegister = async () => {
+        if (!vehicleNumber || !selectedMake || !modelName || !modelYear) {
+            Alert.alert('알림', '모든 필수 필드를 입력해주세요. (차량 번호, 제조사, 모델명, 연식)');
+            return;
+        }
+
+        try {
+            await registerVehicle({
+                manufacturer: selectedMake.label, // Use label for display name or value based on backend expectation? usually value or label depending on backend. The valid choices are strings. Let's use label or value. The API def says 'manufacturer: string'.
+                modelName: modelName,
+                modelYear: parseInt(modelYear),
+                fuelType: fuelType.toUpperCase() as any, // 'GASOLINE' | 'DIESEL' etc.
+                carNumber: vehicleNumber,
+                memo: vin ? `VIN: ${vin}` : undefined,
+                nickname: `${selectedMake.label} ${modelName}`, // Default nickname
+            });
+            Alert.alert('성공', '차량이 성공적으로 등록되었습니다.', [
+                { text: '확인', onPress: () => navigation.goBack() }
+            ]);
+        } catch (error) {
+            console.error('Registration failed:', error);
+            Alert.alert('오류', '차량 등록 중 문제가 발생했습니다. 다시 시도해주세요.');
+        }
+    };
 
     // Helper to render Fuel Option
     const FuelOption = ({ type, label, icon, value }: { type: string, label: string, icon: keyof typeof MaterialIcons.glyphMap, value: string }) => (
@@ -106,14 +139,11 @@ export default function PassiveReg() {
                                 <MaterialIcons name="center-focus-strong" size={24} color="#0d7ff2" />
                             </TouchableOpacity>
                         </View>
-                        <Text className="text-xs text-slate-500 mt-2 pl-1">
-                            등록증 하단의 차대번호를 입력하거나 스캔하세요.
-                        </Text>
                     </View>
 
                     {/* Manufacturer / Model - Custom Dropdown Trigger */}
                     <View>
-                        <Text className="text-sm font-medium text-slate-400 mb-2 pl-1">제조사 / 모델</Text>
+                        <Text className="text-sm font-medium text-slate-400 mb-2 pl-1">제조사</Text>
                         <TouchableOpacity
                             onPress={() => setMakeModalVisible(true)}
                             className="relative w-full h-14 bg-[#15181E] border border-border-dark rounded-xl px-4 justify-center"
@@ -125,6 +155,32 @@ export default function PassiveReg() {
                                 <MaterialIcons name="expand-more" size={24} color="#94a3b8" />
                             </View>
                         </TouchableOpacity>
+                    </View>
+
+                    {/* Model Name */}
+                    <View>
+                        <Text className="text-sm font-medium text-slate-400 mb-2 pl-1">모델명</Text>
+                        <TextInput
+                            value={modelName}
+                            onChangeText={setModelName}
+                            placeholder="예: 아반떼, 그랜저"
+                            placeholderTextColor="#94a3b8"
+                            className="w-full h-14 bg-[#15181E] border border-border-dark rounded-xl px-4 text-base text-white focus:border-primary"
+                        />
+                    </View>
+
+                    {/* Model Year */}
+                    <View>
+                        <Text className="text-sm font-medium text-slate-400 mb-2 pl-1">연식</Text>
+                        <TextInput
+                            value={modelYear}
+                            onChangeText={(text) => setModelYear(text.replace(/[^0-9]/g, ''))}
+                            placeholder="예: 2024"
+                            keyboardType="number-pad"
+                            maxLength={4}
+                            placeholderTextColor="#94a3b8"
+                            className="w-full h-14 bg-[#15181E] border border-border-dark rounded-xl px-4 text-base text-white focus:border-primary"
+                        />
                     </View>
 
                     {/* Fuel Type */}
@@ -151,6 +207,7 @@ export default function PassiveReg() {
                 style={{ paddingBottom: insets.bottom + 10 }}
             >
                 <TouchableOpacity
+                    onPress={handleRegister}
                     className="w-full h-14 bg-primary rounded-xl shadow-lg shadow-blue-500/30 flex-row items-center justify-center gap-2 active:opacity-90"
                     activeOpacity={0.8}
                 >
@@ -196,6 +253,27 @@ export default function PassiveReg() {
                     </View>
                 </TouchableOpacity>
             </Modal>
+
+            {/* Registration Result Modal */}
+            <StatusModal
+                visible={resultModalVisible}
+                status={registrationStatus}
+                title={registrationStatus === 'success' ? '등록 성공!' : '등록 실패'}
+                message={registrationStatus === 'success' ? '차량이 성공적으로 등록되었습니다.' : errorMessage}
+                onClose={() => {
+                    const isSuccess = registrationStatus === 'success';
+                    setResultModalVisible(false);
+                    if (isSuccess) navigation.goBack();
+                }}
+                onConfirm={() => {
+                    setResultModalVisible(false);
+                    navigation.goBack();
+                }}
+                onRetry={() => {
+                    setResultModalVisible(false);
+                }}
+            />
+
 
         </View>
     );

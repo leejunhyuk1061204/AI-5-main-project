@@ -25,6 +25,7 @@ services:
       - ./data/postgres_1024:/var/lib/postgresql/data
       - ./db/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql
       - ./db/data.sql:/docker-entrypoint-initdb.d/02_data.sql
+      - ./db/seed_car_models.sql:/docker-entrypoint-initdb.d/03_seed_car_models.sql
     networks:
       - car-sentry-network
 
@@ -39,8 +40,6 @@ services:
     ports:
       - "${MQ_PORT:-5672}:5672" # AMQP 포트
       - "${MQ_MANAGEMENT_PORT:-15672}:15672" # Management UI 포트
-    volumes:
-      - rabbitmq_data:/var/lib/rabbitmq
     networks:
       - car-sentry-network
 
@@ -50,4 +49,3 @@ networks:
 
 volumes:
   postgres_data:
-  rabbitmq_data:

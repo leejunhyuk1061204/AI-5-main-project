@@ -5,9 +5,12 @@ import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { CommonActions } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import ObdService from '../../services/ObdService';
 
 export default function ObdResult({ navigation }: any) {
     const [scoreAnim] = useState(new Animated.Value(0));
+    const [isSimulating, setIsSimulating] = useState(false);
 
     useEffect(() => {
         Animated.timing(scoreAnim, {
@@ -15,15 +18,39 @@ export default function ObdResult({ navigation }: any) {
             duration: 2000,
             useNativeDriver: false,
         }).start();
+
+        // Cleanup simulation on unmount
+        return () => {
+            ObdService.stopSimulation();
+        };
     }, []);
 
     const handleGoMain = () => {
+        ObdService.stopSimulation();
         navigation.dispatch(
             CommonActions.reset({
                 index: 0,
                 routes: [{ name: 'MainPage' }],
             })
         );
+    };
+
+    const toggleSimulation = async () => {
+        if (isSimulating) {
+            ObdService.stopSimulation();
+            setIsSimulating(false);
+        } else {
+            // Get primary vehicle ID
+            const stored = await AsyncStorage.getItem('primaryVehicle');
+            if (stored) {
+                const vehicle = JSON.parse(stored);
+                ObdService.setVehicleId(vehicle.id);
+                ObdService.startSimulation();
+                setIsSimulating(true);
+            } else {
+                console.warn('[ObdResult] No primary vehicle set');
+            }
+        }
     };
 
     const ResultItem = ({ icon, label, status, isGood }: { icon: any, label: string, status: string, isGood: boolean }) => (
@@ -82,6 +109,17 @@ export default function ObdResult({ navigation }: any) {
                         <ResultItem icon="air" label="흡기 시스템" status="주의" isGood={false} />
                     </View>
 
+                    {/* Simulation Mode Button */}
+                    <TouchableOpacity
+                        onPress={toggleSimulation}
+                        className={`p-4 rounded-xl mb-4 flex-row items-center justify-center gap-2 border ${isSimulating ? 'bg-orange-500/20 border-orange-500/50' : 'bg-[#ffffff08] border-[#ffffff0d]'}`}
+                    >
+                        <MaterialIcons name={isSimulating ? 'stop' : 'play-arrow'} size={20} color={isSimulating ? '#f97316' : '#0d7ff2'} />
+                        <Text className={`font-bold ${isSimulating ? 'text-orange-400' : 'text-[#0d7ff2]'}`}>
+                            {isSimulating ? '시뮬레이션 중지' : '🚗 가상 주행 시작 (테스트)'}
+                        </Text>
+                    </TouchableOpacity>
+
                     {/* AI Recommendation */}
                     <View className="bg-gradient-to-br from-[#1e293b] to-[#0f172a] p-5 rounded-2xl border border-[#0d7ff2]/30 mb-8 relative overflow-hidden">
                         <View className="absolute top-0 right-0 w-20 h-20 bg-[#0d7ff2]/20 blur-xl rounded-full translate-x-10 -translate-y-10" />
@@ -117,3 +155,4 @@ export default function ObdResult({ navigation }: any) {
         </View>
     );
 }
+

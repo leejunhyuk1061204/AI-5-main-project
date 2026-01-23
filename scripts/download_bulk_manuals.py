@@ -7,52 +7,62 @@ OUTPUT_DIR = "data/manuals/zips"
 PARSED_DIR = "data/manuals/parsed"
 DELAY = 2
 
-# 2025년 한국 점유율 및 2010-2011 인기 모델 기반 리스트
+# 2010-2013 한국 및 글로벌 인기 모델 대규모 리스트
 TARGETS = [
     # === 현대 (Hyundai) ===
     ("Hyundai", "2010", "Elantra%20L4-2.0L"),
     ("Hyundai", "2011", "Elantra%20L4-1.8L"),
     ("Hyundai", "2012", "Elantra%20L4-1.8L"),
     ("Hyundai", "2013", "Elantra%20L4-1.8L"),
-    ("Hyundai", "2010", "Sonata%20L4-2.4L"),
     ("Hyundai", "2011", "Sonata%20L4-2.4L"),
     ("Hyundai", "2012", "Sonata%20L4-2.4L"),
     ("Hyundai", "2013", "Sonata%20L4-2.4L"),
-    ("Hyundai", "2010", "Azera%20V6-3.3L"),
     ("Hyundai", "2011", "Azera%20V6-3.3L"),
     ("Hyundai", "2012", "Azera%20V6-3.3L"),
     ("Hyundai", "2013", "Azera%20V6-3.3L"),
-    ("Hyundai", "2012", "Veloster%20L4-1.6L"),
-    ("Hyundai", "2013", "Veloster%20L4-1.6L"),
-    ("Hyundai", "2011", "Equus%20V8-5.0L"),
-    ("Hyundai", "2010", "Accent%20L4-1.6L"),
-    ("Hyundai", "2011", "Accent%20L4-1.6L"),
-    
-    # Tucson (Corrected: Requires FWD/AWD)
-    ("Hyundai", "2010", "Tucson%20FWD%20L4-2.4L"),
-    ("Hyundai", "2011", "Tucson%20FWD%20L4-2.0L"),
-    ("Hyundai", "2012", "Tucson%20FWD%20L4-2.0L"),
-    ("Hyundai", "2013", "Tucson%20FWD%20L4-2.0L"),
-    ("Hyundai", "2010", "Tucson%20AWD%20L4-2.4L"),
-    ("Hyundai", "2011", "Tucson%20AWD%20L4-2.4L"),
-    ("Hyundai", "2012", "Tucson%20AWD%20L4-2.4L"),
-    ("Hyundai", "2013", "Tucson%20AWD%20L4-2.4L"),
-    
-    ("Hyundai", "2010", "Santa%20Fe%20FWD%20L4-2.4L"),
-    ("Hyundai", "2011", "Santa%20Fe%20FWD%20L4-2.4L"),
-    ("Hyundai", "2012", "Santa%20Fe%20FWD%20L4-2.4L"),
-    ("Hyundai", "2013", "Santa%20Fe%20FWD%20L4-2.4L"),
-    
-    # Genesis (Corrected: Requires Sedan/Coupe)
-    ("Hyundai", "2010", "Genesis%20Sedan%20V6-3.8L"),
     ("Hyundai", "2011", "Genesis%20Sedan%20V6-3.8L"),
     ("Hyundai", "2012", "Genesis%20Sedan%20V6-3.8L"),
     ("Hyundai", "2013", "Genesis%20Sedan%20V6-3.8L"),
-    ("Hyundai", "2010", "Genesis%20Coupe%20V6-3.8L"),
-    ("Hyundai", "2011", "Genesis%20Coupe%20V6-3.8L"),
-    ("Hyundai", "2012", "Genesis%20Coupe%20V6-3.8L"),
-    ("Hyundai", "2013", "Genesis%20Coupe%20V6-3.8L"),
+    ("Hyundai", "2011", "Tucson%20FWD%20L4-2.0L"),
+    ("Hyundai", "2012", "Tucson%20FWD%20L4-2.0L"),
+    ("Hyundai", "2013", "Tucson%20FWD%20L4-2.4L"),
+    ("Hyundai", "2012", "Santa%20Fe%20FWD%20L4-2.4L"),
+    ("Hyundai", "2013", "Santa%20Fe%20FWD%20V6-3.3L"),
+    ("Hyundai", "2011", "Accent%20L4-1.6L"),
+    ("Hyundai", "2012", "Accent%20L4-1.6L"),
+    ("Hyundai", "2013", "Accent%20L4-1.6L"),
+    ("Hyundai", "2013", "Veloster%20L4-1.6L"),
 
+    # === 기아 (Kia) ===
+    ("Kia", "2011", "Optima%20L4-2.4L"),
+    ("Kia", "2012", "Optima%20L4-2.4L"),
+    ("Kia", "2013", "Optima%20L4-2.4L"),
+    ("Kia", "2012", "Sorento%202WD%20L4-2.4L"),
+    ("Kia", "2013", "Sorento%202WD%20L4-2.4L"),
+    ("Kia", "2011", "Sportage%202WD%20L4-2.4L"),
+    ("Kia", "2012", "Sportage%202WD%20L4-2.4L"),
+    ("Kia", "2013", "Sportage%202WD%20L4-2.4L"),
+    ("Kia", "2011", "Forte%20L4-2.0L"),
+    ("Kia", "2012", "Forte%20L4-2.0L"),
+    ("Kia", "2013", "Forte%20L4-2.0L"),
+    ("Kia", "2011", "Rio%20L4-1.6L"),
+    ("Kia", "2012", "Rio%20L4-1.6L"),
+    ("Kia", "2013", "Rio%20L4-1.6L"),
+    ("Kia", "2010", "Soul%20L4-2.0L"),
+    ("Kia", "2011", "Soul%20L4-2.0L"),
+    ("Kia", "2012", "Soul%20L4-2.0L"),
+    ("Kia", "2013", "Soul%20L4-2.0L"),
+
+    # === 쉐보레 (Chevrolet) ===
+    ("Chevrolet", "2011", "Cruze%20L4-1.8L"),
+    ("Chevrolet", "2012", "Cruze%20L4-1.8L"),
+    ("Chevrolet", "2013", "Cruze%20L4-1.8L"),
+    ("Chevrolet", "2011", "Malibu%20L4-2.4L"),
+    ("Chevrolet", "2012", "Malibu%20L4-2.4L"),
+    ("Chevrolet", "2013", "Malibu%20L4-2.5L"),
+    ("Chevrolet", "2011", "Spark%20L4-1.2L"),
+    ("Chevrolet", "2012", "Spark%20L4-1.2L"),
+    ("Chevrolet", "2013", "Spark%20L4-1.2L"),
     # === 기아 (Kia) ===
     ("Kia", "2010", "Optima%20L4-2.4L"),
     ("Kia", "2011", "Optima%20L4-2.4L"),

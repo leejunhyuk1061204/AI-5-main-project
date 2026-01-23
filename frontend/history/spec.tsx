@@ -1,22 +1,73 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, ScrollView, Image, Dimensions, Platform } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, TouchableOpacity, ScrollView, Image, Dimensions, Platform, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { getVehicleDetail, VehicleResponse } from '../api/vehicleApi';
 
 const CAR_IMAGE_URL = "https://lh3.googleusercontent.com/aida-public/AB6AXuAfxrTBxNiA6HuulRPAzDW39a_qn078fKlEXJhWCyJFUyNsZOwXeGVRzjuHZ2XlTHe8b9Px1_yQWi-8yW0E8CcSZY9rQ5gLXH0W8BSPB6c4mbB2XsCt76Hmt-ePDsB16K-3V32TdUNAO2WYetQzPAQjnUMXBmnoADau4MHNrMoEUVgP7VezAGWegsNv1C8o3DOJYw2fy95661KeEYhvvmFskgPtpk4FgJPJBoVyXZBTSKPfv-jrFTXyKLFElCUqqp6Bvel6S2FFqti-";
 
 export default function Spec() {
     const navigation = useNavigation();
+    const route = useRoute<any>();
     const insets = useSafeAreaInsets();
+    const { vehicleId } = route.params || {};
+
+    const [vehicle, setVehicle] = useState<VehicleResponse | null>(null);
+    const [loading, setLoading] = useState(true);
+
+
+
+    useEffect(() => {
+        if (!vehicleId) {
+            Alert.alert('오류', '차량 정보를 찾을 수 없습니다.');
+            navigation.goBack();
+            return;
+        }
+
+        const fetchVehicleSpec = async () => {
+            try {
+                setLoading(true);
+                const data = await getVehicleDetail(vehicleId);
+
+                setVehicle(data);
+            } catch (error) {
+                console.error('Failed to load vehicle spec:', error);
+                Alert.alert('오류', '차량 정보를 불러오는데 실패했습니다.');
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchVehicleSpec();
+    }, [vehicleId]);
+
+    const formatNumber = (num?: number | null, unit?: string) => {
+        if (num === undefined || num === null) return '-';
+        return unit ? `${num.toLocaleString()} ${unit}` : num.toLocaleString();
+    };
+
+    if (loading) {
+        return (
+            <View className="flex-1 bg-[#101922] items-center justify-center">
+                <ActivityIndicator size="large" color="#0d7ff2" />
+            </View>
+        );
+    }
+
+    if (!vehicle) {
+        return (
+            <View className="flex-1 bg-[#101922] items-center justify-center">
+                <Text className="text-white">차량 정보를 불러올 수 없습니다.</Text>
+            </View>
+        );
+    }
 
     return (
         <View className="flex-1 bg-[#101922]">
             <StatusBar style="light" />
-
-            {/* Background Gradient Removed */}
 
             {/* Header */}
             <View
@@ -46,8 +97,6 @@ export default function Spec() {
 
                     {/* Hero Card */}
                     <View className="relative w-full overflow-hidden rounded-2xl bg-[#121826]/60 border border-white/10">
-                        {/* Glow Effect Removed */}
-
                         <View className="w-full h-56 relative bg-white/5">
                             <LinearGradient
                                 colors={['transparent', '#121826']}
@@ -59,7 +108,7 @@ export default function Spec() {
                                 resizeMode="contain"
                             />
                             <View className="absolute top-4 right-4 z-20 bg-black/40 px-3 py-1 rounded-full border border-white/10">
-                                <Text className="text-xs font-medium text-white/80">2024 Model</Text>
+                                <Text className="text-xs font-medium text-white/80">{vehicle.modelYear} Model</Text>
                             </View>
                         </View>
 
@@ -68,10 +117,12 @@ export default function Spec() {
                                 <View className="h-6 w-6 rounded-full bg-white items-center justify-center">
                                     <MaterialIcons name="local-taxi" size={16} color="black" />
                                 </View>
-                                <Text className="text-primary text-sm font-bold tracking-wider uppercase">Genesis</Text>
+                                <Text className="text-primary text-sm font-bold tracking-wider uppercase">{vehicle.manufacturer}</Text>
                             </View>
-                            <Text className="text-white text-3xl font-bold mb-1">Genesis G80</Text>
-                            <Text className="text-gray-400 text-sm font-normal">2.5 Gasoline Turbo AWD • Sport Package</Text>
+                            <Text className="text-white text-3xl font-bold mb-1">{vehicle.modelName}</Text>
+                            <Text className="text-gray-400 text-sm font-normal">
+                                {vehicle.engineType || vehicle.fuelType || 'Unknown Specification'}
+                            </Text>
                         </View>
                     </View>
 
@@ -92,7 +143,9 @@ export default function Spec() {
                                 </View>
                                 <View>
                                     <Text className="text-gray-400 text-xs mb-1">배기량</Text>
-                                    <Text className="text-white text-xl font-bold">2,497 <Text className="text-sm font-normal text-gray-500">cc</Text></Text>
+                                    <Text className="text-white text-xl font-bold">
+                                        {formatNumber(vehicle.displacement, 'cc')}
+                                    </Text>
                                 </View>
                             </View>
 
@@ -103,7 +156,9 @@ export default function Spec() {
                                 </View>
                                 <View>
                                     <Text className="text-gray-400 text-xs mb-1">최대 출력</Text>
-                                    <Text className="text-white text-xl font-bold">304 <Text className="text-sm font-normal text-gray-500">hp</Text></Text>
+                                    <Text className="text-white text-xl font-bold">
+                                        {formatNumber(vehicle.maxPower, 'hp')}
+                                    </Text>
                                 </View>
                             </View>
 
@@ -114,7 +169,9 @@ export default function Spec() {
                                 </View>
                                 <View>
                                     <Text className="text-gray-400 text-xs mb-1">연비</Text>
-                                    <Text className="text-white text-xl font-bold">10.8 <Text className="text-sm font-normal text-gray-500">km/ℓ</Text></Text>
+                                    <Text className="text-white text-xl font-bold">
+                                        {vehicle.officialFuelEconomy ? `${vehicle.officialFuelEconomy} km/ℓ` : '-'}
+                                    </Text>
                                 </View>
                             </View>
 
@@ -124,8 +181,10 @@ export default function Spec() {
                                     <MaterialIcons name="hub" size={24} color="#94a3b8" />
                                 </View>
                                 <View>
-                                    <Text className="text-gray-400 text-xs mb-1">구동 방식</Text>
-                                    <Text className="text-white text-xl font-bold">AWD</Text>
+                                    <Text className="text-gray-400 text-xs mb-1">최대 토크</Text>
+                                    <Text className="text-white text-xl font-bold">
+                                        {formatNumber(vehicle.maxTorque, 'kg.m')}
+                                    </Text>
                                 </View>
                             </View>
                         </View>
@@ -148,7 +207,7 @@ export default function Spec() {
                                     </View>
                                     <Text className="text-gray-300 text-sm">프론트 타이어</Text>
                                 </View>
-                                <Text className="text-white font-bold text-lg">245/40R19</Text>
+                                <Text className="text-white font-bold text-lg">{vehicle.tireSizeFront || '-'}</Text>
                             </View>
 
                             <View className="flex-row items-center justify-between p-4 active:bg-white/5">
@@ -158,7 +217,7 @@ export default function Spec() {
                                     </View>
                                     <Text className="text-gray-300 text-sm">리어 타이어</Text>
                                 </View>
-                                <Text className="text-white font-bold text-lg">275/35R19</Text>
+                                <Text className="text-white font-bold text-lg">{vehicle.tireSizeRear || '-'}</Text>
                             </View>
                         </View>
                     </View>
@@ -175,7 +234,9 @@ export default function Spec() {
                         <View className="flex-row gap-3">
                             <View className="flex-1 bg-white/5 border border-white/5 rounded-xl p-4 items-center justify-center gap-1">
                                 <Text className="text-xs text-gray-400">전장 (Length)</Text>
-                                <Text className="text-white font-bold text-lg">4,995 <Text className="text-xs font-normal text-gray-500">mm</Text></Text>
+                                <Text className="text-white font-bold text-lg">
+                                    {formatNumber(vehicle.length)} <Text className="text-xs font-normal text-gray-500">mm</Text>
+                                </Text>
                                 <View className="w-full h-1 bg-white/10 mt-2 rounded-full overflow-hidden">
                                     <View className="bg-primary w-[90%] h-full rounded-full" />
                                 </View>
@@ -183,7 +244,9 @@ export default function Spec() {
 
                             <View className="flex-1 bg-white/5 border border-white/5 rounded-xl p-4 items-center justify-center gap-1">
                                 <Text className="text-xs text-gray-400">전폭 (Width)</Text>
-                                <Text className="text-white font-bold text-lg">1,925 <Text className="text-xs font-normal text-gray-500">mm</Text></Text>
+                                <Text className="text-white font-bold text-lg">
+                                    {formatNumber(vehicle.width)} <Text className="text-xs font-normal text-gray-500">mm</Text>
+                                </Text>
                                 <View className="w-full h-1 bg-white/10 mt-2 rounded-full overflow-hidden">
                                     <View className="bg-primary w-[70%] h-full rounded-full" />
                                 </View>
@@ -191,7 +254,9 @@ export default function Spec() {
 
                             <View className="flex-1 bg-white/5 border border-white/5 rounded-xl p-4 items-center justify-center gap-1">
                                 <Text className="text-xs text-gray-400">전고 (Height)</Text>
-                                <Text className="text-white font-bold text-lg">1,465 <Text className="text-xs font-normal text-gray-500">mm</Text></Text>
+                                <Text className="text-white font-bold text-lg">
+                                    {formatNumber(vehicle.height)} <Text className="text-xs font-normal text-gray-500">mm</Text>
+                                </Text>
                                 <View className="w-full h-1 bg-white/10 mt-2 rounded-full overflow-hidden">
                                     <View className="bg-primary w-[50%] h-full rounded-full" />
                                 </View>

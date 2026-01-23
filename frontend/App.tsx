@@ -37,6 +37,7 @@ import AlertSetting from './setting/AlertSetting';
 import SettingMain from './setting/SettingMain';
 import CarManage from './setting/CarManage';
 import Cloud from './setting/Cloud';
+import Membership from './setting/Membership';
 
 // Keep the splash screen visible while we fetch resources
 ExpoSplashScreen.preventAutoHideAsync();
@@ -103,78 +104,79 @@ export default function App() {
     return null;
   }
 
-  // Show Custom Splash until animation finishes
-  if (showCustomSplash) {
-    return (
-      <SafeAreaProvider>
-        <View className="flex-1" onLayout={onLayoutRootView}>
-          <SplashScreenComponent onFinish={() => setShowCustomSplash(false)} />
-          <StatusBar style="light" />
-        </View>
-      </SafeAreaProvider>
-    );
-  }
-
+  // NavigationContainer는 항상 마운트되어야 함 (useNavigation 등 훅이 정상 작동하도록)
   return (
     <SafeAreaProvider>
       <NavigationContainer theme={AppTheme}>
-        <StatusBar style="auto" />
-        <Stack.Navigator
-          initialRouteName={initialRoute}
-          screenOptions={{
-            headerShown: false,
-            animation: 'slide_from_right',
-            contentStyle: { backgroundColor: '#101922' }
-          }}
-        >
-          <Stack.Screen name="Tos" component={Tos} />
-          <Stack.Screen name="Login" component={Login} />
-          <Stack.Screen name="SignUp" component={SignUp} />
-          <Stack.Screen name="FindPW" component={FindPW} />
-          <Stack.Screen
-            name="MainPage"
-            component={MainPage}
-            options={{ animation: 'none' }}
-          />
-          <Stack.Screen name="RegisterMain" component={RegisterMain} />
-          <Stack.Screen name="ActiveReg" component={ActiveReg} />
-          <Stack.Screen name="ActiveLoading" component={ActiveLoading} />
-          <Stack.Screen name="ActiveSuccess" component={ActiveSuccess} />
-          <Stack.Screen name="ObdResult" component={ObdResult} />
-          <Stack.Screen name="PassiveReg" component={PassiveReg} />
-          <Stack.Screen
-            name="DiagMain"
-            component={DiagMain}
-            options={{ animation: 'none' }}
-          />
-          <Stack.Screen name="EngineSoundDiag" component={EngineSoundDiag} />
-          <Stack.Screen name="AiCompositeDiag" component={AiCompositeDiag} />
-          <Stack.Screen name="VisualDiagnosis" component={require('./diagnosis/VisualDiagnosis').default} />
-          <Stack.Screen name="Filming" component={Filming} />
-          <Stack.Screen
-            name="HistoryMain"
-            component={HistoryMain}
-            options={{ animation: 'none' }}
-          />
-          <Stack.Screen name="DrivingHis" component={DrivingHis} />
-          <Stack.Screen name="RecallHis" component={RecallHis} />
-          <Stack.Screen name="SupManage" component={SupManage} />
-          <Stack.Screen
-            name="AlertMain"
-            component={AlertMain}
-            options={{ animation: 'none' }}
-          />
-          <Stack.Screen name="Spec" component={Spec} />
-          <Stack.Screen
-            name="SettingMain"
-            component={SettingMain}
-            options={{ animation: 'none' }}
-          />
-          <Stack.Screen name="MyPage" component={MyPage} />
-          <Stack.Screen name="AlertSetting" component={AlertSetting} />
-          <Stack.Screen name="CarManage" component={CarManage} />
-          <Stack.Screen name="Cloud" component={Cloud} />
-        </Stack.Navigator>
+        {showCustomSplash ? (
+          // 스플래시 화면 표시
+          <View className="flex-1" onLayout={onLayoutRootView}>
+            <SplashScreenComponent onFinish={() => setShowCustomSplash(false)} />
+            <StatusBar style="light" />
+          </View>
+        ) : (
+          // 메인 앱 네비게이션
+          <>
+            <StatusBar style="auto" />
+            <Stack.Navigator
+              initialRouteName={initialRoute}
+              screenOptions={{
+                headerShown: false,
+                animation: 'slide_from_right',
+                contentStyle: { backgroundColor: '#101922' }
+              }}
+            >
+              <Stack.Screen name="Tos" component={Tos} />
+              <Stack.Screen name="Login" component={Login} />
+              <Stack.Screen name="SignUp" component={SignUp} />
+              <Stack.Screen name="FindPW" component={FindPW} />
+              <Stack.Screen
+                name="MainPage"
+                component={MainPage}
+                options={{ animation: 'none' }}
+              />
+              <Stack.Screen name="RegisterMain" component={RegisterMain} />
+              <Stack.Screen name="ActiveReg" component={ActiveReg} />
+              <Stack.Screen name="ActiveLoading" component={ActiveLoading} />
+              <Stack.Screen name="ActiveSuccess" component={ActiveSuccess} />
+              <Stack.Screen name="ObdResult" component={ObdResult} />
+              <Stack.Screen name="PassiveReg" component={PassiveReg} />
+              <Stack.Screen
+                name="DiagMain"
+                component={DiagMain}
+                options={{ animation: 'none' }}
+              />
+              <Stack.Screen name="EngineSoundDiag" component={EngineSoundDiag} />
+              <Stack.Screen name="AiCompositeDiag" component={AiCompositeDiag} />
+              <Stack.Screen name="VisualDiagnosis" component={require('./diagnosis/VisualDiagnosis').default} />
+              <Stack.Screen name="Filming" component={Filming} />
+              <Stack.Screen
+                name="HistoryMain"
+                component={HistoryMain}
+                options={{ animation: 'none' }}
+              />
+              <Stack.Screen name="DrivingHis" component={DrivingHis} />
+              <Stack.Screen name="RecallHis" component={RecallHis} />
+              <Stack.Screen name="SupManage" component={SupManage} />
+              <Stack.Screen
+                name="AlertMain"
+                component={AlertMain}
+                options={{ animation: 'none' }}
+              />
+              <Stack.Screen name="Spec" component={Spec} />
+              <Stack.Screen
+                name="SettingMain"
+                component={SettingMain}
+                options={{ animation: 'none' }}
+              />
+              <Stack.Screen name="MyPage" component={MyPage} />
+              <Stack.Screen name="AlertSetting" component={AlertSetting} />
+              <Stack.Screen name="CarManage" component={CarManage} />
+              <Stack.Screen name="Cloud" component={Cloud} />
+              <Stack.Screen name="Membership" component={Membership} />
+            </Stack.Navigator>
+          </>
+        )}
       </NavigationContainer>
     </SafeAreaProvider>
   );

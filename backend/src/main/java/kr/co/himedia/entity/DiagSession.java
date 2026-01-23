@@ -33,7 +33,7 @@ public class DiagSession {
     @Column(name = "status")
     private DiagStatus status;
 
-    @Column(name = "progress_message")
+    @Column(name = "progress_message", length = 1000)
     private String progressMessage;
 
     @CreationTimestamp
@@ -59,6 +59,6 @@ public class DiagSession {
     }
 
     public enum DiagStatus {
-        PENDING, PROCESSING, DONE, FAILED
+        PENDING, PROCESSING, DONE, ACTION_REQUIRED, FAILED
     }
 }

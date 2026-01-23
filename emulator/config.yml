@@ -1,0 +1,41 @@
+# OBD 에뮬레이터 설정 파일
+
+# 연결 설정
+connection:
+  port: "COM3"
+  baudrate: 38400
+
+# 모드 설정 (static: 고정값, replay: CSV 재생, high_mobility: 하이모빌리티 연동)
+mode: "static"
+
+# 가상 차량 정보 (Mode 0902 대응용)
+vehicle:
+  vin: "1HMXOBSGK693TJ7JR"
+  brand: "sandbox"
+
+# [Mode: high_mobility] 하이모빌리티 샌드박스 연동 설정
+high_mobility:
+  access_token: "YOUR_HM_SANDBOX_TOKEN_HERE"
+  refresh_interval: 1.0  # 초 단위
+
+# [Mode: static] 고정 PID 데이터 설정
+pids:
+  rpm: "2EE0"         # 3000 RPM
+  speed: "3C"         # 60 km/h
+  coolant_temp: "82"  # 90도
+  engine_load: "7F"   # 50%
+  voltage: "3778"     # 14.2V
+  throttle: "33"      # 20%
+
+# [Mode: replay] CSV 주행 데이터 재생 및 매핑 설정
+replay:
+  csv_file: "scenarios/overheating.csv"
+  interval: 0.5
+  loop: true
+  # CSV 컬럼명과 PID 데이터 매핑 (사용자의 CSV 형식에 맞춰 수정 가능)
+  mapping:
+    rpm: "Engine RPM [RPM]"
+    speed: "Vehicle Speed Sensor [km/h]"
+    coolant_temp: "Engine Coolant Temperature [°C]"
+    engine_load: "Calculated Engine Load [%]"
+    voltage: "Control Module Voltage [V]"
