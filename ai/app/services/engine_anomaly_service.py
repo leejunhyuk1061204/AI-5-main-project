@@ -1,16 +1,17 @@
 # ai/app/services/engine_anomaly_service.py
 """
-Engine Anomaly Detection Pipeline
+엔진룸 이상 정밀 분석 파이프라인 (Engine Anomaly Pipeline)
 
-[설계 원칙]
-1. AI는 S3 URL만 받아서 추론 수행
-2. 원본 이미지 관리는 서버에서 담당
-3. AI는 결과(라벨, bbox, score)만 반환
-4. 히트맵은 base64로 반환 (S3 업로드 안 함)
+[역할]
+1. 엔진룸 부품 감지: 26가지 주요 엔진 부품의 위치를 파악합니다. (YOLO)
+2. 부품별 이상 탐지: 각 부품 이미지에 대해 PatchCore 알고리즘으로 미세 결함을 찾아냅니다.
+3. 히트맵 시각화: 결함이 의심되는 부위를 붉은색 히트맵으로 생성합니다.
+4. 전문가 해석: 결함의 종류(누유, 부식 등)를 LLM을 통해 정밀 진단합니다.
 
-[보안]
-- SSRF 방지: S3 도메인만 허용 (Allow-list)
-- 비동기 I/O: httpx 사용 (Blocking 없음)
+[주요 기능]
+- 엔진룸 종합 분석 (analyze)
+- 개별 부품 정밀 진단 (_analyze_single_part)
+- 히트맵 오버레이 및 데이터 인코딩
 """
 import httpx
 import uuid
@@ -27,7 +28,7 @@ from dataclasses import dataclass, asdict
 import json
 import os
 
-from ai.app.services.yolo_service import run_yolo_inference
+from ai.app.services.engine_yolo_service import run_yolo_inference
 from ai.app.services.crop_service import crop_detected_parts
 from ai.app.services.anomaly_service import AnomalyDetector
 from ai.app.services.heatmap_service import generate_heatmap_overlay
@@ -45,16 +46,9 @@ SEMAPHORE = asyncio.Semaphore(5)  # Concurrency Limit
 HTTP_TIMEOUT = 30.0  # seconds
 
 # =============================================================================
-# SSRF 방지: 허용된 도메인 (Allow-list)
+# Reliability Thresholds
 # =============================================================================
-ALLOWED_DOMAINS = [
-    r".*\.s3\.amazonaws\.com$",
-    r".*\.s3\.ap-northeast-2\.amazonaws\.com$",
-    r".*\.s3-ap-northeast-2\.amazonaws\.com$",
-    r"s3\.amazonaws\.com$",
-    r"s3\.ap-northeast-2\.amazonaws\.com$",
-    # 필요시 추가
-]
+FAST_PATH_THRESHOLD = 0.9  # 90% 확신할 때만 LLM 스킵
 
 # EV Parts Definition
 EV_PARTS = {
@@ -85,48 +79,7 @@ class PartAnalysisResult:
 # =============================================================================
 # URL Validation (SSRF 방지)
 # =============================================================================
-def validate_s3_url(url: str) -> bool:
-    """
-    S3 URL 검증 (SSRF 방지)
-    - 허용된 도메인만 통과
-    - localhost, 메타데이터 URL 차단
-    """
-    try:
-        parsed = urlparse(url)
-        
-        # HTTPS만 허용
-        if parsed.scheme not in ['https', 'http']:
-            return False
-        
-        hostname = parsed.hostname or ""
-        
-        # 차단 목록 (SSRF 공격 패턴)
-        blocked_patterns = [
-            r"localhost",
-            r"127\.0\.0\.\d+",
-            r"10\.\d+\.\d+\.\d+",
-            r"172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+",
-            r"192\.168\.\d+\.\d+",
-            r"169\.254\.\d+\.\d+",  # AWS 메타데이터
-            r"0\.0\.0\.0",
-        ]
-        
-        for pattern in blocked_patterns:
-            if re.match(pattern, hostname, re.IGNORECASE):
-                print(f"[SSRF Block] Blocked URL: {url}")
-                return False
-        
-        # 허용 목록 검사
-        for allowed_pattern in ALLOWED_DOMAINS:
-            if re.match(allowed_pattern, hostname, re.IGNORECASE):
-                return True
-        
-        print(f"[SSRF Block] Domain not in allow-list: {hostname}")
-        return False
-        
-    except Exception as e:
-        print(f"[URL Validation Error] {e}")
-        return False
+# validate_s3_url 제거 (visual_service에서 통합 관리)
 
 
 # =============================================================================
@@ -142,31 +95,36 @@ class EngineAnomalyPipeline:
     
     def __init__(self):
         self.anomaly_detector = AnomalyDetector()
-        # 비동기 HTTP 클라이언트
-        self.http_client = httpx.AsyncClient(timeout=HTTP_TIMEOUT)
 
-    async def analyze(self, s3_url: str, yolo_model=None) -> Dict[str, Any]:
+    async def analyze(
+        self, 
+        s3_url: str, 
+        image: Optional[Image.Image] = None,
+        image_bytes: Optional[bytes] = None,
+        yolo_model=None
+    ) -> Dict[str, Any]:
         """
         엔진 이미지 분석 (메인 진입점)
+        
+        Args:
+            s3_url: S3 URL (기존 인터페이스 유지 및 로깅용)
+            image: 미리 로드된 PIL Image (중복 다운로드 방지)
+            image_bytes: 미리 로드된 이미지 바이트 (중복 다운로드 방지)
+            yolo_model: YOLO 모델
         """
         request_id = str(uuid.uuid4())[:8]
         
-        # 0. SSRF 방지: URL 검증
-        if not validate_s3_url(s3_url):
-            return {
-                "status": "ERROR", 
-                "message": "Invalid URL: Only S3 URLs are allowed",
-                "request_id": request_id
-            }
-        
-        # 1. 이미지 로드 (비동기)
-        try:
-            image, image_bytes = await self._load_image_async(s3_url)
-        except ValueError as e:
-            return {"status": "ERROR", "message": str(e), "request_id": request_id}
+        # 1. 이미지 로드 (전달받은 이미지가 없으면 오류 - visual_service에서 미리 로드되어야 함)
+        if image is None or image_bytes is None:
+             # 하위 호환성 위해 로드 시도하되, 가급적 visual_service 사용 권장
+             from ai.app.services.visual_service import _safe_load_image
+             try:
+                 image, image_bytes = await _safe_load_image(s3_url)
+             except Exception as e:
+                 return {"status": "ERROR", "message": f"Image load failed: {e}", "request_id": request_id}
 
         # 2. YOLO 추론
-        yolo_result = await run_yolo_inference(s3_url, model=yolo_model)
+        yolo_result = await run_yolo_inference(s3_url, image=image, model=yolo_model)
         
         # =================================================================
         # Path B: YOLO가 부품을 감지하지 못한 경우
@@ -243,6 +201,7 @@ class EngineAnomalyPipeline:
             heatmap_b64 = None
             
             if anomaly_result.is_anomaly:
+                # [Dual-Check] 이상 발견 시 무조건 LLM 호출
                 # 히트맵 생성
                 heatmap_overlay = generate_heatmap_overlay(crop_img, anomaly_result.heatmap)
                 
@@ -257,14 +216,60 @@ class EngineAnomalyPipeline:
                     part_name=part_name,
                     anomaly_score=anomaly_result.score
                 )
+                
+                # [Active Learning] 엔진룸 이상탐지 정답(Oracle) S3 저장
+                try:
+                    import boto3
+                    s3 = boto3.client('s3')
+                    bucket = os.getenv("S3_BUCKET_NAME", "car-sentry-data")
+                    # 부품별 고유 ID 생성 (이미지ID + 부품명)
+                    file_id = os.path.basename(s3_url).split('.')[0]
+                    label_key = f"dataset/engine/llm_confirmed/{file_id}_{part_name}.json"
+                    
+                    oracle_data = {
+                        "domain": "engine",
+                        "source_url": s3_url,
+                        "part_name": part_name,
+                        "bbox": bbox,
+                        "labels": [{"class": part_name, "bbox": bbox}], # YOLO 재학습용
+                        "anomaly_label": llm_res.get("defect_label"),   # Anomaly 분류 재학습용
+                        "status": llm_res.get("severity")
+                    }
+                    
+                    s3.put_object(
+                        Bucket=bucket,
+                        Key=label_key,
+                        Body=json.dumps(oracle_data, ensure_ascii=False, indent=2),
+                        ContentType='application/json'
+                    )
+                    print(f"[Active Learning] 엔진 부품 정답지 저장 완료: {label_key}")
+                except Exception as e:
+                    print(f"[Active Learning Engine] 저장 실패: {e}")
+
             else:
-                llm_res = {
-                    "defect_category": "NORMAL",
-                    "defect_label": "Normal",
-                    "description_ko": "정상 상태입니다.",
-                    "severity": "NORMAL",
-                    "recommended_action": "조치 불필요"
-                }
+                # [Fast Path] 정상이고 확신도가 높으면(Score가 매우 낮으면) LLM 스킵
+                # Confidence = 1.0 - (score / threshold) 로 근사치 계산
+                normal_confidence = 1.0 - (anomaly_result.score / anomaly_result.threshold) if anomaly_result.threshold > 0 else 1.0
+                
+                if normal_confidence >= FAST_PATH_THRESHOLD:
+                    print(f"[Engine] Fast Path 적용: {part_name} (Normal Confidence: {normal_confidence:.2f})")
+                    llm_res = {
+                        "defect_category": "NORMAL",
+                        "defect_label": "Normal",
+                        "description_ko": f"{part_name} 부품이 정상적인 상태입니다. 특별한 결함 징후가 발견되지 않았습니다.",
+                        "severity": "NORMAL",
+                        "recommended_action": "주기적인 육안 점검을 유지하십시오."
+                    }
+                else:
+                    # 정상 범위지만 확신도가 낮으면 LLM 확인 (Dual-Check)
+                    print(f"[Engine] 낮은 확신도 정상({normal_confidence:.2f}), LLM 확인 요청: {part_name}")
+                    crop_b64 = self._image_to_base64(crop_img)
+                    llm_res = await suggest_anomaly_label_with_base64(
+                        crop_base64=crop_b64,
+                        heatmap_base64=None, # 정상일 땐 히트맵 생략 가능
+                        part_name=part_name,
+                        anomaly_score=anomaly_result.score
+                    )
 
             return PartAnalysisResult(
                 part_name=part_name,
@@ -281,37 +286,7 @@ class EngineAnomalyPipeline:
                 heatmap_base64=heatmap_b64
             )
 
-    async def _load_image_async(self, url: str) -> Tuple[Image.Image, bytes]:
-        """
-        비동기로 S3 URL에서 이미지 로드
-        """
-        # HEAD 요청으로 크기 확인
-        try:
-            head_response = await self.http_client.head(url)
-            content_length = int(head_response.headers.get('Content-Length', 0))
-            if content_length > MAX_FILE_SIZE:
-                raise ValueError(f"Image too large: {content_length} bytes")
-        except httpx.RequestError as e:
-            raise ValueError(f"Failed to check image: {e}")
-        
-        # GET 요청으로 이미지 다운로드
-        try:
-            response = await self.http_client.get(url)
-            response.raise_for_status()
-            content = response.content
-        except httpx.RequestError as e:
-            raise ValueError(f"Failed to download image: {e}")
-        
-        if len(content) > MAX_FILE_SIZE:
-            raise ValueError(f"Image too large: {len(content)} bytes")
-        
-        # Magic Bytes 검증
-        kind = filetype.guess(content)
-        if kind is None or kind.mime not in ['image/jpeg', 'image/png']:
-            raise ValueError(f"Invalid file type: {kind.mime if kind else 'Unknown'}")
-        
-        image = Image.open(io.BytesIO(content))
-        return image, content
+    # _load_image_async 제거 (visual_service 피쳐 활용)
 
     def _image_to_base64(self, image: Image.Image, format: str = "PNG") -> str:
         """PIL Image를 Base64 문자열로 변환"""
@@ -320,5 +295,5 @@ class EngineAnomalyPipeline:
         return base64.b64encode(buffer.getvalue()).decode('utf-8')
 
     async def close(self):
-        """HTTP 클라이언트 종료"""
-        await self.http_client.aclose()
+        """HTTP 클라이언트 종료 (필요시)"""
+        pass

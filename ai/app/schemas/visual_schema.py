@@ -1,54 +1,101 @@
-#app/schemas/visual_schema.py
-from pydantic import BaseModel, Field
-from typing import List, Optional
+# app/schemas/visual_schema.py
+"""
+시각 분석 API 스키마 정의
 
+[SceneType]
+Router가 분류하는 4가지 장면 타입
+
+[VisualResponse]
+통합 시각 분석 응답 규격
+"""
+from pydantic import BaseModel, Field
+from typing import List, Optional, Dict, Any
+from enum import Enum
+
+
+# =============================================================================
+# Scene Type Enum (Router 분류 결과)
+# =============================================================================
+class SceneType(str, Enum):
+    """라우터가 분류하는 4가지 장면 타입"""
+    SCENE_ENGINE = "SCENE_ENGINE"
+    SCENE_DASHBOARD = "SCENE_DASHBOARD"
+    SCENE_EXTERIOR = "SCENE_EXTERIOR"
+    SCENE_TIRE = "SCENE_TIRE"
+
+
+# =============================================================================
+# Request Schemas
+# =============================================================================
 class VisualRequest(BaseModel):
-    """비전 분석 요청 스키마"""
+    """통합 시각 분석 요청"""
     imageUrl: str = Field(..., description="S3에 저장된 이미지 URL")
 
-class DetectionItem(BaseModel):
-    """개별 경고등 감지 결과"""
-    label: str = Field(..., description="감지된 경고등 명칭 (예: Check Engine)")
-    confidence: float = Field(..., description="모델의 확신도 (0.0 ~ 1.0)")
-    bbox: List[int] = Field(..., description="감지 박스 좌표 [x, y, w, h]")
-
-class VisualResponse(BaseModel):
-    """최종 비전 분석 응답 규격"""
-    status: str = Field(..., description="전체 상태 (NORMAL, WARNING, CRITICAL)")
-    analysis_type: str = Field(..., description="분석 주체 (DASHBOARD 또는 GENERAL_IMAGE)")
-    detected_count: int = Field(0, description="감지된 항목 개수")
-    detections: List[DetectionItem] = Field([], description="감지된 상세 항목 리스트")
-    
-    # LLM 상세 분석 결과 (일반 이미지 분석 시 활용)
-    description: Optional[str] = Field(None, description="이미지에 대한 전체적인 설명")
-    recommendation: Optional[str] = Field(None, description="정비 권고 사항")
-    category: Optional[str] = Field(None, description="이미지 분류 (TIRES, ENGINE, EXTERIOR 등)")
-    
-    # 결과 이미지 경로
-    processed_image_url: Optional[str] = Field(None, description="분석 결과가 표시된 S3 이미지 URL")
-
-## 출력예시
-# {
-#     "status": "NORMAL",
-#     "analysis_type": "LLM_VISION",
-#     "category": "TIRES",
-#     "description": "이 차량의 타이어에서 슬립 노이즈가 발견되었습니다.",
-#     "recommendation": "이 차량의 엔진에서 슬립 노이즈가 발견되었습니다.",
-#     "processed_image_url": "https://car-sentry.s3.ap-northeast-2.amazonaws.com/processed_image.jpg"
-# }
-
-# =============================================================================
-# Engine Anomaly Schemas
-# =============================================================================
-from typing import Dict, Any
 
 class EngineAnalysisRequest(BaseModel):
+    """엔진룸 전용 분석 요청"""
     imageUrl: str = Field(..., description="Engine room image S3 URL")
+
+
+# =============================================================================
+# Detection Item
+# =============================================================================
+class DetectionItem(BaseModel):
+    """개별 객체 감지 결과"""
+    label: str = Field(..., description="감지된 객체 명칭")
+    confidence: float = Field(..., description="모델 확신도 (0.0 ~ 1.0)")
+    bbox: List[int] = Field(..., description="감지 박스 좌표 [x, y, w, h]")
+
+
+# =============================================================================
+# Response Schemas
+# =============================================================================
+class VisualResponse(BaseModel):
+    """
+    통합 시각 분석 응답 규격
     
-    # Simple validator to ensure it looks like a URL
-    # Note: Complex validators usually go in the service or API layer, but basic format checks are fine here.
-    # Pydantic v2 uses @field_validator, v1 uses @validator. Assuming v1 based on existing code style or v2 compat.
+    analysis_type 값:
+    - SCENE_ENGINE: 엔진룸 분석 결과
+    - SCENE_DASHBOARD: 계기판 분석 결과
+    - SCENE_EXTERIOR: 외관 분석 결과
+    - SCENE_TIRE: 타이어 분석 결과
+    - LLM_FALLBACK: LLM 직접 분석 결과
+    """
+    status: str = Field(..., description="상태 (NORMAL, WARNING, CRITICAL, ERROR)")
+    analysis_type: str = Field(..., description="분석 타입")
+    scene_type: Optional[SceneType] = Field(None, description="라우터가 판별한 장면 타입")
+    category: Optional[str] = Field(None, description="카테고리")
     
+    # 감지 결과
+    detected_count: int = Field(0, description="감지된 항목 개수")
+    detections: List[DetectionItem] = Field(default_factory=list, description="감지된 상세 항목")
+    
+    # LLM 분석 결과
+    description: Optional[str] = Field(None, description="분석 설명")
+    recommendation: Optional[str] = Field(None, description="권장 조치")
+    
+    # 결과 이미지
+    processed_image_url: Optional[str] = Field(None, description="결과 이미지 URL")
+
+
 class EngineAnalysisResponse(BaseModel):
-    status: str = Field(..., description="분석 성공 여부 (SUCCESS/ERROR)")
-    data: Dict[str, Any] = Field(..., description="Path A(부품별 상세) 또는 Path B(범용 진단) 결과 데이터")
+    """엔진룸 전용 분석 응답"""
+    status: str = Field(..., description="분석 상태 (SUCCESS/ERROR)")
+    data: Dict[str, Any] = Field(..., description="분석 결과 데이터")
+
+
+# =============================================================================
+# 출력 예시
+# =============================================================================
+# {
+#     "status": "WARNING",
+#     "analysis_type": "SCENE_ENGINE",
+#     "category": "ENGINE_ROOM",
+#     "detected_count": 2,
+#     "detections": [
+#         {"label": "Oil_Cap", "confidence": 0.92, "bbox": [100, 200, 50, 50]}
+#     ],
+#     "description": "오일 캡 주변에 누유 흔적이 발견되었습니다.",
+#     "recommendation": "정비소 방문 권장",
+#     "processed_image_url": "https://s3.../result.jpg"
+# }
