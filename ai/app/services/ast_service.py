@@ -1,7 +1,21 @@
-# app/services/ast_service.py
+# ai/app/services/ast_service.py
+"""
+AST 기반 기계 소음 분석 서비스 (Audio Spectrogram Transformer)
+
+[역할]
+1. 딥러닝 기반 소음 분류: 차량 엔진, 브레이크, 서스펜션 등에서 발생하는 소음을 스펙트로그램으로 변환하여 분류합니다.
+2. 실시간 상태 판별: 정상(Normal)과 결함(Faulty) 상태를 신뢰도(Confidence)와 함께 판단합니다.
+3. 자동 카테고리 매핑: 라벨 이름 패턴을 기반으로 부품 카테고릴 자동 분류합니다.
+
+[주요 기능]
+- AST 모델 추론 (run_ast_inference)
+- 라벨 기반 카테고리 자동 추출 (get_category_from_label)
+"""
 import torch
 from transformers import ASTForAudioClassification, ASTFeatureExtractor
 import os
+import librosa
+import torch.nn.functional as F
 from ai.app.schemas.audio_schema import AudioResponse, AudioDetail
 
 # =============================================================================
@@ -117,9 +131,6 @@ async def run_ast_inference(processed_audio_buffer, ast_model_payload=None) -> A
     # 실제 추론 로직
     # =========================================================================
     try:
-        import librosa
-        import torch.nn.functional as F
-        
         # 1. BytesIO 버퍼에서 오디오 데이터 로드 (이미 16kHz로 변환됨)
         processed_audio_buffer.seek(0)  # 버퍼 처음으로 이동
         audio_array, sr = librosa.load(processed_audio_buffer, sr=16000)

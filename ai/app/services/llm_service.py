@@ -1,12 +1,27 @@
+# ai/app/services/llm_service.py
+"""
+AI 분석 결과 해석 및 리포트 생성 서비스 (LLM)
+
+[역할]
+1. 전문가급 진단: YOLO, PatchCore 등의 수치적 결과를 사람이 이해할 수 있는 자연어로 변환합니다.
+2. 멀티 모달 분석: 시각(Vision)과 청각(Audio) 데이터를 모두 처리하며, 복합적인 상황을 추론합니다.
+3. 범용 분석(Fallback): 전용 AI 모델이 없거나 확신도가 낮을 때 GPT-4o가 직접 사진을 보고 판단합니다.
+
+[주요 기능]
+- 엔진룸 이상 분석 (suggest_anomaly_label)
+- 범용 이미지 진단 (analyze_general_image)
+- 계기판 경고등 해석 (interpret_dashboard_warnings)
+- 외관 파손 리포트 생성 (generate_exterior_report)
+- 타이어 상태 정밀 진단 (interpret_tire_status)
+- 오디오 기반 기계음 진단 (analyze_audio_with_llm)
+"""
 import os
 import json
 import base64
 import httpx
 import re
+from typing import Optional, List, Dict
 from openai import AsyncOpenAI
-from ai.app.schemas.visual_schema import VisualResponse
-from ai.app.schemas.audio_schema import AudioResponse, AudioDetail
-
 from ai.app.schemas.visual_schema import VisualResponse
 from ai.app.schemas.audio_schema import AudioResponse, AudioDetail
 
@@ -256,7 +271,7 @@ async def analyze_general_image(s3_url: str) -> VisualResponse:
 # ---------------------------------------------------------
 # 2. 청각 전문 진단 (GPT-4o Audio)
 # ---------------------------------------------------------
-async def analyze_audio_with_llm(s3_url: str) -> AudioResponse:
+async def analyze_audio_with_llm(s3_url: str, audio_bytes: Optional[bytes] = None) -> AudioResponse:
     SYSTEM_PROMPT = """
     당신은 'Car-Sentry 소음·진동(NVH) 분석 팀'의 수석 엔지니어입니다. 
     오디오 데이터에서 기계적인 이상 징후를 소리만으로 찾아내십시오.
@@ -288,10 +303,13 @@ async def analyze_audio_with_llm(s3_url: str) -> AudioResponse:
     """
    
     try:
-        async with httpx.AsyncClient(timeout=10.0) as httpx_client:
-            audio_response = await httpx_client.get(s3_url)
-            audio_response.raise_for_status()
-            audio_data = base64.b64encode(audio_response.content).decode('utf-8')
+        if audio_bytes is None:
+            async with httpx.AsyncClient(timeout=10.0) as httpx_client:
+                audio_response = await httpx_client.get(s3_url)
+                audio_response.raise_for_status()
+                audio_data = base64.b64encode(audio_response.content).decode('utf-8')
+        else:
+            audio_data = base64.b64encode(audio_bytes).decode('utf-8')
 
         # [Correct] Audio Input via 'chat.completions.create'
         response = await client.chat.completions.create(
@@ -351,3 +369,92 @@ async def analyze_audio_with_llm(s3_url: str) -> AudioResponse:
             confidence=0.0,
             is_critical=False
         )
+
+
+# ---------------------------------------------------------
+# 3. 도메인 전용 자연어 해석 함수 (Pipelines)
+# ---------------------------------------------------------
+
+async def interpret_dashboard_warnings(detections: List[Dict]) -> Dict[str, str]:
+    """
+    YOLO가 감지한 경고등 목록을 바탕으로 운전 가이드 생성
+    """
+    PROMPT = f"""
+    차량 계기판에서 다음 경고등이 감지되었습니다:
+    {json.dumps(detections, ensure_ascii=False, indent=2)}
+    
+    운전자에게 알려줄 내용을 작성해주세요:
+    1. 각 경고등의 의미와 위험도
+    2. 즉시 조치가 필요한지 여부
+    3. 권장하는 조치 사항
+    
+    JSON 형식으로 응답:
+    {{"description": "종합 설명", "recommendation": "권장 조치"}}
+    """
+    try:
+        response = await client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": PROMPT}],
+            response_format={"type": "json_object"},
+            max_tokens=600
+        )
+        return json.loads(response.choices[0].message.content)
+    except Exception as e:
+        print(f"[LLM Dashboard Error] {e}")
+        return {"description": "계기판 경고등 분석 중 오류가 발생했습니다.", "recommendation": "안전한 곳에 정차 후 수동 점검 바랍니다."}
+
+
+async def generate_exterior_report(mappings: List[Dict]) -> Dict[str, str]:
+    """
+    감지된 부위별 파손 정보를 자연스러운 한글 문장으로 변환
+    """
+    PROMPT = f"""
+    차량 외관 분석 결과:
+    {json.dumps(mappings, ensure_ascii=False, indent=2)}
+    
+    운전자에게 알려줄 내용을 자연스러운 한국어로 작성:
+    1. 발견된 파손 요약
+    2. 수리 권장 사항 (판금, 도색, 교체 등)
+    3. 주행 안전상 지장 유무
+    
+    JSON: {{"description": "...", "recommendation": "..."}}
+    """
+    try:
+        response = await client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": PROMPT}],
+            response_format={"type": "json_object"},
+            max_tokens=600
+        )
+        return json.loads(response.choices[0].message.content)
+    except Exception as e:
+        print(f"[LLM Exterior Error] {e}")
+        return {"description": "외관 파손 분석 결과를 처리할 수 없습니다.", "recommendation": "가까운 정비소에서 육안 검사를 권장합니다."}
+
+
+async def interpret_tire_status(status_list: List[Dict]) -> Dict[str, str]:
+    """
+    타이어의 마모, 균열, 펑크 등에 대한 전문가 조언 생성
+    """
+    PROMPT = f"""
+    타이어 분석 결과:
+    {json.dumps(status_list, ensure_ascii=False, indent=2)}
+    
+    운전자에게 알려줄 내용:
+    1. 타이어 상태 요약 (마모 상태 등)
+    2. 안전 관련 주의사항 (제동거리, 미끄러짐 위험)
+    3. 권장 조치 (교체 주기 확인 등)
+    
+    JSON: {{"description": "...", "recommendation": "..."}}
+    """
+    try:
+        response = await client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": PROMPT}],
+            response_format={"type": "json_object"},
+            max_tokens=500
+        )
+        return json.loads(response.choices[0].message.content)
+    except Exception as e:
+        print(f"[LLM Tire Error] {e}")
+        return {"description": "타이어 상태 정보를 처리하는 도중 오류가 발생했습니다.", "recommendation": "공기압 및 트레드 상태를 수동으로 확인하십시오."}
