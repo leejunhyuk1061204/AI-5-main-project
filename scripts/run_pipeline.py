@@ -28,14 +28,15 @@ def run_script(script_name):
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
-        encoding="utf-8",
+        encoding="cp949",
+        errors="replace",
         bufsize=1
     )
     
     # 실시간으로 한 줄씩 읽어서 로그에 기록
     for line in process.stdout:
         print(line, end="") # 터미널 출력
-        with open(LOG_FILE, "a", encoding="utf-8") as f:
+        with open(LOG_FILE, "a", encoding="utf-8", errors="replace") as f:
             f.write(line)
             
     process.wait()

@@ -138,13 +138,30 @@ SELECT add_retention_policy (
 
 -- 클라우드 동기화 데이터 (2.2.2)
 CREATE TABLE IF NOT EXISTS cloud_telemetry (
-    last_synced_at TIMESTAMPTZ NOT NULL,
+    telemetry_id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
+    last_synced_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     vehicles_id UUID NOT NULL REFERENCES vehicles (vehicles_id),
-    odometer FLOAT,
-    fuel_level FLOAT,
-    battery_soc FLOAT,
-    charging_status charging_status,
-    PRIMARY KEY (last_synced_at, vehicles_id)
+
+-- 진단 (Diagnostics)
+odometer FLOAT, -- 주행거리 (km)
+fuel_level FLOAT, -- 연료 잔량 (%)
+battery_soc FLOAT, -- 배터리 잔량 (%)
+engine_oil_life FLOAT, -- 엔진오일 수명 (%)
+tire_pressure_fl FLOAT, -- 타이어 공기압 (앞왼쪽)
+tire_pressure_fr FLOAT, -- 타이어 공기압 (앞오른쪽)
+tire_pressure_rl FLOAT, -- 타이어 공기압 (뒤왼쪽)
+tire_pressure_rr FLOAT, -- 타이어 공기압 (뒤오른쪽)
+
+-- 위치 및 환경 (Location & Climate)
+latitude FLOAT, -- 위도
+longitude FLOAT, -- 경도
+inside_temp FLOAT, -- 실내 온도
+outside_temp FLOAT, -- 실외 온도
+
+-- 상태 (Status)
+door_lock_status VARCHAR(20),    -- 문 잠금 상태 (LOCKED/UNLOCKED)
+    window_open_status VARCHAR(20),  -- 창문 열림 상태 (CLOSED/OPEN/PARTIAL)
+    charging_status charging_status
 );
 
 -- 주행 요약 (2.2.3)
@@ -307,7 +324,9 @@ CREATE TABLE IF NOT EXISTS vehicle_specs (
     tire_size_front VARCHAR(50),
     tire_size_rear VARCHAR(50),
     official_fuel_economy FLOAT,
-    last_updated TIMESTAMP
+    spec_source VARCHAR(20) DEFAULT 'MASTER', -- MASTER, CLOUD, MANUAL
+    extra_specs JSONB DEFAULT '{}', -- 가변적인 브랜드별 상세 제원
+    last_updated TIMESTAMP DEFAULT NOW()
 );
 
 -- 리콜 상세 정보 (2.6.2)
