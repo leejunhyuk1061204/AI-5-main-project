@@ -1,27 +1,16 @@
+# ai/scripts/train_anomaly.py
 """
-PatchCore Anomaly Detection Training Script
-엔진룸 부품별 이상 탐지 모델 학습
+PatchCore 엔진 부품 이상 탐지 학습 도구 (Anomaly Trainer)
 
-[필수 설치]
-pip install anomalib torch torchvision
-
-[데이터 구조]
-ai/data/anomaly/{part_name}/
-├── train/
-│   └── good/         ← 정상 이미지만 (100~500장 권장)
-└── test/
-    ├── good/         ← 정상 테스트
-    └── defect/       ← 이상 테스트 (선택)
+[역할]
+1. 미세 결함 학습: 정상(Good) 데이터만을 학습하여 엔진 부품의 미세한 균열, 누유, 부식을 잡아내는 PatchCore 모델을 생성합니다.
+2. 부품별 모델 생성: 오일 캡, 배터리 등 26종 개별 부품에 최적화된 이상 탐지 가중치를 각각 생성합니다.
+3. 고성능 아키텍처: RTX 4090 환경에 최적화된 배치 사이즈와 백본(WideResNet50) 설정을 제공합니다.
 
 [사용법]
-1. 단일 부품 학습:
-   python ai/scripts/train_anomaly.py --part Battery
-
-2. 전체 부품 학습:
-   python ai/scripts/train_anomaly.py --all
-
-3. 모델 평가:
-   python ai/scripts/train_anomaly.py --part Battery --mode test
+- 특정 부품 학습: python ai/scripts/train_anomaly.py --part Battery
+- 전체 부품 학습: python ai/scripts/train_anomaly.py --all
+- 디렉토리 구조 생성: python ai/scripts/train_anomaly.py --mode setup
 """
 import argparse
 import os

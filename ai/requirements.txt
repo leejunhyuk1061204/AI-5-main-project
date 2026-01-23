@@ -33,8 +33,10 @@ pytorch-lightning       # LSTM / AutoEncoder 학습 프레임워크
 torch                   # PyTorch core
 
 # ==================================================
-# 6. Vision (YOLOv8 – 다른 팀원 담당)
+# 6. Vision (EfficientDet & YOLOv8)
 # ==================================================
+effdet                  # EfficientDet (외관 모델)
+timm                    # PyTorch Image Models (effdet 의존성)
 ultralytics             # YOLOv8
 opencv-python-headless  # 서버 환경용 OpenCV
 

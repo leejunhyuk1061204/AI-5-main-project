@@ -23,8 +23,8 @@ async def analyze_audio(
     if not s3_url.startswith("http"):
         raise HTTPException(status_code=400, detail="유효한 S3 URL이 아닙니다.")
     
-    # Safe Access
-    ast_model = getattr(request.app.state, "ast_model", None)
+    # Safe Access (Lazy Loading)
+    ast_model = request.app.state.get_ast_model()
         
     return await service.predict_audio_smart(s3_url, ast_model=ast_model)
 
