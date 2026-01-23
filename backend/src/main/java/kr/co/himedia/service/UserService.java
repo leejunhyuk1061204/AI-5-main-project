@@ -21,6 +21,11 @@ import java.util.Base64;
 import java.util.UUID;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseToken;
+import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
+import com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier;
+import com.google.api.client.http.javanet.NetHttpTransport;
+import com.google.api.client.json.gson.GsonFactory;
+import java.util.Collections;
 
 @Service
 @RequiredArgsConstructor
@@ -123,10 +128,10 @@ public class UserService {
         // 1. 소셜 제공자에 따른 토큰 검증
         try {
             if ("google".equalsIgnoreCase(req.getProvider())) {
-                // Firebase Admin SDK를 사용하여 ID Token 검증
-                FirebaseToken decodedToken = FirebaseAuth.getInstance().verifyIdToken(req.getToken());
-                email = decodedToken.getEmail();
-                nickname = decodedToken.getName();
+                // Google ID Token 검증 (Frontend가 Firebase Auth를 사용하지 않으므로 직접 검증)
+                GoogleIdToken.Payload payload = verifyGoogleIdToken(req.getToken());
+                email = payload.getEmail();
+                nickname = (String) payload.get("name");
 
                 if (nickname == null) {
                     nickname = "Google User";
@@ -140,9 +145,9 @@ public class UserService {
             }
         } catch (Exception e) {
             // 검증 실패 시 예외 처리
-            e.printStackTrace(); // 서버 로그에 스택 트레이스 출력
+            e.printStackTrace();
             throw new BaseException(ErrorCode.INVALID_CREDENTIALS,
-                    "Token Verification Failed: " + e.getMessage());
+                    "Token Verification Failed: " + (e.getMessage() != null ? e.getMessage() : e.toString()));
         }
 
         try {
@@ -187,8 +192,9 @@ public class UserService {
                     .build();
 
         } catch (Exception e) {
-            e.printStackTrace(); // DB 저장이나 토큰 생성 중 에러 로그 출력
-            throw new BaseException(ErrorCode.INTERNAL_SERVER_ERROR, "Social Login Failed: " + e.getMessage());
+            e.printStackTrace();
+            throw new BaseException(ErrorCode.INTERNAL_SERVER_ERROR,
+                    "Social Login Failed: " + (e.getMessage() != null ? e.getMessage() : e.toString()));
         }
     }
 
@@ -264,6 +270,28 @@ public class UserService {
             userRepository.save(user);
         } catch (IOException e) {
             throw new BaseException(ErrorCode.INTERNAL_SERVER_ERROR, "이미지 업로드에 실패했습니다.");
+        }
+    }
+
+    // Google ID Token 검증 (Frontend에서 Firebase Auth 미사용 시)
+    private GoogleIdToken.Payload verifyGoogleIdToken(String tokenString) {
+        // Web Client ID (from frontend/sign/Login.tsx or google-services.json)
+        final String CLIENT_ID = "415824813180-to8ea5houck16m7as32t9cavi7aq87e5.apps.googleusercontent.com";
+
+        GoogleIdTokenVerifier verifier = new GoogleIdTokenVerifier.Builder(new NetHttpTransport(), new GsonFactory())
+                .setAudience(Collections.singletonList(CLIENT_ID))
+                .build();
+
+        try {
+            GoogleIdToken idToken = verifier.verify(tokenString);
+            if (idToken != null) {
+                return idToken.getPayload();
+            } else {
+                throw new BaseException(ErrorCode.INVALID_CREDENTIALS, "Invalid Google ID Token.");
+            }
+        } catch (Exception e) {
+            throw new BaseException(ErrorCode.INVALID_CREDENTIALS,
+                    "Google Token Verification Error: " + e.getMessage());
         }
     }
 }

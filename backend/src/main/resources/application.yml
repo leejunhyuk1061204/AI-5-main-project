@@ -64,11 +64,11 @@ app:
 ai:
   server:
     url:
-      visual: ${AI_SERVER_URL_VISUAL:http://localhost:8001/api/v1/connect/predict/visual}
-      audio: ${AI_SERVER_URL_AUDIO:http://localhost:8001/api/v1/connect/predict/audio}
-      comprehensive: ${AI_SERVER_URL_COMPREHENSIVE:http://localhost:8001/api/v1/connect/predict/comprehensive}
-      anomaly: ${AI_SERVER_URL_ANOMALY:http://localhost:8001/api/v1/connect/predict/anomaly}
-      wear-factor: ${AI_SERVER_URL_WEAR_FACTOR:http://localhost:8001/api/v1/connect/predict/wear-factor}
+      visual: ${AI_SERVER_URL_VISUAL:http://localhost:8000/api/v1/connect/predict/visual}
+      audio: ${AI_SERVER_URL_AUDIO:http://localhost:8000/api/v1/connect/predict/audio}
+      comprehensive: ${AI_SERVER_URL_COMPREHENSIVE:http://localhost:8000/api/v1/connect/predict/comprehensive}
+      anomaly: ${AI_SERVER_URL_ANOMALY:http://localhost:8000/api/v1/connect/predict/anomaly}
+      wear-factor: ${AI_SERVER_URL_WEAR_FACTOR:http://localhost:8000/api/v1/connect/predict/wear-factor}
 
 logging:
   file:
