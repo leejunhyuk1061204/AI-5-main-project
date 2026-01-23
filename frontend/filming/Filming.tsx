@@ -1,18 +1,15 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, TouchableOpacity, Dimensions, StyleSheet, Image, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, Dimensions, StyleSheet, Image, ActivityIndicator, Alert, StatusBar as RNStatusBar } from 'react-native';
 import { diagnoseImage } from '../api/aiApi';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { MaterialIcons } from '@expo/vector-icons';
 import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
-import { LinearGradient } from 'expo-linear-gradient';
 
-const { width, height } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
 
-export default function Filming() {
-    const navigation = useNavigation<any>();
-    const route = useRoute<any>();
+// Main Camera Component
+export default function Filming({ navigation, route }: { navigation?: any; route?: any }) {
     const insets = useSafeAreaInsets();
     const [permission, requestPermission] = useCameraPermissions();
     const [facing, setFacing] = useState<CameraType>('back');
@@ -20,6 +17,9 @@ export default function Filming() {
     const cameraRef = useRef<CameraView>(null);
     const [capturedImage, setCapturedImage] = useState<string | null>(null);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
+
+    // New: Capture loading state to prevent double taps and show feedback
+    const [isCapturing, setIsCapturing] = useState(false);
 
     const toggleCameraFacing = () => {
         setFacing((current) => (current === 'back' ? 'front' : 'back'));
@@ -30,20 +30,24 @@ export default function Filming() {
     };
 
     const takePicture = async () => {
-        if (cameraRef.current) {
-            try {
-                const photo = await cameraRef.current.takePictureAsync({
-                    quality: 0.8,
-                    skipProcessing: true, // 안드로이드 속도 최적화
-                });
-                if (photo?.uri) {
-                    setCapturedImage(photo.uri);
-                    setEnableTorch(false); // 촬영 후 플래시 끄기
-                }
-            } catch (error) {
-                console.error('Failed to take picture:', error);
-                Alert.alert('오류', '사진 촬영 중 문제가 발생했습니다.');
+        if (isCapturing) return; // Prevent double taps
+        if (!cameraRef.current) return;
+
+        setIsCapturing(true);
+        try {
+            const photo = await cameraRef.current.takePictureAsync({
+                quality: 0.8,
+                skipProcessing: true,
+            });
+            if (photo?.uri) {
+                setCapturedImage(photo.uri);
+                setEnableTorch(false);
             }
+        } catch (error) {
+            console.error('Failed to take picture:', error);
+            Alert.alert('오류', '사진 촬영 중 문제가 발생했습니다.');
+        } finally {
+            setIsCapturing(false);
         }
     };
 
@@ -56,151 +60,141 @@ export default function Filming() {
 
         setIsAnalyzing(true);
         try {
-            // 여기에 API 호출 로직 추가
-            // const result = await diagnoseImage(capturedImage);
-            // navigation.navigate('VisualDiagnosis', { result });
-
-            // 임시로 2초 후 성공 처리 (API 연동 전 테스트용)
-            // await new Promise(resolve => setTimeout(resolve, 2000));
-            // Alert.alert('진단 완료', 'AI 진단이 완료되었습니다. (API 연결 필요)');
-
-            // 실제 API 호출 (주석 해제 후 사용)
             const result = await diagnoseImage(capturedImage);
 
-            // Check if initiated from Chatbot (AiCompositeDiag)
-            if (route.params?.from === 'chatbot') {
+            if (!navigation) {
+                Alert.alert('진단 완료', '진단 결과가 준비되었습니다.');
+                return;
+            }
+
+            if (route?.params?.from === 'chatbot') {
                 navigation.navigate('AiCompositeDiag', { diagnosisResult: result });
             } else {
                 navigation.navigate('VisualDiagnosis', { diagnosisResult: result, capturedImage: capturedImage });
             }
 
-        } catch (error) {
-            Alert.alert('진단 실패', '서버 통신 중 오류가 발생했습니다.');
+        } catch (error: any) {
+            console.error('Diagnosis Error:', error);
+            Alert.alert('진단 실패', error.message || '서버 통신 중 오류가 발생했습니다.');
         } finally {
             setIsAnalyzing(false);
         }
     };
 
     useEffect(() => {
-        // Request camera permission on mount
         if (!permission) {
             requestPermission();
         }
     }, [permission]);
 
-    if (!permission) {
-        // Camera permissions are still loading
-        return <View className="flex-1 bg-[#050F1A]" />;
-    }
+    if (!permission) return <View style={styles.loadingContainer} />;
 
     if (!permission.granted) {
-        // Camera permissions are not granted yet
         return (
-            <View className="flex-1 bg-[#050F1A] items-center justify-center p-6">
-                <Text className="text-white text-center mb-4">카메라 권한이 필요합니다.</Text>
-                <TouchableOpacity onPress={requestPermission} className="bg-primary px-4 py-2 rounded-lg">
-                    <Text className="text-white font-bold">권한 허용</Text>
+            <View style={styles.permissionContainer}>
+                <Text style={styles.permissionText}>카메라 권한이 필요합니다.</Text>
+                <TouchableOpacity onPress={requestPermission} style={styles.permissionButton}>
+                    <Text style={styles.permissionButtonText}>권한 허용</Text>
                 </TouchableOpacity>
             </View>
         );
     }
 
     return (
-        <View className="flex-1 bg-black">
+        <View style={styles.container}>
             <StatusBar style="light" />
 
-            {/* Top Bar with safe area top margin */}
-            <View
-                className="flex-row items-start justify-between px-4 z-30 absolute top-0 left-0 right-0"
-                style={{ paddingTop: insets.top + 10 }}
-            >
+            {/* Top Bar */}
+            <View style={[styles.topBar, { paddingTop: insets.top + 10 }]}>
                 <TouchableOpacity
-                    onPress={() => navigation.goBack()}
-                    className="w-10 h-10 items-center justify-center rounded-full bg-black/20 active:bg-white/10 backdrop-blur-md"
+                    onPress={() => navigation?.goBack?.()}
+                    style={styles.iconButton}
                 >
-                    <MaterialIcons name="arrow-back-ios" size={20} color="white" style={{ marginLeft: 4 }} />
+                    <MaterialIcons name="close" size={24} color="white" />
                 </TouchableOpacity>
 
-                <View className="items-center bg-black/20 px-4 py-1.5 rounded-full backdrop-blur-md">
-                    <Text className="text-white text-base font-bold">AI 복합 진단</Text>
+                <View style={styles.titleContainer}>
+                    <Text style={styles.titleText}>AI VISUAL SCAN</Text>
                 </View>
 
-                <TouchableOpacity className="w-10 h-10 items-center justify-center rounded-full bg-black/20 active:bg-white/10 backdrop-blur-md">
+                <TouchableOpacity style={styles.iconButton}>
                     <MaterialIcons name="help-outline" size={24} color="white" />
                 </TouchableOpacity>
             </View>
 
-            {/* Main Content (Camera View or Preview) */}
-            <View className="absolute inset-0 z-0 bg-black">
-                {capturedImage ? (
-                    <View className="flex-1 relative">
-                        <Image source={{ uri: capturedImage }} style={StyleSheet.absoluteFill} resizeMode="cover" />
-                        {/* Preview Overlay */}
-                        <View className="absolute inset-0 bg-black/20" />
+            {/* Content Area */}
+            <View style={StyleSheet.absoluteFill}>
+                {/* Camera View */}
+                <View style={[StyleSheet.absoluteFill, { opacity: capturedImage ? 0 : 1, zIndex: capturedImage ? 0 : 1 }]}>
+                    <CameraView
+                        ref={cameraRef}
+                        style={StyleSheet.absoluteFill}
+                        facing={facing}
+                        enableTorch={enableTorch}
+                    >
+                        {!capturedImage && (
+                            <>
+                                {/* Guidelines */}
+                                <View style={[styles.cornerGuide, { top: 128, left: 32, borderTopWidth: 3, borderLeftWidth: 3, borderTopLeftRadius: 12 }]} />
+                                <View style={[styles.cornerGuide, { top: 128, right: 32, borderTopWidth: 3, borderRightWidth: 3, borderTopRightRadius: 12 }]} />
+                                <View style={[styles.cornerGuide, { bottom: 192, left: 32, borderBottomWidth: 3, borderLeftWidth: 3, borderBottomLeftRadius: 12 }]} />
+                                <View style={[styles.cornerGuide, { bottom: 192, right: 32, borderBottomWidth: 3, borderRightWidth: 3, borderBottomRightRadius: 12 }]} />
 
-                        {isAnalyzing && (
-                            <View className="absolute inset-0 items-center justify-center bg-black/60 z-50">
-                                <ActivityIndicator size="large" color="#0d7ff2" />
-                                <Text className="text-white mt-4 font-bold tracking-widest">AI 분석 중...</Text>
-                            </View>
-                        )}
-                    </View>
-                ) : (
-                    <View style={StyleSheet.absoluteFill}>
-                        <CameraView
-                            ref={cameraRef}
-                            style={StyleSheet.absoluteFill}
-                            facing={facing}
-                            enableTorch={enableTorch}
-                        />
-                        {/* Camera Grid Overlay - Clean view required */}
-                        {/* Corner Reticles - 가시성 개선 (진하게) */}
-                        <View className="absolute top-32 left-8 w-10 h-10 border-t-[3px] border-l-[3px] border-[#0d7ff2] rounded-tl-xl shadow-lg shadow-blue-500/30 pointer-events-none" />
-                        <View className="absolute top-32 right-8 w-10 h-10 border-t-[3px] border-r-[3px] border-[#0d7ff2] rounded-tr-xl shadow-lg shadow-blue-500/30 pointer-events-none" />
-                        <View className="absolute bottom-48 left-8 w-10 h-10 border-b-[3px] border-l-[3px] border-[#0d7ff2] rounded-bl-xl shadow-lg shadow-blue-500/30 pointer-events-none" />
-                        <View className="absolute bottom-48 right-8 w-10 h-10 border-b-[3px] border-r-[3px] border-[#0d7ff2] rounded-br-xl shadow-lg shadow-blue-500/30 pointer-events-none" />
-
-                        {/* Central Guide */}
-                        <View className="absolute inset-0 items-center justify-center pointer-events-none pb-10">
-                            <View className="w-[85%] aspect-square max-w-[340px] rounded-full border-2 border-dashed border-[#0d7ff2] items-center justify-center relative shadow-[0_0_20px_rgba(13,127,242,0.3)] bg-blue-500/5">
-                                <View className="w-[45%] aspect-square rounded-full border border-[#0d7ff2]/50" />
-                                <View className="absolute -top-12 bg-[#0d7ff2]/20 border border-[#0d7ff2] px-4 py-1.5 rounded-full flex-row items-center gap-1.5 backdrop-blur-md">
-                                    <MaterialIcons name="build" size={14} color="#0d7ff2" />
-                                    <Text className="text-[#0d7ff2] text-xs font-bold tracking-widest uppercase">SCAN</Text>
+                                <View style={styles.centerGuideContainer} pointerEvents="none">
+                                    <View style={styles.centerCircle}>
+                                        <View style={styles.innerCircle} />
+                                        <View style={styles.scanLabel}>
+                                            <MaterialIcons name="build" size={14} color="#0d7ff2" />
+                                            <Text style={styles.scanText}>SCAN</Text>
+                                        </View>
+                                    </View>
                                 </View>
-                            </View>
-                        </View>
 
-                        {/* Instruction Text */}
-                        <View className="absolute bottom-44 w-full px-6 items-center justify-center pointer-events-none">
-                            <View className="bg-black/70 px-6 py-4 rounded-2xl items-center border border-white/20 backdrop-blur-md w-full max-w-sm">
-                                <Text className="text-white font-bold text-base mb-1 text-center">가이드라인에 맞춰 부품을 촬영해 주세요</Text>
-                                <Text className="text-slate-300 text-xs text-center">어두운 곳에서는 플래시를 켜주세요</Text>
-                            </View>
+                                <View style={styles.guideTextContainer} pointerEvents="none">
+                                    <View style={styles.guideTextBox}>
+                                        <Text style={styles.guideTitle}>가이드라인에 맞춰 부품을 촬영해 주세요</Text>
+                                        <Text style={styles.guideSubtitle}>어두운 곳에서는 플래시를 켜주세요</Text>
+                                    </View>
+                                </View>
+                            </>
+                        )}
+                    </CameraView>
+                </View>
+
+                {/* Preview Image */}
+                {capturedImage && (
+                    <View style={[StyleSheet.absoluteFill, { zIndex: 10 }]}>
+                        <View style={{ flex: 1, position: 'relative' }}>
+                            <Image source={{ uri: capturedImage }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+                            <View style={styles.overlay} />
+
+                            {isAnalyzing && (
+                                <View style={styles.loadingOverlay}>
+                                    <ActivityIndicator size="large" color="#0d7ff2" />
+                                    <Text style={styles.loadingText}>AI 분석 중...</Text>
+                                </View>
+                            )}
                         </View>
                     </View>
                 )}
             </View>
 
-            {/* Bottom Controls Area */}
-            <View
-                className="absolute bottom-0 left-0 right-0 bg-[#101922] pt-8 rounded-t-[32px] border-t border-white/10 z-20 shadow-2xl"
-                style={{ paddingBottom: insets.bottom + 20 }}
-            >
+            {/* Bottom Controls */}
+            <View style={[styles.bottomControls, { paddingBottom: insets.bottom + 20 }]}>
                 {capturedImage ? (
-                    // Preview Mode Controls
-                    <View className="flex-row items-center justify-between px-8 w-full max-w-md mx-auto">
+                    // Preview Controls
+                    <View style={styles.previewControls}>
                         <TouchableOpacity
                             onPress={retakePicture}
-                            className="flex-1 bg-[#1e2936] py-4 rounded-xl items-center mr-3 active:scale-95"
+                            style={styles.retakeButton}
                             disabled={isAnalyzing}
                         >
-                            <Text className="text-slate-300 font-bold">재촬영</Text>
+                            <Text style={styles.retakeText}>재촬영</Text>
                         </TouchableOpacity>
 
                         <TouchableOpacity
                             onPress={analyzeImage}
-                            className="flex-[2] bg-[#0d7ff2] py-4 rounded-xl items-center flex-row justify-center gap-2 active:scale-95 shadow-lg shadow-blue-500/20"
+                            style={styles.analyzeButton}
                             disabled={isAnalyzing}
                         >
                             {isAnalyzing ? (
@@ -208,44 +202,48 @@ export default function Filming() {
                             ) : (
                                 <>
                                     <MaterialIcons name="check" size={20} color="white" />
-                                    <Text className="text-white font-bold text-lg">진단 시작</Text>
+                                    <Text style={styles.analyzeText}>진단 시작</Text>
                                 </>
                             )}
                         </TouchableOpacity>
                     </View>
                 ) : (
-                    // Camera Mode Controls
-                    <View className="flex-row items-center justify-between max-w-sm mx-auto w-full px-8 z-50">
-                        {/* Flash Button */}
+                    // Camera Controls
+                    <View style={styles.cameraControls}>
                         <TouchableOpacity
-                            className="items-center gap-2"
+                            style={styles.controlButton}
                             onPress={toggleFlash}
+                            disabled={isCapturing}
                         >
-                            <View className={`w-12 h-12 rounded-full border border-white/10 items-center justify-center active:bg-white/20 ${enableTorch ? 'bg-yellow-500/20 border-yellow-500' : 'bg-[#1e2936]'}`}>
+                            <View style={[styles.controlIcon, { backgroundColor: enableTorch ? 'rgba(234,179,8,0.2)' : '#1e2936', borderColor: enableTorch ? 'rgba(234,179,8,0.5)' : 'rgba(255,255,255,0.1)' }]}>
                                 <MaterialIcons name={enableTorch ? "flash-on" : "flash-off"} size={22} color={enableTorch ? "#fbbf24" : "white"} />
                             </View>
-                            <Text className={`text-[11px] font-medium tracking-wide ${enableTorch ? 'text-yellow-500' : 'text-slate-400'}`}>플래시</Text>
+                            <Text style={[styles.controlText, { color: enableTorch ? '#eab308' : '#94a3b8' }]}>플래시</Text>
                         </TouchableOpacity>
 
-                        {/* Shutter Button */}
                         <TouchableOpacity
-                            className="relative items-center justify-center active:scale-95 transition-all -mt-4"
+                            style={[styles.shutterButtonContainer, isCapturing && { opacity: 0.8 }]}
                             onPress={takePicture}
+                            disabled={isCapturing}
                         >
-                            <View className="w-20 h-20 rounded-full border-[3px] border-white/20 items-center justify-center bg-[#101922]">
-                                <View className="w-16 h-16 rounded-full bg-[#0d7ff2] shadow-lg shadow-blue-500/40 border-[3px] border-[#1e2936]" />
+                            <View style={styles.shutterButtonOuter}>
+                                {isCapturing ? (
+                                    <ActivityIndicator color="#0d7ff2" size="small" />
+                                ) : (
+                                    <View style={styles.shutterButtonInner} />
+                                )}
                             </View>
                         </TouchableOpacity>
 
-                        {/* Switch Camera */}
                         <TouchableOpacity
-                            className="items-center gap-2"
+                            style={styles.controlButton}
                             onPress={toggleCameraFacing}
+                            disabled={isCapturing}
                         >
-                            <View className="w-12 h-12 rounded-full bg-[#1e2936] border border-white/10 items-center justify-center active:bg-white/20">
+                            <View style={[styles.controlIcon, { backgroundColor: '#1e2936' }]}>
                                 <MaterialIcons name="flip-camera-ios" size={22} color="white" />
                             </View>
-                            <Text className="text-[11px] text-slate-400 font-medium tracking-wide">전환</Text>
+                            <Text style={[styles.controlText, { color: '#94a3b8' }]}>전환</Text>
                         </TouchableOpacity>
                     </View>
                 )}
@@ -253,3 +251,274 @@ export default function Filming() {
         </View>
     );
 }
+
+const styles = StyleSheet.create({
+    container: {
+        flex: 1,
+        backgroundColor: 'black',
+    },
+    loadingContainer: {
+        flex: 1,
+        backgroundColor: '#050F1A',
+    },
+    permissionContainer: {
+        flex: 1,
+        backgroundColor: '#050F1A',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 24,
+    },
+    permissionText: {
+        color: 'white',
+        textAlign: 'center',
+        marginBottom: 16,
+    },
+    permissionButton: {
+        backgroundColor: '#0d7ff2',
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderRadius: 8,
+    },
+    permissionButtonText: {
+        color: 'white',
+        fontWeight: 'bold',
+    },
+    topBar: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        zIndex: 20,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: 24,
+    },
+    iconButton: {
+        width: 40,
+        height: 40,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: 20,
+        backgroundColor: 'rgba(0,0,0,0.2)',
+    },
+    titleContainer: {
+        backgroundColor: 'rgba(0,0,0,0.4)',
+        paddingHorizontal: 16,
+        paddingVertical: 6,
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.1)',
+    },
+    titleText: {
+        color: 'white',
+        fontWeight: 'bold',
+        fontSize: 12,
+        letterSpacing: 1,
+    },
+    bottomControls: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        backgroundColor: '#101922',
+        borderTopRightRadius: 32,
+        borderTopLeftRadius: 32,
+        borderTopWidth: 1,
+        borderColor: 'rgba(255,255,255,0.1)',
+        zIndex: 20,
+        paddingTop: 32,
+        shadowColor: 'black',
+        shadowOpacity: 0.5,
+        shadowRadius: 20,
+        elevation: 10,
+    },
+    previewControls: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 32,
+        width: '100%',
+        maxWidth: 450,
+        alignSelf: 'center',
+    },
+    retakeButton: {
+        flex: 1,
+        backgroundColor: '#1e2936',
+        paddingVertical: 16,
+        borderRadius: 12,
+        alignItems: 'center',
+        marginRight: 12,
+    },
+    retakeText: {
+        color: '#cbd5e1',
+        fontWeight: 'bold',
+    },
+    analyzeButton: {
+        flex: 2,
+        backgroundColor: '#0d7ff2',
+        paddingVertical: 16,
+        borderRadius: 12,
+        alignItems: 'center',
+        flexDirection: 'row',
+        justifyContent: 'center',
+        gap: 8,
+    },
+    analyzeText: {
+        color: 'white',
+        fontWeight: 'bold',
+        fontSize: 18,
+    },
+    cameraControls: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        maxWidth: 380,
+        width: '100%',
+        alignSelf: 'center',
+        paddingHorizontal: 32,
+    },
+    controlButton: {
+        alignItems: 'center',
+        gap: 8,
+    },
+    controlIcon: {
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.1)',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    controlText: {
+        fontSize: 11,
+        fontWeight: '500',
+        letterSpacing: 0.5,
+    },
+    shutterButtonContainer: {
+        position: 'relative',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: -16,
+    },
+    shutterButtonOuter: {
+        width: 80,
+        height: 80,
+        borderRadius: 999,
+        borderWidth: 3,
+        borderColor: 'rgba(255,255,255,0.2)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#101922',
+    },
+    shutterButtonInner: {
+        width: 64,
+        height: 64,
+        borderRadius: 999,
+        backgroundColor: '#0d7ff2',
+        borderWidth: 3,
+        borderColor: '#1e2936',
+    },
+    cornerGuide: {
+        position: 'absolute',
+        width: 40,
+        height: 40,
+        borderColor: '#0d7ff2',
+    },
+    centerGuideContainer: {
+        position: 'absolute',
+        inset: 0,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingBottom: 40,
+    },
+    centerCircle: {
+        width: '85%',
+        aspectRatio: 1,
+        maxWidth: 340,
+        borderRadius: 999,
+        borderWidth: 2,
+        borderStyle: 'dashed',
+        borderColor: '#0d7ff2',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: 'rgba(13,127,242,0.05)',
+    },
+    innerCircle: {
+        width: '45%',
+        aspectRatio: 1,
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: 'rgba(13,127,242,0.5)',
+    },
+    scanLabel: {
+        position: 'absolute',
+        top: -12,
+        backgroundColor: 'rgba(13,127,242,0.2)',
+        borderWidth: 1,
+        borderColor: '#0d7ff2',
+        paddingHorizontal: 16,
+        paddingVertical: 6,
+        borderRadius: 999,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+    },
+    scanText: {
+        color: '#0d7ff2',
+        fontSize: 12,
+        fontWeight: 'bold',
+        letterSpacing: 2,
+    },
+    guideTextContainer: {
+        position: 'absolute',
+        bottom: 176,
+        width: '100%',
+        paddingHorizontal: 24,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    guideTextBox: {
+        backgroundColor: 'rgba(0,0,0,0.7)',
+        paddingHorizontal: 24,
+        paddingVertical: 16,
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.2)',
+        width: '100%',
+        maxWidth: 380,
+        alignItems: 'center',
+    },
+    guideTitle: {
+        color: 'white',
+        fontWeight: 'bold',
+        fontSize: 16,
+        marginBottom: 4,
+        textAlign: 'center',
+    },
+    guideSubtitle: {
+        color: '#cbd5e1',
+        fontSize: 12,
+        textAlign: 'center',
+    },
+    overlay: {
+        position: 'absolute',
+        inset: 0,
+        backgroundColor: 'rgba(0,0,0,0.2)',
+    },
+    loadingOverlay: {
+        position: 'absolute',
+        inset: 0,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        zIndex: 50,
+    },
+    loadingText: {
+        color: 'white',
+        marginTop: 16,
+        fontWeight: 'bold',
+        letterSpacing: 2,
+    },
+});

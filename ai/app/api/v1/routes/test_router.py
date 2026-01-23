@@ -15,7 +15,8 @@ from fastapi.responses import JSONResponse
 from ai.app.services.local_service import process_visual_mock, process_audio_mock
 from ai.app.schemas.visual_schema import VisualResponse, DetectionItem
 from ai.app.schemas.audio_schema import AudioResponse
-from pydantic import BaseModel
+from ai.app.schemas.wear_factor import VehicleMetadata, DrivingHabits # 공통 메타데이터는 재사용
+from pydantic import BaseModel, Field
 from typing import List, Dict
 from PIL import Image
 import io
@@ -178,110 +179,144 @@ async def connect_get_embedding(data: dict):
 async def connect_comprehensive_mock(data: dict):
     """
     [사용자 - Mock] 종합 진단 Mock 응답 반환 (수동/자동 진단용)
+    - 4.API 명세서.md (Part 2 - 6. AI 진단 통합)의 스펙을 준수함.
     
-    Status 종류:
-    - SUCCESS: 진단 완료
-    - NEED_MORE_DATA: 추가 증거 필요 (사진/녹음 요청)
+    Response Modes:
+    - REPORT: 진단 완료 (Confidence High/Mid)
+    - INTERACTIVE: 추가 정보 요청 (Confidence Low)
+    
+    대화 이력(conversation_history) 기반 시나리오:
+    - 답변 0회: INTERACTIVE + 사진 촬영 요청
+    - 답변 1회 (사진 없음): INTERACTIVE + 추가 질문
+    - 답변 2회 이상 또는 사진 있음: REPORT
     """
+    import asyncio
+    await asyncio.sleep(1)  # 분석 지연 시뮬레이션 (테스트용으로 단축)
+    
     vehicle_id = data.get("vehicleId", "unknown")
-    audio = data.get("audioAnalysis")
-    visual = data.get("visualAnalysis")
-    anomaly = data.get("anomalyAnalysis")
-    vehicle_info = data.get("vehicleInfo")
-    consumables_status = data.get("consumablesStatus")
+    audio = data.get("analysis_results", {}).get("audioAnalysis") or data.get("audioAnalysis")
+    visual = data.get("analysis_results", {}).get("visualAnalysis") or data.get("visualAnalysis")
+    anomaly = data.get("analysis_results", {}).get("anomalyAnalysis") or data.get("anomalyAnalysis")
+    rag_context = data.get("rag_context") or data.get("knowledgeData")
     
-    log_msg = f"[Comprehensive] Request received for vehicle: {vehicle_id}\n"
-    log_msg += f"- Visual: {'YES' if visual else 'NO'}\n"
-    log_msg += f"- Audio: {'YES' if audio else 'NO'}\n"
-    log_msg += f"- Anomaly: {'YES' if anomaly else 'NO'}\n"
-    log_msg += f"- VehicleInfo: {'YES' if vehicle_info else 'NO'}\n"
-    log_msg += f"- Consumables: {'YES' if consumables_status else 'NO'} ({len(consumables_status) if consumables_status else 0} items)"
-    print(log_msg)
+    # 대화 이력 파싱
+    conversation = data.get("conversation_history", [])
+    user_reply_count = len([m for m in conversation if m.get("role") == "user"])
     
-    if not audio and not visual and not anomaly:
+    print(f"[Comprehensive] Request for vehicle: {vehicle_id}")
+    print(f"- Visual: {'YES' if visual else 'NO'}, Audio: {'YES' if audio else 'NO'}, Anomaly: {'YES' if anomaly else 'NO'}")
+    print(f"- Conversation history: {user_reply_count} user replies")
+
+    # 시나리오 1: 최초 요청 (데이터 부족 또는 모두 정상) - 사진 촬영 요청
+    is_anomaly_detected = anomaly.get("is_anomaly", False) if anomaly else False
+    if not audio and not visual and not is_anomaly_detected and user_reply_count == 0:
         return {
-            "status": "NEED_MORE_DATA",
-            "vehicleId": vehicle_id,
-            "mission": {
-                "type": "PHOTO_OR_AUDIO",
-                "message": "정확한 진단을 위해 차량 사진 또는 엔진 소리 녹음이 필요합니다.",
-                "options": [
-                    {"type": "PHOTO", "guide": "엔진룸 또는 이상 부위를 촬영해 주세요."},
-                    {"type": "AUDIO", "guide": "시동을 건 상태에서 10초간 녹음해 주세요."}
-                ]
+            "response_mode": "INTERACTIVE",
+            "confidence_level": "LOW",
+            "summary": "차량 데이터가 부족하여 정확한 진단이 어렵습니다.",
+            "report_data": None,
+            "interactive_data": {
+                "message": "정확한 진단을 위해 엔진룸 사진을 찍어서 보내주세요.",
+                "follow_up_questions": [
+                    "이상 증상이 언제부터 시작되었나요?"
+                ],
+                "requested_actions": ["CAPTURE_PHOTO"]
             },
-            "model": "gpt-4o-mock"
+            "disclaimer": "본 진단은 데이터 부족 상태에서의 추론이므로 참고용으로만 활용하세요."
         }
     
-    if not audio:
+    # 시나리오 2: 사용자 답변 1회 (사진 없음) - 추가 질문
+    if user_reply_count == 1 and not visual:
         return {
-            "status": "NEED_MORE_DATA",
-            "vehicleId": vehicle_id,
-            "mission": {
-                "type": "AUDIO",
-                "message": "소리 분석 데이터가 없습니다. 엔진 소리를 녹음해 주세요.",
-                "guide": "시동을 건 상태에서 10초간 녹음해 주세요."
+            "response_mode": "INTERACTIVE",
+            "confidence_level": "LOW",
+            "summary": "답변 감사합니다. 추가 정보가 필요합니다.",
+            "report_data": None,
+            "interactive_data": {
+                "message": "시동을 끈 상태에서도 소리가 계속 나나요? 그리고 엔진룸 사진을 찍어서 보내주시면 더 정확한 분석이 가능합니다.",
+                "follow_up_questions": [
+                    "시동을 끈 상태에서도 소리가 나나요?",
+                    "최근 냉각수 보충을 하신 적 있나요?"
+                ],
+                "requested_actions": ["CAPTURE_PHOTO", "RECORD_AUDIO"]
             },
-            "model": "gpt-4o-mock"
+            "disclaimer": "본 진단은 추론 기반이므로 참고용으로만 활용하세요."
         }
     
-    if not visual:
-        return {
-            "status": "NEED_MORE_DATA",
-            "vehicleId": vehicle_id,
-            "mission": {
-                "type": "PHOTO",
-                "message": "사진 분석 데이터가 없습니다. 차량 사진을 촬영해 주세요.",
-                "guide": "엔진룸 또는 이상 부위를 촬영해 주세요."
-            },
-            "model": "gpt-4o-mock"
-        }
+    # 시나리오 3: 사용자 답변 2회 이상 또는 분석 결과 있음 - REPORT 생성
+    is_anomaly = anomaly.get("is_anomaly") if anomaly else False
+    has_visual_issue = visual.get("status") == "FAULTY" if visual else False
+    has_audio_issue = audio.get("status") == "FAULTY" if audio else False
     
     return {
-        "status": "SUCCESS",
-        "vehicleId": vehicle_id,
-        "diagnosis": {
-            "summary": "차량 전반적인 상태는 양호합니다.",
-            "issues": [
+        "response_mode": "REPORT",
+        "confidence_level": "HIGH" if (audio or visual) else "MEDIUM",
+        "summary": "수집된 데이터를 바탕으로 종합 분석을 완료했습니다.",
+        "report_data": {
+            "suspected_causes": [
                 {
-                    "category": visual.get("category", "일반") if visual else "일반",
-                    "severity": "LOW",
-                    "description": "경미한 점검 필요"
+                    "cause": "냉각 계통 점검 필요" if (is_anomaly or has_visual_issue) else "정상 상태",
+                    "basis": "사용자 답변 및 분석 결과 종합" if user_reply_count > 0 else "OBD 데이터 분석",
+                    "source_type": "CONFIRMED" if visual else "INFERRED",
+                    "reliability": "HIGH" if visual else "MEDIUM"
                 }
             ],
-            "recommendations": [
-                "정기 점검을 권장합니다.",
-                "엔진 오일 상태를 확인해 주세요."
-            ]
+            "final_guide": "대화와 분석 결과를 종합한 결과, 정기적인 냉각수 점검을 권장합니다." if (is_anomaly or has_visual_issue or has_audio_issue) else "차량 상태가 양호합니다. 정기 점검 일정을 유지해주세요.",
+            "risk_level": "MID" if (is_anomaly or has_visual_issue) else "LOW"
         },
-        "confidence": 0.85,
-        "model": "gpt-4o-mock"
+        "interactive_data": None,
+        "disclaimer": "본 진단은 AI 추론 및 사용자 답변에 기반하며, 실제 정비 전문가의 의견과 다를 수 있습니다."
     }
 
+# ---- /connect 전용 Phase 2 Mock 스키마 ----
+class ConnectConsumableContext(BaseModel):
+    code: str
+    last_replaced_mileage: float
+    is_inferred: bool = False
 
-@connect_router.post("/predict/wear-factor")
-async def connect_predict_wear_factor(data: dict):
+class ConnectWearFactorRequest(BaseModel):
+    vehicle_metadata: VehicleMetadata
+    driving_habits: DrivingHabits
+    consumables: List[ConnectConsumableContext]
+
+class ConnectWearFactorResponse(BaseModel):
+    wear_factors: Dict[str, float]
+    remaining_lifes: Dict[str, float]
+    model_version: str
+
+
+@connect_router.post("/predict/wear-factor", response_model=ConnectWearFactorResponse)
+async def connect_predict_wear_factor(request: ConnectWearFactorRequest):
     """
-    [사용자 - Mock] XGBoost 마모율 예측 Mock 응답 반환
+    [사용자 - Mock] Phase 2용 소모품별 마모도 및 예측 수명 응답
+    - is_inferred=True: AI가 기초 데이터를 보정하여 수명 재계산
+    - is_inferred=False: 사용자 데이터를 존중하여 가중치 누적 차감
     """
-    print(f"[Connect Router] Received Wear-Factor Request")
     import random
     
-    # DB 표준 명칭에 맞게 키값 수정
-    wear_factors = {
-        "ENGINE_OIL": round(random.uniform(0.8, 1.3), 2),
-        "TIRE_FRONT": round(random.uniform(0.9, 1.4), 2),
-        "TIRE_REAR": round(random.uniform(0.9, 1.4), 2),
-        "BRAKE_PAD_FRONT": round(random.uniform(1.0, 1.5), 2),
-        "BRAKE_PAD_REAR": round(random.uniform(1.0, 1.5), 2),
-        "BATTERY_12V": round(random.uniform(0.95, 1.1), 2)
-    }
+    wear_factors = {}
+    remaining_lifes = {}
     
-    return {
-        "wear_factors": wear_factors,
-        "model_version": "xgboost-mock-0.2.0",
-        "message": "부품별 마모성 계수가 계산되었습니다."
-    }
+    for item in request.consumables:
+        # 가중치 (Wear Factor)
+        factor = round(random.uniform(0.8, 1.4), 2)
+        wear_factors[item.code] = factor
+        
+        # 잔존 수명 (Remaining Life)
+        if item.is_inferred:
+            # 보정 모드: AI가 정교하게 예측한 % 제공
+            life = round(random.uniform(40.0, 95.0), 1)
+        else:
+            # 누적 차감 모드: 현재 주행 패턴 기반 차감 시뮬레이션
+            life = round(random.uniform(10.0, 85.0), 1)
+            
+        remaining_lifes[item.code] = life
+    
+    return ConnectWearFactorResponse(
+        wear_factors=wear_factors,
+        remaining_lifes=remaining_lifes,
+        model_version="xgboost-mock-0.3.0-connect"
+    )
 
 
 @connect_router.get("/endpoints")

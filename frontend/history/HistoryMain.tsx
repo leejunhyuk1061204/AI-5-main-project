@@ -1,14 +1,59 @@
-import React from 'react';
-import { View, Text, ScrollView, Platform, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, ScrollView, Platform, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import BottomNav from '../nav/BottomNav';
 import Header from '../header/Header';
+import tripApi, { TripSummary } from '../api/tripApi';
 
 export default function HistoryMain() {
     const navigation = useNavigation();
+    const [tripStats, setTripStats] = useState<{
+        totalScore: number;
+        avgSpeed: number;
+        totalFuel: number;
+        hasData: boolean;
+    }>({ totalScore: 0, avgSpeed: 0, totalFuel: 0, hasData: false });
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        loadTripStats();
+        // 화면 포커스 시 새로 불러오기
+        const unsubscribe = navigation.addListener('focus', loadTripStats);
+        return unsubscribe;
+    }, [navigation]);
+
+    const loadTripStats = async () => {
+        try {
+            const stored = await AsyncStorage.getItem('primaryVehicle');
+            if (stored) {
+                const vehicle = JSON.parse(stored);
+                const response = await tripApi.getTrips(vehicle.id);
+                if (response.success && response.data && response.data.length > 0) {
+                    const trips = response.data;
+                    const totalScore = Math.round(
+                        trips.reduce((acc, t) => acc + (t.driveScore || 0), 0) / trips.length
+                    );
+                    const avgSpeed = Math.round(
+                        trips.reduce((acc, t) => acc + (t.averageSpeed || 0), 0) / trips.length
+                    );
+                    const totalFuel = parseFloat(
+                        trips.reduce((acc, t) => acc + (t.fuelConsumed || 0), 0).toFixed(1)
+                    );
+                    setTripStats({ totalScore, avgSpeed, totalFuel, hasData: true });
+                } else {
+                    setTripStats({ totalScore: 0, avgSpeed: 0, totalFuel: 0, hasData: false });
+                }
+            }
+        } catch (e) {
+            console.error('Failed to load trip stats', e);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     return (
         <View className="flex-1 bg-background-dark">
@@ -38,13 +83,28 @@ export default function HistoryMain() {
                                         <Text className="text-xs font-bold text-primary uppercase tracking-wider">Analysis</Text>
                                     </View>
                                     <Text className="text-lg font-bold text-white mt-2">주행 이력 분석</Text>
-                                    <Text className="text-sm font-medium text-gray-500 mt-0.5">최근 주행 기반 데이터</Text>
+                                    <Text className="text-sm font-medium text-gray-500 mt-0.5">
+                                        {tripStats.hasData ? '최근 주행 기반 데이터' : '주행 기록 없음'}
+                                    </Text>
                                 </View>
                                 <View className="flex-col items-center justify-center mr-10">
-                                    <Text className="text-7xl font-bold text-primary tracking-tighter leading-none">
-                                        98
-                                    </Text>
-                                    <Text className="text-xs text-white font-bold uppercase tracking-widest mt-1">Total Score</Text>
+                                    {loading ? (
+                                        <ActivityIndicator size="small" color="#0d7ff2" />
+                                    ) : tripStats.hasData ? (
+                                        <>
+                                            <Text className="text-7xl font-bold text-primary tracking-tighter leading-none">
+                                                {tripStats.totalScore}
+                                            </Text>
+                                            <Text className="text-xs text-white font-bold uppercase tracking-widest mt-1">Total Score</Text>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Text className="text-4xl font-bold text-gray-600 tracking-tighter leading-none">
+                                                --
+                                            </Text>
+                                            <Text className="text-xs text-gray-500 font-bold uppercase tracking-widest mt-1">No Data</Text>
+                                        </>
+                                    )}
                                 </View>
                             </View>
 
@@ -54,7 +114,9 @@ export default function HistoryMain() {
                                 <View className="flex-1 bg-[#1b2127] rounded-xl p-4 border border-white/10 flex-col gap-1">
                                     <Text className="text-gray-400 text-sm font-medium mb-1">평균 속도</Text>
                                     <View className="flex-row items-baseline gap-1">
-                                        <Text className="text-xl font-bold text-white">42</Text>
+                                        <Text className="text-xl font-bold text-white">
+                                            {tripStats.hasData ? tripStats.avgSpeed : '--'}
+                                        </Text>
                                         <Text className="text-xs text-gray-500 font-semibold">km/h</Text>
                                     </View>
                                 </View>
@@ -62,7 +124,9 @@ export default function HistoryMain() {
                                 <View className="flex-1 bg-[#1b2127] rounded-xl p-4 border border-white/10 flex-col gap-1">
                                     <Text className="text-gray-400 text-sm font-medium mb-1">소모 연료량</Text>
                                     <View className="flex-row items-baseline gap-1">
-                                        <Text className="text-xl font-bold text-white">4.2</Text>
+                                        <Text className="text-xl font-bold text-white">
+                                            {tripStats.hasData ? tripStats.totalFuel : '--'}
+                                        </Text>
                                         <Text className="text-xs text-gray-500 font-semibold">L</Text>
                                     </View>
                                 </View>
@@ -130,3 +194,4 @@ export default function HistoryMain() {
         </View>
     );
 }
+

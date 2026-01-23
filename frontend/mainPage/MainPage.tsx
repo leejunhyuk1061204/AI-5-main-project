@@ -7,47 +7,49 @@ import Svg, { Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
 import { useNavigation } from '@react-navigation/native';
 import BottomNav from '../nav/BottomNav';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
+import { getVehicleList, VehicleResponse } from '../api/vehicleApi';
 import Header from '../header/Header';
-
-const { width } = Dimensions.get('window');
-
-// 차량 데이터 타입
-interface Vehicle {
-    id: string;
-    name: string;
-    plate: string;
-    mileage: string;
-    fuel: string;
-}
-
-// 기본 차량 정보
-const defaultVehicle: Vehicle = {
-    id: '0',
-    name: '차량을 등록해주세요',
-    plate: '- - -',
-    mileage: '0 km',
-    fuel: '0%'
-};
 
 export default function MainPage() {
     const navigation = useNavigation<any>();
-    const [vehicle, setVehicle] = useState<Vehicle>(defaultVehicle);
 
-    // 대표 차량 정보 불러오기
-    useEffect(() => {
-        const loadPrimaryVehicle = async () => {
-            try {
-                const stored = await AsyncStorage.getItem('primaryVehicle');
-                if (stored) {
-                    setVehicle(JSON.parse(stored));
-                }
-            } catch (e) {
-                console.error('대표 차량 불러오기 실패:', e);
+    // 기본 차량 정보 (API 타입에 맞게 초기화 필요하지만, UI 표시용으로만 남김)
+    const [vehicle, setVehicle] = useState<Partial<VehicleResponse>>({
+        modelName: '차량을 등록해주세요',
+        carNumber: '- - -',
+        totalMileage: 0,
+        fuelType: null
+    });
+
+    // 대표 차량 정보 불러오기 (API 연동)
+    const loadPrimaryVehicle = async () => {
+
+        try {
+            const vehicles = await getVehicleList();
+            const primary = vehicles.find(v => v.isPrimary) || vehicles[0]; // 대표 차량 없으면 첫 번째 차량
+
+            if (primary) {
+                setVehicle(primary);
+                // 캐싱을 위해 로컬 저장 (선택 사항)
+                await AsyncStorage.setItem('primaryVehicle', JSON.stringify(primary));
+            } else {
+                // 차량이 아예 없는 경우 초기화
+                setVehicle({
+                    modelName: '차량을 등록해주세요',
+                    carNumber: '- - -',
+                    totalMileage: 0,
+                    fuelType: null
+                });
             }
-        };
+        } catch (e) {
+            console.error('차량 목록 불러오기 실패:', e);
+        }
+    };
 
-        // 화면 포커스 시마다 새로 불러오기 (CarManage에서 변경 후 돌아올 때)
+    useEffect(() => {
+        loadPrimaryVehicle();
+
+        // 화면 포커스 시마다 새로 불러오기
         const unsubscribe = navigation.addListener('focus', loadPrimaryVehicle);
         return unsubscribe;
     }, [navigation]);
@@ -76,8 +78,9 @@ export default function MainPage() {
                                     <MaterialIcons name="directions-car" size={24} color="#d1d5db" />
                                 </View>
                                 <View>
-                                    <Text className="text-white text-base font-bold leading-tight">{vehicle.name}</Text>
-                                    <Text className="text-[#9cabba] text-sm font-normal">{vehicle.plate}</Text>
+                                    <Text className="text-white text-base font-bold leading-tight">{vehicle.modelName}</Text>
+                                    <Text className="text-[#9cabba] text-sm font-normal">{vehicle.carNumber}</Text>
+
                                 </View>
                             </View>
 

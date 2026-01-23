@@ -47,6 +47,9 @@ public class VehicleDto {
         private String vin;
         private String obdDeviceId;
 
+        // 추가: 소모품 등록 리스트
+        private java.util.List<ConsumableRegistrationRequest> consumables;
+
         public Vehicle toEntity(UUID userId) {
             return Vehicle.builder()
                     .userId(userId)
@@ -64,6 +67,18 @@ public class VehicleDto {
                     .obdDeviceId(obdDeviceId)
                     .build();
         }
+    }
+
+    // 추가: 소모품 등록 요청 DTO
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    public static class ConsumableRegistrationRequest {
+        @NotBlank(message = "소모품 코드는 필수입니다.")
+        private String code; // 예: ENGINE_OIL
+
+        private java.time.LocalDateTime lastReplacedAt; // 선택 입력
+        private Double lastReplacedMileage; // 선택 입력
     }
 
     @Getter

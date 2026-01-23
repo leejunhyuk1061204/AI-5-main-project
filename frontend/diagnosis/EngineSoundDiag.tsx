@@ -99,6 +99,7 @@ export default function EngineSoundDiag() {
     const analyzeSound = async (uri: string) => {
         try {
             const result = await diagnoseEngineSound(uri);
+            console.log('Diagnosis Result:', result);
             setDiagnosisResult(result);
 
             if (route.params?.from === 'chatbot') {
@@ -106,8 +107,9 @@ export default function EngineSoundDiag() {
             } else {
                 setStep(3); // Go to Result Screen
             }
-        } catch (error) {
-            Alert.alert('진단 실패', '서버 통신 중 오류가 발생했습니다.');
+        } catch (error: any) {
+            console.error(error);
+            Alert.alert('진단 실패', error.message || '서버 통신 중 오류가 발생했습니다.');
             setStep(1); // Reset to start
         }
     };

@@ -15,6 +15,18 @@ export interface VehicleResponse {
     isPrimary: boolean;
     registrationSource: 'MANUAL' | 'OBD' | 'CLOUD';
     obdDeviceId: string | null;
+
+    // Spec info
+    length?: number;
+    width?: number;
+    height?: number;
+    displacement?: number;
+    engineType?: string;
+    maxPower?: number;
+    maxTorque?: number;
+    tireSizeFront?: string;
+    tireSizeRear?: string;
+    officialFuelEconomy?: number;
 }
 
 // OBD 기반 차량 등록 요청
