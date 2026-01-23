@@ -1,34 +1,47 @@
 {
-    "project_info": {
-        "project_number": "000000000000",
-        "project_id": "dummy-project-id",
-        "storage_bucket": "dummy-project-id.appspot.com"
-    },
-    "client": [
-        {
-            "client_info": {
-                "mobilesdk_app_id": "1:000000000000:android:0000000000000000",
-                "android_client_info": {
-                    "package_name": "com.lee_kang_hyun.frontend"
-                }
-            },
-            "oauth_client": [
-                {
-                    "client_id": "dummy-client-id.apps.googleusercontent.com",
-                    "client_type": 3
-                }
-            ],
-            "api_key": [
-                {
-                    "current_key": "dummy-api-key"
-                }
-            ],
-            "services": {
-                "appinvite_service": {
-                    "other_platform_oauth_client": []
-                }
-            }
+  "project_info": {
+    "project_number": "415824813180",
+    "project_id": "ai-5-main-project",
+    "storage_bucket": "ai-5-main-project.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:415824813180:android:4cde31973b24b571383df9",
+        "android_client_info": {
+          "package_name": "com.lee_kang_hyun.frontend"
         }
-    ],
-    "configuration_version": "1"
+      },
+      "oauth_client": [
+        {
+          "client_id": "415824813180-2n5nrrr5cc9jdjbrm0pvh13rll588bg5.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.lee_kang_hyun.frontend",
+            "certificate_hash": "5e8f16062ea3cd2c4a0d547876baa6f38cabf625"
+          }
+        },
+        {
+          "client_id": "415824813180-to8ea5houck16m7as32t9cavi7aq87e5.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyChUwo5l7QFPaRjWtLv1Dv3Ywlic3hdk3U"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "415824813180-to8ea5houck16m7as32t9cavi7aq87e5.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
 }
