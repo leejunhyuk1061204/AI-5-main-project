@@ -1,27 +1,62 @@
+# General / System
+.DS_Store
+Thumbs.db
+Desktop.ini
+.vscode/
+.idea/
+*.swp
+*.bak
+*.tmp
 
-# 데이터 폴더 전체 제외 (ai/ 기준 상대경로)
-data/ast/
-data/yolo/
-data/engine_bay/
-data/s3_audio/
-data/tire/
-
-
-# 가상환경 및 캐시 파일 (권장)
+# Python / Environment
 __pycache__/
+*.py[cod]
+*$py.class
 .venv/
 venv/
+ENV/
+env/
+.env
+.env.*
 .ipynb_checkpoints/
+build/
+dist/
+*.egg-info/
+.pytest_cache/
 
-# Kaggle API 키 파일 (보안상 절대 올리면 안 됨)
-.kaggle/
-kaggle.json
-
-*.safetensors
-*.pt
-*.pth
-
-# 학습 결과 폴더 제외 (체크포인트, 로그 등)
+# Project Data (Large Files)
+data/anomaly/
+data/ast/
+data/CarDD_release/
+data/obd/
+data/processed/
+data/yolo/
+data/yolo_router/
+results/
+samples/
 runs/
 weights/
 
+# Model Weights
+*.pt
+*.pth
+*.safetensors
+*.h5
+*.onnx
+*.weights
+
+# Security / Credentials
+.kaggle/
+kaggle.json
+my_key
+*.pem
+*.key
+*.pub
+id_rsa
+id_rsa.pub
+credentials.json
+client_secret*.json
+
+# Logs
+*.log
+logs/

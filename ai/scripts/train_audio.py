@@ -1,23 +1,24 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
+# ai/scripts/train_audio.py
 """
-Audio Training Script (AST Model)
-Usage:
-    python train_audio.py --mode baseline  # 초기 모델 정밀도만 측정
-    python train_audio.py --mode train     # 학습만 실행
-    python train_audio.py --mode test      # 최종 모델 테스트만
-    python train_audio.py --mode all       # 전체 실행 (기본값)
+AST 기계 소음 분류 모델 학습 도구 (Audio Trainer)
+
+[역할]
+1. 소리 기반 진단: 차량에서 발생하는 오디오 데이터를 분석하여 기계적 고장(노킹, 실화 등)을 분류하는 AST 모델을 학습합니다.
+2. 전처리 자동화: 오디오 파일을 스펙트로그램 특징(Feature)으로 자동 변환하며, Windows 환경에서의 librosa 로딩 이슈를 해결했습니다.
+3. 성능 리포트: 학습 전(Baseline)과 학습 후(Final)의 정확도를 비교하여 모델의 개선 정도를 측정합니다.
+
+[사용법]
+python ai/scripts/train_audio.py --mode all --epochs 10
 """
 import argparse
-# import kagglehub  # 로컬 데이터를 사용하므로 주석 처리
 import os
 import torch
 import numpy as np
 import boto3
+import evaluate
 from transformers import ASTForAudioClassification, ASTFeatureExtractor, Trainer, TrainingArguments
 from datasets import Dataset, Audio
 from sklearn.model_selection import train_test_split
-import evaluate
 
 # =============================================================================
 # [설정] 경로 및 하이퍼파라미터

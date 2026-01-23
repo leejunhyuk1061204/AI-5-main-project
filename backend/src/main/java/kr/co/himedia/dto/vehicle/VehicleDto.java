@@ -20,6 +20,8 @@ public class VehicleDto {
     public static class UpdateRequest {
         private String nickname;
         private String memo;
+        private String carNumber;
+        private String vin;
     }
 
     @Getter
@@ -114,6 +116,7 @@ public class VehicleDto {
         private String carNumber;
         private String nickname;
         private String memo;
+        private String vin;
         private Boolean isPrimary;
         private String registrationSource;
         private String obdDeviceId;
@@ -132,6 +135,7 @@ public class VehicleDto {
             response.setCarNumber(vehicle.getCarNumber());
             response.setNickname(vehicle.getNickname());
             response.setMemo(vehicle.getMemo());
+            response.setVin(vehicle.getVin());
             response.setIsPrimary(vehicle.getIsPrimary());
             response.setRegistrationSource(
                     vehicle.getRegistrationSource() != null ? vehicle.getRegistrationSource().name() : null);

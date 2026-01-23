@@ -66,6 +66,8 @@ dependencies {
 
 	// Firebase Admin SDK
 	implementation 'com.google.firebase:firebase-admin:9.2.0'
+	// Google API Client (For Google ID Token Verification)
+	implementation 'com.google.api-client:google-api-client:2.0.0'
 
 	// Retry & AOP
 	implementation 'org.springframework.retry:spring-retry'
