@@ -38,7 +38,11 @@ export default function CarManage() {
     const [selectedVehicle, setSelectedVehicle] = useState<VehicleResponse | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [modalVisible, setModalVisible] = useState(false);
+    const [specModalVisible, setSpecModalVisible] = useState(false);
     const [obdModalVisible, setObdModalVisible] = useState(false);
+
+    // 다른 차량 목록 필터링
+    const otherVehicles = vehicles.filter(v => v.vehicleId !== selectedVehicle?.vehicleId);
 
     // 차량 목록 불러오기
     const loadVehicles = async () => {
@@ -82,6 +86,12 @@ export default function CarManage() {
             console.error('[CarManage] Failed to set primary vehicle:', error);
             Alert.alert('오류', '대표 차량 설정에 실패했습니다.');
         }
+    };
+
+    // 차량 제원 보기 선택 핸들러
+    const handleSelectSpecVehicle = (vehicle: VehicleResponse) => {
+        setSpecModalVisible(false);
+        navigation.navigate('Spec', { vehicleId: vehicle.vehicleId });
     };
 
     // OBD 연결 성공 핸들러
@@ -176,6 +186,35 @@ export default function CarManage() {
                                 등록된 차량이 없습니다.{'\n'}아래 버튼으로 차량을 등록해주세요.
                             </Text>
                         </View>
+
+                    )}
+
+                    {/* Other Vehicles List */}
+                    {otherVehicles.length > 0 && (
+                        <View className="mb-8">
+                            <Text className="px-2 text-[13px] font-semibold text-slate-500 uppercase tracking-widest mb-3">보유 차량 목록</Text>
+                            <View className="bg-[#1a1e23]/60 border border-white/5 rounded-2xl overflow-hidden backdrop-blur-md">
+                                {otherVehicles.map((vehicle, index) => (
+                                    <View
+                                        key={vehicle.vehicleId}
+                                        className={`flex-row items-center gap-4 px-5 py-4 ${index !== otherVehicles.length - 1 ? 'border-b border-white/5' : ''}`}
+                                    >
+                                        <View className="w-11 h-11 items-center justify-center rounded-xl bg-slate-800 shrink-0">
+                                            <MaterialIcons name="directions-car" size={24} color="#94a3b8" />
+                                        </View>
+                                        <View className="flex-1">
+                                            <Text className="text-slate-100 text-base font-medium mb-0.5">
+                                                {vehicle.manufacturer} {vehicle.modelName}
+                                            </Text>
+                                            <Text className="text-slate-500 text-xs">
+                                                {vehicle.carNumber || '번호판 미등록'}
+                                            </Text>
+                                        </View>
+                                        {/* <MaterialIcons name="chevron-right" size={24} color="#475569" /> */}
+                                    </View>
+                                ))}
+                            </View>
+                        </View>
                     )}
 
                     {/* Management Menu */}
@@ -183,7 +222,7 @@ export default function CarManage() {
                     <View className="bg-[#1a1e23]/60 border border-white/5 rounded-2xl overflow-hidden mb-6 backdrop-blur-md">
                         <TouchableOpacity
                             className="flex-row items-center gap-4 px-5 py-4 active:bg-white/5 border-b border-white/5"
-                            onPress={() => navigation.navigate('Spec')}
+                            onPress={() => vehicles.length > 0 ? setSpecModalVisible(true) : Alert.alert('알림', '등록된 차량이 없습니다.')}
                         >
                             <View className="w-11 h-11 items-center justify-center rounded-xl bg-slate-800 shrink-0">
                                 <MaterialIcons name="list-alt" size={24} color="#cbd5e1" />
@@ -233,10 +272,10 @@ export default function CarManage() {
                     <TouchableOpacity
                         className="w-full py-4 bg-primary/10 rounded-2xl flex-row items-center justify-center gap-2 border border-primary/30 active:bg-primary/20"
                         activeOpacity={0.8}
-                        onPress={() => setObdModalVisible(true)}
+                        onPress={() => navigation.navigate('RegisterMain')}
                     >
                         <MaterialIcons name="add-circle-outline" size={24} color="#0d7ff2" />
-                        <Text className="text-primary font-bold text-base">OBD로 새 차량 등록하기</Text>
+                        <Text className="text-primary font-bold text-base">새 차량 등록하기</Text>
                     </TouchableOpacity>
 
                 </ScrollView>
@@ -321,6 +360,70 @@ export default function CarManage() {
                     </Pressable>
                 </Pressable>
             </Modal>
-        </View>
+
+            {/* 차량 제원 선택 모달 */}
+            <Modal
+                animationType="fade"
+                transparent={true}
+                visible={specModalVisible}
+                onRequestClose={() => setSpecModalVisible(false)}
+            >
+                <Pressable
+                    className="flex-1 bg-black/70 justify-center items-center px-6"
+                    onPress={() => setSpecModalVisible(false)}
+                >
+                    <Pressable
+                        className="w-full bg-[#1a1e23] border border-white/10 rounded-3xl overflow-hidden"
+                        onPress={(e) => e.stopPropagation()}
+                    >
+                        {/* 모달 헤더 */}
+                        <View className="px-6 py-5 border-b border-white/10 flex-row items-center justify-between">
+                            <Text className="text-lg font-bold text-white">차량 선택</Text>
+                            <TouchableOpacity
+                                className="w-8 h-8 items-center justify-center rounded-full bg-white/5 active:bg-white/10"
+                                onPress={() => setSpecModalVisible(false)}
+                            >
+                                <MaterialIcons name="close" size={20} color="#94a3b8" />
+                            </TouchableOpacity>
+                        </View>
+
+                        {/* 차량 목록 */}
+                        <ScrollView className="max-h-80">
+                            {vehicles.map((vehicle, index) => {
+                                const isLast = index === vehicles.length - 1;
+
+                                return (
+                                    <TouchableOpacity
+                                        key={vehicle.vehicleId}
+                                        className={`flex-row items-center gap-4 px-6 py-4 active:bg-white/5 ${!isLast ? 'border-b border-white/5' : ''
+                                            }`}
+                                        onPress={() => handleSelectSpecVehicle(vehicle)}
+                                    >
+                                        {/* 차량 아이콘 */}
+                                        <View className="w-12 h-12 items-center justify-center rounded-xl bg-white/5 border border-white/10">
+                                            <MaterialIcons
+                                                name="directions-car"
+                                                size={24}
+                                                color="#94a3b8"
+                                            />
+                                        </View>
+
+                                        {/* 차량 정보 */}
+                                        <View className="flex-1">
+                                            <Text className="text-base font-semibold mb-0.5 text-white">
+                                                {vehicle.manufacturer} {vehicle.modelName}
+                                            </Text>
+                                            <Text className="text-slate-500 text-xs">{vehicle.carNumber || '번호판 미등록'}</Text>
+                                        </View>
+
+                                        <MaterialIcons name="chevron-right" size={24} color="#475569" />
+                                    </TouchableOpacity>
+                                );
+                            })}
+                        </ScrollView>
+                    </Pressable>
+                </Pressable>
+            </Modal>
+        </View >
     );
 }

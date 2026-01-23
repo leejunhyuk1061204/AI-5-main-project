@@ -73,9 +73,9 @@ export default function Filming({ navigation, route }: { navigation?: any; route
                 navigation.navigate('VisualDiagnosis', { diagnosisResult: result, capturedImage: capturedImage });
             }
 
-        } catch (error) {
+        } catch (error: any) {
             console.error('Diagnosis Error:', error);
-            Alert.alert('진단 실패', '서버 통신 중 오류가 발생했습니다.');
+            Alert.alert('진단 실패', error.message || '서버 통신 중 오류가 발생했습니다.');
         } finally {
             setIsAnalyzing(false);
         }
