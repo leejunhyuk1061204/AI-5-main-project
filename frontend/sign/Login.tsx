@@ -42,6 +42,9 @@ export default function Login() {
 
                 if (response.success && response.data) {
                     await AsyncStorage.setItem('accessToken', response.data.accessToken);
+                    if (response.data.refreshToken) {
+                        await AsyncStorage.setItem('refreshToken', response.data.refreshToken);
+                    }
 
                     // Fetch user info needed?
                     try {
@@ -89,6 +92,9 @@ export default function Login() {
 
                 if (response.success && response.data) {
                     await AsyncStorage.setItem('accessToken', response.data.accessToken);
+                    if (response.data.refreshToken) {
+                        await AsyncStorage.setItem('refreshToken', response.data.refreshToken);
+                    }
 
                     try {
                         const profileResponse = await authService.getProfile(response.data.accessToken);
@@ -132,7 +138,9 @@ export default function Login() {
                 // Store tokens
                 await AsyncStorage.setItem('accessToken', response.data.accessToken);
                 // RefreshToken is not yet implemented in backend
-                // await AsyncStorage.setItem('refreshToken', response.data.refreshToken);
+                if (response.data.refreshToken) {
+                    await AsyncStorage.setItem('refreshToken', response.data.refreshToken);
+                }
 
                 // Fetch and store user info
                 try {

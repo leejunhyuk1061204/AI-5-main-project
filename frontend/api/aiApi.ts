@@ -14,6 +14,8 @@ export interface AiDiagnosisResponse {
     imageUrl: string;
 }
 
+import { getVehicleList } from './vehicleApi';
+
 /**
  * AI 이미지 진단 요청
  * @param imageUri 촬영된 이미지의 로컬 URI
@@ -25,23 +27,39 @@ export const diagnoseImage = async (imageUri: string): Promise<AiDiagnosisRespon
         const match = /\.(\w+)$/.exec(filename);
         const type = match ? `image/${match[1]}` : 'image/jpeg';
 
-        // React Native의 FormData에 파일 추가 방식
+        // 1. 차량 정보 조회 (필수: data 파트 구성을 위해)
+        let vehicleId = '00000000-0000-0000-0000-000000000000'; // Default fallback
+        try {
+            const vehicles = await getVehicleList();
+            const primary = vehicles.find(v => v.isPrimary) || vehicles[0];
+            if (primary) vehicleId = primary.vehicleId;
+        } catch (e) {
+            console.warn('Failed to fetch vehicle info, using default ID');
+        }
+
+        // 2. 이미지 파일 추가
         formData.append('image', {
             uri: imageUri,
             name: filename,
             type,
         } as any);
 
-        console.log('[aiApi] Uploading image for diagnosis:', filename);
+        // 3. JSON 데이터 추가 (Backend requires 'data' part)
+        formData.append('data', {
+            string: JSON.stringify({ vehicleId }),
+            type: 'application/json',
+        } as any);
 
-        const response = await api.post('/api/v1/ai/diagnose', formData, {
+        console.log('[aiApi] Uploading image to unified endpoint:', filename);
+
+        const response = await api.post('/api/v1/ai/diagnose/unified', formData, {
             headers: {
                 'Content-Type': 'multipart/form-data',
             },
         });
 
         console.log('[aiApi] Diagnosis successful:', response.data);
-        return response.data.data; // 표준 응답 구조 (status, message, data) 가정
+        return response.data.data;
     } catch (error) {
         console.error('[aiApi] Diagnosis failed:', error);
         throw error;
