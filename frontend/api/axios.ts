@@ -66,11 +66,13 @@ api.interceptors.response.use(
         const originalRequest = error.config;
 
         // If error is 401 or 403 and we haven't tried refreshing yet
+        // If error is 401 or 403 and we haven't tried refreshing yet
         if (
             error.response &&
             (error.response.status === 401 || error.response.status === 403) &&
             !originalRequest._retry
         ) {
+            console.log('Authentication Error (401/403):', JSON.stringify(error.response.data, null, 2));
             originalRequest._retry = true;
 
             try {
@@ -122,7 +124,12 @@ api.interceptors.response.use(
         }
 
         // Handle global errors here
-        console.error('API Error:', error.response?.status, error.message);
+        if (error.response) {
+            console.error('API Error Status:', error.response.status);
+            console.error('API Error Data:', JSON.stringify(error.response.data, null, 2));
+        } else {
+            console.error('API Error:', error.message);
+        }
         return Promise.reject(error);
     }
 );
