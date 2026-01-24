@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Modal, Pressable, ActivityIndicator, Alert } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
@@ -33,6 +33,7 @@ const formatFuelType = (fuelType: string | null): string => {
 
 export default function CarManage() {
     const navigation = useNavigation<any>();
+    const insets = useSafeAreaInsets();
 
     // 상태
     const [vehicles, setVehicles] = useState<VehicleResponse[]>([]);
@@ -57,8 +58,8 @@ export default function CarManage() {
             const primary = list.find(v => v.isPrimary);
             if (primary) {
                 setSelectedVehicle(primary);
-            } else if (list.length > 0) {
-                setSelectedVehicle(list[0]);
+            } else {
+                setSelectedVehicle(null);
             }
         } catch (error) {
             console.error('[CarManage] Failed to load vehicles:', error);
@@ -145,7 +146,7 @@ export default function CarManage() {
     return (
         <View className="flex-1 bg-[#050505]">
             <StatusBar style="light" />
-            <SafeAreaView className="flex-1" edges={['top']}>
+            <SafeAreaView className="flex-1" edges={['top', 'bottom']}>
 
                 {/* Header */}
                 <View className="flex-row items-center px-4 py-3 border-b border-white/5 bg-[#050505]/80">
@@ -161,7 +162,11 @@ export default function CarManage() {
                     </TouchableOpacity>
                 </View>
 
-                <ScrollView className="flex-1 px-5 pt-6" contentContainerStyle={{ paddingBottom: 50 }}>
+                <ScrollView
+                    className="flex-1 px-5 pt-6"
+                    contentContainerStyle={{ paddingBottom: insets.bottom + 40 }}
+                    showsVerticalScrollIndicator={false}
+                >
 
                     {/* Main Car Card */}
                     {selectedVehicle ? (
@@ -404,51 +409,18 @@ export default function CarManage() {
                         className="w-full bg-[#1a1e23] border border-white/10 rounded-3xl overflow-hidden"
                         onPress={(e) => e.stopPropagation()}
                     >
-                        {/* 모달 헤더 */}
-                        <View className="px-6 py-5 border-b border-white/10 flex-row items-center justify-between">
-                            <Text className="text-lg font-bold text-white">차량 선택</Text>
+                        <View className="p-4">
                             <TouchableOpacity
-                                className="w-8 h-8 items-center justify-center rounded-full bg-white/5 active:bg-white/10"
-                                onPress={() => setSpecModalVisible(false)}
+                                className="flex-row items-center p-4 bg-white/5 rounded-2xl active:bg-white/10"
+                                onPress={() => {
+                                    setSpecModalVisible(false);
+                                    navigation.navigate('Spec');
+                                }}
                             >
-                                <MaterialIcons name="close" size={20} color="#94a3b8" />
+                                <MaterialIcons name="description" size={24} color="#3b82f6" style={{ marginRight: 12 }} />
+                                <Text className="text-white font-bold text-lg">상세 제원 보기</Text>
                             </TouchableOpacity>
                         </View>
-
-                        {/* 차량 목록 */}
-                        <ScrollView className="max-h-80">
-                            {vehicles.map((vehicle, index) => {
-                                const isLast = index === vehicles.length - 1;
-
-                                return (
-                                    <TouchableOpacity
-                                        key={vehicle.vehicleId}
-                                        className={`flex-row items-center gap-4 px-6 py-4 active:bg-white/5 ${!isLast ? 'border-b border-white/5' : ''
-                                            }`}
-                                        onPress={() => handleSelectSpecVehicle(vehicle)}
-                                    >
-                                        {/* 차량 아이콘 */}
-                                        <View className="w-12 h-12 items-center justify-center rounded-xl bg-white/5 border border-white/10">
-                                            <MaterialIcons
-                                                name="directions-car"
-                                                size={24}
-                                                color="#94a3b8"
-                                            />
-                                        </View>
-
-                                        {/* 차량 정보 */}
-                                        <View className="flex-1">
-                                            <Text className="text-base font-semibold mb-0.5 text-white">
-                                                {vehicle.manufacturer} {vehicle.modelName}
-                                            </Text>
-                                            <Text className="text-slate-500 text-xs">{vehicle.carNumber || '번호판 미등록'}</Text>
-                                        </View>
-
-                                        <MaterialIcons name="chevron-right" size={24} color="#475569" />
-                                    </TouchableOpacity>
-                                );
-                            })}
-                        </ScrollView>
                     </Pressable>
                 </Pressable>
             </Modal>
@@ -468,54 +440,21 @@ export default function CarManage() {
                         className="w-full bg-[#1a1e23] border border-white/10 rounded-3xl overflow-hidden"
                         onPress={(e) => e.stopPropagation()}
                     >
-                        {/* 모달 헤더 */}
-                        <View className="px-6 py-5 border-b border-white/10 flex-row items-center justify-between">
-                            <Text className="text-lg font-bold text-white">수정할 차량 선택</Text>
+                        <View className="p-4">
                             <TouchableOpacity
-                                className="w-8 h-8 items-center justify-center rounded-full bg-white/5 active:bg-white/10"
-                                onPress={() => setEditModalVisible(false)}
+                                className="flex-row items-center p-4 bg-white/5 rounded-2xl mb-2 active:bg-white/10"
+                                onPress={() => {
+                                    setEditModalVisible(false);
+                                    // 편집 기능 연결 예정
+                                }}
                             >
-                                <MaterialIcons name="close" size={20} color="#94a3b8" />
+                                <MaterialIcons name="edit" size={24} color="#3b82f6" style={{ marginRight: 12 }} />
+                                <Text className="text-white font-bold text-lg">수정하기</Text>
                             </TouchableOpacity>
                         </View>
-
-                        {/* 차량 목록 */}
-                        <ScrollView className="max-h-80">
-                            {vehicles.map((vehicle, index) => {
-                                const isLast = index === vehicles.length - 1;
-
-                                return (
-                                    <TouchableOpacity
-                                        key={vehicle.vehicleId}
-                                        className={`flex-row items-center gap-4 px-6 py-4 active:bg-white/5 ${!isLast ? 'border-b border-white/5' : ''
-                                            }`}
-                                        onPress={() => handleEditVehicle(vehicle)}
-                                    >
-                                        {/* 차량 아이콘 */}
-                                        <View className="w-12 h-12 items-center justify-center rounded-xl bg-white/5 border border-white/10">
-                                            <MaterialIcons
-                                                name="edit"
-                                                size={24}
-                                                color="#94a3b8"
-                                            />
-                                        </View>
-
-                                        {/* 차량 정보 */}
-                                        <View className="flex-1">
-                                            <Text className="text-base font-semibold mb-0.5 text-white">
-                                                {vehicle.manufacturer} {vehicle.modelName}
-                                            </Text>
-                                            <Text className="text-slate-500 text-xs">{vehicle.carNumber || '번호판 미등록'}</Text>
-                                        </View>
-
-                                        <MaterialIcons name="chevron-right" size={24} color="#475569" />
-                                    </TouchableOpacity>
-                                );
-                            })}
-                        </ScrollView>
                     </Pressable>
                 </Pressable>
             </Modal>
-        </View >
+        </View>
     );
 }

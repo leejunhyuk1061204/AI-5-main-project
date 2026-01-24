@@ -26,7 +26,7 @@ export default function MainPage() {
 
         try {
             const vehicles = await getVehicleList();
-            const primary = vehicles.find(v => v.isPrimary) || vehicles[0]; // 대표 차량 없으면 첫 번째 차량
+            const primary = vehicles.find(v => v.isPrimary); // 대표 차량이 있는 경우에만 표시
 
             if (primary) {
                 setVehicle(primary);
