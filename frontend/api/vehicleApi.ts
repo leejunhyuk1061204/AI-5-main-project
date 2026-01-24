@@ -117,7 +117,7 @@ export const updateVehicle = async (vehicleId: string, request: VehicleUpdateReq
 export const setPrimaryVehicle = async (vehicleId: string): Promise<void> => {
     try {
         console.log('[vehicleApi] Setting primary vehicle:', vehicleId);
-        await api.patch(`/api/v1/vehicles/${vehicleId}/primary`);
+        await api.patch('/api/v1/vehicles/primary', { vehicleId });
         console.log('[vehicleApi] Primary vehicle set successfully');
     } catch (error) {
         console.error('[vehicleApi] Failed to set primary vehicle:', error);
