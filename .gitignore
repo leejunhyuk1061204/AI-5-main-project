@@ -1,108 +1,44 @@
-# --- Java & Spring Boot ---
-.gradle/
+HELP.md
+.gradle
 build/
 !gradle/wrapper/gradle-wrapper.jar
-!**/src/main/resources/ant-static-assets/
-!**/src/test/resources/ant-static-assets/
-bin/
-out/
-.settings/
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+### STS ###
+.apt_generated
 .classpath
+.factorypath
 .project
+.settings
+.springBeans
+.sts4-cache
+bin/
+!**/src/main/**/bin/
+!**/src/test/**/bin/
+
+### IntelliJ IDEA ###
+.idea
+*.iws
 *.iml
 *.ipr
-*.iws
+out/
+!**/src/main/**/out/
+!**/src/test/**/out/
 
-# --- Python (FastAPI/AI) ---
-__pycache__/
-*.py[cod]
-*$py.class
-.venv/
-venv/
-ENV/
-env/
-ai_env/
-.env
-.pytest_cache/
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
 
-# --- IDE (IntelliJ, VSCode) ---
-.idea/
+### VS Code ###
 .vscode/
-*.swp
-*.swo
 
-# --- Docker ---
-.docker/
-logs/
-*.log
-
-# --- RAG Data (ZIP/DB는 제외, JSON은 커밋) ---
-data/postgres/
-data/manuals/zips/
-data/manuals/Sonata_2012/
-data/dtc/*.db
-*.zip
-data/sync_tracker.db
-data/logs/
-data/manuals/parsed/
-
-# --- OS ---
-.DS_Store
-Thumbs.db
-
-# --- Logs ---
-logs/
-*.log
-
-# --- Frontend (React Native/Expo) ---
-node_modules/
-.expo/
-dist/
-web-build/
-expo-env.d.ts
-
-# Native
-.kotlin/
-*.orig.*
-*.jks
-*.p8
-*.p12
-*.key
-*.mobileprovision
-
-# Metro
-.metro-health-check*
-
-# debug
-npm-debug.*
-yarn-debug.*
-yarn-error.*
-
-# local env files
-.env*.local
-
-# typescript
-*.tsbuildinfo
-
-# generated native folders
-FrontEnd/ios/
-FrontEnd/android/
-
-# AI-Agent
-GEMINI.md
-
-# Firebase (FCM)
-**/firebase-service-account.json
-
-# --- AI Large Files (모델, 데이터셋, 학습 결과) ---
-*.pt
-*.pth
-*.onnx
-*.safetensors
-*.pkl
-runs/
-ai/data/
-ai/weights/
-ai/runs/
-yolo*.pt
-
+### Security ###
+firebase-service-account.json
+backend/google-services.json
+frontend/google-services.json
+.env
+node_modules
