@@ -21,7 +21,7 @@ export default function SettingMain() {
 
     const SectionTitle = ({ title }: { title: string }) => (
         <View className="px-2 mb-3 mt-2 flex-row items-center justify-between">
-            <Text className="text-[13px] font-semibold text-gray-400">{title}</Text>
+            <Text className="text-[13px] font-semibold text-text-muted">{title}</Text>
         </View>
     );
 
@@ -36,7 +36,7 @@ export default function SettingMain() {
             </View>
             <View className="flex-1 justify-center">
                 <Text className="text-white text-base font-medium leading-tight mb-0.5">{title}</Text>
-                {subtitle && <Text className="text-gray-500 text-xs">{subtitle}</Text>}
+                {subtitle && <Text className="text-text-dim text-xs">{subtitle}</Text>}
             </View>
             <MaterialIcons name="chevron-right" size={24} color="#0d7ff2" />
         </TouchableOpacity>
@@ -51,7 +51,7 @@ export default function SettingMain() {
             {/* Account Settings Section */}
             <View className="mb-6">
                 <SectionTitle title="계정 설정" />
-                <View className="bg-[#ffffff08] border border-[#ffffff14] rounded-2xl overflow-hidden">
+                <View className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
                     <SettingsItem
                         icon="person"
                         title="내 프로필"
@@ -70,7 +70,7 @@ export default function SettingMain() {
             {/* Vehicle & Services Section */}
             <View className="mb-6">
                 <SectionTitle title="차량 및 서비스" />
-                <View className="bg-[#ffffff08] border border-[#ffffff14] rounded-2xl overflow-hidden">
+                <View className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
                     <SettingsItem
                         icon="directions-car"
                         title="내 차량 관리"
@@ -88,7 +88,7 @@ export default function SettingMain() {
 
             {/* Logout Button */}
             <TouchableOpacity
-                className="w-full py-4 bg-[#ffffff08] border border-red-400/10 rounded-2xl flex-row items-center justify-center gap-2 mt-2 active:bg-red-400/10 mb-10"
+                className="w-full py-4 bg-white/5 border border-error/10 rounded-2xl flex-row items-center justify-center gap-2 mt-2 active:bg-error/10 mb-10"
                 activeOpacity={0.7}
                 onPress={async () => {
                     try {
@@ -104,7 +104,7 @@ export default function SettingMain() {
                 }}
             >
                 <MaterialIcons name="logout" size={18} color="#ff6b6b" />
-                <Text className="text-[#ff6b6b] font-semibold text-sm">로그아웃</Text>
+                <Text className="text-error font-semibold text-sm">로그아웃</Text>
             </TouchableOpacity>
         </BaseScreen>
     );

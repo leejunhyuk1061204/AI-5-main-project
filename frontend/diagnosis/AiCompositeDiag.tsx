@@ -93,16 +93,16 @@ export default function AiCompositeDiag() {
 
                     {/* Selected Vehicle Info + Change Button */}
                     {selectedVehicleId && (
-                        <View className="mb-6 flex-row items-center justify-between px-4 py-3 bg-[#1e293b]/50 border border-white/10 rounded-2xl">
+                        <View className="mb-6 flex-row items-center justify-between px-4 py-3 bg-surface-dark/50 border border-white/10 rounded-2xl">
                             <View className="flex-row items-center gap-2">
                                 <MaterialIcons name="directions-car" size={18} color="#60a5fa" />
                                 <Text className="text-white text-[13px] font-bold">{selectedVehicleName}</Text>
                             </View>
                             <TouchableOpacity
                                 onPress={() => setVehicleSelectVisible(true)}
-                                className="bg-[#3b82f6]/20 px-3 py-1.5 rounded-lg border border-[#3b82f6]/30 active:bg-[#3b82f6]/30"
+                                className="bg-primary/20 px-3 py-1.5 rounded-lg border border-primary/30 active:bg-primary/30"
                             >
-                                <Text className="text-[#60a5fa] text-[11px] font-bold">차량 변경</Text>
+                                <Text className="text-primary-light text-[11px] font-bold">차량 변경</Text>
                             </TouchableOpacity>
                         </View>
                     )}
@@ -111,14 +111,14 @@ export default function AiCompositeDiag() {
                         <View key={msg.id} className={`flex-row items-start gap-3 max-w-[88%] ${idx > 0 ? 'mt-4' : 'mb-2'}`}>
                             {msg.type === 'ai' && (
                                 <View className="mt-1">
-                                    <View className="w-9 h-9 rounded-xl bg-[#1e293b] border border-white/20 items-center justify-center shadow-sm">
+                                    <View className="w-9 h-9 rounded-xl bg-surface-dark border border-white/20 items-center justify-center shadow-sm">
                                         <MaterialIcons name="analytics" size={20} color="#3d7eff" />
                                     </View>
                                 </View>
                             )}
                             <View className="gap-1.5 shrink">
-                                {msg.type === 'ai' && <Text className="text-slate-400 text-[11px] font-bold ml-1 tracking-tight">AI DIAGNOSTICS</Text>}
-                                <View className={`bg-[#1e293b] border border-white/10 rounded-2xl ${msg.type === 'ai' ? 'rounded-tl-none' : 'rounded-tr-none'} px-4 py-3.5 shadow-sm`}>
+                                {msg.type === 'ai' && <Text className="text-text-muted text-[11px] font-bold ml-1 tracking-tight">AI DIAGNOSTICS</Text>}
+                                <View className={`bg-surface-dark border border-white/10 rounded-2xl ${msg.type === 'ai' ? 'rounded-tl-none' : 'rounded-tr-none'} px-4 py-3.5 shadow-sm`}>
                                     <Text className="text-[15px] text-white/95 leading-relaxed">{msg.text}</Text>
                                 </View>
                             </View>
@@ -128,9 +128,9 @@ export default function AiCompositeDiag() {
                     <View className="flex-row items-start gap-3 max-w-[88%] mt-4">
                         <View className="w-9 h-9" />
                         <View className="gap-1.5 shrink -mt-2">
-                            <View className="bg-[#1e293b] border border-white/10 border-l-2 border-l-accent-blue rounded-2xl rounded-tl-none px-4 py-3.5 shadow-sm">
+                            <View className="bg-surface-dark border border-white/10 border-l-2 border-l-primary rounded-2xl rounded-tl-none px-4 py-3.5 shadow-sm">
                                 <Text className="text-[15px] text-white/95 font-medium leading-relaxed">
-                                    정확한 진단을 위해 몇 가지 데이터가 필요합니다. 먼저 <Text className="text-[#60a5fa] font-bold">엔진 시동음</Text>을 녹음할까요?
+                                    정확한 진단을 위해 몇 가지 데이터가 필요합니다. 먼저 <Text className="text-primary-light font-bold">엔진 시동음</Text>을 녹음할까요?
                                 </Text>
                             </View>
                         </View>
@@ -141,31 +141,31 @@ export default function AiCompositeDiag() {
                 <View className="px-5 pb-4">
                     {/* Action Buttons */}
                     <View className="flex-row justify-between pb-5 gap-3">
-                        <TouchableOpacity onPress={() => navigation.navigate('EngineSoundDiag', { from: 'chatbot' })} className="flex-1 h-[90px] p-3 rounded-2xl bg-[#1e293b] border border-white/10 justify-between active:scale-95 overflow-hidden relative">
-                            <View className="w-8 h-8 rounded-lg bg-[#0d7ff2]/20 items-center justify-center mb-1">
+                        <TouchableOpacity onPress={() => navigation.navigate('EngineSoundDiag', { from: 'chatbot' })} className="flex-1 h-[90px] p-3 rounded-2xl bg-surface-dark border border-white/10 justify-between active:scale-95 overflow-hidden relative">
+                            <View className="w-8 h-8 rounded-lg bg-primary/20 items-center justify-center mb-1">
                                 <MaterialIcons name="mic" size={20} color="#60a5fa" />
                             </View>
                             <Text className="text-[12px] font-bold text-white/95 leading-tight">녹음 시작</Text>
-                            <View className="absolute bottom-0 left-0 h-[3px] w-full bg-[#3b82f6]" />
+                            <View className="absolute bottom-0 left-0 h-[3px] w-full bg-primary" />
                         </TouchableOpacity>
-                        <TouchableOpacity onPress={() => navigation.navigate('Filming', { from: 'chatbot' })} className="flex-1 h-[90px] p-3 rounded-2xl bg-[#1e293b] border border-white/10 justify-between active:scale-95 overflow-hidden relative">
-                            <View className="w-8 h-8 rounded-lg bg-[#0d7ff2]/20 items-center justify-center mb-1">
+                        <TouchableOpacity onPress={() => navigation.navigate('Filming', { from: 'chatbot' })} className="flex-1 h-[90px] p-3 rounded-2xl bg-surface-dark border border-white/10 justify-between active:scale-95 overflow-hidden relative">
+                            <View className="w-8 h-8 rounded-lg bg-primary/20 items-center justify-center mb-1">
                                 <MaterialIcons name="camera-alt" size={20} color="#60a5fa" />
                             </View>
                             <Text className="text-[12px] font-bold text-white/95 leading-tight">사진 촬영</Text>
-                            <View className="absolute bottom-0 left-0 h-[3px] w-full bg-[#3b82f6]" />
+                            <View className="absolute bottom-0 left-0 h-[3px] w-full bg-primary" />
                         </TouchableOpacity>
-                        <TouchableOpacity onPress={() => navigation.navigate('ActiveReg')} className="flex-1 h-[90px] p-3 rounded-2xl bg-[#1e293b] border border-white/10 justify-between active:scale-95 overflow-hidden relative">
-                            <View className="w-8 h-8 rounded-lg bg-[#0d7ff2]/20 items-center justify-center mb-1">
+                        <TouchableOpacity onPress={() => navigation.navigate('ActiveReg')} className="flex-1 h-[90px] p-3 rounded-2xl bg-surface-dark border border-white/10 justify-between active:scale-95 overflow-hidden relative">
+                            <View className="w-8 h-8 rounded-lg bg-primary/20 items-center justify-center mb-1">
                                 <MaterialCommunityIcons name="car-connected" size={20} color="#60a5fa" />
                             </View>
                             <Text className="text-[12px] font-bold text-white/95 leading-tight">OBD 스캔</Text>
-                            <View className="absolute bottom-0 left-0 h-[3px] w-full bg-[#3b82f6]" />
+                            <View className="absolute bottom-0 left-0 h-[3px] w-full bg-primary" />
                         </TouchableOpacity>
                     </View>
 
                     {/* Input Area */}
-                    <View className="flex-row items-center gap-2 bg-[#1e293b] border border-white/20 rounded-[24px] p-1.5 pl-4 shadow-xl">
+                    <View className="flex-row items-center gap-2 bg-surface-dark border border-white/20 rounded-[24px] p-1.5 pl-4 shadow-xl">
                         <TouchableOpacity className="w-8 h-8 items-center justify-center rounded-full active:bg-white/10">
                             <MaterialIcons name="add" size={24} color="#94a3b8" />
                         </TouchableOpacity>
@@ -173,7 +173,7 @@ export default function AiCompositeDiag() {
                         <TouchableOpacity className="w-8 h-8 items-center justify-center rounded-full active:bg-white/10 mr-1">
                             <MaterialIcons name="mic" size={22} color="#94a3b8" />
                         </TouchableOpacity>
-                        <TouchableOpacity className="w-10 h-10 bg-[#3b82f6] rounded-full items-center justify-center shadow-lg active:scale-95">
+                        <TouchableOpacity className="w-10 h-10 bg-primary rounded-full items-center justify-center shadow-lg active:scale-95">
                             <MaterialIcons name="arrow-upward" size={20} color="white" />
                         </TouchableOpacity>
                     </View>
