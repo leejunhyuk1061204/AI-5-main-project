@@ -1,15 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert, ActivityIndicator } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { View, Text, TextInput, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { StatusBar } from 'expo-status-bar';
 import { getVehicleDetail, updateVehicle, deleteVehicle, VehicleResponse } from '../api/vehicleApi';
+import BaseScreen from '../components/layout/BaseScreen';
 
 export default function CarEdit() {
     const navigation = useNavigation<any>();
     const route = useRoute<any>();
-    const insets = useSafeAreaInsets();
     const { vehicleId } = route.params || {};
 
     const [loading, setLoading] = useState(true);
@@ -90,6 +88,33 @@ export default function CarEdit() {
         );
     };
 
+    const HeaderCustom = (
+        <View className="flex-row items-center justify-between px-4 py-3 pb-4">
+            <TouchableOpacity
+                className="w-10 h-10 items-center justify-center rounded-full hover:bg-white/10"
+                onPress={() => navigation.goBack()}
+            >
+                <MaterialIcons name="arrow-back-ios-new" size={24} color="white" />
+            </TouchableOpacity>
+            <Text className="text-white text-lg font-bold tracking-tight text-center flex-1 pr-10">
+                차량 정보 수정
+            </Text>
+        </View>
+    );
+
+    const FooterActions = (
+        <View className="p-5 bg-background-dark">
+            <TouchableOpacity
+                onPress={handleUpdate}
+                className="w-full h-14 bg-primary rounded-xl shadow-lg shadow-blue-500/30 flex-row items-center justify-center gap-2 active:opacity-90"
+                activeOpacity={0.8}
+            >
+                <Text className="text-white font-bold text-lg">저장하기</Text>
+                <MaterialIcons name="check" size={20} color="white" />
+            </TouchableOpacity>
+        </View>
+    );
+
     if (loading) {
         return (
             <View className="flex-1 bg-[#0B0C10] items-center justify-center">
@@ -99,125 +124,86 @@ export default function CarEdit() {
     }
 
     return (
-        <View className="flex-1 bg-[#0B0C10]">
-            <StatusBar style="light" />
+        <BaseScreen
+            header={HeaderCustom}
+            footer={FooterActions}
+            scrollable={true}
+            padding={false}
+            bgColor="#0B0C10"
+        >
+            <View className="px-5 mt-6 pb-12">
+                {/* Read-Only Info Card */}
+                <View className="bg-[#15181E] border border-white/5 rounded-2xl p-5 mb-8">
+                    <View className="flex-row items-center gap-3 mb-4">
+                        <View className="w-10 h-10 rounded-full bg-primary/20 items-center justify-center">
+                            <MaterialIcons name="directions-car" size={24} color="#0d7ff2" />
+                        </View>
+                        <View>
+                            <Text className="text-white font-bold text-lg">
+                                {vehicle?.manufacturer} {vehicle?.modelName}
+                            </Text>
+                            <Text className="text-slate-400 text-sm">
+                                {vehicle?.modelYear}년식 · {vehicle?.fuelType}
+                            </Text>
+                        </View>
+                    </View>
+                    <View className="h-[1px] bg-white/5 mb-4" />
+                    <View className="flex-row justify-between">
+                        <View>
+                            <Text className="text-xs text-slate-500 mb-1">총 주행거리</Text>
+                            <Text className="text-slate-300 font-medium">{(vehicle?.totalMileage || 0).toLocaleString()} km</Text>
+                        </View>
+                    </View>
+                </View>
 
-            {/* Header */}
-            <View
-                className="bg-[#0B0C10]/80 backdrop-blur-md z-50 sticky top-0"
-                style={{ paddingTop: insets.top }}
-            >
-                <View className="flex-row items-center justify-between px-4 py-3 pb-4">
+                {/* Nickname Input */}
+                <View className="mb-6">
+                    <Text className="text-sm font-medium text-slate-400 mb-2 pl-1">차량 별칭 (Nickname)</Text>
+                    <TextInput
+                        value={nickname}
+                        onChangeText={setNickname}
+                        placeholder="차량 별칭을 입력하세요"
+                        placeholderTextColor="#94a3b8"
+                        className="w-full h-14 bg-[#15181E] border border-border-dark rounded-xl px-4 text-base text-white focus:border-primary"
+                    />
+                </View>
+
+                {/* Car Number Input */}
+                <View className="mb-6">
+                    <Text className="text-sm font-medium text-slate-400 mb-2 pl-1">차량 번호 (License Plate)</Text>
+                    <TextInput
+                        value={carNumber}
+                        onChangeText={setCarNumber}
+                        placeholder="차량 번호를 입력하세요 (예: 12가 3456)"
+                        placeholderTextColor="#94a3b8"
+                        className="w-full h-14 bg-[#15181E] border border-border-dark rounded-xl px-4 text-base text-white focus:border-primary"
+                    />
+                </View>
+
+                {/* VIN Input */}
+                <View className="mb-8">
+                    <Text className="text-sm font-medium text-slate-400 mb-2 pl-1">차대번호 (VIN)</Text>
+                    <TextInput
+                        value={vin}
+                        onChangeText={setVin}
+                        placeholder="차대번호를 입력하세요"
+                        placeholderTextColor="#94a3b8"
+                        autoCapitalize="characters"
+                        className="w-full h-14 bg-[#15181E] border border-border-dark rounded-xl px-4 text-base text-white focus:border-primary"
+                    />
+                </View>
+
+                {/* Delete Button Area */}
+                <View className="pt-4 border-t border-white/5">
                     <TouchableOpacity
-                        className="w-10 h-10 items-center justify-center rounded-full hover:bg-white/10"
-                        onPress={() => navigation.goBack()}
+                        onPress={handleDelete}
+                        className="flex-row items-center justify-center gap-2 p-4"
                     >
-                        <MaterialIcons name="arrow-back-ios-new" size={24} color="white" />
+                        <MaterialIcons name="delete-outline" size={20} color="#ef4444" />
+                        <Text className="text-red-500 font-medium">차량 삭제하기</Text>
                     </TouchableOpacity>
-                    <Text className="text-white text-lg font-bold tracking-tight text-center flex-1 pr-10">
-                        차량 정보 수정
-                    </Text>
                 </View>
             </View>
-
-            {/* Main Content */}
-            <ScrollView
-                className="flex-1 px-5"
-                contentContainerStyle={{ paddingBottom: 120 }}
-                showsVerticalScrollIndicator={false}
-            >
-                <View className="space-y-8 mt-6">
-
-                    {/* Read-Only Info Card */}
-                    <View className="bg-[#15181E] border border-white/5 rounded-2xl p-5 mb-2">
-                        <View className="flex-row items-center gap-3 mb-4">
-                            <View className="w-10 h-10 rounded-full bg-primary/20 items-center justify-center">
-                                <MaterialIcons name="directions-car" size={24} color="#0d7ff2" />
-                            </View>
-                            <View>
-                                <Text className="text-white font-bold text-lg">
-                                    {vehicle?.manufacturer} {vehicle?.modelName}
-                                </Text>
-                                <Text className="text-slate-400 text-sm">
-                                    {vehicle?.modelYear}년식 · {vehicle?.fuelType}
-                                </Text>
-                            </View>
-                        </View>
-                        <View className="h-[1px] bg-white/5 mb-4" />
-                        <View className="flex-row justify-between">
-                            <View>
-                                <Text className="text-xs text-slate-500 mb-1">총 주행거리</Text>
-                                <Text className="text-slate-300 font-medium">{(vehicle?.totalMileage || 0).toLocaleString()} km</Text>
-                            </View>
-                        </View>
-                    </View>
-
-                    {/* Nickname Input */}
-                    <View>
-                        <Text className="text-sm font-medium text-slate-400 mb-2 pl-1">차량 별칭 (Nickname)</Text>
-                        <TextInput
-                            value={nickname}
-                            onChangeText={setNickname}
-                            placeholder="차량 별칭을 입력하세요"
-                            placeholderTextColor="#94a3b8"
-                            className="w-full h-14 bg-[#15181E] border border-border-dark rounded-xl px-4 text-base text-white focus:border-primary"
-                        />
-                    </View>
-
-                    {/* Car Number Input */}
-                    <View>
-                        <Text className="text-sm font-medium text-slate-400 mb-2 pl-1">차량 번호 (License Plate)</Text>
-                        <TextInput
-                            value={carNumber}
-                            onChangeText={setCarNumber}
-                            placeholder="차량 번호를 입력하세요 (예: 12가 3456)"
-                            placeholderTextColor="#94a3b8"
-                            className="w-full h-14 bg-[#15181E] border border-border-dark rounded-xl px-4 text-base text-white focus:border-primary"
-                        />
-                    </View>
-
-                    {/* VIN Input */}
-                    <View>
-                        <Text className="text-sm font-medium text-slate-400 mb-2 pl-1">차대번호 (VIN)</Text>
-                        <TextInput
-                            value={vin}
-                            onChangeText={setVin}
-                            placeholder="차대번호를 입력하세요"
-                            placeholderTextColor="#94a3b8"
-                            autoCapitalize="characters"
-                            className="w-full h-14 bg-[#15181E] border border-border-dark rounded-xl px-4 text-base text-white focus:border-primary"
-                        />
-                    </View>
-
-                    {/* Delete Button Area */}
-                    <View className="pt-4 border-t border-white/5">
-                        <TouchableOpacity
-                            onPress={handleDelete}
-                            className="flex-row items-center justify-center gap-2 p-4"
-                        >
-                            <MaterialIcons name="delete-outline" size={20} color="#ef4444" />
-                            <Text className="text-red-500 font-medium">차량 삭제하기</Text>
-                        </TouchableOpacity>
-                    </View>
-
-                </View>
-            </ScrollView>
-
-            {/* Bottom Action Bar */}
-            <View
-                className="absolute bottom-0 left-0 right-0 p-5 bg-gradient-to-t from-[#0B0C10] via-[#0B0C10] to-transparent"
-                style={{ paddingBottom: insets.bottom + 10 }}
-            >
-                <TouchableOpacity
-                    onPress={handleUpdate}
-                    className="w-full h-14 bg-primary rounded-xl shadow-lg shadow-blue-500/30 flex-row items-center justify-center gap-2 active:opacity-90"
-                    activeOpacity={0.8}
-                >
-                    <Text className="text-white font-bold text-lg">저장하기</Text>
-                    <MaterialIcons name="check" size={20} color="white" />
-                </TouchableOpacity>
-            </View>
-
-        </View>
+        </BaseScreen>
     );
 }

@@ -58,6 +58,18 @@ api.interceptors.request.use(
 );
 
 // Response interceptor
+let isRefreshing = false;
+let refreshSubscribers: ((token: string) => void)[] = [];
+
+const subscribeTokenRefresh = (cb: (token: string) => void) => {
+    refreshSubscribers.push(cb);
+};
+
+const onRefreshed = (token: string) => {
+    refreshSubscribers.forEach((cb) => cb(token));
+    refreshSubscribers = [];
+};
+
 api.interceptors.response.use(
     (response) => {
         return response;
@@ -65,15 +77,25 @@ api.interceptors.response.use(
     async (error) => {
         const originalRequest = error.config;
 
-        // If error is 401 or 403 and we haven't tried refreshing yet
-        // If error is 401 or 403 and we haven't tried refreshing yet
         if (
             error.response &&
             (error.response.status === 401 || error.response.status === 403) &&
             !originalRequest._retry
         ) {
             console.log('Authentication Error (401/403):', JSON.stringify(error.response.data, null, 2));
+
+            if (isRefreshing) {
+                console.log('Refresh already in progress, queuing request...');
+                return new Promise((resolve) => {
+                    subscribeTokenRefresh((token) => {
+                        originalRequest.headers.Authorization = `Bearer ${token}`;
+                        resolve(api(originalRequest));
+                    });
+                });
+            }
+
             originalRequest._retry = true;
+            isRefreshing = true;
 
             try {
                 const refreshToken = await AsyncStorage.getItem('refreshToken');
@@ -83,8 +105,6 @@ api.interceptors.response.use(
 
                 console.log('Refreshing access token...');
 
-                // Use fetch to avoid circular dependency loop with axios interceptors
-                // Note: BASE_URL is defined above
                 const response = await fetch(`${BASE_URL}/api/v1/auth/refresh`, {
                     method: 'POST',
                     headers: {
@@ -109,21 +129,21 @@ api.interceptors.response.use(
                     }
 
                     console.log('Token refreshed successfully');
+                    isRefreshing = false;
+                    onRefreshed(newAccessToken);
 
-                    // Update header and retry original request
                     originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
                     return api(originalRequest);
                 }
             } catch (refreshError) {
                 console.error('Token refresh failed:', refreshError);
-                // Clear tokens to force logout state
+                isRefreshing = false;
+                refreshSubscribers = [];
                 await AsyncStorage.multiRemove(['accessToken', 'refreshToken']);
-                // Optionally navigate to login or let UI handle 401/403
                 return Promise.reject(error);
             }
         }
 
-        // Handle global errors here
         if (error.response) {
             console.error('API Error Status:', error.response.status);
             console.error('API Error Data:', JSON.stringify(error.response.data, null, 2));

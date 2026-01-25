@@ -3,10 +3,14 @@ import { View, Text, TouchableOpacity } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useUIStore } from '../store/useUIStore';
 
 export default function BottomNav() {
     const navigation = useNavigation<any>();
     const route = useRoute();
+    const bottomNavVisible = useUIStore(state => state.bottomNavVisible);
+
+    if (!bottomNavVisible) return null;
     const insets = useSafeAreaInsets();
     const isActive = (routeName: string) => route.name === routeName;
 
@@ -24,7 +28,10 @@ export default function BottomNav() {
     return (
         <View className="absolute left-6 right-6 z-50" style={{ bottom: (insets.bottom || 10) - 2 }}>
             <View className="rounded-2xl h-16 bg-[#161d27]/95 backdrop-blur-xl border border-[#ffffff14] flex-row items-center justify-around shadow-2xl px-2">
-                <NavItem name="MainPage" label="홈" icon="home" target="MainPage" /><NavItem name="AiCompositeDiag" label="진단" icon="car-crash" target="AiCompositeDiag" /><NavItem name="HistoryMain" label="기록" icon="history" target="HistoryMain" /><NavItem name="SettingMain" label="설정" icon="settings" target="SettingMain" />
+                <NavItem name="MainPage" label="홈" icon="home" target="MainPage" />
+                <NavItem name="AiProfessionalDiag" label="진단" icon="car-crash" target="AiProfessionalDiag" />
+                <NavItem name="HistoryMain" label="기록" icon="history" target="HistoryMain" />
+                <NavItem name="SettingMain" label="설정" icon="settings" target="SettingMain" />
             </View>
         </View>
     );

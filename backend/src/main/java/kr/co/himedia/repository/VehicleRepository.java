@@ -8,7 +8,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface VehicleRepository extends JpaRepository<Vehicle, UUID> {
-    List<Vehicle> findByUserIdAndDeletedAtIsNull(UUID userId);
+    List<Vehicle> findByUserIdAndDeletedAtIsNullOrderByCreatedAtAsc(UUID userId);
 
     Optional<Vehicle> findByVehicleIdAndDeletedAtIsNull(UUID vehicleId);
 
