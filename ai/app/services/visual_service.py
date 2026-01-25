@@ -2,30 +2,32 @@
 """
 통합 시각 분석 서비스 (Visual Orchestrator)
 
-[역할]
-1. 통합 진입점: 클라이언트의 모든 시각 분석 요청(이미지 URL)을 받아 처리하는 최상위 서비스입니다.
-2. 지능형 라우팅: Router 서비스를 통해 장면을 분류하고, 각 도메인 전용 파이프라인(엔진, 타이어 등)으로 작업을 위임합니다.
-3. 보안 및 전처리: SSRF 공격 방지를 위해 URL을 검증하고, 이미지를 안전하게 로드하여 중복 다운로드를 방지합니다.
+[파일 설명]
+이 파일은 시각 분석 API의 진입점입니다.
+Router로 장면을 분류(ENGINE/DASHBOARD/EXTERIOR/TIRE)하고,
+각 도메인 전용 파이프라인으로 분석을 위임합니다.
 
-[주요 기능]
-- 스마트 종합 진단 (get_smart_visual_diagnosis)
-- 안전한 이미지 로딩 및 전처리 (_safe_load_image)
-- 장면별 분석 파이프라인 연결 (Engine, Dashboard, Exterior, Tire)
+[API 응답 형식 - 모든 장면 공통]
+{
+  "status": "NORMAL | WARNING | CRITICAL | ERROR",
+  "analysis_type": "SCENE_ENGINE | SCENE_DASHBOARD | SCENE_EXTERIOR | SCENE_TIRE",
+  "category": "ENGINE_ROOM | DASHBOARD | EXTERIOR | TIRE",
+  "data": { ... 장면별 상세 데이터 ... }
+}
 """
-from typing import Dict, Any, Optional
-from ai.app.schemas.visual_schema import VisualResponse
-from ai.app.services.router_service import RouterService, SceneType, get_router_service
-from ai.app.services.llm_service import analyze_general_image
-from ai.app.services.dashboard_service import analyze_dashboard_image
-from ai.app.services.exterior_service import analyze_exterior_image
-from ai.app.services.tire_service import analyze_tire_image
-
+import os
+from typing import Dict, Any, Optional, Tuple
 import httpx
 import io
 import re
 from PIL import Image
 from urllib.parse import urlparse
-from typing import Tuple
+
+from ai.app.services.router_service import RouterService, SceneType, get_router_service
+from ai.app.services.llm_service import analyze_general_image
+from ai.app.services.dashboard_service import analyze_dashboard_image
+from ai.app.services.exterior_service import analyze_exterior_image
+from ai.app.services.tire_service import analyze_tire_image
 
 # =============================================================================
 # SSRF 방지: 허용된 도메인 (Allow-list)
@@ -150,11 +152,9 @@ async def get_smart_visual_diagnosis(
             engine_yolo = models.get("engine_yolo")
             
             try:
-
                 result_data = await pipeline.analyze(s3_url, image=image, image_bytes=image_bytes, yolo_model=engine_yolo)
-                if isinstance(result_data, dict):
-                    result_data["scene_type"] = scene_type
-                return {"type": scene_type.value, "content": result_data}
+                # API 명세서 형식으로 바로 반환 (content 래핑 제거)
+                return result_data
             finally:
                 await pipeline.close()
         
@@ -162,26 +162,23 @@ async def get_smart_visual_diagnosis(
             # DASHBOARD: YOLO(10종) → LLM
             dashboard_yolo = models.get("dashboard_yolo")
             result_data = await analyze_dashboard_image(image, s3_url, dashboard_yolo)
-            if hasattr(result_data, "scene_type"):
-                result_data.scene_type = scene_type
-            return {"type": scene_type.value, "content": result_data}
+            # API 명세서 형식으로 바로 반환
+            return result_data
         
         elif scene_type == SceneType.SCENE_EXTERIOR:
             # EXTERIOR: CarDD + CarParts → IoU → LLM
             cardd_yolo = models.get("cardd_yolo")
             carparts_yolo = models.get("carparts_yolo")
             result_data = await analyze_exterior_image(image, s3_url, cardd_yolo, carparts_yolo)
-            if hasattr(result_data, "scene_type"):
-                result_data.scene_type = scene_type
-            return {"type": scene_type.value, "content": result_data}
+            # API 명세서 형식으로 바로 반환
+            return result_data
         
         elif scene_type == SceneType.SCENE_TIRE:
             # TIRE: YOLO → LLM
             tire_yolo = models.get("tire_yolo")
             result_data = await analyze_tire_image(image, s3_url, tire_yolo)
-            if hasattr(result_data, "scene_type"):
-                result_data.scene_type = scene_type
-            return {"type": scene_type.value, "content": result_data}
+            # API 명세서 형식으로 바로 반환
+            return result_data
         
         else:
             # Unknown scene → LLM Fallback
@@ -195,8 +192,15 @@ async def get_smart_visual_diagnosis(
         return {"type": "LLM_FALLBACK", "content": llm_result}
     
     finally:
-        # Active Learning: 분석 결과 기록
-        await _record_for_active_learning(s3_url, scene_type, confidence)
+        # =================================================================
+        # [Active Learning] 모델 재학습을 위한 데이터 수집
+        # =================================================================
+        # 왜 저신뢰 데이터만 수집하는가?
+        # → 고신뢰(≥0.9): 모델이 이미 잘 맞추니까 재학습 효과 없음
+        # → 저신뢰(<0.9): 모델이 헷갈려하는 데이터 → 이걸 학습해야 실력이 늘음
+        # =================================================================
+        if confidence < 0.9:
+            await _record_for_active_learning(s3_url, scene_type, confidence)
 
 
 async def _record_for_active_learning(
@@ -205,57 +209,122 @@ async def _record_for_active_learning(
     confidence: float
 ):
     """
-    Active Learning용 데이터 기록
-    Confidence < 0.9 (Fast Path 통과 못함)일 경우 LLM 정답 JSON 생성 및 S3 저장
+    [Active Learning] 저신뢰 데이터의 정답 라벨을 LLM으로 생성하여 S3에 저장
+    
+    ┌─────────────────────────────────────────────────────────────┐
+    │ Active Learning이란?                                        │
+    │ - 모델이 틀리거나 불확실한 데이터를 수집                      │
+    │ - LLM(GPT)이 정답(Oracle)을 생성                             │
+    │ - 이 정답으로 모델을 재학습시켜 성능 향상                     │
+    └─────────────────────────────────────────────────────────────┘
+    
+    [저장 조건] - 두 가지 모두 충족해야 저장
+    1. 신뢰도 < 0.9 (모델이 불확실한 데이터)
+    2. 품질 통과 (차량 관련 이미지, 분석 가능한 상태)
+    
+    [배제 조건] - 재학습해도 도움 안 되는 데이터
+    - status == "IRRELEVANT": 차량 관련 없는 이미지 (고양이 사진 등)
+    - status == "ERROR": 분석 불가 (너무 어둡거나 흐림)
+    - labels가 비어있음: LLM도 객체를 못 찾음 (의미 없는 이미지)
+    
+    [S3 저장 경로]
+    - dataset/{domain}/llm_confirmed/{file_id}.json
+    - 예: dataset/engine/llm_confirmed/abc123.json
     """
     try:
+        # 필요한 모듈 임포트 (함수 내부에서 하여 순환 참조 방지)
         from ai.app.services.manifest_service import add_visual_entry
         from ai.app.services.llm_service import generate_training_labels
         import boto3
         import json
 
-        label_key = None
+        # 장면 타입 → 도메인 이름 변환
+        # 예: SceneType.SCENE_ENGINE → "engine"
+        domain_map = {
+            SceneType.SCENE_ENGINE: "engine",
+            SceneType.SCENE_DASHBOARD: "dashboard",
+            SceneType.SCENE_TIRE: "tire",
+            SceneType.SCENE_EXTERIOR: "exterior"
+        }
+        domain = domain_map.get(scene_type, "engine")
         
-        # 신뢰도가 0.9 미만이면 LLM이 정답(Oracle)을 생성하여 S3에 저장
-        if confidence < 0.9:
-            print(f"[Active Learning] 저신뢰 데이터 감지 ({confidence:.2f} < 0.9). LLM 라벨링 시작...")
-            domain_map = {
-                SceneType.SCENE_ENGINE: "engine",
-                SceneType.SCENE_DASHBOARD: "dashboard",
-                SceneType.SCENE_TIRE: "tire",
-                SceneType.SCENE_EXTERIOR: "exterior"
-            }
-            domain = domain_map.get(scene_type, "engine")
-            
-            # LLM 정답 생성 (Oracle)
-            oracle_labels = await generate_training_labels(s3_url, domain)
-            
-            if oracle_labels.get("labels"):
-                # S3에 JSON 저장
-                s3 = boto3.client('s3')
-                bucket = os.getenv("S3_BUCKET_NAME", "car-sentry-data")
-                file_id = os.path.basename(s3_url).split('.')[0]
-                label_key = f"dataset/{domain}/llm_confirmed/{file_id}.json"
-                
-                s3.put_object(
-                    Bucket=bucket,
-                    Key=label_key,
-                    Body=json.dumps(oracle_labels, ensure_ascii=False, indent=2),
-                    ContentType='application/json'
-                )
-                print(f"[Active Learning] 고품질 정답지 저장 완료: {label_key}")
-
-        # Manifest 기록 (original_url은 그대로, label_key는 LLM이 만든 JSON 경로)
+        print(f"[Active Learning] 저신뢰 데이터 감지 ({confidence:.2f} < 0.9). LLM 라벨링 시작...")
+        
+        # =================================================================
+        # Step 1: LLM에게 정답 라벨 생성 요청 (Oracle)
+        # =================================================================
+        # LLM(GPT-4o)이 이미지를 보고 객체의 위치와 종류를 알려줌
+        # 반환값 예시:
+        # {
+        #   "labels": [{"class": "Battery", "bbox": [0.5, 0.3, 0.1, 0.1]}],
+        #   "status": "NORMAL"
+        # }
+        oracle_labels = await generate_training_labels(s3_url, domain)
+        
+        # =================================================================
+        # Step 2: 품질 필터링 - 재학습 가치 없는 데이터 배제
+        # =================================================================
+        # LLM이 반환한 상태값으로 품질 판단
+        status = oracle_labels.get("status", "")
+        
+        # [배제 1] 차량 관련 없는 이미지
+        # 예: 음식 사진, 풍경 사진 등 → 차량 모델 학습에 쓸모없음
+        if status == "IRRELEVANT":
+            print(f"[Active Learning] 배제: 차량 관련 없는 이미지")
+            return  # 저장하지 않고 종료
+        
+        # [배제 2] 분석 불가 상태
+        # 예: 너무 어둡거나, 흐릿하거나, 일부만 보이는 경우
+        if status == "ERROR":
+            print(f"[Active Learning] 배제: 분석 불가 상태")
+            return  # 저장하지 않고 종료
+        
+        # [배제 3] LLM도 객체를 못 찾은 경우
+        # 예: 빈 배경만 있는 이미지 → 라벨이 없으면 학습 불가
+        if not oracle_labels.get("labels"):
+            print(f"[Active Learning] 배제: 라벨 없음 (객체 미감지)")
+            return  # 저장하지 않고 종료
+        
+        # =================================================================
+        # Step 3: 품질 통과 → S3에 라벨 JSON 저장
+        # =================================================================
+        # AWS S3 클라이언트 생성 (환경변수에서 자격증명 자동 로드)
+        s3 = boto3.client('s3')
+        
+        # 버킷 이름: 환경변수에 없으면 기본값 사용
+        bucket = os.getenv("S3_BUCKET_NAME", "car-sentry-data")
+        
+        # 파일 ID 추출: "abc123.jpg" → "abc123"
+        file_id = os.path.basename(s3_url).split('.')[0]
+        
+        # 저장 경로: dataset/llm_confirmed/visual/{domain}/{file_id}.json
+        label_key = f"dataset/llm_confirmed/visual/{domain}/{file_id}.json"
+        
+        # S3에 JSON 파일 업로드
+        s3.put_object(
+            Bucket=bucket,
+            Key=label_key,
+            Body=json.dumps(oracle_labels, ensure_ascii=False, indent=2),
+            ContentType='application/json'
+        )
+        print(f"[Active Learning] 고품질 정답지 저장 완료: {label_key}")
+        
+        # =================================================================
+        # Step 4: Manifest에 기록 (데이터 목록 관리용)
+        # =================================================================
+        # Manifest = 어떤 데이터가 수집되었는지 목록을 관리하는 JSON 파일
+        # 나중에 재학습 시 이 목록을 보고 데이터를 불러옴
         add_visual_entry(
-            original_url=s3_url,
-            category=scene_type.value,
-            label_key=label_key,
-            status="ANALYZED" if label_key else "HIGH_CONFIDENCE",
+            original_url=s3_url,       # 원본 이미지 S3 위치
+            category=scene_type.value, # ENGINE, DASHBOARD 등
+            label_key=label_key,       # 라벨 JSON S3 위치
+            status=status,             # NORMAL, WARNING 등
             analysis_type=scene_type.value,
             detections=None,
-            confidence=confidence
+            confidence=confidence      # 원래 모델의 신뢰도
         )
         print(f"[Active Learning] Manifest 기록 완료: {scene_type.value} ({confidence:.2f})")
         
     except Exception as e:
+        # Active Learning 실패해도 메인 분석에는 영향 없음
         print(f"[Active Learning] 기록 실패 (무시): {e}")
