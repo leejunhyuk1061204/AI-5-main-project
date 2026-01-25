@@ -1,6 +1,6 @@
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, Platform, KeyboardAvoidingView, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, Platform, KeyboardAvoidingView } from 'react-native';
 
 let login: () => Promise<any>;
 if (Platform.OS !== 'web') {
@@ -13,12 +13,13 @@ import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
-import { authService } from '../services/auth';
+import { useUserStore } from '../store/useUserStore';
+import { useAlertStore } from '../store/useAlertStore';
 
 export default function Login() {
     const navigation = useNavigation<any>();
     const route = useRoute<any>();
+    const { loginAction, socialLoginAction } = useUserStore();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
@@ -35,42 +36,28 @@ export default function Login() {
             await GoogleSignin.hasPlayServices();
             const signInResult = await GoogleSignin.signIn();
 
-            // idToken이 있으면 백엔드로 전송
             if (signInResult.data?.idToken) {
                 setLoading(true);
-                const response = await authService.socialLogin('google', signInResult.data.idToken);
+                const result = await socialLoginAction('google', signInResult.data.idToken);
 
-                if (response.success && response.data) {
-                    await AsyncStorage.setItem('accessToken', response.data.accessToken);
-                    if (response.data.refreshToken) {
-                        await AsyncStorage.setItem('refreshToken', response.data.refreshToken);
-                    }
-
-                    // Fetch user info needed?
-                    try {
-                        const profileResponse = await authService.getProfile(response.data.accessToken);
-                        if (profileResponse.success && profileResponse.data) {
-                            await AsyncStorage.setItem('userNickname', profileResponse.data.nickname);
-                        }
-                    } catch (e) {
-                        console.error("Failed to fetch profile", e);
-                    }
-
+                if (result.success) {
                     if (route.params?.fromSignup) {
                         navigation.navigate('RegisterMain');
-                    } else {
+                    } else if (result.hasVehicle) {
                         navigation.navigate('MainPage');
+                    } else {
+                        navigation.navigate('RegisterMain');
                     }
                 } else {
-                    Alert.alert("로그인 실패", response.error?.message || "소셜 로그인에 실패했습니다.");
+                    useAlertStore.getState().showAlert("로그인 실패", result.errorMessage || "소셜 로그인 실패", "ERROR");
                 }
             } else {
-                Alert.alert("로그인 실패", "Google 계정 정보를 가져오지 못했습니다.");
+                useAlertStore.getState().showAlert("로그인 실패", "Google 계정 정보를 가져오지 못했습니다.", "ERROR");
             }
         } catch (error: any) {
             if (error.code !== 'SIGN_IN_CANCELLED') {
                 console.error("Google Sign-In Error", error);
-                Alert.alert("오류", "구글 로그인 중 오류가 발생했습니다.");
+                useAlertStore.getState().showAlert("오류", "구글 로그인 중 오류가 발생했습니다.", "ERROR");
             }
         } finally {
             setLoading(false);
@@ -80,7 +67,7 @@ export default function Login() {
     const onKakaoButtonPress = async () => {
         try {
             if (Platform.OS === 'web') {
-                Alert.alert("알림", "카카오 로그인(네이티브)은 앱에서만 가능합니다.");
+                useAlertStore.getState().showAlert("알림", "카카오 로그인(네이티브)은 앱에서만 가능합니다.", "INFO");
                 return;
             }
 
@@ -88,36 +75,24 @@ export default function Login() {
 
             if (token) {
                 setLoading(true);
-                const response = await authService.socialLogin('kakao', token.accessToken);
+                const result = await socialLoginAction('kakao', token.accessToken);
 
-                if (response.success && response.data) {
-                    await AsyncStorage.setItem('accessToken', response.data.accessToken);
-                    if (response.data.refreshToken) {
-                        await AsyncStorage.setItem('refreshToken', response.data.refreshToken);
-                    }
-
-                    try {
-                        const profileResponse = await authService.getProfile(response.data.accessToken);
-                        if (profileResponse.success && profileResponse.data) {
-                            await AsyncStorage.setItem('userNickname', profileResponse.data.nickname);
-                        }
-                    } catch (e) {
-                        console.error("Failed to fetch profile", e);
-                    }
-
+                if (result.success) {
                     if (route.params?.fromSignup) {
                         navigation.navigate('RegisterMain');
-                    } else {
+                    } else if (result.hasVehicle) {
                         navigation.navigate('MainPage');
+                    } else {
+                        navigation.navigate('RegisterMain');
                     }
                 } else {
-                    Alert.alert("로그인 실패", response.error?.message || "카카오 로그인에 실패했습니다.");
+                    useAlertStore.getState().showAlert("로그인 실패", result.errorMessage || "카카오 로그인 실패", "ERROR");
                 }
             }
         } catch (error: any) {
             if (error.message !== 'user cancelled.') {
                 console.error("Kakao Login Error", error);
-                Alert.alert("로그인 실패", "카카오 로그인 중 오류가 발생했습니다.");
+                useAlertStore.getState().showAlert("로그인 실패", "카카오 로그인 중 오류가 발생했습니다.", "ERROR");
             }
         } finally {
             setLoading(false);
@@ -126,51 +101,36 @@ export default function Login() {
 
     const handleLogin = async () => {
         if (!email || !password) {
-            Alert.alert("입력 오류", "이메일과 비밀번호를 입력해주세요.");
+            useAlertStore.getState().showAlert("입력 오류", "이메일과 비밀번호를 입력해주세요.", "WARNING");
             return;
         }
 
         try {
             setLoading(true);
-            const response = await authService.login({ email, password });
+            const result = await loginAction(email, password);
 
-            if (response.success && response.data) {
-                // Store tokens
-                await AsyncStorage.setItem('accessToken', response.data.accessToken);
-                // RefreshToken is not yet implemented in backend
-                if (response.data.refreshToken) {
-                    await AsyncStorage.setItem('refreshToken', response.data.refreshToken);
-                }
-
-                // Fetch and store user info
-                try {
-                    const profileResponse = await authService.getProfile(response.data.accessToken);
-                    if (profileResponse.success && profileResponse.data) {
-                        await AsyncStorage.setItem('userNickname', profileResponse.data.nickname);
-                    }
-                } catch (e) {
-                    console.error("Failed to fetch profile", e);
-                }
-
-                // Navigate
+            if (result.success) {
                 if (route.params?.fromSignup) {
-                    navigation.navigate('RegisterMain'); // Or ActiveReg flow start
-                } else {
+                    navigation.navigate('RegisterMain');
+                } else if (result.hasVehicle) {
                     navigation.navigate('MainPage');
+                } else {
+                    navigation.navigate('RegisterMain');
                 }
             } else {
-                Alert.alert("로그인 실패", response.error?.message || "이메일 또는 비밀번호를 확인해주세요.");
+                useAlertStore.getState().showAlert("로그인 실패", result.errorMessage || "로그인 실패", "ERROR");
             }
         } catch (error: any) {
             console.error("Login Error:", error);
-            const errorMsg = error.response?.data?.error?.message || "서버 연결에 실패했습니다.";
-            Alert.alert("오류", errorMsg);
+            useAlertStore.getState().showAlert("오류", "로그인 중 오류가 발생했습니다.", "ERROR");
         } finally {
             setLoading(false);
         }
     };
 
     const handleReset = async () => {
+        const { logout } = useUserStore.getState();
+        await logout();
         await AsyncStorage.clear();
         navigation.replace('Tos');
     };
@@ -223,7 +183,7 @@ export default function Login() {
                                     onChangeText={setEmail}
                                     className="block w-full rounded-xl border border-border-light bg-input-dark/80 text-white placeholder:text-text-dim focus:border-primary px-4 py-3.5 pl-11"
                                     placeholder="example@email.com"
-                                    placeholderTextColor="#6b7280"
+                                    placeholderTextColor="#6b7280" // text-dim
                                     keyboardType="email-address"
                                     autoCapitalize="none"
                                 />
@@ -286,10 +246,10 @@ export default function Login() {
                     {/* Divider */}
                     <View className="relative w-full my-8">
                         <View className="absolute inset-0 flex-row items-center">
-                            <View className="w-full border-t border-[#314d68]" />
+                            <View className="w-full border-t border-border-light" />
                         </View>
                         <View className="relative flex-row justify-center">
-                            <Text className="bg-background-dark px-3 text-xs text-gray-500 uppercase tracking-wider">
+                            <Text className="bg-background-dark px-3 text-xs text-text-dim uppercase tracking-wider">
                                 또는
                             </Text>
                         </View>

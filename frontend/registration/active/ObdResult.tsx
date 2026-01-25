@@ -88,10 +88,10 @@ export default function ObdResult({ navigation }: any) {
     };
 
     const ResultItem = ({ icon, label, status, isGood, value }: { icon: any, label: string, status: string, isGood: boolean, value?: string }) => (
-        <View className="flex-row items-center justify-between p-4 mb-3 rounded-2xl bg-[#ffffff08] border border-[#ffffff0d]">
+        <View className="flex-row items-center justify-between p-4 mb-3 rounded-2xl bg-white/5 border border-white/10">
             <View className="flex-row items-center gap-3">
-                <View className={`w-10 h-10 rounded-xl items-center justify-center ${isGood ? 'bg-[#0d7ff2]/10' : 'bg-red-500/10'}`}>
-                    <MaterialIcons name={icon} size={20} color={isGood ? '#0d7ff2' : '#ef4444'} />
+                <View className={`w-10 h-10 rounded-xl items-center justify-center ${isGood ? 'bg-primary/10' : 'bg-error/10'}`}>
+                    <MaterialIcons name={icon} size={20} color={isGood ? '#0d7ff2' : '#ff6b6b'} />
                 </View>
                 <View>
                     <Text className="text-white font-bold text-[15px]">{label}</Text>
@@ -100,8 +100,8 @@ export default function ObdResult({ navigation }: any) {
             </View>
             <View className="items-end">
                 {value && <Text className="text-white font-bold text-base mb-0.5">{value}</Text>}
-                <View className={`px-2 py-0.5 rounded-full ${isGood ? 'bg-[#0d7ff2]/10' : 'bg-red-500/10'}`}>
-                    <Text className={`text-[10px] font-bold ${isGood ? 'text-[#0d7ff2]' : 'text-red-400'}`}>
+                <View className={`px-2 py-0.5 rounded-full ${isGood ? 'bg-primary/10' : 'bg-error/10'}`}>
+                    <Text className={`text-[10px] font-bold ${isGood ? 'text-primary' : 'text-error'}`}>
                         {status}
                     </Text>
                 </View>
@@ -114,7 +114,7 @@ export default function ObdResult({ navigation }: any) {
             <StatusBar style="light" />
             <SafeAreaView className="flex-1">
                 <View className="flex-row items-center justify-between px-6 py-4">
-                    <TouchableOpacity onPress={handleGoMain} className="w-10 h-10 items-center justify-center rounded-full bg-[#ffffff08]">
+                    <TouchableOpacity onPress={handleGoMain} className="w-10 h-10 items-center justify-center rounded-full bg-white/5">
                         <MaterialIcons name="close" size={20} color="white" />
                     </TouchableOpacity>
                     <Text className="text-white text-lg font-bold">실시간 진단 대시보드</Text>
@@ -124,7 +124,7 @@ export default function ObdResult({ navigation }: any) {
                 <ScrollView className="flex-1 px-6 pt-4" showsVerticalScrollIndicator={false}>
                     {/* Score Section */}
                     <View className="items-center justify-center py-8 mb-8">
-                        <View className="w-48 h-48 rounded-full items-center justify-center border-4 border-[#0d7ff2]/30 shadow-[0_0_40px_rgba(13,127,242,0.2)] bg-[#101922]">
+                        <View className="w-48 h-48 rounded-full items-center justify-center border-4 border-primary/30 shadow-[0_0_40px_rgba(13,127,242,0.2)] bg-surface-dark">
                             <Text className="text-slate-400 text-sm font-medium mb-1">엔진 회전수 (RPM)</Text>
                             <View className="flex-row items-baseline">
                                 <Text className="text-5xl font-bold text-white tracking-tighter">{liveData.rpm}</Text>
@@ -148,7 +148,7 @@ export default function ObdResult({ navigation }: any) {
                     {/* Simulation Mode Button */}
                     <TouchableOpacity
                         onPress={toggleSimulation}
-                        className={`p-4 rounded-xl mb-4 flex-row items-center justify-center gap-2 border ${isSimulating ? 'bg-orange-500/20 border-orange-500/50' : 'bg-[#ffffff08] border-[#ffffff0d]'}`}
+                        className={`p-4 rounded-xl mb-4 flex-row items-center justify-center gap-2 border ${isSimulating ? 'bg-warning/20 border-warning/50' : 'bg-white/5 border-white/10'}`}
                     >
                         <MaterialIcons name={isSimulating ? 'stop' : 'play-arrow'} size={20} color={isSimulating ? '#f97316' : '#0d7ff2'} />
                         <Text className={`font-bold ${isSimulating ? 'text-orange-400' : 'text-[#0d7ff2]'}`}>

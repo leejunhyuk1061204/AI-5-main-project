@@ -17,7 +17,7 @@ export default function BottomNav({ state, descriptors, navigation }: BottomTabB
 
     return (
         <View className="absolute left-6 right-6 z-50" style={{ bottom: (insets.bottom || 10) - 2 }}>
-            <View className="rounded-2xl h-16 bg-[#161d27]/95 backdrop-blur-xl border border-[#ffffff14] flex-row items-center justify-around shadow-2xl px-2">
+            <View className="rounded-2xl h-16 bg-surface-dark/95 backdrop-blur-xl border border-white/10 flex-row items-center justify-around shadow-2xl px-2">
                 {state.routes.map((route, index) => {
                     const { options } = descriptors[route.key];
                     const label =

@@ -1,4 +1,6 @@
-import { NativeEventEmitter, NativeModules, Platform, PermissionsAndroid, DeviceEventEmitter, Alert } from 'react-native';
+import { NativeEventEmitter, NativeModules, Platform, PermissionsAndroid, DeviceEventEmitter } from 'react-native';
+import { useAlertStore } from '../store/useAlertStore';
+import { useBleStore } from '../store/useBleStore';
 
 let BleManager: any;
 let BleManagerModule: any;
@@ -51,10 +53,29 @@ class BleService {
             // DEBUG: Global listener to see if ANY event comes through
             DeviceEventEmitter.addListener('BleManagerDiscoverPeripheral', (data) => {
                 console.log('[BleService DEBUG] Global Listener Event:', data);
+                useBleStore.getState().addDevice(data);
+            });
+
+            DeviceEventEmitter.addListener('BleManagerStopScan', () => {
+                console.log('[BleService] Scan stopped');
+                useBleStore.getState().setScanning(false);
+            });
+
+            DeviceEventEmitter.addListener('BleManagerConnectPeripheral', (data: any) => {
+                console.log('[BleService] Connected:', data);
+                useBleStore.getState().setStatus('connected');
+                useBleStore.getState().setConnectedDevice(data.peripheral);
+            });
+
+            DeviceEventEmitter.addListener('BleManagerDisconnectPeripheral', (data: any) => {
+                console.log('[BleService] Disconnected:', data);
+                useBleStore.getState().setStatus('disconnected');
+                useBleStore.getState().setConnectedDevice(null);
             });
 
         } catch (error) {
             console.error('[BleService] Failed to initialize BleManager', error);
+            useBleStore.getState().setError('Failed to initialize BLE');
         }
     }
 
@@ -86,6 +107,12 @@ class BleService {
     async startScan() {
         if (Platform.OS === 'web') {
             console.log('[BleService] Web scan simulated');
+            useBleStore.getState().setScanning(true);
+            setTimeout(() => {
+                useBleStore.getState().addDevice({ id: 'WEB-SIM-1', name: 'Simulated OBD', rssi: -50 } as any);
+                useBleStore.getState().addDevice({ id: 'WEB-SIM-2', name: 'Simulated Device 2' } as any);
+                useBleStore.getState().setScanning(false);
+            }, 2000);
             return;
         }
 
@@ -95,9 +122,13 @@ class BleService {
         // Alert.alert('Debug', `Permissions granted: ${hasPermission}`); // Uncomment if console is hard to see
 
         if (!hasPermission) {
-            Alert.alert('Permission Error', 'Bluetooth permissions are required.');
+            useAlertStore.getState().showAlert('Permission Error', 'Bluetooth permissions are required.', 'ERROR');
             return;
         }
+
+        useBleStore.getState().setScanning(true);
+        useBleStore.getState().setStatus('scanning');
+        useBleStore.getState().clearDevices();
 
         console.log('[BleService] Starting scan with defaults...');
         // Correct v12+ signature: scan(options: ScanOptions)
@@ -107,9 +138,11 @@ class BleService {
             allowDuplicates: true,
         }).then(() => {
             console.log('[BleService] Scan started successfully');
-        }).catch(err => {
+        }).catch((err: any) => {
             console.error('[BleService] Scan failed to start', err);
-            Alert.alert('Scan Error', `Failed to start scan: ${err}`);
+            useAlertStore.getState().showAlert('Scan Error', `Failed to start scan: ${err}`, 'ERROR');
+            useBleStore.getState().setScanning(false);
+            useBleStore.getState().setStatus('disconnected');
         });
     }
 
@@ -120,7 +153,17 @@ class BleService {
 
     connect(id: string) {
         if (Platform.OS === 'web') return Promise.resolve();
-        return BleManager.connect(id);
+        useBleStore.getState().setStatus('connecting');
+        return BleManager.connect(id)
+            .then(() => {
+                useBleStore.getState().setStatus('connected');
+                useBleStore.getState().setConnectedDevice(id);
+            })
+            .catch((err: any) => {
+                useBleStore.getState().setStatus('disconnected');
+                useBleStore.getState().setError(`Connection failed: ${err}`);
+                throw err;
+            });
     }
 
     createBond(id: string) {
@@ -135,7 +178,10 @@ class BleService {
 
     disconnect(id: string) {
         if (Platform.OS === 'web') return Promise.resolve();
-        return BleManager.disconnect(id);
+        return BleManager.disconnect(id).then(() => {
+            useBleStore.getState().setStatus('disconnected');
+            useBleStore.getState().setConnectedDevice(null);
+        });
     }
 
     retrieveServices(id: string) {

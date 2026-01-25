@@ -1,49 +1,30 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import Svg, { Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
 import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getVehicleList, VehicleResponse } from '../api/vehicleApi';
 import Header from '../header/Header';
 import BaseScreen from '../components/layout/BaseScreen';
+import { useVehicleStore } from '../store/useVehicleStore';
 
 export default function MainPage() {
     const navigation = useNavigation<any>();
+    const { primaryVehicle, fetchVehicles } = useVehicleStore();
 
-    const [vehicle, setVehicle] = useState<Partial<VehicleResponse>>({
+    useEffect(() => {
+        fetchVehicles();
+        const unsubscribe = navigation.addListener('focus', fetchVehicles);
+        return unsubscribe;
+    }, [navigation]);
+
+    // fallback for display
+    const currentVehicle = primaryVehicle || {
         modelName: '차량을 등록해주세요',
         carNumber: '- - -',
         totalMileage: 0,
         fuelType: null
-    });
-
-    const loadPrimaryVehicle = async () => {
-        try {
-            const vehicles = await getVehicleList();
-            const primary = vehicles.find(v => v.isPrimary);
-
-            if (primary) {
-                setVehicle(primary);
-                await AsyncStorage.setItem('primaryVehicle', JSON.stringify(primary));
-            } else {
-                setVehicle({
-                    modelName: '차량을 등록해주세요',
-                    carNumber: '- - -',
-                    totalMileage: 0,
-                    fuelType: null
-                });
-            }
-        } catch (e) {
-            console.error('차량 목록 불러오기 실패:', e);
-        }
     };
-
-    useEffect(() => {
-        loadPrimaryVehicle();
-        const unsubscribe = navigation.addListener('focus', loadPrimaryVehicle);
-        return unsubscribe;
-    }, [navigation]);
 
     return (
         <BaseScreen
@@ -58,8 +39,8 @@ export default function MainPage() {
                             <MaterialIcons name="directions-car" size={24} color="#d1d5db" />
                         </View>
                         <View>
-                            <Text className="text-white text-base font-bold leading-tight">{vehicle.modelName}</Text>
-                            <Text className="text-text-muted text-sm font-normal">{vehicle.carNumber}</Text>
+                            <Text className="text-white text-base font-bold leading-tight">{currentVehicle.modelName}</Text>
+                            <Text className="text-text-muted text-sm font-normal">{currentVehicle.carNumber}</Text>
                         </View>
                     </View>
                     <TouchableOpacity
@@ -86,7 +67,7 @@ export default function MainPage() {
                             cx="50"
                             cy="50"
                             r="42"
-                            stroke="#1b2127"
+                            stroke="#17212b"
                             strokeWidth="6"
                             fill="transparent"
                         />
@@ -119,7 +100,7 @@ export default function MainPage() {
             <View className="px-6 mb-6">
                 <View className="flex-row items-center mb-4">
                     <Text className="text-white text-lg font-bold">실시간 상태</Text>
-                    <View className="h-px bg-slate-800 flex-1 ml-4" />
+                    <View className="h-px bg-white/5 flex-1 ml-4" />
                 </View>
                 <View className="flex-row gap-3">
                     {[

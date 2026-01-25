@@ -5,10 +5,11 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import BaseScreen from '../components/layout/BaseScreen';
-
+import { useAlertStore } from '../store/useAlertStore';
 import ObdConnect from './ObdConnect';
+
+import { useVehicleStore } from '../store/useVehicleStore';
 import {
-    getVehicleList,
     setPrimaryVehicle as apiSetPrimaryVehicle,
     VehicleResponse
 } from '../api/vehicleApi';
@@ -33,8 +34,10 @@ const formatFuelType = (fuelType: string | null): string => {
 export default function CarManage() {
     const navigation = useNavigation<any>();
 
-    // 상태
-    const [vehicles, setVehicles] = useState<VehicleResponse[]>([]);
+    // Store
+    const { vehicles, fetchVehicles, isLoading: isStoreLoading } = useVehicleStore();
+
+    // Local State
     const [selectedVehicle, setSelectedVehicle] = useState<VehicleResponse | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [modalVisible, setModalVisible] = useState(false);
@@ -45,23 +48,24 @@ export default function CarManage() {
     // 다른 차량 목록 필터링
     const otherVehicles = vehicles.filter(v => v.vehicleId !== selectedVehicle?.vehicleId);
 
-    // 차량 목록 불러오기
+    // 차량 목록 불러오기 & 대표차량 설정
     const loadVehicles = async () => {
         try {
             setIsLoading(true);
-            const list = await getVehicleList();
-            setVehicles(list);
+            const list = await fetchVehicles();
 
             // 대표 차량 찾기
             const primary = list.find(v => v.isPrimary);
             if (primary) {
                 setSelectedVehicle(primary);
+            } else if (list.length > 0) {
+                setSelectedVehicle(list[0]);
             } else {
                 setSelectedVehicle(null);
             }
         } catch (error) {
             console.error('[CarManage] Failed to load vehicles:', error);
-            Alert.alert('오류', '차량 목록을 불러오는데 실패했습니다.');
+            useAlertStore.getState().showAlert('오류', '차량 목록을 불러오는데 실패했습니다.', 'ERROR');
         } finally {
             setIsLoading(false);
         }
@@ -82,10 +86,11 @@ export default function CarManage() {
             await AsyncStorage.setItem('primaryVehicle', JSON.stringify(vehicle));
             setModalVisible(false);
             await loadVehicles();
-            Alert.alert('성공', '대표 차량이 설정되었습니다.');
+            await loadVehicles();
+            useAlertStore.getState().showAlert('성공', '대표 차량이 설정되었습니다.', 'SUCCESS');
         } catch (error) {
             console.error('[CarManage] Failed to set primary vehicle:', error);
-            Alert.alert('오류', '대표 차량 설정에 실패했습니다.');
+            useAlertStore.getState().showAlert('오류', '대표 차량 설정에 실패했습니다.', 'ERROR');
         }
     };
 
@@ -99,7 +104,7 @@ export default function CarManage() {
         } else if (vehicles.length > 1) {
             setSpecModalVisible(true);
         } else {
-            Alert.alert('알림', '등록된 차량이 없습니다.');
+            useAlertStore.getState().showAlert('알림', '등록된 차량이 없습니다.', 'INFO');
         }
     };
 
@@ -113,7 +118,7 @@ export default function CarManage() {
         } else if (vehicles.length > 1) {
             setEditModalVisible(true);
         } else {
-            Alert.alert('알림', '등록된 차량이 없습니다.');
+            useAlertStore.getState().showAlert('알림', '등록된 차량이 없습니다.', 'INFO');
         }
     };
 
@@ -127,7 +132,7 @@ export default function CarManage() {
     };
 
     const HeaderCustom = (
-        <View className="flex-row items-center px-4 py-3 border-b border-white/5 bg-deep-black/80">
+        <View className="flex-row items-center px-4 py-3 border-b border-white/5">
             <TouchableOpacity
                 className="w-10 h-10 items-center justify-center -ml-2 rounded-full hover:bg-white/5 active:bg-white/10"
                 onPress={() => navigation.goBack()}
@@ -251,7 +256,7 @@ export default function CarManage() {
 
                     <TouchableOpacity
                         className="flex-row items-center gap-4 px-5 py-4 active:bg-white/5 border-b border-white/5"
-                        onPress={() => vehicles.length > 0 ? setModalVisible(true) : Alert.alert('알림', '등록된 차량이 없습니다.')}
+                        onPress={() => vehicles.length > 0 ? setModalVisible(true) : useAlertStore.getState().showAlert('알림', '등록된 차량이 없습니다.', 'INFO')}
                     >
                         <View className="w-11 h-11 items-center justify-center rounded-xl bg-surface-highlight shrink-0">
                             <MaterialIcons name="star-half" size={24} color="#cbd5e1" />

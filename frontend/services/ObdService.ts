@@ -9,6 +9,7 @@ import BleService from './BleService';
 import ClassicBtService from './ClassicBtService';
 import { OBD_PIDS, parseObdResponse, PidDefinition } from './ObdPidHelper';
 import { uploadObdBatch, ObdLogRequest } from '../api/obdApi';
+import { useBleStore } from '../store/useBleStore';
 
 export interface ObdData {
     timestamp: string;
@@ -80,6 +81,9 @@ class ObdService {
         this.classicDevice = device;
         this.currentData = { timestamp: new Date().toISOString() };
         this.isPolling = false;
+        useBleStore.getState().setConnectedDeviceName(device.name || 'Classic Device');
+        useBleStore.getState().setConnectedDevice(device.address);
+        useBleStore.getState().setStatus('connected');
 
         console.log(`[ObdService] Classic BT device set: ${device.name}`);
 
@@ -106,6 +110,7 @@ class ObdService {
         this.currentDeviceId = deviceId;
         this.currentData = { timestamp: new Date().toISOString() };
         this.isPolling = false;
+        useBleStore.getState().setStatus('connecting');
 
         try {
             const peripheralInfo = await BleManager.retrieveServices(deviceId);
@@ -149,13 +154,18 @@ class ObdService {
             if (found) {
                 await BleService.startNotification(this.currentDeviceId, this.serviceUUID, this.charUUID);
                 console.log('[ObdService] BLE Notifications enabled');
+                useBleStore.getState().setStatus('connected');
+                useBleStore.getState().setConnectedDevice(this.currentDeviceId);
+                useBleStore.getState().setConnectedDeviceName(this.currentDeviceId);
                 await this.initializeElm327();
             } else {
                 console.warn('[ObdService] Could not find OBD characteristics');
+                useBleStore.getState().setStatus('disconnected');
             }
 
         } catch (e) {
             console.error('[ObdService] Failed to configure BLE device', e);
+            useBleStore.getState().setStatus('disconnected');
         }
     }
 
@@ -213,6 +223,7 @@ class ObdService {
 
         console.log(`[ObdService] Starting polling (${this.connectionType})...`);
         this.isPolling = true;
+        useBleStore.getState().setPolling(true);
         this.pollingLoop(intervalMs);
     }
 
@@ -220,6 +231,7 @@ class ObdService {
         this.isPolling = false;
         this.commandQueue = [];
         this.isProcessingQueue = false;
+        useBleStore.getState().setPolling(false);
         console.log('[ObdService] Polling stopped, flushing buffer...');
         await this.flushBuffer();
     }
@@ -456,6 +468,7 @@ class ObdService {
         this.classicDevice = null;
         this.currentDeviceId = null;
         this.dataBuffer = [];
+        useBleStore.getState().reset();
         console.log('[ObdService] Disconnected');
     }
 

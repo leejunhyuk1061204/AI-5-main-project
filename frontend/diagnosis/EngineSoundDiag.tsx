@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, TouchableOpacity, Animated, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, Animated, ActivityIndicator } from 'react-native';
+import { useAlertStore } from '../store/useAlertStore';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Audio } from 'expo-av';
@@ -39,7 +40,7 @@ export default function EngineSoundDiag() {
         try {
             const permission = await Audio.requestPermissionsAsync();
             if (permission.status !== 'granted') {
-                Alert.alert('권한 필요', '마이크 사용 권한이 필요합니다.');
+                useAlertStore.getState().showAlert('권한 필요', '마이크 사용 권한이 필요합니다.', 'WARNING');
                 setIsProcessing(false);
                 return;
             }
@@ -56,7 +57,7 @@ export default function EngineSoundDiag() {
             setIsRecording(true);
         } catch (err) {
             console.error('Failed to start recording', err);
-            Alert.alert('오류', '녹음을 시작할 수 없습니다.');
+            useAlertStore.getState().showAlert('오류', '녹음을 시작할 수 없습니다.', 'ERROR');
         } finally {
             setIsProcessing(false);
         }
@@ -81,7 +82,7 @@ export default function EngineSoundDiag() {
             }
         } catch (error) {
             console.error(error);
-            Alert.alert('오류', '녹음 파일을 저장하는 중 문제가 발생했습니다.');
+            useAlertStore.getState().showAlert('오류', '녹음 파일을 저장하는 중 문제가 발생했습니다.', 'ERROR');
             setStep(1);
         } finally {
             recordingRef.current = null;
@@ -115,7 +116,7 @@ export default function EngineSoundDiag() {
             }
         } catch (error: any) {
             console.error(error);
-            Alert.alert('진단 실패', error.message || '서버 통신 중 오류가 발생했습니다.');
+            useAlertStore.getState().showAlert('진단 실패', error.message || '서버 통신 중 오류가 발생했습니다.', 'ERROR');
             setStep(1);
         }
     };
