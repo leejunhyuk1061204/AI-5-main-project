@@ -42,3 +42,7 @@ backend/google-services.json
 frontend/google-services.json
 .env
 node_modules
+
+### Generated Native Projects ###
+frontend/android/
+frontend/ios/
