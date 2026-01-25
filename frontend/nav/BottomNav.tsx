@@ -1,37 +1,90 @@
 import React from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useUIStore } from '../store/useUIStore';
 
-export default function BottomNav() {
-    const navigation = useNavigation<any>();
-    const route = useRoute();
+/**
+ * 프로젝트 표준 하단 탭 바 (커스텀)
+ * 기존의 Floating 디자인을 유지하면서 BottomTabNavigator와 연동됨
+ */
+export default function BottomNav({ state, descriptors, navigation }: BottomTabBarProps) {
     const bottomNavVisible = useUIStore(state => state.bottomNavVisible);
+    const insets = useSafeAreaInsets();
 
     if (!bottomNavVisible) return null;
-    const insets = useSafeAreaInsets();
-    const isActive = (routeName: string) => route.name === routeName;
-
-    const NavItem = ({ name, label, icon, target }: { name: string, label: string, icon: keyof typeof MaterialIcons.glyphMap, target?: string }) => {
-        const active = isActive(name);
-        return (
-            <TouchableOpacity className="flex-1 items-center justify-center gap-1 h-full" onPress={() => target && navigation.navigate(target)} activeOpacity={0.7}>
-                <MaterialIcons name={icon} size={24} color={active ? '#0d7ff2' : '#6b7280'} style={active ? { textShadowColor: 'rgba(13, 127, 242, 0.4)', textShadowRadius: 8 } : {}} />
-                <Text className={`text-[10px] font-medium ${active ? 'text-primary font-bold' : 'text-gray-500'}`}>{label}</Text>
-                {active && (<View className="absolute bottom-1 w-1 h-1 rounded-full bg-primary shadow-lg shadow-primary" />)}
-            </TouchableOpacity>
-        );
-    };
 
     return (
         <View className="absolute left-6 right-6 z-50" style={{ bottom: (insets.bottom || 10) - 2 }}>
             <View className="rounded-2xl h-16 bg-[#161d27]/95 backdrop-blur-xl border border-[#ffffff14] flex-row items-center justify-around shadow-2xl px-2">
-                <NavItem name="MainPage" label="홈" icon="home" target="MainPage" />
-                <NavItem name="AiProfessionalDiag" label="진단" icon="car-crash" target="AiProfessionalDiag" />
-                <NavItem name="HistoryMain" label="기록" icon="history" target="HistoryMain" />
-                <NavItem name="SettingMain" label="설정" icon="settings" target="SettingMain" />
+                {state.routes.map((route, index) => {
+                    const { options } = descriptors[route.key];
+                    const label =
+                        options.tabBarLabel !== undefined
+                            ? options.tabBarLabel
+                            : options.title !== undefined
+                                ? options.title
+                                : route.name;
+
+                    const isFocused = state.index === index;
+
+                    const onPress = () => {
+                        const event = navigation.emit({
+                            type: 'tabPress',
+                            target: route.key,
+                            canPreventDefault: true,
+                        });
+
+                        if (!isFocused && !event.defaultPrevented) {
+                            navigation.navigate(route.name);
+                        }
+                    };
+
+                    // 아이콘 매핑 (이름 기준)
+                    const getIcon = (name: string): keyof typeof MaterialIcons.glyphMap => {
+                        switch (name) {
+                            case 'MainHome': return 'home';
+                            case 'DiagTab': return 'car-crash';
+                            case 'HistoryTab': return 'history';
+                            case 'SettingTab': return 'settings';
+                            default: return 'help';
+                        }
+                    };
+
+                    // 한글 라벨 매핑
+                    const getLabel = (name: string) => {
+                        switch (name) {
+                            case 'MainHome': return '홈';
+                            case 'DiagTab': return '진단';
+                            case 'HistoryTab': return '기록';
+                            case 'SettingTab': return '설정';
+                            default: return name;
+                        }
+                    };
+
+                    return (
+                        <TouchableOpacity
+                            key={route.key}
+                            className="flex-1 items-center justify-center gap-1 h-full"
+                            onPress={onPress}
+                            activeOpacity={0.7}
+                        >
+                            <MaterialIcons
+                                name={getIcon(route.name)}
+                                size={24}
+                                color={isFocused ? '#0d7ff2' : '#6b7280'}
+                                style={isFocused ? { textShadowColor: 'rgba(13, 127, 242, 0.4)', textShadowRadius: 8 } : {}}
+                            />
+                            <Text className={`text-[10px] font-medium ${isFocused ? 'text-primary font-bold' : 'text-gray-500'}`}>
+                                {getLabel(route.name)}
+                            </Text>
+                            {isFocused && (
+                                <View className="absolute bottom-1 w-1 h-1 rounded-full bg-primary shadow-lg shadow-primary" />
+                            )}
+                        </TouchableOpacity>
+                    );
+                })}
             </View>
         </View>
     );

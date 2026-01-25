@@ -3,7 +3,6 @@ import { View, Text, TouchableOpacity, Animated, Easing, StyleSheet } from 'reac
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import Header from '../header/Header';
-import BottomNav from '../nav/BottomNav';
 import BaseScreen from '../components/layout/BaseScreen';
 
 export default function DiagMain() {
@@ -32,7 +31,6 @@ export default function DiagMain() {
     return (
         <BaseScreen
             header={<Header />}
-            footer={<BottomNav />}
             padding={false}
             useBottomNav={true}
         >
