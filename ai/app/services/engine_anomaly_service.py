@@ -1,17 +1,19 @@
+```python
 # ai/app/services/engine_anomaly_service.py
 """
 엔진룸 이상 정밀 분석 파이프라인 (Engine Anomaly Pipeline)
 
-[역할]
-1. 엔진룸 부품 감지: 26가지 주요 엔진 부품의 위치를 파악합니다. (YOLO)
-2. 부품별 이상 탐지: 각 부품 이미지에 대해 PatchCore 알고리즘으로 미세 결함을 찾아냅니다.
-3. 히트맵 시각화: 결함이 의심되는 부위를 붉은색 히트맵으로 생성합니다.
-4. 전문가 해석: 결함의 종류(누유, 부식 등)를 LLM을 통해 정밀 진단합니다.
+[파일 설명]
+이 파일은 엔진룸 이미지를 분석하여 부품별 결함을 탐지하는 파이프라인입니다.
+YOLO로 26종 부품을 감지하고, PatchCore로 이상을 탐지한 후, LLM으로 결함을 해석합니다.
 
-[주요 기능]
-- 엔진룸 종합 분석 (analyze)
-- 개별 부품 정밀 진단 (_analyze_single_part)
-- 히트맵 오버레이 및 데이터 인코딩
+[API 응답 형식]
+{
+  "status": "WARNING",
+  "analysis_type": "SCENE_ENGINE",
+  "category": "ENGINE_ROOM",
+  "data": { vehicle_type, parts_detected, anomalies_found, results[] }
+}
 """
 import httpx
 import uuid
@@ -130,18 +132,23 @@ class EngineAnomalyPipeline:
         # Path B: YOLO가 부품을 감지하지 못한 경우
         # =================================================================
         if yolo_result.detected_count == 0:
-            print(f"[Pipeline] Path B: No parts detected.")
+            print(f"[Pipeline] Path B: No parts detected. LLM Fallback.")
             llm_result = await analyze_general_image(s3_url)
             
+            # API 명세서 형식에 맞춤
             return {
-                "status": "SUCCESS",
-                "request_id": request_id,
-                "path": "B",
-                "source_url": s3_url,
-                "vehicle_type": None,
-                "parts_detected": 0,
-                "llm_analysis": llm_result.dict(),
-                "is_hard_negative": llm_result.category == "ENGINE"
+                "status": llm_result.status if hasattr(llm_result, 'status') else "ERROR",
+                "analysis_type": "SCENE_ENGINE",
+                "category": "ENGINE_ROOM",
+                "data": {
+                    "vehicle_type": None,
+                    "parts_detected": 0,
+                    "anomalies_found": 0,
+                    "results": [],
+                    "llm_fallback": True,
+                    "description": llm_result.description if hasattr(llm_result, 'description') else None,
+                    "recommendation": llm_result.recommendation if hasattr(llm_result, 'recommendation') else None
+                }
             }
 
         # =================================================================
@@ -154,13 +161,19 @@ class EngineAnomalyPipeline:
         # 부품 크롭
         crops = await crop_detected_parts(image_bytes, yolo_result.detections)
         
-        # 각 부품별 분석 (병렬)
+        # =================================================================
+        # 각 부품별 분석 수행 (병렬 처리로 속도 향상)
+        # =================================================================
+        # [중요] s3_url을 각 부품 분석 함수에 전달해야 함
+        # → Active Learning 시 S3에 라벨 데이터를 저장할 때 파일명 생성에 필요
+        # =================================================================
         tasks = []
         for i, (part_name, (crop_img, bbox)) in enumerate(crops.items()):
             # YOLO confidence 전달
             conf = yolo_result.detections[i].confidence if i < len(yolo_result.detections) else 0.0
             tasks.append(
-                self._analyze_single_part(part_name, crop_img, bbox, conf, request_id)
+                # [수정] s3_url 파라미터 추가하여 Active Learning에서 파일 경로 생성 가능
+                self._analyze_single_part(part_name, crop_img, bbox, conf, request_id, s3_url)
             )
         
         part_results = await asyncio.gather(*tasks)
@@ -174,15 +187,26 @@ class EngineAnomalyPipeline:
                 if res.is_anomaly:
                     anomaly_count += 1
 
+        # 최종 상태 결정: 이상이 있으면 WARNING, CRITICAL 판정
+        final_status = "NORMAL"
+        for res in results:
+            if res.get("severity") == "CRITICAL":
+                final_status = "CRITICAL"
+                break
+            elif res.get("is_anomaly") or res.get("severity") == "WARNING":
+                final_status = "WARNING"
+        
+        # API 명세서 형식에 맞춤
         return {
-            "status": "SUCCESS",
-            "request_id": request_id,
-            "path": "A",
-            "source_url": s3_url,
-            "vehicle_type": vehicle_type,
-            "parts_detected": len(results),
-            "anomalies_found": anomaly_count,
-            "results": results
+            "status": final_status,
+            "analysis_type": "SCENE_ENGINE",
+            "category": "ENGINE_ROOM",
+            "data": {
+                "vehicle_type": vehicle_type,
+                "parts_detected": len(results),
+                "anomalies_found": anomaly_count,
+                "results": results
+            }
         }
 
     async def _analyze_single_part(
@@ -191,9 +215,16 @@ class EngineAnomalyPipeline:
         crop_img: Image.Image, 
         bbox: List[int],
         confidence: float,
-        request_id: str
+        request_id: str,
+        s3_url: str  # [추가] Active Learning S3 저장 시 파일명 생성에 필요
     ) -> PartAnalysisResult:
-        """단일 부품 이상 탐지"""
+        """
+        단일 부품 이상 탐지
+        
+        [파라미터 설명]
+        - s3_url: 원본 이미지의 S3 경로. Active Learning 시 라벨 JSON 저장 경로 생성에 사용.
+                  예: s3://bucket/images/abc123.jpg → dataset/engine/llm_confirmed/abc123_Battery.json
+        """
         async with SEMAPHORE:
             # Anomaly Detection
             anomaly_result = await self.anomaly_detector.detect(crop_img, part_name)
