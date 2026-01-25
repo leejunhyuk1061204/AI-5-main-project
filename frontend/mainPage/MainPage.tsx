@@ -3,7 +3,6 @@ import { View, Text, TouchableOpacity } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import Svg, { Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
 import { useNavigation } from '@react-navigation/native';
-import BottomNav from '../nav/BottomNav';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getVehicleList, VehicleResponse } from '../api/vehicleApi';
 import Header from '../header/Header';
@@ -49,9 +48,7 @@ export default function MainPage() {
     return (
         <BaseScreen
             header={<Header />}
-            footer={<BottomNav />}
             padding={false}
-            useBottomNav={true}
         >
             {/* Car Info Card */}
             <View className="px-6 py-4">

@@ -3,7 +3,6 @@ import { View, Text, TouchableOpacity } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import Header from '../header/Header';
-import BottomNav from '../nav/BottomNav';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import BaseScreen from '../components/layout/BaseScreen';
 
@@ -46,7 +45,6 @@ export default function SettingMain() {
     return (
         <BaseScreen
             header={<Header />}
-            footer={<BottomNav />}
             padding={true}
             useBottomNav={true}
         >

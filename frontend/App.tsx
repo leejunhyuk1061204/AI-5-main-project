@@ -14,7 +14,9 @@ import { useVehicleStore } from './store/useVehicleStore';
 import { useUIStore } from './store/useUIStore';
 import { Keyboard } from 'react-native';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import GlobalAlert from './components/common/GlobalAlert';
+import BottomNav from './nav/BottomNav';
 
 import Tos from './sign/Tos';
 import Login from './sign/Login';
@@ -52,6 +54,23 @@ import Membership from './setting/Membership';
 ExpoSplashScreen.preventAutoHideAsync();
 
 const Stack = createNativeStackNavigator();
+const Tab = createBottomTabNavigator();
+
+function MainTabNavigator() {
+  return (
+    <Tab.Navigator
+      tabBar={(props: any) => <BottomNav {...props} />}
+      screenOptions={{
+        headerShown: false,
+      }}
+    >
+      <Tab.Screen name="MainHome" component={MainPage} />
+      <Tab.Screen name="DiagTab" component={DiagMain} />
+      <Tab.Screen name="HistoryTab" component={HistoryMain} />
+      <Tab.Screen name="SettingTab" component={SettingMain} />
+    </Tab.Navigator>
+  );
+}
 
 const AppTheme = {
   ...DarkTheme,
@@ -160,7 +179,7 @@ export default function App() {
                 <Stack.Screen name="FindPW" component={FindPW} />
                 <Stack.Screen
                   name="MainPage"
-                  component={MainPage}
+                  component={MainTabNavigator}
                   options={{ animation: 'none' }}
                 />
                 <Stack.Screen name="RegisterMain" component={RegisterMain} />
@@ -169,11 +188,6 @@ export default function App() {
                 <Stack.Screen name="ActiveSuccess" component={ActiveSuccess} />
                 <Stack.Screen name="ObdResult" component={ObdResult} />
                 <Stack.Screen name="PassiveReg" component={PassiveReg} />
-                <Stack.Screen
-                  name="DiagMain"
-                  component={DiagMain}
-                  options={{ animation: 'none' }}
-                />
                 <Stack.Screen name="EngineSoundDiag" component={EngineSoundDiag} />
                 <Stack.Screen
                   name="AiCompositeDiag"
@@ -187,11 +201,6 @@ export default function App() {
                 />
                 <Stack.Screen name="VisualDiagnosis" component={VisualDiagnosis} />
                 <Stack.Screen name="Filming" component={Filming} />
-                <Stack.Screen
-                  name="HistoryMain"
-                  component={HistoryMain}
-                  options={{ animation: 'none' }}
-                />
                 <Stack.Screen name="DrivingHis" component={DrivingHis} />
                 <Stack.Screen name="RecallHis" component={RecallHis} />
                 <Stack.Screen name="SupManage" component={SupManage} />
@@ -201,11 +210,6 @@ export default function App() {
                   options={{ animation: 'none' }}
                 />
                 <Stack.Screen name="Spec" component={Spec} />
-                <Stack.Screen
-                  name="SettingMain"
-                  component={SettingMain}
-                  options={{ animation: 'none' }}
-                />
                 <Stack.Screen name="MyPage" component={MyPage} />
                 <Stack.Screen name="AlertSetting" component={AlertSetting} />
                 <Stack.Screen name="CarManage" component={CarManage} />

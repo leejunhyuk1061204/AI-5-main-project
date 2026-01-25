@@ -3,7 +3,6 @@ import { View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import BottomNav from '../nav/BottomNav';
 import Header from '../header/Header';
 import tripApi from '../api/tripApi';
 import BaseScreen from '../components/layout/BaseScreen';
@@ -56,7 +55,6 @@ export default function HistoryMain() {
     return (
         <BaseScreen
             header={<Header />}
-            footer={<BottomNav />}
             padding={false}
             useBottomNav={true}
         >
