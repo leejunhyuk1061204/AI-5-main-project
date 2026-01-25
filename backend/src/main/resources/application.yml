@@ -69,6 +69,7 @@ logging:
     org.hibernate.type.descriptor.sql.BasicBinder: TRACE
     org.springframework.web: DEBUG # 404 디버깅용 로그 추가
 
+# 암호화 키(코드는 가짜를 들고 있고, 서버가 진짜를 넣어주는 방식"이므로 보안상 안전함)
 encryption:
   key: ${ENCRYPTION_KEY:car-sentry-default-key-32bytes-!!} # 32바이트 권장
 
