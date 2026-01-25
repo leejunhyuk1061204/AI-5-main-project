@@ -8,10 +8,12 @@ import { authService, UserResponse } from '../services/auth';
 import { CommonActions } from '@react-navigation/native';
 import BaseScreen from '../components/layout/BaseScreen';
 
+import { useUserStore } from '../store/useUserStore';
+
 export default function MyPage() {
     const navigation = useNavigation<any>();
-    const [user, setUser] = useState<UserResponse | null>(null);
-    const [loading, setLoading] = useState(true);
+    const { nickname, email, loadUser, logout } = useUserStore();
+    const [loading, setLoading] = useState(false);
     // Modal State
     const [modalVisible, setModalVisible] = useState(false);
     const [modalType, setModalType] = useState<'nickname' | 'password' | 'delete' | 'alert' | 'none'>('none');
@@ -21,27 +23,14 @@ export default function MyPage() {
     const [alertConfig, setAlertConfig] = useState({ title: '', message: '', onConfirm: () => { } });
 
     useEffect(() => {
-        fetchUserProfile();
-    }, []);
-
-    const fetchUserProfile = async () => {
-        try {
-            const token = await AsyncStorage.getItem('accessToken');
-            if (!token) {
-                navigation.navigate('Login');
-                return;
-            }
-            const response = await authService.getProfile(token);
-            if (response.success && response.data) {
-                setUser(response.data);
-                await AsyncStorage.setItem('userNickname', response.data.nickname);
-            }
-        } catch (error) {
-            console.error('Failed to fetch profile', error);
-        } finally {
-            setLoading(false);
+        // 데이터가 없으면 로드 (또는 강제 로드 정책에 따라 loadUser 호출)
+        if (!nickname) {
+            loadUser();
         }
-    };
+    }, [nickname]);
+
+    // loadUser handle loading internally or we can use store's isLoading
+    // For now, simple effect is enough.
 
     // Custom Alert Helper
     const showAlert = (title: string, message: string, onConfirm?: () => void) => {
@@ -56,8 +45,8 @@ export default function MyPage() {
 
     // Action Handlers
     const openNicknameModal = () => {
-        if (user) {
-            setTempInput(user.nickname);
+        if (nickname) {
+            setTempInput(nickname);
             setModalType('nickname');
             setModalVisible(true);
         }
@@ -90,7 +79,7 @@ export default function MyPage() {
                         setTimeout(() => {
                             showAlert('성공', '닉네임이 성공적으로 변경되었습니다.', () => {
                                 setModalVisible(false);
-                                fetchUserProfile();
+                                loadUser(); // Refresh Store
                             });
                         }, 300);
                     } else {
@@ -141,7 +130,7 @@ export default function MyPage() {
                         setTimeout(() => {
                             showAlert('완료', '회원 탈퇴가 처리되었습니다.', async () => {
                                 setModalVisible(false);
-                                await AsyncStorage.clear();
+                                await logout(); // Use store logout
                                 navigation.dispatch(
                                     CommonActions.reset({
                                         index: 0,
@@ -165,20 +154,20 @@ export default function MyPage() {
 
     const SettingItem = ({ icon, label, value, onPress, isDestructive = false }: { icon: keyof typeof MaterialIcons.glyphMap, label: string, value?: string, onPress?: () => void, isDestructive?: boolean }) => (
         <TouchableOpacity
-            className={`flex-row items-center justify-between p-4 bg-[#17212b] rounded-xl border ${isDestructive ? 'border-red-500/10 active:bg-red-500/10' : 'border-white/5 active:bg-white/5'} mb-3`}
+            className={`flex-row items-center justify-between p-4 bg-surface-dark rounded-xl border ${isDestructive ? 'border-error/10 active:bg-error/10' : 'border-white/5 active:bg-white/5'} mb-3`}
             activeOpacity={0.7}
             onPress={onPress}
         >
             <View className="flex-row items-center gap-4">
-                <View className={`w-10 h-10 rounded-lg items-center justify-center ${isDestructive ? 'bg-red-500/10' : 'bg-primary/10'}`}>
+                <View className={`w-10 h-10 rounded-lg items-center justify-center ${isDestructive ? 'bg-error/10' : 'bg-primary/10'}`}>
                     <MaterialIcons
                         name={icon}
                         size={20}
-                        color={isDestructive ? '#ef4444' : (icon === 'stars' ? '#c5a059' : '#0d7ff2')}
+                        color={isDestructive ? '#ff6b6b' : (icon === 'stars' ? '#c5a059' : '#0d7ff2')} // error, premium, primary tokens
                     />
                 </View>
                 <View>
-                    <Text className={`text-[10px] font-bold uppercase tracking-wider mb-0.5 ${isDestructive ? 'text-red-500' : 'text-gray-500'}`}>
+                    <Text className={`text-[10px] font-bold uppercase tracking-wider mb-0.5 ${isDestructive ? 'text-error' : 'text-text-dim'}`}>
                         {label}
                     </Text>
                     {value && <Text className={`text-[15px] font-medium ${isDestructive ? 'text-red-500' : 'text-white'}`}>{value}</Text>}
@@ -216,15 +205,15 @@ export default function MyPage() {
                 >
                     <View className="absolute -right-4 -top-4 w-24 h-24 bg-primary/10 rounded-full blur-3xl pointer-events-none" />
 
-                    <View className="px-2 py-0.5 rounded-full bg-[#c5a059]/20 border border-[#c5a059]/30 mb-3">
-                        <Text className="text-[#c5a059] text-[10px] font-bold uppercase tracking-wider">PREMIUM</Text>
+                    <View className="px-2 py-0.5 rounded-full bg-premium/20 border border-premium/30 mb-3">
+                        <Text className="text-premium text-[10px] font-bold uppercase tracking-wider">PREMIUM</Text>
                     </View>
 
                     <Text className="text-white text-2xl font-bold tracking-tight mb-1">
-                        {user?.nickname || '사용자'}
+                        {nickname || '사용자'}
                     </Text>
                     <Text className="text-gray-400 text-sm">
-                        {user?.email || 'user@example.com'}
+                        {email || 'user@example.com'}
                     </Text>
                 </LinearGradient>
 
@@ -283,7 +272,7 @@ export default function MyPage() {
                         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                         className="flex-1 justify-center items-center bg-black/80 px-6"
                     >
-                        <View className="w-full bg-[#17212b] rounded-2xl border border-white/10 p-6 shadow-2xl">
+                        <View className="w-full bg-surface-dark rounded-2xl border border-white/10 p-6 shadow-2xl">
                             {modalType === 'alert' && (
                                 <View className="items-center mb-6">
                                     <View className="w-12 h-12 rounded-full bg-primary/10 items-center justify-center mb-3">

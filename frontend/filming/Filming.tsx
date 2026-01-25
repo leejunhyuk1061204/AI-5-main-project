@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, TouchableOpacity, Dimensions, StyleSheet, Image, ActivityIndicator, Alert, StatusBar as RNStatusBar } from 'react-native';
+import { View, Text, TouchableOpacity, Dimensions, StyleSheet, Image, ActivityIndicator, StatusBar as RNStatusBar } from 'react-native';
+import { useAlertStore } from '../store/useAlertStore';
 import { diagnoseImage, replyToDiagnosisSession } from '../api/aiApi';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -45,7 +46,7 @@ export default function Filming({ navigation, route }: { navigation?: any; route
             }
         } catch (error) {
             console.error('Failed to take picture:', error);
-            Alert.alert('오류', '사진 촬영 중 문제가 발생했습니다.');
+            useAlertStore.getState().showAlert('오류', '사진 촬영 중 문제가 발생했습니다.', 'ERROR');
         } finally {
             setIsCapturing(false);
         }
@@ -74,7 +75,7 @@ export default function Filming({ navigation, route }: { navigation?: any; route
             }
 
             if (!navigation) {
-                Alert.alert('진단 완료', '진단 결과가 준비되었습니다.');
+                useAlertStore.getState().showAlert('진단 완료', '진단 결과가 준비되었습니다.', 'SUCCESS');
                 return;
             }
 
@@ -88,7 +89,7 @@ export default function Filming({ navigation, route }: { navigation?: any; route
 
         } catch (error: any) {
             console.error('Diagnosis Error:', error);
-            Alert.alert('진단 실패', error.message || '서버 통신 중 오류가 발생했습니다.');
+            useAlertStore.getState().showAlert('진단 실패', error.message || '서버 통신 중 오류가 발생했습니다.', 'ERROR');
         } finally {
             setIsAnalyzing(false);
         }

@@ -7,6 +7,8 @@ import BottomNav from '../nav/BottomNav';
 import Header from '../header/Header';
 import BaseScreen from '../components/layout/BaseScreen';
 import VehicleSelectModal from '../components/VehicleSelectModal';
+import { useUIStore } from '../store/useUIStore';
+import { Keyboard } from 'react-native';
 
 export default function AiCompositeDiag() {
     const navigation = useNavigation<any>();
@@ -28,6 +30,19 @@ export default function AiCompositeDiag() {
     const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
     const [selectedVehicleName, setSelectedVehicleName] = useState<string>('');
     const selectionRef = React.useRef(false);
+    const setKeyboardVisible = useUIStore(state => state.setKeyboardVisible);
+    const bottomNavVisible = useUIStore(state => state.bottomNavVisible);
+
+    React.useEffect(() => {
+        const keyboardDidShowListener = Keyboard.addListener('keyboardDidShow', () => setKeyboardVisible(true));
+        const keyboardDidHideListener = Keyboard.addListener('keyboardDidHide', () => setKeyboardVisible(false));
+
+        return () => {
+            keyboardDidShowListener.remove();
+            keyboardDidHideListener.remove();
+            setKeyboardVisible(false); // 화면을 나갈 때 초기화
+        };
+    }, []);
 
     // Initial check on mount
     React.useEffect(() => {
@@ -82,7 +97,7 @@ export default function AiCompositeDiag() {
             <View className="flex-1">
                 <ScrollView
                     className="flex-1 px-5 pt-4"
-                    contentContainerStyle={{ paddingBottom: 20 }}
+                    contentContainerStyle={{ paddingBottom: 250 }} // Floating Footer를 위한 넉넉한 하단 여백
                     showsVerticalScrollIndicator={false}
                 >
                     <View className="items-center mb-6">
@@ -137,39 +152,49 @@ export default function AiCompositeDiag() {
                     </View>
                 </ScrollView>
 
-                {/* Footer Input Area - Positioned above BottomNav */}
-                <View className="px-5 pb-4">
-                    {/* Action Buttons */}
-                    <View className="flex-row justify-between pb-5 gap-3">
-                        <TouchableOpacity onPress={() => navigation.navigate('EngineSoundDiag', { from: 'chatbot' })} className="flex-1 h-[90px] p-3 rounded-2xl bg-surface-dark border border-white/10 justify-between active:scale-95 overflow-hidden relative">
-                            <View className="w-8 h-8 rounded-lg bg-primary/20 items-center justify-center mb-1">
-                                <MaterialIcons name="mic" size={20} color="#60a5fa" />
-                            </View>
-                            <Text className="text-[12px] font-bold text-white/95 leading-tight">녹음 시작</Text>
-                            <View className="absolute bottom-0 left-0 h-[3px] w-full bg-primary" />
-                        </TouchableOpacity>
-                        <TouchableOpacity onPress={() => navigation.navigate('Filming', { from: 'chatbot' })} className="flex-1 h-[90px] p-3 rounded-2xl bg-surface-dark border border-white/10 justify-between active:scale-95 overflow-hidden relative">
-                            <View className="w-8 h-8 rounded-lg bg-primary/20 items-center justify-center mb-1">
-                                <MaterialIcons name="camera-alt" size={20} color="#60a5fa" />
-                            </View>
-                            <Text className="text-[12px] font-bold text-white/95 leading-tight">사진 촬영</Text>
-                            <View className="absolute bottom-0 left-0 h-[3px] w-full bg-primary" />
-                        </TouchableOpacity>
-                        <TouchableOpacity onPress={() => navigation.navigate('ActiveReg')} className="flex-1 h-[90px] p-3 rounded-2xl bg-surface-dark border border-white/10 justify-between active:scale-95 overflow-hidden relative">
-                            <View className="w-8 h-8 rounded-lg bg-primary/20 items-center justify-center mb-1">
-                                <MaterialCommunityIcons name="car-connected" size={20} color="#60a5fa" />
-                            </View>
-                            <Text className="text-[12px] font-bold text-white/95 leading-tight">OBD 스캔</Text>
-                            <View className="absolute bottom-0 left-0 h-[3px] w-full bg-primary" />
-                        </TouchableOpacity>
-                    </View>
+                {/* Footer Input Area - Floating Overlay */}
+                <View
+                    style={{ bottom: 0 }}
+                    className="absolute left-0 right-0 px-5 pb-4 bg-background-dark/95 backdrop-blur-md pt-2"
+                >
+                    {/* Action Buttons - 키보드가 보일 때는 숨김 처리 (기기별 최적화) */}
+                    {!Keyboard.isVisible() && (
+                        <View className="flex-row justify-between pb-5 gap-3">
+                            <TouchableOpacity onPress={() => navigation.navigate('EngineSoundDiag', { from: 'chatbot' })} className="flex-1 h-[90px] p-3 rounded-2xl bg-surface-dark border border-white/10 justify-between active:scale-95 overflow-hidden relative">
+                                <View className="w-8 h-8 rounded-lg bg-primary/20 items-center justify-center mb-1">
+                                    <MaterialIcons name="mic" size={20} color="#60a5fa" />
+                                </View>
+                                <Text className="text-[12px] font-bold text-white/95 leading-tight">녹음 시작</Text>
+                                <View className="absolute bottom-0 left-0 h-[3px] w-full bg-primary" />
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => navigation.navigate('Filming', { from: 'chatbot' })} className="flex-1 h-[90px] p-3 rounded-2xl bg-surface-dark border border-white/10 justify-between active:scale-95 overflow-hidden relative">
+                                <View className="w-8 h-8 rounded-lg bg-primary/20 items-center justify-center mb-1">
+                                    <MaterialIcons name="camera-alt" size={20} color="#60a5fa" />
+                                </View>
+                                <Text className="text-[12px] font-bold text-white/95 leading-tight">사진 촬영</Text>
+                                <View className="absolute bottom-0 left-0 h-[3px] w-full bg-primary" />
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => navigation.navigate('ActiveReg')} className="flex-1 h-[90px] p-3 rounded-2xl bg-surface-dark border border-white/10 justify-between active:scale-95 overflow-hidden relative">
+                                <View className="w-8 h-8 rounded-lg bg-primary/20 items-center justify-center mb-1">
+                                    <MaterialCommunityIcons name="car-connected" size={20} color="#60a5fa" />
+                                </View>
+                                <Text className="text-[12px] font-bold text-white/95 leading-tight">OBD 스캔</Text>
+                                <View className="absolute bottom-0 left-0 h-[3px] w-full bg-primary" />
+                            </TouchableOpacity>
+                        </View>
+                    )}
 
                     {/* Input Area */}
                     <View className="flex-row items-center gap-2 bg-surface-dark border border-white/20 rounded-[24px] p-1.5 pl-4 shadow-xl">
                         <TouchableOpacity className="w-8 h-8 items-center justify-center rounded-full active:bg-white/10">
                             <MaterialIcons name="add" size={24} color="#94a3b8" />
                         </TouchableOpacity>
-                        <TextInput placeholder="AI에게 질문해보세요..." placeholderTextColor="#94a3b8" className="flex-1 text-[15px] text-white py-2" />
+                        <TextInput
+                            placeholder="AI에게 질문해보세요..."
+                            placeholderTextColor="#94a3b8"
+                            className="flex-1 text-[15px] text-white py-2"
+                            onFocus={() => setKeyboardVisible(true)}
+                        />
                         <TouchableOpacity className="w-8 h-8 items-center justify-center rounded-full active:bg-white/10 mr-1">
                             <MaterialIcons name="mic" size={22} color="#94a3b8" />
                         </TouchableOpacity>

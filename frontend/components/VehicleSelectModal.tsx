@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, Modal, Pressable, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, Modal, Pressable, ActivityIndicator } from 'react-native';
+import { useAlertStore } from '../store/useAlertStore';
 import { MaterialIcons } from '@expo/vector-icons';
 import { getVehicleList, VehicleResponse, setPrimaryVehicle as apiSetPrimaryVehicle } from '../api/vehicleApi';
 
@@ -47,7 +48,7 @@ export default function VehicleSelectModal({
             // For now, let's just let user choose.
         } catch (error) {
             console.error('[VehicleSelectModal] Failed to load vehicles:', error);
-            Alert.alert('오류', '차량 목록을 불러오는데 실패했습니다.');
+            useAlertStore.getState().showAlert('오류', '차량 목록을 불러오는데 실패했습니다.', 'ERROR');
         } finally {
             setIsLoading(false);
         }

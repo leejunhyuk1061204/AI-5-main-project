@@ -33,6 +33,17 @@ const getConsumableStatus = async (vehicleId: string): Promise<MaintenanceStatus
     }
 };
 
+const recordMaintenanceBatch = async (vehicleId: string, items: { itemCode: string, lastReplacementDate?: string, lastReplacementMileage?: number }[]): Promise<boolean> => {
+    try {
+        await api.post(`/api/v1/vehicles/${vehicleId}/maintenance`, items);
+        return true;
+    } catch (error) {
+        console.error('Error recording batch maintenance:', error);
+        return false;
+    }
+};
+
 export default {
-    getConsumableStatus
+    getConsumableStatus,
+    recordMaintenanceBatch
 };

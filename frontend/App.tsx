@@ -1,6 +1,6 @@
 import './global.css';
 import { StatusBar } from 'expo-status-bar';
-import { View, Text, Platform } from 'react-native';
+import { View, Text, Platform, Keyboard } from 'react-native';
 import * as ExpoSplashScreen from 'expo-splash-screen';
 import { useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -9,13 +9,14 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as NavigationBar from 'expo-navigation-bar';
 import * as SystemUI from 'expo-system-ui';
+import { KeyboardProvider } from 'react-native-keyboard-controller';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 
 import { useVehicleStore } from './store/useVehicleStore';
 import { useUIStore } from './store/useUIStore';
-import { Keyboard } from 'react-native';
-import { KeyboardProvider } from 'react-native-keyboard-controller';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { useUserStore } from './store/useUserStore';
 import GlobalAlert from './components/common/GlobalAlert';
+import GlobalDatePicker from './components/common/GlobalDatePicker';
 import BottomNav from './nav/BottomNav';
 
 import Tos from './sign/Tos';
@@ -30,6 +31,7 @@ import ActiveLoading from './registration/active/ActiveLoading';
 import ActiveSuccess from './registration/active/ActiveSuccess';
 import ObdResult from './registration/active/ObdResult';
 import PassiveReg from './registration/passive/PassiveReg';
+import MaintenanceReg from './registration/passive/MaintenanceReg';
 import MyPage from './setting/MyPage';
 import DiagMain from './diagnosis/DiagMain';
 import EngineSoundDiag from './diagnosis/EngineSoundDiag';
@@ -65,7 +67,7 @@ function MainTabNavigator() {
       }}
     >
       <Tab.Screen name="MainHome" component={MainPage} />
-      <Tab.Screen name="DiagTab" component={DiagMain} />
+      <Tab.Screen name="DiagTab" component={AiProfessionalDiag} />
       <Tab.Screen name="HistoryTab" component={HistoryMain} />
       <Tab.Screen name="SettingTab" component={SettingMain} />
     </Tab.Navigator>
@@ -86,6 +88,8 @@ export default function App() {
   const [showCustomSplash, setShowCustomSplash] = useState(true);
 
   const loadFromStorage = useVehicleStore(state => state.loadFromStorage);
+  const fetchVehicles = useVehicleStore(state => state.fetchVehicles);
+  const loadUser = useUserStore(state => state.loadUser);
   const setKeyboardVisible = useUIStore(state => state.setKeyboardVisible);
 
   useEffect(() => {
@@ -114,7 +118,18 @@ export default function App() {
         // Check for persistent login
         const token = await AsyncStorage.getItem('accessToken');
         if (token) {
-          setInitialRoute('MainPage');
+          try {
+            await loadUser(); // 사용자 정보 미리 로드
+            const vehicles = await fetchVehicles();
+            if (vehicles.length > 0) {
+              setInitialRoute('MainPage');
+            } else {
+              setInitialRoute('RegisterMain');
+            }
+          } catch (e) {
+            console.error("Failed to fetch vehicles on startup", e);
+            setInitialRoute('MainPage');
+          }
         } else {
           // Check Tos agreement
           const hasAgreed = await AsyncStorage.getItem('hasAgreedToTos');
@@ -188,6 +203,7 @@ export default function App() {
                 <Stack.Screen name="ActiveSuccess" component={ActiveSuccess} />
                 <Stack.Screen name="ObdResult" component={ObdResult} />
                 <Stack.Screen name="PassiveReg" component={PassiveReg} />
+                <Stack.Screen name="MaintenanceReg" component={MaintenanceReg} />
                 <Stack.Screen name="EngineSoundDiag" component={EngineSoundDiag} />
                 <Stack.Screen
                   name="AiCompositeDiag"
@@ -221,6 +237,7 @@ export default function App() {
           )}
         </NavigationContainer>
         <GlobalAlert />
+        <GlobalDatePicker />
       </KeyboardProvider>
     </SafeAreaProvider>
   );

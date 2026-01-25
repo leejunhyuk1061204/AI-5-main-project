@@ -4,6 +4,8 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { getVehicleDetail, updateVehicle, deleteVehicle, VehicleResponse } from '../api/vehicleApi';
 import BaseScreen from '../components/layout/BaseScreen';
+import { useVehicleStore } from '../store/useVehicleStore';
+import { useAlertStore } from '../store/useAlertStore';
 
 export default function CarEdit() {
     const navigation = useNavigation<any>();
@@ -24,8 +26,7 @@ export default function CarEdit() {
 
     const loadVehicle = async () => {
         if (!vehicleId) {
-            Alert.alert('오류', '차량 정보를 찾을 수 없습니다.');
-            navigation.goBack();
+            useAlertStore.getState().showAlert('오류', '차량 정보를 찾을 수 없습니다.', 'ERROR', () => navigation.goBack());
             return;
         }
 
@@ -38,8 +39,7 @@ export default function CarEdit() {
             setVin(data.vin || '');
         } catch (error) {
             console.error('Failed to load vehicle:', error);
-            Alert.alert('오류', '차량 정보를 불러오는데 실패했습니다.');
-            navigation.goBack();
+            useAlertStore.getState().showAlert('오류', '차량 정보를 불러오는데 실패했습니다.', 'ERROR', () => navigation.goBack());
         } finally {
             setLoading(false);
         }
@@ -54,37 +54,34 @@ export default function CarEdit() {
                 carNumber: carNumber,
                 vin: vin
             });
-            Alert.alert('성공', '차량 정보가 수정되었습니다.', [
-                { text: '확인', onPress: () => navigation.goBack() }
-            ]);
+            await useVehicleStore.getState().fetchVehicles(); // 목록 새로고침
+            useAlertStore.getState().showAlert('성공', '차량 정보가 수정되었습니다.', 'SUCCESS', () => navigation.goBack());
         } catch (error) {
             console.error('Update failed:', error);
-            Alert.alert('오류', '차량 정보 수정에 실패했습니다.');
+            useAlertStore.getState().showAlert('오류', '차량 정보 수정에 실패했습니다.', 'ERROR');
         }
     };
 
     const handleDelete = () => {
-        Alert.alert(
+        useAlertStore.getState().showAlert(
             '차량 삭제',
             '정말로 이 차량을 삭제하시겠습니까?\n삭제된 데이터는 복구할 수 없습니다.',
-            [
-                { text: '취소', style: 'cancel' },
-                {
-                    text: '삭제',
-                    style: 'destructive',
-                    onPress: async () => {
-                        try {
-                            await deleteVehicle(vehicleId);
-                            Alert.alert('성공', '차량이 삭제되었습니다.', [
-                                { text: '확인', onPress: () => navigation.goBack() }
-                            ]);
-                        } catch (error) {
-                            console.error('Delete failed:', error);
-                            Alert.alert('오류', '차량 삭제에 실패했습니다.');
-                        }
-                    }
+            'WARNING',
+            async () => {
+                try {
+                    await deleteVehicle(vehicleId);
+                    await useVehicleStore.getState().fetchVehicles(); // 목록 새로고침
+                    useAlertStore.getState().showAlert('성공', '차량이 삭제되었습니다.', 'SUCCESS', () => navigation.goBack());
+                } catch (error) {
+                    console.error('Delete failed:', error);
+                    useAlertStore.getState().showAlert('오류', '차량 삭제에 실패했습니다.', 'ERROR');
                 }
-            ]
+            },
+            {
+                confirmText: '삭제',
+                cancelText: '취소',
+                isDestructive: true
+            }
         );
     };
 
@@ -117,7 +114,7 @@ export default function CarEdit() {
 
     if (loading) {
         return (
-            <View className="flex-1 bg-[#0B0C10] items-center justify-center">
+            <View className="flex-1 bg-background-dark items-center justify-center">
                 <ActivityIndicator size="large" color="#0d7ff2" />
             </View>
         );
@@ -129,11 +126,11 @@ export default function CarEdit() {
             footer={FooterActions}
             scrollable={true}
             padding={false}
-            bgColor="#0B0C10"
+            bgColor="#101922" // background-dark 토큰값
         >
             <View className="px-5 mt-6 pb-12">
                 {/* Read-Only Info Card */}
-                <View className="bg-[#15181E] border border-white/5 rounded-2xl p-5 mb-8">
+                <View className="bg-surface-dark border border-white/5 rounded-2xl p-5 mb-8">
                     <View className="flex-row items-center gap-3 mb-4">
                         <View className="w-10 h-10 rounded-full bg-primary/20 items-center justify-center">
                             <MaterialIcons name="directions-car" size={24} color="#0d7ff2" />
@@ -164,7 +161,7 @@ export default function CarEdit() {
                         onChangeText={setNickname}
                         placeholder="차량 별칭을 입력하세요"
                         placeholderTextColor="#94a3b8"
-                        className="w-full h-14 bg-[#15181E] border border-border-dark rounded-xl px-4 text-base text-white focus:border-primary"
+                        className="w-full h-14 bg-surface-dark border border-border-dark rounded-xl px-4 text-base text-white focus:border-primary"
                     />
                 </View>
 
@@ -176,7 +173,7 @@ export default function CarEdit() {
                         onChangeText={setCarNumber}
                         placeholder="차량 번호를 입력하세요 (예: 12가 3456)"
                         placeholderTextColor="#94a3b8"
-                        className="w-full h-14 bg-[#15181E] border border-border-dark rounded-xl px-4 text-base text-white focus:border-primary"
+                        className="w-full h-14 bg-surface-dark border border-border-dark rounded-xl px-4 text-base text-white focus:border-primary"
                     />
                 </View>
 
@@ -189,7 +186,7 @@ export default function CarEdit() {
                         placeholder="차대번호를 입력하세요"
                         placeholderTextColor="#94a3b8"
                         autoCapitalize="characters"
-                        className="w-full h-14 bg-[#15181E] border border-border-dark rounded-xl px-4 text-base text-white focus:border-primary"
+                        className="w-full h-14 bg-surface-dark border border-border-dark rounded-xl px-4 text-base text-white focus:border-primary"
                     />
                 </View>
 

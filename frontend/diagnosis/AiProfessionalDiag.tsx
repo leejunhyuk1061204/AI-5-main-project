@@ -78,7 +78,7 @@ export default function AiProfessionalDiag() {
                     />
                 </>
             }
-            useBottomNav={false} // 서브페이지이므로 하단바 여백 미사용
+            useBottomNav={true} // 탭 메뉴로 쓰일 때 하단바 여백 확보
         >
             <View className="flex-1">
                 {/* 1. Vehicle Info Card */}

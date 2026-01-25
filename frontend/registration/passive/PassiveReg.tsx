@@ -4,9 +4,8 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
-import { registerVehicle } from '../../api/vehicleApi';
-import { getManufacturers, getModelNames, getModelYears, getAvailableFuelTypes } from '../../api/masterApi';
-import StatusModal from '../../components/StatusModal';
+import { useAlertStore } from '../../store/useAlertStore';
+import { useRegistrationStore } from '../../store/useRegistrationStore';
 
 // Selection Type
 type SelectionType = 'manufacturer' | 'model' | 'year';
@@ -22,95 +21,31 @@ const FUEL_CONFIG: Record<string, { label: string, icon: keyof typeof MaterialIc
 };
 
 export default function PassiveReg() {
-    const navigation = useNavigation();
+    const navigation = useNavigation<any>();
     const insets = useSafeAreaInsets();
 
-    // Form State
-    const [vehicleNumber, setVehicleNumber] = useState('');
-    const [vin, setVin] = useState('');
-    const [fuelType, setFuelType] = useState(''); // Default to empty
+    // Store
+    const store = useRegistrationStore();
 
-    // Master Data States
-    const [manufacturer, setManufacturer] = useState('');
-    const [modelName, setModelName] = useState('');
-    const [modelYear, setModelYear] = useState('');
-
-    // List Data
-    const [manufacturers, setManufacturers] = useState<string[]>([]);
-    const [models, setModels] = useState<string[]>([]);
-    const [years, setYears] = useState<string[]>([]);
-    const [availableFuels, setAvailableFuels] = useState<string[]>([]);
-
-    // UI States
-    const [loading, setLoading] = useState(false);
+    // Local UI State
     const [modalVisible, setModalVisible] = useState(false);
     const [activeType, setActiveType] = useState<SelectionType>('manufacturer');
     const [searchQuery, setSearchQuery] = useState('');
+    const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
 
-    const [registrationStatus, setRegistrationStatus] = useState<'idle' | 'success' | 'error'>('idle');
-    const [resultModalVisible, setResultModalVisible] = useState(false);
-    const [errorMessage, setErrorMessage] = useState('');
-
-    // Fetch Manufacturers on mount
+    // Initial Load
     useEffect(() => {
-        loadManufacturers();
+        store.loadManufacturers();
     }, []);
 
-    const loadManufacturers = async () => {
-        try {
-            const data = await getManufacturers();
-            setManufacturers(data);
-        } catch (error) {
-            console.error('Failed to load manufacturers:', error);
-        }
-    };
 
-    const loadModels = async (make: string) => {
-        setLoading(true);
-        try {
-            const data = await getModelNames(make);
-            setModels(data);
-        } catch (error) {
-            console.error('Failed to load models:', error);
-        } finally {
-            setLoading(false);
-        }
-    };
 
-    const loadYears = async (make: string, model: string) => {
-        setLoading(true);
-        try {
-            const data = await getModelYears(make, model);
-            setYears(data.map(y => y.toString()));
-        } catch (error) {
-            console.error('Failed to load years:', error);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const loadAvailableFuels = async (make: string, model: string, year: string) => {
-        try {
-            const data = await getAvailableFuelTypes(make, model, parseInt(year));
-
-            // Sort by priority before setting default
-            const sortedData = [...data].sort((a, b) => {
-                const order = ['GASOLINE', 'DIESEL', 'HEV', 'EV', 'PHEV', 'LPG'];
-                const indexA = order.indexOf(a);
-                const indexB = order.indexOf(b);
-                return (indexA === -1 ? 99 : indexA) - (indexB === -1 ? 99 : indexB);
-            });
-
-            setAvailableFuels(data); // UI displays in original order (or sorted if preferred, but usually we want default selection to match prioritized first item)
-
-            // Default select the top priority fuel type available
-            if (sortedData.length > 0) {
-                setFuelType(sortedData[0].toLowerCase());
-            }
-        } catch (error) {
-            console.error('Failed to load fuel types:', error);
-        }
-    };
+    // Keyboard Listener
+    useEffect(() => {
+        const show = Keyboard.addListener('keyboardDidShow', () => setIsKeyboardVisible(true));
+        const hide = Keyboard.addListener('keyboardDidHide', () => setIsKeyboardVisible(false));
+        return () => { show.remove(); hide.remove(); };
+    }, []);
 
     // Korean Choseong (Initial Consonant) Search Logic
     const getChoseong = (str: string) => {
@@ -130,10 +65,11 @@ export default function PassiveReg() {
     };
 
     // Filtered List for Search
+    // Filtered List
     const filteredList = useMemo(() => {
-        const currentList = activeType === 'manufacturer' ? manufacturers
-            : activeType === 'model' ? models
-                : years;
+        const currentList = activeType === 'manufacturer' ? store.manufacturers
+            : activeType === 'model' ? store.models
+                : store.years;
 
         if (!searchQuery) return currentList;
 
@@ -143,40 +79,19 @@ export default function PassiveReg() {
         return currentList.filter(item => {
             const lowerItem = item.toLowerCase();
             const itemChoseong = getChoseong(lowerItem);
-
-            // 1. Literal search
-            if (lowerItem.includes(query)) return true;
-
-            // 2. Choseong search
-            if (itemChoseong.includes(queryChoseong)) return true;
-
-            return false;
+            return lowerItem.includes(query) || itemChoseong.includes(queryChoseong);
         });
-    }, [activeType, manufacturers, models, years, searchQuery]);
-
-    // Keyboard visibility for dynamic modal height
-    const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
-
-    useEffect(() => {
-        const showSubscription = Keyboard.addListener('keyboardDidShow', () => setIsKeyboardVisible(true));
-        const hideSubscription = Keyboard.addListener('keyboardDidHide', () => setIsKeyboardVisible(false));
-
-        return () => {
-            showSubscription.remove();
-            hideSubscription.remove();
-        };
-    }, []);
+    }, [activeType, store.manufacturers, store.models, store.years, searchQuery]);
 
     const openModal = (type: SelectionType) => {
-        if (type === 'model' && !manufacturer) {
-            Alert.alert('알림', '제조사를 먼저 선택해주세요.');
+        if (type === 'model' && !store.manufacturer) {
+            useAlertStore.getState().showAlert('알림', '제조사를 먼저 선택해주세요.', 'INFO');
             return;
         }
-        if (type === 'year' && !modelName) {
-            Alert.alert('알림', '모델명을 먼저 선택해주세요.');
+        if (type === 'year' && !store.modelName) {
+            useAlertStore.getState().showAlert('알림', '모델명을 먼저 선택해주세요.', 'INFO');
             return;
         }
-
         setActiveType(type);
         setSearchQuery('');
         setModalVisible(true);
@@ -184,66 +99,50 @@ export default function PassiveReg() {
 
     const handleSelect = (item: string) => {
         if (activeType === 'manufacturer') {
-            if (manufacturer !== item) {
-                setManufacturer(item);
-                setModelName('');
-                setModelYear('');
-                setAvailableFuels([]);
-                setFuelType('');
-                loadModels(item);
+            if (store.manufacturer !== item) {
+                store.setVehicleInfo('manufacturer', item);
+                store.setVehicleInfo('modelName', '');
+                store.setVehicleInfo('modelYear', '');
+                store.setVehicleInfo('fuelType', '');
+                store.loadModels(item);
             }
         } else if (activeType === 'model') {
-            if (modelName !== item) {
-                setModelName(item);
-                setModelYear('');
-                setAvailableFuels([]);
-                setFuelType('');
-                loadYears(manufacturer, item);
+            if (store.modelName !== item) {
+                store.setVehicleInfo('modelName', item);
+                store.setVehicleInfo('modelYear', '');
+                store.setVehicleInfo('fuelType', '');
+                store.loadYears(store.manufacturer, item);
             }
         } else if (activeType === 'year') {
-            if (modelYear !== item) {
-                setModelYear(item);
-                loadAvailableFuels(manufacturer, modelName, item);
+            if (store.modelYear !== item) {
+                store.setVehicleInfo('modelYear', item);
+                store.loadFuels(store.manufacturer, store.modelName, item);
             }
         }
         setModalVisible(false);
     };
 
-    const handleRegister = async () => {
-        if (!vehicleNumber || !manufacturer || !modelName || !modelYear || !fuelType) {
-            Alert.alert('알림', '모든 필수 필드를 입력해주세요.');
+    const handleNext = () => {
+        if (!store.vehicleNumber || !store.manufacturer || !store.modelName || !store.modelYear || !store.fuelType) {
+            useAlertStore.getState().showAlert('알림', '모든 필수 필드를 입력해주세요.', 'WARNING');
             return;
         }
-
-        try {
-            await registerVehicle({
-                manufacturer,
-                modelName,
-                modelYear: parseInt(modelYear),
-                fuelType: fuelType.toUpperCase() as any,
-                carNumber: vehicleNumber,
-                memo: vin ? `VIN: ${vin}` : undefined,
-                nickname: `${manufacturer} ${modelName}`,
-            });
-            Alert.alert('성공', '차량이 성공적으로 등록되었습니다.', [
-                { text: '확인', onPress: () => navigation.goBack() }
-            ]);
-        } catch (error) {
-            console.error('Registration failed:', error);
-            Alert.alert('오류', '차량 등록 중 문제가 발생했습니다. 다시 시도해주세요.');
-        }
+        // Go to Step 2
+        navigation.navigate('MaintenanceReg');
     };
+
+
 
     const FuelOption = ({ label, icon, value }: { label: string, icon: keyof typeof MaterialIcons.glyphMap, value: string }) => {
         const displayValue = value.toLowerCase();
-        const isSelected = fuelType === displayValue;
+        const isSelected = store.fuelType.toLowerCase() === displayValue;
 
         return (
             <Pressable
-                onPress={() => setFuelType(displayValue)}
+                onPress={() => store.setVehicleInfo('fuelType', value)}
                 className={`flex-row items-center justify-center h-16 rounded-xl border mb-3 px-4 transition-all duration-200 ${isSelected
                     ? 'border-primary bg-primary/10'
-                    : 'border-border-dark bg-[#15181E]'
+                    : 'border-border-dark bg-surface-dark'
                     }`}
             >
                 <MaterialIcons
@@ -259,11 +158,12 @@ export default function PassiveReg() {
     };
 
     return (
-        <View className="flex-1 bg-[#0B0C10]">
+        <View className="flex-1 bg-background-dark">
             <StatusBar style="light" />
 
             {/* Header */}
-            <View className="bg-[#0B0C10]/80 backdrop-blur-md z-50 sticky top-0" style={{ paddingTop: insets.top }}>
+            {/* Header */}
+            <View className="bg-background-dark/80 backdrop-blur-md z-50 sticky top-0" style={{ paddingTop: insets.top }}>
                 <View className="flex-row items-center justify-between px-4 py-3 pb-4">
                     <TouchableOpacity
                         className="w-10 h-10 items-center justify-center rounded-full hover:bg-white/10"
@@ -280,15 +180,33 @@ export default function PassiveReg() {
             <ScrollView className="flex-1 px-5" contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
                 <View className="space-y-8 mt-2">
                     {/* Vehicle Number */}
-                    <View>
-                        <Text className="text-sm font-medium text-slate-400 mb-2 pl-1">차량 번호</Text>
-                        <TextInput
-                            value={vehicleNumber}
-                            onChangeText={setVehicleNumber}
-                            placeholder="예: 12가 3456"
-                            placeholderTextColor="#94a3b8"
-                            className="w-full h-14 bg-[#15181E] border border-border-dark rounded-xl px-4 text-base text-white focus:border-primary"
-                        />
+                    <View className="mb-8">
+                        <Text className="text-sm font-medium text-slate-400 mb-2 ml-1">차량 번호</Text>
+                        <View className="h-14 bg-surface-card border border-border-dark rounded-xl px-4 flex-row items-center focus:border-primary">
+                            <TextInput
+                                value={store.vehicleNumber}
+                                onChangeText={(t) => store.setVehicleInfo('vehicleNumber', t)}
+                                placeholder="12가 3456"
+                                placeholderTextColor="#64748b"
+                                className="flex-1 text-white text-lg font-bold"
+                            />
+                        </View>
+                    </View>
+
+                    {/* Total Mileage Input */}
+                    <View className="mb-0">
+                        <Text className="text-sm font-medium text-slate-400 mb-2 pl-1">현재 총 주행거리</Text>
+                        <View className="relative flex-row items-center">
+                            <TextInput
+                                value={store.totalMileage}
+                                onChangeText={(t) => store.setVehicleInfo('totalMileage', t.replace(/[^0-9]/g, ''))}
+                                placeholder="0"
+                                placeholderTextColor="#94a3b8"
+                                keyboardType="number-pad"
+                                className="w-full h-14 bg-surface-dark border border-border-dark rounded-xl pl-4 pr-12 text-base text-white focus:border-primary"
+                            />
+                            <Text className="absolute right-4 text-slate-500 font-medium">km</Text>
+                        </View>
                     </View>
 
                     {/* VIN Number */}
@@ -296,11 +214,11 @@ export default function PassiveReg() {
                         <Text className="text-sm font-medium text-slate-400 mb-2 pl-1">차대번호 (VIN)</Text>
                         <View className="relative flex-row items-center">
                             <TextInput
-                                value={vin}
-                                onChangeText={setVin}
+                                value={store.vin}
+                                onChangeText={(t) => store.setVehicleInfo('vin', t)}
                                 placeholder="17자리 영문+숫자"
                                 placeholderTextColor="#94a3b8"
-                                className="w-full h-14 bg-[#15181E] border border-border-dark rounded-xl pl-4 pr-14 text-base text-white focus:border-primary uppercase"
+                                className="w-full h-14 bg-surface-dark border border-border-dark rounded-xl pl-4 pr-14 text-base text-white focus:border-primary uppercase"
                             />
                             <TouchableOpacity className="absolute right-2 p-2">
                                 <MaterialIcons name="center-focus-strong" size={24} color="#0d7ff2" />
@@ -315,10 +233,10 @@ export default function PassiveReg() {
                             <Text className="text-sm font-medium text-slate-400 mb-2 pl-1">제조사</Text>
                             <TouchableOpacity
                                 onPress={() => openModal('manufacturer')}
-                                className="relative w-full h-14 bg-[#15181E] border border-border-dark rounded-xl px-4 justify-center"
+                                className="relative w-full h-14 bg-surface-dark border border-border-dark rounded-xl px-4 justify-center"
                             >
-                                <Text className={`text-base ${manufacturer ? 'text-white' : 'text-slate-400'}`}>
-                                    {manufacturer || '제조사를 선택해주세요'}
+                                <Text className={`text-base ${store.manufacturer ? 'text-white' : 'text-slate-400'}`}>
+                                    {store.manufacturer || '제조사를 선택해주세요'}
                                 </Text>
                                 <View className="absolute right-4">
                                     <MaterialIcons name="expand-more" size={24} color="#94a3b8" />
@@ -331,11 +249,11 @@ export default function PassiveReg() {
                             <Text className="text-sm font-medium text-slate-400 mb-2 pl-1">모델명</Text>
                             <TouchableOpacity
                                 onPress={() => openModal('model')}
-                                className={`relative w-full h-14 bg-[#15181E] border border-border-dark rounded-xl px-4 justify-center ${!manufacturer && 'opacity-50'}`}
-                                disabled={!manufacturer}
+                                className={`relative w-full h-14 bg-surface-dark border border-border-dark rounded-xl px-4 justify-center ${!store.manufacturer && 'opacity-50'}`}
+                                disabled={!store.manufacturer}
                             >
-                                <Text className={`text-base ${modelName ? 'text-white' : 'text-slate-400'}`}>
-                                    {modelName || '모델을 선택해주세요'}
+                                <Text className={`text-base ${store.modelName ? 'text-white' : 'text-slate-400'}`}>
+                                    {store.modelName || '모델을 선택해주세요'}
                                 </Text>
                                 <View className="absolute right-4">
                                     <MaterialIcons name="expand-more" size={24} color="#94a3b8" />
@@ -348,11 +266,11 @@ export default function PassiveReg() {
                             <Text className="text-sm font-medium text-slate-400 mb-2 pl-1">연식</Text>
                             <TouchableOpacity
                                 onPress={() => openModal('year')}
-                                className={`relative w-full h-14 bg-[#15181E] border border-border-dark rounded-xl px-4 justify-center ${!modelName && 'opacity-50'}`}
-                                disabled={!modelName}
+                                className={`relative w-full h-14 bg-surface-dark border border-border-dark rounded-xl px-4 justify-center ${!store.modelName && 'opacity-50'}`}
+                                disabled={!store.modelName}
                             >
-                                <Text className={`text-base ${modelYear ? 'text-white' : 'text-slate-400'}`}>
-                                    {modelYear ? `${modelYear}년형` : '연식을 선택해주세요'}
+                                <Text className={`text-base ${store.modelYear ? 'text-white' : 'text-slate-400'}`}>
+                                    {store.modelYear ? `${store.modelYear}년형` : '연식을 선택해주세요'}
                                 </Text>
                                 <View className="absolute right-4">
                                     <MaterialIcons name="expand-more" size={24} color="#94a3b8" />
@@ -362,11 +280,11 @@ export default function PassiveReg() {
                     </View>
 
                     {/* Fuel Type */}
-                    {availableFuels.length > 0 && (
+                    {store.availableFuels.length > 0 && (
                         <View>
                             <Text className="text-sm font-medium text-slate-400 mb-3 pl-1">연료 타입</Text>
                             <View className="flex-row flex-wrap justify-between">
-                                {availableFuels
+                                {store.availableFuels
                                     .sort((a, b) => {
                                         const order = ['GASOLINE', 'DIESEL', 'HEV', 'EV', 'PHEV', 'LPG'];
                                         const indexA = order.indexOf(a);
@@ -378,7 +296,7 @@ export default function PassiveReg() {
                                         return (
                                             <View
                                                 key={fuel}
-                                                style={{ width: availableFuels.length === 1 ? '100%' : '48.5%' }}
+                                                style={{ width: store.availableFuels.length === 1 ? '100%' : '48.5%' }}
                                             >
                                                 <FuelOption
                                                     value={fuel}
@@ -396,10 +314,10 @@ export default function PassiveReg() {
 
             <View className="absolute bottom-0 left-0 right-0 p-5 bg-gradient-to-t from-[#0B0C10] via-[#0B0C10] to-transparent" style={{ paddingBottom: insets.bottom + 10 }}>
                 <TouchableOpacity
-                    onPress={handleRegister}
+                    onPress={handleNext}
                     className="w-full h-14 bg-primary rounded-xl shadow-lg shadow-blue-500/30 flex-row items-center justify-center gap-2 active:opacity-90"
                 >
-                    <Text className="text-white font-bold text-lg">등록 완료</Text>
+                    <Text className="text-white font-bold text-lg">다음 단계로</Text>
                     <MaterialIcons name="arrow-forward" size={20} color="white" />
                 </TouchableOpacity>
             </View>
@@ -421,7 +339,7 @@ export default function PassiveReg() {
                     >
                         <Pressable
                             onPress={(e) => e.stopPropagation()}
-                            className="bg-[#15181E] rounded-t-3xl overflow-hidden"
+                            className="bg-surface-dark rounded-t-3xl overflow-hidden"
                             style={{
                                 height: isKeyboardVisible ? '85%' : '45%',
                                 maxHeight: isKeyboardVisible ? '85%' : '45%'
@@ -439,7 +357,7 @@ export default function PassiveReg() {
 
                                 {/* Search Bar */}
                                 <View className="px-4 py-3">
-                                    <View className="flex-row items-center bg-[#0B0C10] border border-border-dark rounded-xl px-3 h-12">
+                                    <View className="flex-row items-center bg-background-dark border border-border-dark rounded-xl px-3 h-12">
                                         <MaterialIcons name="search" size={20} color="#94a3b8" />
                                         <TextInput
                                             value={searchQuery}
@@ -457,7 +375,7 @@ export default function PassiveReg() {
                                     </View>
                                 </View>
 
-                                {loading ? (
+                                {store.isLoading ? (
                                     <View className="flex-1 items-center justify-center py-10">
                                         <ActivityIndicator size="large" color="#0d7ff2" />
                                     </View>

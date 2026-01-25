@@ -28,13 +28,13 @@ export default function AlertSetting() {
         onValueChange: (val: boolean) => void;
         iconType?: 'material' | 'community';
     }) => (
-        <View className="flex-row items-center justify-between p-4 mb-3 rounded-2xl bg-[#ffffff08] border border-[#ffffff0d]">
+        <View className="flex-row items-center justify-between p-4 mb-3 rounded-2xl bg-white/5 border border-white/10">
             <View className="flex-row items-center flex-1 gap-4">
-                <View className="w-12 h-12 rounded-xl bg-[#1A1C24] border border-white/5 items-center justify-center shrink-0">
+                <View className="w-12 h-12 rounded-xl bg-surface-dark border border-white/5 items-center justify-center shrink-0">
                     {iconType === 'material' ? (
-                        <MaterialIcons name={icon} size={24} color={value ? "#007AFF" : "#6b7280"} />
+                        <MaterialIcons name={icon} size={24} color={value ? "#0d7ff2" : "#6b7280"} />
                     ) : (
-                        <MaterialCommunityIcons name={icon} size={24} color={value ? "#007AFF" : "#6b7280"} />
+                        <MaterialCommunityIcons name={icon} size={24} color={value ? "#0d7ff2" : "#6b7280"} />
                     )}
                 </View>
                 <View className="flex-1">
@@ -54,7 +54,7 @@ export default function AlertSetting() {
     );
 
     const HeaderCustom = (
-        <View className="flex-row items-center px-4 py-2 mb-4">
+        <View className="flex-row items-center px-4 py-2 mb-4 border-b border-white/5">
             <TouchableOpacity
                 onPress={() => navigation.goBack()}
                 className="w-10 h-10 items-center justify-center -ml-2"
@@ -124,7 +124,7 @@ export default function AlertSetting() {
                 {/* Footer Info */}
                 <View className="p-4 mb-12 border bg-black/40 rounded-2xl border-white/5">
                     <View className="flex-row items-start gap-3">
-                        <MaterialIcons name="info-outline" size={20} color="#007AFF" />
+                        <MaterialIcons name="info-outline" size={20} color="#0d7ff2" />
                         <Text className="flex-1 text-xs leading-relaxed font-normal text-white/50">
                             차량 안전과 직결된 긴급 경보 및 시스템 필수 공지사항은 설정과 관계없이 발송될 수 있습니다. AI 이상감지 알림은 데이터 연결 상태에 따라 실제 차량 상태와 다를 수 있습니다.
                         </Text>
