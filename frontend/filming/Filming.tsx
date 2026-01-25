@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, TouchableOpacity, Dimensions, StyleSheet, Image, ActivityIndicator, Alert, StatusBar as RNStatusBar } from 'react-native';
-import { diagnoseImage } from '../api/aiApi';
+import { diagnoseImage, replyToDiagnosisSession } from '../api/aiApi';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -57,10 +57,21 @@ export default function Filming({ navigation, route }: { navigation?: any; route
 
     const analyzeImage = async () => {
         if (!capturedImage) return;
+        const sessionId = route?.params?.sessionId;
 
         setIsAnalyzing(true);
         try {
-            const result = await diagnoseImage(capturedImage);
+            let result;
+            if (sessionId) {
+                // If we are in an interactive session, use REPLY endpoint
+                result = await replyToDiagnosisSession(sessionId, {
+                    userResponse: "사진을 촬영했습니다.", // Default text for media reply 
+                    vehicleId: route?.params?.vehicleId || '00000000-0000-0000-0000-000000000000'
+                }, capturedImage);
+            } else {
+                // Otherwise start a new diagnosis
+                result = await diagnoseImage(capturedImage);
+            }
 
             if (!navigation) {
                 Alert.alert('진단 완료', '진단 결과가 준비되었습니다.');
@@ -69,6 +80,8 @@ export default function Filming({ navigation, route }: { navigation?: any; route
 
             if (route?.params?.from === 'chatbot') {
                 navigation.navigate('AiCompositeDiag', { diagnosisResult: result });
+            } else if (route?.params?.from === 'professional') {
+                navigation.navigate('AiProfessionalDiag', { diagnosisResult: result });
             } else {
                 navigation.navigate('VisualDiagnosis', { diagnosisResult: result, capturedImage: capturedImage });
             }

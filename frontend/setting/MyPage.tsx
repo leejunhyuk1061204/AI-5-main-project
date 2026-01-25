@@ -1,13 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, TextInput, Alert, Modal, KeyboardAvoidingView, Platform, Keyboard, TouchableWithoutFeedback } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { StatusBar } from 'expo-status-bar';
+import { View, Text, TouchableOpacity, TextInput, Modal, KeyboardAvoidingView, Platform, Keyboard, TouchableWithoutFeedback } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { authService, UserResponse } from '../services/auth';
 import { CommonActions } from '@react-navigation/native';
+import BaseScreen from '../components/layout/BaseScreen';
 
 export default function MyPage() {
     const navigation = useNavigation<any>();
@@ -58,7 +57,7 @@ export default function MyPage() {
     // Action Handlers
     const openNicknameModal = () => {
         if (user) {
-            setTempInput(user.nickname); // Pre-fill current nickname
+            setTempInput(user.nickname);
             setModalType('nickname');
             setModalVisible(true);
         }
@@ -189,24 +188,25 @@ export default function MyPage() {
         </TouchableOpacity>
     );
 
+    const HeaderCustom = (
+        <View className="flex-row items-center justify-between px-4 py-3 border-b border-white/5">
+            <TouchableOpacity
+                className="w-10 h-10 items-center justify-center"
+                onPress={() => navigation.goBack()}
+            >
+                <MaterialIcons name="arrow-back-ios-new" size={24} color="#0d7ff2" />
+            </TouchableOpacity>
+            <Text className="text-white text-lg font-bold flex-1 text-center pr-10">내 프로필 및 계정 설정</Text>
+        </View>
+    );
+
     return (
-        <View className="flex-1 bg-background-dark">
-            <StatusBar style="light" />
-
-            {/* Header */}
-            <SafeAreaView className="z-10 bg-background-dark/90 sticky top-0 border-b border-white/5" edges={['top']}>
-                <View className="flex-row items-center justify-between px-4 py-3">
-                    <TouchableOpacity
-                        className="w-10 h-10 items-center justify-center"
-                        onPress={() => navigation.goBack()}
-                    >
-                        <MaterialIcons name="arrow-back-ios-new" size={24} color="#0d7ff2" />
-                    </TouchableOpacity>
-                    <Text className="text-white text-lg font-bold flex-1 text-center pr-10">내 프로필 및 계정 설정</Text>
-                </View>
-            </SafeAreaView>
-
-            <ScrollView className="flex-1 px-5 pt-6" contentContainerStyle={{ paddingBottom: 50 }}>
+        <BaseScreen
+            header={HeaderCustom}
+            scrollable={true}
+            padding={false}
+        >
+            <View className="px-5 pt-6">
                 {/* Profile Card */}
                 <LinearGradient
                     colors={['#1a2a3a', '#111a24']}
@@ -269,7 +269,7 @@ export default function MyPage() {
                     </View>
                     <Text className="text-[10px] text-white font-bold uppercase tracking-widest">Predictive AI Maintenance v2.4</Text>
                 </View>
-            </ScrollView>
+            </View>
 
             {/* Custom Unified Modal */}
             <Modal
@@ -284,8 +284,6 @@ export default function MyPage() {
                         className="flex-1 justify-center items-center bg-black/80 px-6"
                     >
                         <View className="w-full bg-[#17212b] rounded-2xl border border-white/10 p-6 shadow-2xl">
-                            {/* Modal Content Switch */}
-                            {/* Alert Type */}
                             {modalType === 'alert' && (
                                 <View className="items-center mb-6">
                                     <View className="w-12 h-12 rounded-full bg-primary/10 items-center justify-center mb-3">
@@ -351,7 +349,6 @@ export default function MyPage() {
                                 </View>
                             )}
 
-                            {/* Buttons */}
                             <View className="flex-row gap-3">
                                 {modalType !== 'alert' && (
                                     <TouchableOpacity
@@ -375,6 +372,6 @@ export default function MyPage() {
                     </KeyboardAvoidingView>
                 </TouchableWithoutFeedback>
             </Modal>
-        </View>
+        </BaseScreen>
     );
 }
