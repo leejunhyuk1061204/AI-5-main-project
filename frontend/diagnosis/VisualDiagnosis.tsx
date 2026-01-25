@@ -58,17 +58,17 @@ export default function VisualDiagnosis() {
 
             {/* Analysis Result */}
             <View className="px-5">
-                <View className="bg-[#1b2127] rounded-2xl p-6 border border-white/10 mb-6">
+                <View className="bg-surface-card rounded-2xl p-6 border border-white/10 mb-6">
                     <View className="flex-row items-center gap-3 mb-4">
-                        <View className={`w-10 h-10 rounded-full items-center justify-center ${diagnosisResult?.result === 'NORMAL' ? 'bg-green-500/20' : 'bg-red-500/20'}`}>
+                        <View className={`w-10 h-10 rounded-full items-center justify-center ${diagnosisResult?.result === 'NORMAL' ? 'bg-success/20' : 'bg-error/20'}`}>
                             <MaterialIcons
                                 name={diagnosisResult?.result === 'NORMAL' ? "check-circle" : "warning"}
                                 size={24}
-                                color={diagnosisResult?.result === 'NORMAL' ? "#4ade80" : "#ef4444"}
+                                color={diagnosisResult?.result === 'NORMAL' ? "#0bda5b" : "#ff6b6b"}
                             />
                         </View>
                         <View>
-                            <Text className="text-sm text-slate-400 font-medium">진단 결과</Text>
+                            <Text className="text-sm text-text-muted font-medium">진단 결과</Text>
                             <Text className="text-xl font-bold text-white mt-0.5">
                                 {diagnosisResult?.result === 'NORMAL' ? '정상' : '이상 발견'}
                             </Text>
@@ -77,7 +77,7 @@ export default function VisualDiagnosis() {
 
                     <View className="h-[1px] bg-white/10 w-full mb-4" />
 
-                    <Text className="text-slate-300 leading-6 text-base">
+                    <Text className="text-text-secondary leading-6 text-base">
                         {diagnosisResult?.description || "분석된 진단 내용이 없습니다."}
                     </Text>
                 </View>
@@ -87,13 +87,13 @@ export default function VisualDiagnosis() {
                     <View className="mb-6">
                         <Text className="text-white font-bold text-lg mb-4 px-1">부품별 상세 분석</Text>
                         {diagnosisResult.parts.map((part: any, index: number) => (
-                            <View key={index} className="flex-row items-center justify-between bg-[#1b2127] p-4 rounded-xl border border-white/5 mb-3">
-                                <Text className="text-slate-300 font-medium">{part.name}</Text>
-                                <View className={`px-2.5 py-1 rounded-md ${part.status === 'NORMAL' ? 'bg-green-500/10' :
-                                    part.status === 'WARNING' ? 'bg-yellow-500/10' : 'bg-red-500/10'
+                            <View key={index} className="flex-row items-center justify-between bg-surface-card p-4 rounded-xl border border-white/5 mb-3">
+                                <Text className="text-text-secondary font-medium">{part.name}</Text>
+                                <View className={`px-2.5 py-1 rounded-md ${part.status === 'NORMAL' ? 'bg-success/10' :
+                                    part.status === 'WARNING' ? 'bg-warning/10' : 'bg-error/10'
                                     }`}>
-                                    <Text className={`text-xs font-bold ${part.status === 'NORMAL' ? 'text-green-500' :
-                                        part.status === 'WARNING' ? 'text-yellow-500' : 'text-red-500'
+                                    <Text className={`text-xs font-bold ${part.status === 'NORMAL' ? 'text-success' :
+                                        part.status === 'WARNING' ? 'text-warning' : 'text-error'
                                         }`}>
                                         {part.status}
                                     </Text>
@@ -105,7 +105,7 @@ export default function VisualDiagnosis() {
 
                 <TouchableOpacity
                     onPress={() => navigation.goBack()}
-                    className="w-full bg-[#0d7ff2] py-4 rounded-xl items-center active:scale-95 shadow-lg shadow-blue-500/20 mb-10"
+                    className="w-full bg-primary py-4 rounded-xl items-center active:scale-95 shadow-lg shadow-primary/20 mb-10"
                 >
                     <Text className="text-white font-bold text-base">확인</Text>
                 </TouchableOpacity>

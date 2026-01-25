@@ -127,14 +127,14 @@ export default function CarManage() {
     };
 
     const HeaderCustom = (
-        <View className="flex-row items-center px-4 py-3 border-b border-white/5 bg-[#050505]/80">
+        <View className="flex-row items-center px-4 py-3 border-b border-white/5 bg-deep-black/80">
             <TouchableOpacity
                 className="w-10 h-10 items-center justify-center -ml-2 rounded-full hover:bg-white/5 active:bg-white/10"
                 onPress={() => navigation.goBack()}
             >
                 <MaterialIcons name="arrow-back-ios-new" size={24} color="#f1f5f9" />
             </TouchableOpacity>
-            <Text className="text-xl font-bold text-slate-100 flex-1 ml-2">내 차량 관리</Text>
+            <Text className="text-xl font-bold text-white flex-1 ml-2">내 차량 관리</Text>
             <TouchableOpacity onPress={loadVehicles}>
                 <MaterialIcons name="refresh" size={24} color="#94a3b8" />
             </TouchableOpacity>
@@ -144,9 +144,9 @@ export default function CarManage() {
     // 로딩 중
     if (isLoading && vehicles.length === 0) {
         return (
-            <View className="flex-1 bg-[#050505] items-center justify-center">
+            <View className="flex-1 bg-deep-black items-center justify-center">
                 <ActivityIndicator size="large" color="#0d7ff2" />
-                <Text className="text-slate-400 mt-4">차량 정보를 불러오는 중...</Text>
+                <Text className="text-text-muted mt-4">차량 정보를 불러오는 중...</Text>
             </View>
         );
     }
@@ -174,7 +174,7 @@ export default function CarManage() {
                                     <Text className="text-2xl font-bold text-white tracking-tight mb-1">
                                         {selectedVehicle.manufacturer} {selectedVehicle.modelName}
                                     </Text>
-                                    <Text className="text-slate-400 text-sm">
+                                    <Text className="text-text-muted text-sm">
                                         {selectedVehicle.carNumber || '번호판 미등록'}
                                     </Text>
                                 </View>
@@ -185,14 +185,14 @@ export default function CarManage() {
 
                             <View className="flex-row gap-3 mt-2">
                                 <View className="flex-1 bg-white/5 border border-white/10 rounded-2xl p-4 backdrop-blur-md">
-                                    <Text className="text-[10px] text-slate-500 mb-1">총 주행거리</Text>
-                                    <Text className="text-base font-bold text-slate-100">
+                                    <Text className="text-[10px] text-text-dim mb-1">총 주행거리</Text>
+                                    <Text className="text-base font-bold text-white">
                                         {formatMileage(selectedVehicle.totalMileage)}
                                     </Text>
                                 </View>
                                 <View className="flex-1 bg-white/5 border border-white/10 rounded-2xl p-4 backdrop-blur-md">
-                                    <Text className="text-[10px] text-slate-500 mb-1">연료 타입</Text>
-                                    <Text className="text-base font-bold text-slate-100">
+                                    <Text className="text-[10px] text-text-dim mb-1">연료 타입</Text>
+                                    <Text className="text-base font-bold text-white">
                                         {formatFuelType(selectedVehicle.fuelType)}
                                     </Text>
                                 </View>
@@ -202,7 +202,7 @@ export default function CarManage() {
                 ) : (
                     <View className="rounded-3xl border border-dashed border-white/20 p-8 mb-8 items-center">
                         <MaterialIcons name="directions-car" size={48} color="#475569" />
-                        <Text className="text-slate-400 mt-4 text-center">
+                        <Text className="text-text-muted mt-4 text-center">
                             등록된 차량이 없습니다.{'\n'}아래 버튼으로 차량을 등록해주세요.
                         </Text>
                     </View>
@@ -211,21 +211,21 @@ export default function CarManage() {
                 {/* Other Vehicles List */}
                 {otherVehicles.length > 0 && (
                     <View className="mb-8">
-                        <Text className="px-2 text-[13px] font-semibold text-slate-500 uppercase tracking-widest mb-3">보유 차량 목록</Text>
-                        <View className="bg-[#1a1e23]/60 border border-white/5 rounded-2xl overflow-hidden backdrop-blur-md">
+                        <Text className="px-2 text-[13px] font-semibold text-text-dim uppercase tracking-widest mb-3">보유 차량 목록</Text>
+                        <View className="bg-surface-card/60 border border-white/5 rounded-2xl overflow-hidden backdrop-blur-md">
                             {otherVehicles.map((vehicle, index) => (
                                 <View
                                     key={vehicle.vehicleId}
                                     className={`flex-row items-center gap-4 px-5 py-4 ${index !== otherVehicles.length - 1 ? 'border-b border-white/5' : ''}`}
                                 >
-                                    <View className="w-11 h-11 items-center justify-center rounded-xl bg-slate-800 shrink-0">
+                                    <View className="w-11 h-11 items-center justify-center rounded-xl bg-surface-highlight shrink-0">
                                         <MaterialIcons name="directions-car" size={24} color="#94a3b8" />
                                     </View>
                                     <View className="flex-1">
-                                        <Text className="text-slate-100 text-base font-medium mb-0.5">
+                                        <Text className="text-white text-base font-medium mb-0.5">
                                             {vehicle.manufacturer} {vehicle.modelName}
                                         </Text>
-                                        <Text className="text-slate-500 text-xs">
+                                        <Text className="text-text-dim text-xs">
                                             {vehicle.carNumber || '번호판 미등록'}
                                         </Text>
                                     </View>
@@ -236,16 +236,16 @@ export default function CarManage() {
                 )}
 
                 {/* Management Menu */}
-                <Text className="px-2 text-[13px] font-semibold text-slate-500 uppercase tracking-widest mb-3">관리 메뉴</Text>
-                <View className="bg-[#1a1e23]/60 border border-white/5 rounded-2xl overflow-hidden mb-6 backdrop-blur-md">
+                <Text className="px-2 text-[13px] font-semibold text-text-dim uppercase tracking-widest mb-3">관리 메뉴</Text>
+                <View className="bg-surface-card/60 border border-white/5 rounded-2xl overflow-hidden mb-6 backdrop-blur-md">
                     <TouchableOpacity
                         className="flex-row items-center gap-4 px-5 py-4 active:bg-white/5 border-b border-white/5"
                         onPress={() => handleSelectSpecVehicle()}
                     >
-                        <View className="w-11 h-11 items-center justify-center rounded-xl bg-slate-800 shrink-0">
+                        <View className="w-11 h-11 items-center justify-center rounded-xl bg-surface-highlight shrink-0">
                             <MaterialIcons name="list-alt" size={24} color="#cbd5e1" />
                         </View>
-                        <Text className="text-slate-100 text-base font-medium flex-1">차량 상세 제원 보기</Text>
+                        <Text className="text-white text-base font-medium flex-1">차량 상세 제원 보기</Text>
                         <MaterialIcons name="chevron-right" size={24} color="#475569" />
                     </TouchableOpacity>
 
@@ -253,10 +253,10 @@ export default function CarManage() {
                         className="flex-row items-center gap-4 px-5 py-4 active:bg-white/5 border-b border-white/5"
                         onPress={() => vehicles.length > 0 ? setModalVisible(true) : Alert.alert('알림', '등록된 차량이 없습니다.')}
                     >
-                        <View className="w-11 h-11 items-center justify-center rounded-xl bg-slate-800 shrink-0">
+                        <View className="w-11 h-11 items-center justify-center rounded-xl bg-surface-highlight shrink-0">
                             <MaterialIcons name="star-half" size={24} color="#cbd5e1" />
                         </View>
-                        <Text className="text-slate-100 text-base font-medium flex-1">대표 차량으로 설정</Text>
+                        <Text className="text-white text-base font-medium flex-1">대표 차량으로 설정</Text>
                         <MaterialIcons name="chevron-right" size={24} color="#475569" />
                     </TouchableOpacity>
 
@@ -264,10 +264,10 @@ export default function CarManage() {
                         className="flex-row items-center gap-4 px-5 py-4 active:bg-white/5 border-b border-white/5"
                         onPress={() => setObdModalVisible(true)}
                     >
-                        <View className="w-11 h-11 items-center justify-center rounded-xl bg-slate-800 shrink-0">
+                        <View className="w-11 h-11 items-center justify-center rounded-xl bg-surface-highlight shrink-0">
                             <MaterialIcons name="bluetooth-connected" size={24} color="#cbd5e1" />
                         </View>
-                        <Text className="text-slate-100 text-base font-medium flex-1">OBD 스캐너 등록</Text>
+                        <Text className="text-white text-base font-medium flex-1">OBD 스캐너 등록</Text>
                         <MaterialIcons name="chevron-right" size={24} color="#475569" />
                     </TouchableOpacity>
 
@@ -275,10 +275,10 @@ export default function CarManage() {
                         className="flex-row items-center gap-4 px-5 py-4 active:bg-white/5"
                         onPress={() => handleEditVehicle()}
                     >
-                        <View className="w-11 h-11 items-center justify-center rounded-xl bg-slate-800 shrink-0">
+                        <View className="w-11 h-11 items-center justify-center rounded-xl bg-surface-highlight shrink-0">
                             <MaterialIcons name="edit" size={24} color="#cbd5e1" />
                         </View>
-                        <Text className="text-slate-100 text-base font-medium flex-1">차량 정보 수정</Text>
+                        <Text className="text-white text-base font-medium flex-1">차량 정보 수정</Text>
                         <MaterialIcons name="chevron-right" size={24} color="#475569" />
                     </TouchableOpacity>
                 </View>
@@ -312,7 +312,7 @@ export default function CarManage() {
                     onPress={() => setModalVisible(false)}
                 >
                     <Pressable
-                        className="w-full bg-[#1a1e23] border border-white/10 rounded-3xl overflow-hidden"
+                        className="w-full bg-surface-dark border border-white/10 rounded-3xl overflow-hidden"
                         onPress={(e) => e.stopPropagation()}
                     >
                         <View className="px-6 py-5 border-b border-white/10 flex-row items-center justify-between">
@@ -350,7 +350,7 @@ export default function CarManage() {
                                             <Text className={`text-base font-semibold mb-0.5 ${isSelected ? 'text-primary' : 'text-white'}`}>
                                                 {vehicle.manufacturer} {vehicle.modelName}
                                             </Text>
-                                            <Text className="text-slate-500 text-xs">{vehicle.carNumber || '번호판 미등록'}</Text>
+                                            <Text className="text-text-dim text-xs">{vehicle.carNumber || '번호판 미등록'}</Text>
                                         </View>
 
                                         {isSelected ? (
@@ -366,7 +366,7 @@ export default function CarManage() {
                         </ScrollView>
 
                         <View className="px-6 py-4 border-t border-white/10">
-                            <Text className="text-xs text-slate-500 text-center">
+                            <Text className="text-xs text-text-muted text-center">
                                 대표 차량으로 설정하면 메인 화면에 해당 차량 정보가 표시됩니다.
                             </Text>
                         </View>
@@ -386,7 +386,7 @@ export default function CarManage() {
                     onPress={() => setSpecModalVisible(false)}
                 >
                     <Pressable
-                        className="w-full bg-[#1a1e23] border border-white/10 rounded-3xl overflow-hidden"
+                        className="w-full bg-surface-dark border border-white/10 rounded-3xl overflow-hidden"
                         onPress={(e) => e.stopPropagation()}
                     >
                         <View className="px-6 py-5 border-b border-white/10 flex-row items-center justify-between">
@@ -414,7 +414,7 @@ export default function CarManage() {
                                             <Text className="text-base font-semibold text-white">
                                                 {vehicle.manufacturer} {vehicle.modelName}
                                             </Text>
-                                            <Text className="text-slate-500 text-xs">{vehicle.carNumber}</Text>
+                                            <Text className="text-text-dim text-xs">{vehicle.carNumber}</Text>
                                         </View>
                                         <MaterialIcons name="chevron-right" size={20} color="#475569" />
                                     </TouchableOpacity>
@@ -437,7 +437,7 @@ export default function CarManage() {
                     onPress={() => setEditModalVisible(false)}
                 >
                     <Pressable
-                        className="w-full bg-[#1a1e23] border border-white/10 rounded-3xl overflow-hidden"
+                        className="w-full bg-surface-dark border border-white/10 rounded-3xl overflow-hidden"
                         onPress={(e) => e.stopPropagation()}
                     >
                         <View className="px-6 py-5 border-b border-white/10 flex-row items-center justify-between">
@@ -465,7 +465,7 @@ export default function CarManage() {
                                             <Text className="text-base font-semibold text-white">
                                                 {vehicle.manufacturer} {vehicle.modelName}
                                             </Text>
-                                            <Text className="text-slate-500 text-xs">{vehicle.carNumber}</Text>
+                                            <Text className="text-text-dim text-xs">{vehicle.carNumber}</Text>
                                         </View>
                                         <MaterialIcons name="chevron-right" size={20} color="#475569" />
                                     </TouchableOpacity>

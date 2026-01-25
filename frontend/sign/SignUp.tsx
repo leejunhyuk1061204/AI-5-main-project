@@ -50,7 +50,7 @@ export default function SignUp() {
             console.log('Signup Response:', response);
             if (response.success) {
                 if (Platform.OS === 'web') {
-                    alert("가입 완료\n회원가입이 완료되었습니다. 로그인해주세요.");
+                    Alert.alert("가입 완료", "회원가입이 완료되었습니다. 로그인해주세요.");
                     navigation.navigate('Login', { fromSignup: true });
                 } else {
                     Alert.alert("가입 완료", "회원가입이 완료되었습니다. 로그인해주세요.", [
@@ -111,7 +111,7 @@ export default function SignUp() {
                         <Text className="text-3xl font-bold tracking-tight mb-2 text-white">
                             계정 생성
                         </Text>
-                        <Text className="text-slate-400 text-base font-normal">
+                        <Text className="text-text-muted text-base font-normal">
                             AI 차량 관리 서비스를 시작해보세요.
                         </Text>
                     </View>
@@ -121,14 +121,14 @@ export default function SignUp() {
 
                         {/* Name Field */}
                         <View className="flex flex-col gap-2 group">
-                            <Text className="text-sm font-medium text-slate-300 ml-1">
+                            <Text className="text-sm font-medium text-text-secondary ml-1">
                                 성함
                             </Text>
                             <View className="relative">
                                 <TextInput
                                     value={name}
                                     onChangeText={setName}
-                                    className="w-full bg-surface-dark border border-slate-700/50 rounded-xl px-4 py-3.5 text-base text-white placeholder:text-slate-500 focus:outline-none focus:border-primary"
+                                    className="w-full bg-surface-dark border border-border-muted/50 rounded-xl px-4 py-3.5 text-base text-white placeholder:text-text-dim focus:outline-none focus:border-primary"
                                     placeholder="이름을 입력해주세요"
                                     placeholderTextColor="#64748b"
                                 />
@@ -137,14 +137,14 @@ export default function SignUp() {
 
                         {/* Email Field */}
                         <View className="flex flex-col gap-2 group">
-                            <Text className="text-sm font-medium text-slate-300 ml-1">
+                            <Text className="text-sm font-medium text-text-secondary ml-1">
                                 이메일
                             </Text>
                             <View className="relative justify-center">
                                 <TextInput
                                     value={email}
                                     onChangeText={setEmail}
-                                    className="w-full bg-surface-dark border border-slate-700/50 rounded-xl px-4 py-3.5 text-base text-white placeholder:text-slate-500 focus:outline-none focus:border-primary pr-12"
+                                    className="w-full bg-surface-dark border border-border-muted/50 rounded-xl px-4 py-3.5 text-base text-white placeholder:text-text-dim focus:outline-none focus:border-primary pr-12"
                                     placeholder="example@email.com"
                                     placeholderTextColor="#64748b"
                                     keyboardType="email-address"
@@ -155,7 +155,7 @@ export default function SignUp() {
                                     pointerEvents={Platform.OS === 'web' ? undefined : 'none'}
                                     style={Platform.OS === 'web' ? { pointerEvents: 'none' } : undefined}
                                 >
-                                    <MaterialIcons name="mail" size={20} className="text-slate-500" color="#64748b" />
+                                    <MaterialIcons name="mail" size={20} className="text-text-dim" color="#64748b" />
                                 </View>
                             </View>
                         </View>
@@ -227,7 +227,7 @@ export default function SignUp() {
             >
                 <View className="max-w-lg mx-auto w-full">
                     <TouchableOpacity
-                        className={`w-full bg-primary hover:bg-primary/90 rounded-xl h-14 flex-row items-center justify-center gap-2 shadow-lg shadow-blue-500/30 active:opacity-90 mb-4 ${loading ? 'opacity-70' : ''}`}
+                        className={`w-full bg-primary hover:bg-primary/90 rounded-xl h-14 flex-row items-center justify-center gap-2 shadow-lg shadow-primary/30 active:opacity-90 mb-4 ${loading ? 'opacity-70' : ''}`}
                         activeOpacity={0.8}
                         onPress={handleSignup}
                         disabled={loading}

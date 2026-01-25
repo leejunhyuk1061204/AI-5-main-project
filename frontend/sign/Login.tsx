@@ -190,16 +190,16 @@ export default function Login() {
                 >
                     {/* Logo Section */}
                     <View className="items-center gap-6 mb-12">
-                        <View className="relative items-center justify-center w-20 h-20 rounded-2xl bg-slate-900 border border-[#314d68] shadow-xl">
+                        <View className="relative items-center justify-center w-20 h-20 rounded-2xl bg-surface-dark border border-border-light shadow-xl">
                             <MaterialIcons name="car-crash" size={40} color="#0d7ff2" />
                             {/* Decorative dot */}
-                            <View className="absolute -top-1 -right-1 w-3 h-3 bg-primary rounded-full shadow-lg shadow-blue-500" />
+                            <View className="absolute -top-1 -right-1 w-3 h-3 bg-primary rounded-full shadow-lg shadow-primary" />
                         </View>
                         <View className="items-center">
                             <Text className="text-white text-3xl font-bold tracking-tight mb-2">
                                 AI Vehicle Guard
                             </Text>
-                            <Text className="text-gray-400 text-base font-normal">
+                            <Text className="text-text-muted text-base font-normal">
                                 스마트한 차량 관리의 시작
                             </Text>
                         </View>
@@ -209,19 +209,19 @@ export default function Login() {
                     <View className="w-full gap-5">
                         {/* Email Field */}
                         <View className="gap-1.5">
-                            <Text className="text-sm font-medium text-gray-300 ml-1">이메일</Text>
+                            <Text className="text-sm font-medium text-text-secondary ml-1">이메일</Text>
                             <View className="relative group">
                                 <View
                                     className="absolute inset-y-0 left-0 pl-4 justify-center z-10"
                                     pointerEvents={Platform.OS === 'web' ? undefined : 'none'}
                                     style={Platform.OS === 'web' ? { pointerEvents: 'none' } : undefined}
                                 >
-                                    <MaterialIcons name="mail" size={20} className="text-gray-500" color="#6b7280" />
+                                    <MaterialIcons name="mail" size={20} className="text-text-dim" color="#6b7280" />
                                 </View>
                                 <TextInput
                                     value={email}
                                     onChangeText={setEmail}
-                                    className="block w-full rounded-xl border border-[#314d68] bg-[#182634]/80 text-white placeholder:text-gray-500 focus:border-primary px-4 py-3.5 pl-11"
+                                    className="block w-full rounded-xl border border-border-light bg-input-dark/80 text-white placeholder:text-text-dim focus:border-primary px-4 py-3.5 pl-11"
                                     placeholder="example@email.com"
                                     placeholderTextColor="#6b7280"
                                     keyboardType="email-address"
@@ -232,19 +232,19 @@ export default function Login() {
 
                         {/* Password Field */}
                         <View className="gap-1.5">
-                            <Text className="text-sm font-medium text-gray-300 ml-1">비밀번호</Text>
+                            <Text className="text-sm font-medium text-text-secondary ml-1">비밀번호</Text>
                             <View className="relative group">
                                 <View
                                     className="absolute inset-y-0 left-0 pl-4 justify-center z-10"
                                     pointerEvents={Platform.OS === 'web' ? undefined : 'none'}
                                     style={Platform.OS === 'web' ? { pointerEvents: 'none' } : undefined}
                                 >
-                                    <MaterialIcons name="lock" size={20} className="text-gray-500" color="#6b7280" />
+                                    <MaterialIcons name="lock" size={20} className="text-text-dim" color="#6b7280" />
                                 </View>
                                 <TextInput
                                     value={password}
                                     onChangeText={setPassword}
-                                    className="block w-full rounded-xl border border-[#314d68] bg-[#182634]/80 text-white placeholder:text-gray-500 focus:border-primary px-4 py-3.5 pl-11 pr-12"
+                                    className="block w-full rounded-xl border border-border-light bg-input-dark/80 text-white placeholder:text-text-dim focus:border-primary px-4 py-3.5 pl-11 pr-12"
                                     placeholder="비밀번호를 입력하세요"
                                     placeholderTextColor="#6b7280"
                                     secureTextEntry={!showPassword}
@@ -265,7 +265,7 @@ export default function Login() {
                         {/* Forgot Password Link */}
                         <View className="flex-row justify-end pt-1">
                             <TouchableOpacity onPress={() => navigation.navigate('FindPW')}>
-                                <Text className="text-sm font-medium text-gray-400">
+                                <Text className="text-sm font-medium text-text-muted">
                                     비밀번호를 잊으셨나요?
                                 </Text>
                             </TouchableOpacity>
@@ -274,7 +274,7 @@ export default function Login() {
                         {/* Login Button */}
                         <TouchableOpacity
                             onPress={handleLogin}
-                            className={`w-full rounded-xl bg-primary py-4 items-center justify-center shadow-lg shadow-blue-500/20 active:opacity-90 mt-4 ${loading ? 'opacity-70' : ''}`}
+                            className={`w-full rounded-xl bg-primary py-4 items-center justify-center shadow-lg shadow-primary/20 active:opacity-90 mt-4 ${loading ? 'opacity-70' : ''}`}
                             disabled={loading}
                         >
                             <Text className="text-sm font-bold text-white">
@@ -299,7 +299,7 @@ export default function Login() {
                     <View className="flex-row gap-4 w-full">
                         <TouchableOpacity
                             onPress={onGoogleButtonPress}
-                            className="flex-1 flex-row items-center justify-center gap-3 rounded-xl bg-[#182634] border border-[#314d68] px-4 py-3 active:bg-[#203040]"
+                            className="flex-1 flex-row items-center justify-center gap-3 rounded-xl bg-input-dark border border-border-light px-4 py-3 active:bg-surface-highlight"
                         >
                             <Ionicons name="logo-google" size={20} color="white" />
                             <Text className="text-sm font-medium text-white">Google</Text>
@@ -315,7 +315,7 @@ export default function Login() {
 
                     {/* Sign Up Prompt */}
                     <View className="mt-10 flex-row justify-center gap-1">
-                        <Text className="text-sm text-gray-400">아직 계정이 없으신가요?</Text>
+                        <Text className="text-sm text-text-muted">아직 계정이 없으신가요?</Text>
                         <TouchableOpacity onPress={() => navigation.navigate('SignUp')}>
                             <Text className="text-sm font-semibold text-primary">회원가입</Text>
                         </TouchableOpacity>

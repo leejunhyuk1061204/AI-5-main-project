@@ -52,14 +52,14 @@ export default function MainPage() {
         >
             {/* Car Info Card */}
             <View className="px-6 py-4">
-                <View className="relative overflow-hidden rounded-xl bg-[#ffffff08] border border-[#ffffff14] p-4 flex-row items-center justify-between shadow-lg">
+                <View className="relative overflow-hidden rounded-xl bg-white/5 border border-white/10 p-4 flex-row items-center justify-between shadow-lg">
                     <View className="flex-row items-center gap-4 z-10">
-                        <View className="w-12 h-12 rounded-lg bg-[#1b2127] border border-white/10 items-center justify-center shadow-inner">
+                        <View className="w-12 h-12 rounded-lg bg-surface-card border border-white/10 items-center justify-center shadow-inner">
                             <MaterialIcons name="directions-car" size={24} color="#d1d5db" />
                         </View>
                         <View>
                             <Text className="text-white text-base font-bold leading-tight">{vehicle.modelName}</Text>
-                            <Text className="text-[#9cabba] text-sm font-normal">{vehicle.carNumber}</Text>
+                            <Text className="text-text-muted text-sm font-normal">{vehicle.carNumber}</Text>
                         </View>
                     </View>
                     <TouchableOpacity
@@ -103,13 +103,13 @@ export default function MainPage() {
                         />
                     </Svg>
                     <View className="absolute inset-0 items-center justify-center z-10">
-                        <Text className="text-[#9cabba] text-sm font-medium tracking-wide mb-1">종합 점수</Text>
+                        <Text className="text-text-muted text-sm font-medium tracking-wide mb-1">종합 점수</Text>
                         <Text className="text-6xl font-bold text-white tracking-tighter">
-                            95<Text className="text-2xl text-gray-500 font-normal">점</Text>
+                            95<Text className="text-2xl text-text-dim font-normal">점</Text>
                         </Text>
-                        <View className="mt-3 flex-row items-center gap-1.5 px-3 py-1 rounded-full bg-[#0bda5b]/10 border border-[#0bda5b]/20">
-                            <View className="w-1.5 h-1.5 rounded-full bg-[#0bda5b]" />
-                            <Text className="text-[#0bda5b] text-xs font-bold">상태 최상</Text>
+                        <View className="mt-3 flex-row items-center gap-1.5 px-3 py-1 rounded-full bg-success/10 border border-success/20">
+                            <View className="w-1.5 h-1.5 rounded-full bg-success" />
+                            <Text className="text-success text-xs font-bold">상태 최상</Text>
                         </View>
                     </View>
                 </View>
@@ -129,7 +129,7 @@ export default function MainPage() {
                     ].map((item, index) => (
                         <TouchableOpacity
                             key={index}
-                            className="flex-1 aspect-square rounded-xl bg-[#ffffff08] border border-[#ffffff14] items-center justify-center gap-3"
+                            className="flex-1 aspect-square rounded-xl bg-white/5 border border-white/10 items-center justify-center gap-3"
                             activeOpacity={0.7}
                         >
                             <MaterialIcons name={item.icon as any} size={32} color="#0d7ff2" />
@@ -142,28 +142,28 @@ export default function MainPage() {
             {/* Membership Promotion Card */}
             <View className="px-6 pb-4">
                 <TouchableOpacity
-                    className="relative overflow-hidden rounded-xl border border-[#c5a059]/30 p-5"
+                    className="relative overflow-hidden rounded-xl border border-premium/30 p-5"
                     activeOpacity={0.9}
                     onPress={() => navigation.navigate('Membership')}
                 >
-                    <View className="absolute inset-0 bg-[#c5a059]/5" />
+                    <View className="absolute inset-0 bg-premium/5" />
                     <View className="flex-row items-center justify-between mb-2">
                         <View className="flex-row items-center gap-2">
                             <MaterialIcons name="workspace-premium" size={20} color="#c5a059" />
-                            <Text className="text-[#c5a059] text-xs font-bold tracking-wider uppercase">Premium Membership</Text>
+                            <Text className="text-premium text-xs font-bold tracking-wider uppercase">Premium Membership</Text>
                         </View>
                         <MaterialIcons name="arrow-forward-ios" size={14} color="#78716c" />
                     </View>
                     <Text className="text-white text-lg font-bold mb-1">프리미엄 멤버십 혜택</Text>
-                    <Text className="text-[#a8a29e] text-sm mb-4 leading-relaxed">
+                    <Text className="text-text-secondary text-sm mb-4 leading-relaxed">
                         AI 기반 정밀 진단과 무제한 리포트, 더 많은 혜택을 누려보세요.
                     </Text>
                     <View className="flex-row gap-2">
-                        <View className="bg-[#c5a059]/10 px-2 py-1 rounded border border-[#c5a059]/20">
-                            <Text className="text-[#c5a059] text-xs font-medium">AI 정밀 진단</Text>
+                        <View className="bg-premium/10 px-2 py-1 rounded border border-premium/20">
+                            <Text className="text-premium text-xs font-medium">AI 정밀 진단</Text>
                         </View>
-                        <View className="bg-[#c5a059]/10 px-2 py-1 rounded border border-[#c5a059]/20">
-                            <Text className="text-[#c5a059] text-xs font-medium">무제한 리포트</Text>
+                        <View className="bg-premium/10 px-2 py-1 rounded border border-premium/20">
+                            <Text className="text-premium text-xs font-medium">무제한 리포트</Text>
                         </View>
                     </View>
                 </TouchableOpacity>
