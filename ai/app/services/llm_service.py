@@ -20,7 +20,7 @@ import json
 import base64
 import httpx
 import re
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Any
 from openai import AsyncOpenAI
 from ai.app.schemas.visual_schema import VisualResponse
 from ai.app.schemas.audio_schema import AudioResponse, AudioDetail

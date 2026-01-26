@@ -130,6 +130,13 @@ class ExteriorData(BaseModel):
     repair_estimate: Optional[str] = Field(None, description="예상 수리 내용 (LLM)")
 
 
+class DetectionItem(BaseModel):
+    """범용 객체 탐지 결과 (YOLO Raw Output)"""
+    label: str = Field(..., description="객체 클래스명")
+    confidence: float = Field(..., description="탐지 신뢰도")
+    bbox: List[int] = Field(..., description="Bounding Box [x, y, w, h]")
+
+
 # =============================================================================
 # 4. TIRE 관련 스키마
 # =============================================================================
@@ -156,7 +163,12 @@ class VisualResponse(BaseModel):
     status: str = Field(..., description="상태 (NORMAL, WARNING, CRITICAL, ERROR)")
     analysis_type: str = Field(..., description="분석 타입 (SCENE_ENGINE 등)")
     category: str = Field(..., description="카테고리 (ENGINE_ROOM, DASHBOARD 등)")
-    data: Dict[str, Any] = Field(..., description="장면별 상세 데이터")
+    data: Optional[Dict[str, Any]] = Field(None, description="장면별 상세 데이터")
+    
+    # [하위 호환성 및 중간 단계용 필드]
+    detected_count: Optional[int] = Field(None, description="감지된 객체 수 (Legacy or Intermediate)")
+    detections: Optional[List[DetectionItem]] = Field(None, description="감지 목록 (Legacy or Intermediate)")
+    processed_image_url: Optional[str] = Field(None, description="처리된 이미지 URL")
 
 
 class EngineAnalysisResponse(BaseModel):
