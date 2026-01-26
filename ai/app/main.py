@@ -19,8 +19,14 @@ import os
 from ultralytics import settings, YOLO
 from dotenv import load_dotenv, find_dotenv
 
-# 루트 폴더(.env)를 명시적으로 찾아서 로드
-load_dotenv(find_dotenv())
+# AI 전용 설정(ai/.env)을 우선적으로 로드 (OpenAI Key 등)
+ai_env_path = os.path.join(os.getcwd(), 'ai', '.env')
+if os.path.exists(ai_env_path):
+    print(f"[Config] Loading AI specific settings from: {ai_env_path}")
+    load_dotenv(ai_env_path, override=True)
+else:
+    # ai/.env가 없으면 기본 루트 .env 탐색
+    load_dotenv(find_dotenv())
 
 # Ultralytics 전역 가중치 경로 설정
 settings.update({'weights_dir': os.path.join(os.getcwd(), 'ai', 'weights')})
@@ -142,6 +148,13 @@ def load_tire_yolo_model():
     return YOLO(model_path)
 
 
+def load_anomaly_detector():
+    """PatchCore 엔진룸 이상 탐지 모델 로드"""
+    print("[Model] Loading Anomaly Detector (PatchCore)...")
+    from ai.app.services.anomaly_service import AnomalyDetector
+    return AnomalyDetector()
+
+
 # =============================================================================
 # Lifespan Context Manager
 # =============================================================================
@@ -152,7 +165,7 @@ async def lifespan(app: FastAPI):
     앱 수명 주기 관리
     - 모델 로딩은 Lazy Loading 방식으로 변경 (첫 요청 시 로드)
     """
-    # 초기 상태 설정
+    # 초기 상태 설정 (None으로 초기화해야 Getter에서 인식 가능)
     app.state.ast_model = None
     app.state.router_model = None
     app.state.engine_yolo_model = None
@@ -160,11 +173,23 @@ async def lifespan(app: FastAPI):
     app.state.cardd_yolo_model = None
     app.state.carparts_yolo_model = None
     app.state.tire_yolo_model = None
+    app.state.anomaly_detector_model = None
 
-    print("=" * 60)
-    print("🚀 Car-Sentry AI Server 시작 (Lazy Loading Mode)")
-    print("=" * 60)
-    
+    # [지연 해결 로직] 서버 시작 시 모델을 미리 로드하는 Eager Loading 지원
+    if os.getenv("EAGER_MODEL_LOADING", "false").lower() == "true":
+        print("\n" + "="*60)
+        print("[Warmup] Eager Model Loading 시작... (잠시만 기다려주세요)")
+        print("="*60)
+        try:
+            # Getter를 통해 모델 로드 강제 실행
+            app.state.get_router()
+            app.state.get_engine_yolo()
+            print("[Warmup] 주요 모델(Router, Engine YOLO) 로드 완료!")
+        except Exception as e:
+            print(f"[Warmup Error] 모델 로딩 중 오류 발생: {e}")
+            import traceback
+            traceback.print_exc()
+
     yield
     
     print("🛑 AI Server 종료 중...")
@@ -245,12 +270,18 @@ def _setup_model_getters(app: FastAPI):
             app.state.ast_model = load_ast_model()
         return app.state.ast_model
 
+    def get_anomaly_detector():
+        if app.state.anomaly_detector_model is None:
+            app.state.anomaly_detector_model = load_anomaly_detector()
+        return app.state.anomaly_detector_model
+
     app.state.get_router = get_router
     app.state.get_engine_yolo = get_engine_yolo
     app.state.get_dashboard_yolo = get_dashboard_yolo
     app.state.get_exterior_yolo = get_exterior_yolo
     app.state.get_tire_yolo = get_tire_yolo
     app.state.get_ast_model = get_ast_model
+    app.state.get_anomaly_detector = get_anomaly_detector
 
 
 app = create_app()

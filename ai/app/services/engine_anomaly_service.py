@@ -95,8 +95,11 @@ class EngineAnomalyPipeline:
     - 결과는 JSON으로 반환 (S3 업로드 없음)
     """
     
-    def __init__(self):
-        self.anomaly_detector = AnomalyDetector()
+    def __init__(self, anomaly_detector: Optional[AnomalyDetector] = None):
+        if anomaly_detector:
+            self.anomaly_detector = anomaly_detector
+        else:
+            self.anomaly_detector = AnomalyDetector()
 
     async def analyze(
         self, 
@@ -136,6 +139,12 @@ class EngineAnomalyPipeline:
             llm_result = await analyze_general_image(s3_url)
             
             # API 명세서 형식에 맞춤
+            # [보정 로직] Router가 엔진룸으로 잘못 분류했지만 LLM이 계기판으로 판단한 경우
+            if hasattr(llm_result, "category") and llm_result.category == "DASHBOARD":
+                print("[Engine Pipeline] 💡 Router Miss detected! Redirecting to Dashboard analysis...")
+                from ai.app.services.dashboard_service import analyze_dashboard_image
+                return await analyze_dashboard_image(image, s3_url, yolo_model=None)
+            
             return {
                 "status": llm_result.status if hasattr(llm_result, 'status') else "ERROR",
                 "analysis_type": "SCENE_ENGINE",
@@ -146,8 +155,8 @@ class EngineAnomalyPipeline:
                     "anomalies_found": 0,
                     "results": [],
                     "llm_fallback": True,
-                    "description": llm_result.description if hasattr(llm_result, 'description') else None,
-                    "recommendation": llm_result.recommendation if hasattr(llm_result, 'recommendation') else None
+                    "description": "이미지에서 의미 있는 엔진룸 부품을 찾을 수 없으며, AI 정밀 분석(GPT) 서버와 연결도 원활하지 않습니다." if llm_result.status == "ERROR" else (llm_result.data.get("description") if hasattr(llm_result, 'data') else "엔진룸 분석 실패"),
+                    "recommendation": "밝은 곳에서 엔진룸 전체가 잘 보이도록 다시 촬영해 주세요." if llm_result.status == "ERROR" else (llm_result.data.get("recommendation") if hasattr(llm_result, 'data') else "정비소 점검 권장")
                 }
             }
 
@@ -254,7 +263,13 @@ class EngineAnomalyPipeline:
                     s3 = boto3.client('s3')
                     bucket = os.getenv("S3_BUCKET_NAME", "car-sentry-data")
                     # 부품별 고유 ID 생성 (이미지ID + 부품명)
-                    file_id = os.path.basename(s3_url).split('.')[0]
+                    # 파일 ID 추출: s3_url이 base64인 경우 처리
+                    if s3_url.startswith("data:"):
+                        import hashlib
+                        file_id = hashlib.md5(s3_url.encode()).hexdigest()[:10]
+                    else:
+                        file_id = os.path.basename(s3_url).split('.')[0]
+                        
                     label_key = f"dataset/engine/llm_confirmed/{file_id}_{part_name}.json"
                     
                     oracle_data = {
@@ -319,10 +334,13 @@ class EngineAnomalyPipeline:
 
     # _load_image_async 제거 (visual_service 피쳐 활용)
 
-    def _image_to_base64(self, image: Image.Image, format: str = "PNG") -> str:
-        """PIL Image를 Base64 문자열로 변환"""
+    def _image_to_base64(self, image: Image.Image, format: str = "JPEG") -> str:
+        """PIL Image를 Base64 문자열로 변환 (RGB 변환 및 JPEG 포합 보장)"""
         buffer = io.BytesIO()
-        image.save(buffer, format=format)
+        # RGBA 등을 RGB로 변환 (OpenAI JPEG 호환성)
+        if image.mode != "RGB":
+            image = image.convert("RGB")
+        image.save(buffer, format=format, quality=85)
         return base64.b64encode(buffer.getvalue()).decode('utf-8')
 
     async def close(self):
