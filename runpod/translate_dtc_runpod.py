@@ -39,7 +39,8 @@ def get_system_prompt():
 
 1. 전문 용어는 사전에 정의된 표준 번역어를 최우선으로 사용하되, 문맥에 맞게 자연스럽게 연결해줘.
 2. **TTS 최적화**: 운전자가 운전 중에 들어도 한 번에 이해할 수 있도록 부드러운 구어체(~입니다, ~가 발생했습니다 등) 문장으로 구성해줘.
-3. **구조화된 출력**: 반드시 아래의 JSON 형식으로만 응답해줘. 다른 설명은 하지 마.
+3. **언어 제한**: **절대 중국어(한자)를 포함하지 마.** 결과는 무조건 **한글**이어야 해. (영문 약어는 허용)
+4. **구조화된 출력**: 반드시 아래의 JSON 형식으로만 응답해줘. 다른 설명은 하지 마.
 
 [자동차 용어 사전]
 {terms_str}
@@ -79,7 +80,7 @@ async def translate_item(session, code, original, system_prompt):
         "stream": False,
         "format": "json",
         "options": {
-            "num_ctx": 4096  # 용어 사전이 포함되므로 문맥 길이를 넉넉하게 확보 필수
+            "num_ctx": 8192  # 용어 사전이 기니까 문맥 길이를 2배로 또 늘림 (잘림 방지)
         }
     }
     
@@ -169,7 +170,36 @@ async def main():
     if os.path.exists(CACHE_FILE):
         with open(CACHE_FILE, 'r', encoding='utf-8') as f:
             cache = json.load(f)
-    
+        
+        # [중국어 오염 데이터 자동 세척]
+        # 이미 한자가 포함된 결과가 있다면 캐시에서 삭제하여 재번역 유도
+        import re
+        dirty_keys = []
+        # 한자 유니코드 범위: \u4e00-\u9fff
+        chinese_pattern = re.compile(r'[\u4e00-\u9fff]')
+        
+        print("Checking cache for Chinese character contamination...")
+        for k, v in cache.items():
+            translated_text = v.get('translated', '')
+            tts_text = v.get('tts_phrase', '')
+            summary_text = v.get('summary', '')
+            
+            # 한자가 하나라도 있으면 오염된 것으로 간주
+            if (chinese_pattern.search(translated_text) or 
+                chinese_pattern.search(tts_text) or 
+                chinese_pattern.search(summary_text)):
+                dirty_keys.append(k)
+        
+        if dirty_keys:
+            print(f"🧹 Found {len(dirty_keys)} entries with Chinese characters. Removing them to re-translate...")
+            for k in dirty_keys:
+                del cache[k]
+            # 세척된 캐시 저장
+            with open(CACHE_FILE, 'w', encoding='utf-8') as f:
+                json.dump(cache, f, ensure_ascii=False, indent=2)
+        else:
+            print("✨ Cache is clean (no Chinese characters found).")
+            
     # 미번역 항목 선별
     to_translate = []
     for item in items:
