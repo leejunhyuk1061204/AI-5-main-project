@@ -13,7 +13,7 @@ from automotive_terms import AUTOMOTIVE_TERMS
 OLLAMA_URL = "http://localhost:11434/api/generate"
 OLLAMA_CHECK_URL = "http://localhost:11434"
 MODEL_NAME = "qwen2.5:32b"
-BATCH_SIZE = 50  # RTX 4090 강력한 성능 활용 (동시 처리량 증가)
+BATCH_SIZE = 5  # 32B 모델은 무거우므로 4090에서도 배치를 줄여야 안정적입니다 (Timeout 방지)
 
 # 스크립트 실행 위치 기준 경로 설정
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -81,7 +81,8 @@ async def translate_item(session, code, original, system_prompt):
     }
     
     try:
-        async with session.post(OLLAMA_URL, json=payload, timeout=60) as response:
+        # 32B 모델 처리 시간을 고려해 타임아웃을 5분(300초)으로 대폭 늘림
+        async with session.post(OLLAMA_URL, json=payload, timeout=300) as response:
             if response.status == 200:
                 result = await response.json()
                 return json.loads(result.get("response", "{}"))
