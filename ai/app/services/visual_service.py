@@ -20,6 +20,7 @@ from typing import Dict, Any, Optional, Tuple
 import httpx
 import io
 import re
+import base64
 from PIL import Image
 from urllib.parse import urlparse
 
@@ -50,7 +51,18 @@ async def _safe_load_image(url: str) -> Tuple[Image.Image, bytes]:
     1. SSRF 방지 (URL 검증)
     2. 중복 다운로드 방지 (한 번만 다운로드하여 반환)
     """
-    # 1. SSRF 검증
+    # 0. Data URL 처리 (테스트용 base64)
+    if url.startswith("data:"):
+        try:
+            # data:image/jpeg;base64,xxxx
+            header, encoded = url.split(",", 1)
+            content = base64.b64decode(encoded)
+            image = Image.open(io.BytesIO(content)).convert("RGB")
+            return image, content
+        except Exception as e:
+            raise ValueError(f"Invalid Data URL format: {e}")
+
+    # 1. SSRF 검증 (S3 URL 전용)
     try:
         parsed = urlparse(url)
         hostname = parsed.hostname or ""
@@ -128,7 +140,12 @@ async def get_smart_visual_diagnosis(
         image, image_bytes = await _safe_load_image(s3_url)
     except Exception as e:
         print(f"[Visual Service] 이미지 로드 실패: {e}")
-        return {"type": "ERROR", "content": {"message": str(e)}}
+        return {
+            "status": "ERROR",
+            "analysis_type": "IO_ERROR",
+            "category": "ERROR",
+            "data": {"message": str(e)}
+        }
 
     # Step 1: Router로 장면 분류
     router = models.get("router") or get_router_service()
@@ -136,10 +153,16 @@ async def get_smart_visual_diagnosis(
     try:
         scene_type, confidence = await router.classify(image)
         print(f"[Visual Service] Router 분류: {scene_type.value} (신뢰도: {confidence:.2f})")
+        
+        # 신뢰도가 낮으면 LLM에게 직접 판단 요청 (Fallback)
+        if confidence < 0.85:
+            print(f"[Visual Service] Router 신뢰도 낮음, LLM Fallback 실행")
+            return await analyze_general_image(s3_url)
+            
     except Exception as e:
         print(f"[Visual Service] Router 실패, LLM Fallback: {e}")
         llm_result = await analyze_general_image(s3_url)
-        return {"type": "LLM_FALLBACK", "content": llm_result}
+        return llm_result
     
     # Step 2: 장면별 분기
     result_data = None
@@ -148,7 +171,7 @@ async def get_smart_visual_diagnosis(
             # ENGINE: 기존 EngineAnomalyPipeline 사용
             from ai.app.services.engine_anomaly_service import EngineAnomalyPipeline
             
-            pipeline = EngineAnomalyPipeline()
+            pipeline = EngineAnomalyPipeline(anomaly_detector=models.get("anomaly_detector"))
             engine_yolo = models.get("engine_yolo")
             
             try:
@@ -184,12 +207,12 @@ async def get_smart_visual_diagnosis(
             # Unknown scene → LLM Fallback
             print(f"[Visual Service] Unknown scene: {scene_type}, LLM Fallback")
             llm_result = await analyze_general_image(s3_url)
-            return {"type": "LLM_FALLBACK", "content": llm_result}
+            return llm_result
             
     except Exception as e:
         print(f"[Visual Service] 분석 오류, LLM Fallback: {e}")
         llm_result = await analyze_general_image(s3_url)
-        return {"type": "LLM_FALLBACK", "content": llm_result}
+        return llm_result
     
     finally:
         # =================================================================

@@ -16,6 +16,7 @@ import torch
 import numpy as np
 from PIL import Image
 from typing import Dict, Any, Optional
+import asyncio
 from dataclasses import dataclass
 from pathlib import Path
 import json
@@ -59,6 +60,7 @@ class AnomalyDetector:
         if self.models:
             self.backbone = self._load_backbone()
             self.transform = self._get_transform()
+            self.lock = asyncio.Lock()
             print(f"[AnomalyDetector] 실제 모델 모드 (Device: {self.device})")
         else:
             self.backbone = None
@@ -144,12 +146,12 @@ class AnomalyDetector:
         
         # 부품별 모델 → General 모델 → Mock 순서
         if key in self.models:
-            return self._real_detect(crop_image, key, threshold)
+            return await self._real_detect(crop_image, key, threshold)
         if "_general" in self.models:
-            return self._real_detect(crop_image, "_general", threshold)
+            return await self._real_detect(crop_image, "_general", threshold)
         return self._mock_detect(threshold)
 
-    def _real_detect(self, crop_image: Image.Image, model_key: str, threshold: float) -> AnomalyResult:
+    async def _real_detect(self, crop_image: Image.Image, model_key: str, threshold: float) -> AnomalyResult:
         """실제 PatchCore 추론"""
         model_data = self.models[model_key]
         knn = model_data['knn']
@@ -157,12 +159,14 @@ class AnomalyDetector:
         # 이미지 전처리
         img_tensor = self.transform(crop_image.convert("RGB")).unsqueeze(0).to(self.device)
         
-        # Feature 추출
-        with torch.no_grad():
-            _ = self.backbone(img_tensor)
-            feat = self.features['layer2'].cpu().numpy()
-            b, c, h, w = feat.shape
-            feat = feat.reshape(b, c, -1).transpose(0, 2, 1).reshape(-1, c)
+        # Feature 추출 (Lock으로 경쟁 상태 방지)
+        async with self.lock:
+            with torch.no_grad():
+                _ = self.backbone(img_tensor)
+                feat = self.features['layer2'].cpu().numpy()
+        
+        b, c, h, w = feat.shape
+        feat = feat.reshape(b, c, -1).transpose(0, 2, 1).reshape(-1, c)
         
         # KNN 거리 계산 (이상 점수)
         distances, _ = knn.kneighbors(feat)
@@ -177,10 +181,10 @@ class AnomalyDetector:
         heatmap = np.array(Image.fromarray((heatmap * 255).astype(np.uint8)).resize((224, 224))) / 255.0
         
         return AnomalyResult(
-            score=score,
-            is_anomaly=score > threshold,
+            score=float(score),
+            is_anomaly=bool(score > threshold),
             heatmap=heatmap.astype(np.float32),
-            threshold=threshold
+            threshold=float(threshold)
         )
 
     def _mock_detect(self, threshold: float) -> AnomalyResult:
@@ -195,8 +199,8 @@ class AnomalyDetector:
         mock_heatmap = 0.5 * mock_heatmap + 0.5 * gaussian
         
         return AnomalyResult(
-            score=mock_score,
-            is_anomaly=mock_score > threshold,
+            score=float(mock_score),
+            is_anomaly=bool(mock_score > threshold),
             heatmap=mock_heatmap,
-            threshold=threshold
+            threshold=float(threshold)
         )

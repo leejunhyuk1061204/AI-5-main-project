@@ -18,24 +18,24 @@ from ultralytics import YOLO
 # =============================================================================
 # [Configuration] 
 # =============================================================================
-BASE_MODEL = "yolov8s.pt"  # 타이어 미세 패턴을 위해 s 모델 이상 권장
-DATA_YAML_PATH = "ai/data/tire/data.yaml"
+BASE_MODEL = "yolov8s-cls.pt"  # 타이어 상태 분류를 위해 Classification 모델 사용
+DATA_DIR = "ai/data/yolo/tire" # 분류 모델은 폴더 구조(normal/cracked)를 직접 읽음
 OUTPUT_DIR = "ai/runs/tire_model"
 SAVE_PATH = "ai/weights/tire/best.pt"
 
-DEFAULT_EPOCHS = 150
-BATCH_SIZE = 16  # 고해상도 고려하여 배치 조절
-IMG_SIZE = 640
+DEFAULT_EPOCHS = 100
+BATCH_SIZE = 32  # Classification은 Detection보다 배치를 크게 가져가도 됨
+IMG_SIZE = 224   # YOLO 분류 모델 표준 사이즈
 
 def train_model(epochs=DEFAULT_EPOCHS):
-    print(f"\n[Tire] 학습 시작 ({epochs} epochs)...")
-    if not os.path.exists(DATA_YAML_PATH):
-        print(f"[Error] {DATA_YAML_PATH} 가 없습니다.")
+    print(f"\n[Tire Classification] 학습 시작 ({epochs} epochs)...")
+    if not os.path.exists(DATA_DIR):
+        print(f"[Error] 데이터 디렉토리 {DATA_DIR} 가 없습니다.")
         return
     
     model = YOLO(BASE_MODEL)
-    model.train(
-        data=DATA_YAML_PATH,
+    results = model.train(
+        data=DATA_DIR,
         epochs=epochs,
         imgsz=IMG_SIZE,
         batch=BATCH_SIZE,
@@ -45,11 +45,18 @@ def train_model(epochs=DEFAULT_EPOCHS):
         device=0
     )
     
-    best_path = os.path.join(OUTPUT_DIR, "run", "weights", "best.pt")
+    # 가중치 저장 - 실제 저장 경로를 동적으로 추적
+    if hasattr(results, 'save_dir'):
+        best_path = os.path.join(results.save_dir, "weights", "best.pt")
+    else:
+        best_path = os.path.join(OUTPUT_DIR, "run", "weights", "best.pt")
+
     if os.path.exists(best_path):
         os.makedirs(os.path.dirname(SAVE_PATH), exist_ok=True)
         shutil.copy(best_path, SAVE_PATH)
-        print(f"[✓] 모델이 저장되었습니다: {SAVE_PATH}")
+        print(f"[✓] 분류 모델이 저장되었습니다: {SAVE_PATH}")
+    else:
+        print(f"[Warning] Best model weight file not found at: {best_path}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Tire Status Analysis Training")

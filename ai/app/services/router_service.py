@@ -32,8 +32,8 @@ class SceneType(str, Enum):
 
 # =============================================================================
 # Confidence Threshold (이 값 이하면 LLM Fallback)
-# =============================================================================
-CONFIDENCE_THRESHOLD = 0.7
+# 초기 모델의 불안정성을 고려하여 0.85로 상향
+CONFIDENCE_THRESHOLD = 0.85
 
 
 # =============================================================================
@@ -98,10 +98,11 @@ class RouterService:
         self.model.load_state_dict(state_dict)
         self.model.eval()
         
-        # 클래스 매핑
+        # 클래스 매핑 (훈련 데이터 폴더의 알파벳 순서와 정확히 일치해야 함)
+        # 0: dashboard, 1: engine, 2: exterior, 3: tire
         self.class_names = [
-            SceneType.SCENE_ENGINE,
             SceneType.SCENE_DASHBOARD,
+            SceneType.SCENE_ENGINE,
             SceneType.SCENE_EXTERIOR,
             SceneType.SCENE_TIRE
         ]
