@@ -4,7 +4,11 @@ import Constants from 'expo-constants';
 
 // Dynamically determine the host IP from the Expo Go URI
 const getBaseUrl = () => {
-    // ADB Reverse Tunneling enabled
+    // Android Emulator requires 10.0.2.2 to access host localhost
+    if (Platform.OS === 'android') {
+        return 'http://10.0.2.2:8080';
+    }
+    // For iOS simulator and web
     return 'http://localhost:8080';
 };
 
