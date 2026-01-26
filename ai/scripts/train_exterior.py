@@ -38,27 +38,28 @@ import numpy as np
 # =============================================================================
 
 def get_base_proj_dir():
-    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    # 스크립트 위치가 ai/scripts/ 이므로 3번 위로 올라가야 프로젝트 루트임
+    return os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 TASKS = {
     "damage": {
-        "train_json": "data/yolo/exterior/cardd/CarDD_COCO/annotations/instances_train2017.json",
-        "train_images": "data/yolo/exterior/cardd/CarDD_COCO/train2017",
-        "val_json": "data/yolo/exterior/cardd/CarDD_COCO/annotations/instances_val2017.json",
-        "val_images": "data/yolo/exterior/cardd/CarDD_COCO/val2017",
+        "train_json": "ai/data/yolo/exterior/cardd/CarDD_COCO/annotations/instances_train2017.json",
+        "train_images": "ai/data/yolo/exterior/cardd/CarDD_COCO/train2017",
+        "val_json": "ai/data/yolo/exterior/cardd/CarDD_COCO/annotations/instances_val2017.json",
+        "val_images": "ai/data/yolo/exterior/cardd/CarDD_COCO/val2017",
         "num_classes": 6,
-        "weights_path": "weights/exterior/damage_best.pth",
-        "output_dir": "runs/exterior_damage",
+        "weights_path": "ai/weights/exterior/damage_best.pth",
+        "output_dir": "ai/runs/exterior_damage",
         "description": "CarDD 파손 감지 (6 classes: dent, scratch, crack, glass_shatter, lamp_broken, tire_flat)"
     },
     "parts": {
-        "train_json": "data/yolo/exterior/carparts/Car-Parts-Segmentation-master/trainingset/annotations.json",
-        "train_images": "data/yolo/exterior/carparts/Car-Parts-Segmentation-master/trainingset",
-        "val_json": "data/yolo/exterior/carparts/Car-Parts-Segmentation-master/trainingset/annotations.json",
-        "val_images": "data/yolo/exterior/carparts/Car-Parts-Segmentation-master/trainingset",
+        "train_json": "ai/data/yolo/exterior/carparts/Car-Parts-Segmentation-master/trainingset/annotations.json",
+        "train_images": "ai/data/yolo/exterior/carparts/Car-Parts-Segmentation-master/trainingset",
+        "val_json": "ai/data/yolo/exterior/carparts/Car-Parts-Segmentation-master/trainingset/annotations.json",
+        "val_images": "ai/data/yolo/exterior/carparts/Car-Parts-Segmentation-master/trainingset",
         "num_classes": 18,
-        "weights_path": "weights/exterior/parts_best.pth",
-        "output_dir": "runs/exterior_parts",
+        "weights_path": "ai/weights/exterior/parts_best.pth",
+        "output_dir": "ai/runs/exterior_parts",
         "description": "CarParts 부위 감지 (18 classes: bumper, door, hood, etc.)"
     }
 }

@@ -52,6 +52,7 @@ async def analyze_visual(request_body: VisualRequest, request: Request):
         "cardd_yolo": request.app.state.get_exterior_yolo()["cardd"],
         "carparts_yolo": request.app.state.get_exterior_yolo()["carparts"],
         "tire_yolo": request.app.state.get_tire_yolo(),
+        "anomaly_detector": request.app.state.get_anomaly_detector(),
     }
     
     try:
@@ -93,8 +94,10 @@ async def analyze_engine(request_body: EngineAnalysisRequest, request: Request):
         )
         
         return EngineAnalysisResponse(
-            status=result.get("status", "SUCCESS"),
-            data=result
+            status=result.get("status", "NORMAL"),
+            analysis_type=result.get("analysis_type", "SCENE_ENGINE"),
+            category=result.get("category", "ENGINE_ROOM"),
+            data=result["data"]
         )
         
     except ValueError as e:

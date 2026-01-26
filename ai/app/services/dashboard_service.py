@@ -34,16 +34,16 @@ FAST_PATH_THRESHOLD = 0.9  # 이 값 이상이면서 NORMAL이면 LLM 건너뜀
 # Dashboard 경고등 클래스 정의 (10종)
 # =============================================================================
 DASHBOARD_CLASSES = {
-    "Anti_Lock_Braking_System": {"severity": "WARNING", "color": "YELLOW", "category": "BRAKES", "description": "ABS 시스템 이상"},
-    "Braking_System_Issue": {"severity": "CRITICAL", "color": "RED", "category": "BRAKES", "description": "브레이크 시스템 고장"},
-    "Charging_System_Issue": {"severity": "WARNING", "color": "YELLOW", "category": "ELECTRICAL", "description": "충전 시스템 이상 (배터리/알터네이터)"},
-    "Check_Engine": {"severity": "WARNING", "color": "YELLOW", "category": "ENGINE", "description": "엔진 점검 필요"},
-    "Electronic_Stability_Problem": {"severity": "WARNING", "color": "YELLOW", "category": "SAFETY", "description": "전자 안정 제어(ESP) 이상"},
-    "Engine_Overheating": {"severity": "CRITICAL", "color": "RED", "category": "ENGINE", "description": "엔진 과열 - 즉시 정차 필요"},
-    "Low_Engine_Oil": {"severity": "CRITICAL", "color": "RED", "category": "ENGINE", "description": "엔진 오일 부족 - 주행 중지 권장"},
-    "Low_Tire_Pressure": {"severity": "WARNING", "color": "YELLOW", "category": "TIRES", "description": "타이어 공기압 부족"},
-    "Master_Warning": {"severity": "CRITICAL", "color": "RED", "category": "GENERAL", "description": "차량 주요 시스템 경고"},
-    "SRS_Airbag": {"severity": "CRITICAL", "color": "RED", "category": "SAFETY", "description": "에어백 시스템 이상"},
+    "Anti Lock Braking System": {"severity": "WARNING", "color": "YELLOW", "category": "BRAKES", "description": "ABS 시스템 이상"},
+    "Braking System Issue": {"severity": "CRITICAL", "color": "RED", "category": "BRAKES", "description": "브레이크 시스템 고장"},
+    "Charging System Issue": {"severity": "CRITICAL", "color": "RED", "category": "ELECTRICAL", "description": "배터리/충전 시스템 이상"},
+    "Check Engine": {"severity": "WARNING", "color": "YELLOW", "category": "ENGINE", "description": "엔진 점검 필요"},
+    "Electronic Stability Problem -ESP-": {"severity": "WARNING", "color": "YELLOW", "category": "SAFETY", "description": "전자 안정 제어(ESP) 이상"},
+    "Engine Overheating Warning Light": {"severity": "CRITICAL", "color": "RED", "category": "ENGINE", "description": "엔진 과열 - 즉시 정차 필요"},
+    "Low Engine Oil Warning Light": {"severity": "CRITICAL", "color": "RED", "category": "ENGINE", "description": "엔진 오일 부족 - 즉시 정차 필요"},
+    "Low Tire Pressure Warning Light": {"severity": "WARNING", "color": "YELLOW", "category": "TIRES", "description": "타이어 공기압 부족"},
+    "Master warning light": {"severity": "WARNING", "color": "YELLOW", "category": "GENERAL", "description": "통합 경고 확인 필요"},
+    "SRS-Airbag": {"severity": "CRITICAL", "color": "RED", "category": "SAFETY", "description": "에어백 시스템 이상"},
 }
 
 
@@ -105,13 +105,16 @@ async def analyze_dashboard_image(
             "analysis_type": "SCENE_DASHBOARD",
             "category": "DASHBOARD",
             "data": {
-                "vehicle_context": None,
                 "detected_count": 0,
                 "detections": [],
-                "integrated_analysis": None,
-                "recommendation": None,
-                "llm_fallback": True,
-                "description": llm_result.description if hasattr(llm_result, 'description') else None
+                "integrated_analysis": {
+                    "severity_score": 0,
+                    "description": llm_result.data.get("description") if hasattr(llm_result, 'data') else "분석 실패"
+                },
+                "recommendation": {
+                     "primary_action": llm_result.data.get("recommendation") if hasattr(llm_result, 'data') else "정비소 방문을 권장합니다."
+                },
+                "llm_fallback": True
             }
         }
     
@@ -125,15 +128,15 @@ async def analyze_dashboard_image(
             "analysis_type": "SCENE_DASHBOARD",
             "category": "DASHBOARD",
             "data": {
-                "vehicle_context": None,
                 "detected_count": 0,
                 "detections": [],
                 "integrated_analysis": {
                     "severity_score": 0,
-                    "description": "계기판에서 경고등이 감지되지 않았습니다. 정상 상태입니다.",
-                    "short_term_risk": None
+                    "description": "계기판에서 경고등이 감지되지 않았습니다. 정상 상태입니다."
                 },
-                "recommendation": None
+                "recommendation": {
+                    "primary_action": "정기적인 소모품 점검을 권장합니다."
+                }
             }
         }
     
@@ -147,11 +150,15 @@ async def analyze_dashboard_image(
             "analysis_type": "SCENE_DASHBOARD",
             "category": "DASHBOARD",
             "data": {
-                "vehicle_context": None,
                 "detected_count": len(detections),
                 "detections": detections,
-                "integrated_analysis": None,
-                "recommendation": None,
+                "integrated_analysis": {
+                    "severity_score": 5,
+                    "description": llm_result.data.get("description") if hasattr(llm_result, 'data') else "낮은 신뢰도 검출"
+                },
+                "recommendation": {
+                     "primary_action": llm_result.data.get("recommendation") if hasattr(llm_result, 'data') else "정교한 육안 점검 필요"
+                },
                 "llm_fallback": True
             }
         }
@@ -174,10 +181,11 @@ async def analyze_dashboard_image(
         print(f"[Dashboard] Fast Path 적용 (신뢰도: {max_confidence:.2f}). LLM 스킵.")
         integrated_analysis = {
             "severity_score": 0,
-            "description": "계기판에서 경고등이 감지되지 않았습니다.",
-            "short_term_risk": None
+            "description": "계기판에서 경고등이 감지되지 않았습니다."
         }
-        recommendation = None
+        recommendation = {
+            "primary_action": "안전하게 주행을 계속하셔도 좋습니다."
+        }
     else:
         # LLM 전달용 데이터 정제
         warning_list = []
@@ -193,14 +201,11 @@ async def analyze_dashboard_image(
         
         integrated_analysis = {
             "severity_score": severity_score,
-            "description": llm_result.get("description", ""),
-            "short_term_risk": llm_result.get("short_term_risk", None)
+            "description": llm_result.get("description", "")
         }
         
         recommendation = {
-            "primary_action": llm_result.get("recommendation", None),
-            "secondary_action": llm_result.get("secondary_action", None),
-            "estimated_repair": llm_result.get("estimated_repair", None)
+            "primary_action": llm_result.get("recommendation", None)
         }
     
     # API 명세서 형식에 맞춤
@@ -209,7 +214,6 @@ async def analyze_dashboard_image(
         "analysis_type": "SCENE_DASHBOARD",
         "category": "DASHBOARD",
         "data": {
-            "vehicle_context": None,  # TODO: LLM이 차종 추론 기능 추가 시
             "detected_count": len(detections),
             "detections": detections,
             "integrated_analysis": integrated_analysis,
