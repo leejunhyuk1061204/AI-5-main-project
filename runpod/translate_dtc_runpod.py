@@ -12,8 +12,8 @@ from automotive_terms import AUTOMOTIVE_TERMS
 # --- 설정 (Configuration) ---
 OLLAMA_URL = "http://localhost:11434/api/generate"
 OLLAMA_CHECK_URL = "http://localhost:11434"
-MODEL_NAME = "qwen2.5:14b"  # 32B(20GB+)는 4090(24GB)에서 메모리 스왑으로 느려짐. 14B가 최적(속도 5배 이상)
-BATCH_SIZE = 30  # 14B 모델은 가벼우므로 배치 30개도 충분히 소화 가능
+MODEL_NAME = "qwen2.5:14b"  # 14B + 용어사전 = 속도/품질 최적 밸런스
+BATCH_SIZE = 30  # 14B는 가벼워서 30개 병렬 처리 가능
 
 # 스크립트 실행 위치 기준 경로 설정
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -31,22 +31,25 @@ DATA_SOURCES = {
 CACHE_FILE = os.path.join(DATA_DIR, "translated_cache.json")
 FINAL_FILE = os.path.join(DATA_DIR, "translated_dtc_final.json")
 
-# --- 시스템 프롬프트 구성 (경량화) ---
+# --- 시스템 프롬프트 구성 (퀄리티 중심) ---
 def get_system_prompt():
-    # 전체 용어 사전을 매번 넣으면 속도가 매우 느려지므로, 핵심 규칙만 전달
-    return """너는 자동차 정비 전문가이자 TTS 성우야.
-자동차 고장 코드(DTC) 설명을 '운전자가 듣기 편한 한글 구어체'로 번역하고, 요약해줘.
+    terms_str = "\n".join([f"- {en}: {ko}" for en, ko in AUTOMOTIVE_TERMS.items()])
+    return f"""너는 숙련된 자동차 정비 전문가이자 TTS(Text-to-Speech) 전문 성우야.
+제공된 [자동차 용어 사전]을 참고해서 다음 규칙을 반드시 지켜서 번역해줘:
 
-[규칙]
-1. 'Circuit Low' -> '회로 전압 낮음', 'Bank 1' -> '뱅크 1' 등 전문 용어는 표준 자동차 용어로 번역.
-2. **반드시 JSON 형식만 출력** (Markdown/설명 금지).
+1. 전문 용어는 사전에 정의된 표준 번역어를 최우선으로 사용하되, 문맥에 맞게 자연스럽게 연결해줘.
+2. **TTS 최적화**: 운전자가 운전 중에 들어도 한 번에 이해할 수 있도록 부드러운 구어체(~입니다, ~가 발생했습니다 등) 문장으로 구성해줘.
+3. **구조화된 출력**: 반드시 아래의 JSON 형식으로만 응답해줘. 다른 설명은 하지 마.
 
-[출력 예시]
-{
-    "translated": "흡기 온도 센서 회로 전압 낮음",
-    "tts_phrase": "흡기 온도 센서의 회로 전압이 낮습니다. 점검이 필요합니다.",
-    "summary": "흡기 센서 전압 낮음"
-}
+[자동차 용어 사전]
+{terms_str}
+
+[출력 JSON 형식 교본]
+{{
+    "translated": "한글 번역문",
+    "tts_phrase": "운전자를 위한 자연스러운 안내 문구",
+    "summary": "핵심 요약 (5자 이내)"
+}}
 """
 
 async def check_ollama_server():
@@ -76,7 +79,7 @@ async def translate_item(session, code, original, system_prompt):
         "stream": False,
         "format": "json",
         "options": {
-            "num_ctx": 1024  # 문맥 길이를 줄여서 VRAM 절약 -> 동시 처리(Parallel) 효율 극대화
+            "num_ctx": 4096  # 용어 사전이 포함되므로 문맥 길이를 넉넉하게 확보 필수
         }
     }
     
