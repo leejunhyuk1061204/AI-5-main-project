@@ -28,7 +28,7 @@ export default function HistoryMain() {
             const stored = await AsyncStorage.getItem('primaryVehicle');
             if (stored) {
                 const vehicle = JSON.parse(stored);
-                const response = await tripApi.getTrips(vehicle.id);
+                const response = await tripApi.getTrips(vehicle.vehicleId);
                 if (response.success && response.data && response.data.length > 0) {
                     const trips = response.data;
                     const totalScore = Math.round(

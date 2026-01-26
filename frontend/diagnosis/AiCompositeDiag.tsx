@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, TextInput } from 'react-native';
+import React, { useState, useRef, useEffect } from 'react';
+import { View, Text, TouchableOpacity, ScrollView, TextInput, Keyboard, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -8,7 +8,6 @@ import Header from '../header/Header';
 import BaseScreen from '../components/layout/BaseScreen';
 import VehicleSelectModal from '../components/VehicleSelectModal';
 import { useUIStore } from '../store/useUIStore';
-import { Keyboard } from 'react-native';
 
 export default function AiCompositeDiag() {
     const navigation = useNavigation<any>();
@@ -32,17 +31,15 @@ export default function AiCompositeDiag() {
     const selectionRef = React.useRef(false);
     const setKeyboardVisible = useUIStore(state => state.setKeyboardVisible);
     const bottomNavVisible = useUIStore(state => state.bottomNavVisible);
+    const isKeyboardVisible = useUIStore(state => state.isKeyboardVisible);
+    const scrollRef = useRef<ScrollView>(null);
 
-    React.useEffect(() => {
-        const keyboardDidShowListener = Keyboard.addListener('keyboardDidShow', () => setKeyboardVisible(true));
-        const keyboardDidHideListener = Keyboard.addListener('keyboardDidHide', () => setKeyboardVisible(false));
+    // Auto-scroll logic
+    const scrollToEnd = (animated = false) => {
+        scrollRef.current?.scrollToEnd({ animated });
+    };
 
-        return () => {
-            keyboardDidShowListener.remove();
-            keyboardDidHideListener.remove();
-            setKeyboardVisible(false); // 화면을 나갈 때 초기화
-        };
-    }, []);
+    // Initial check on mount
 
     // Initial check on mount
     React.useEffect(() => {
@@ -86,28 +83,86 @@ export default function AiCompositeDiag() {
         }
     }, [route.params?.diagnosisResult]);
 
+    const handleFocus = () => {
+        // 즉각적인 하단바 숨김 트리거
+        useUIStore.getState().setKeyboardVisible(true);
+    };
+
     return (
         <BaseScreen
             header={<Header />}
             scrollable={false}
+            androidKeyboardBehavior="height"
             padding={false}
-            useBottomNav={false}
+            useBottomNav={true}
+            footer={
+                <View className="w-full bg-background-dark/95 backdrop-blur-md pt-2">
+                    {/* Action Buttons - 키보드가 보일 때는 숨김 처리 */}
+                    {!useUIStore.getState().isKeyboardVisible && (
+                        <View className="flex-row justify-between px-5 pb-5 gap-3">
+                            <TouchableOpacity onPress={() => navigation.navigate('EngineSoundDiag', { from: 'chatbot' })} className="flex-1 h-[90px] p-3 rounded-2xl bg-surface-dark border border-white/10 justify-between active:scale-95 overflow-hidden relative">
+                                <View className="w-8 h-8 rounded-lg bg-primary/20 items-center justify-center mb-1">
+                                    <MaterialIcons name="mic" size={20} color="#60a5fa" />
+                                </View>
+                                <Text className="text-[12px] font-bold text-white/95 leading-tight">녹음 시작</Text>
+                                <View className="absolute bottom-0 left-0 h-[3px] w-full bg-primary" />
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => navigation.navigate('Filming', { from: 'chatbot' })} className="flex-1 h-[90px] p-3 rounded-2xl bg-surface-dark border border-white/10 justify-between active:scale-95 overflow-hidden relative">
+                                <View className="w-8 h-8 rounded-lg bg-primary/20 items-center justify-center mb-1">
+                                    <MaterialIcons name="camera-alt" size={20} color="#60a5fa" />
+                                </View>
+                                <Text className="text-[12px] font-bold text-white/95 leading-tight">사진 촬영</Text>
+                                <View className="absolute bottom-0 left-0 h-[3px] w-full bg-primary" />
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => navigation.navigate('ActiveReg')} className="flex-1 h-[90px] p-3 rounded-2xl bg-surface-dark border border-white/10 justify-between active:scale-95 overflow-hidden relative">
+                                <View className="w-8 h-8 rounded-lg bg-primary/20 items-center justify-center mb-1">
+                                    <MaterialCommunityIcons name="car-connected" size={20} color="#60a5fa" />
+                                </View>
+                                <Text className="text-[12px] font-bold text-white/95 leading-tight">OBD 스캔</Text>
+                                <View className="absolute bottom-0 left-0 h-[3px] w-full bg-primary" />
+                            </TouchableOpacity>
+                        </View>
+                    )}
+
+                    {/* Input Area */}
+                    <View
+                        className="px-5 pb-4"
+                        style={{
+                            minHeight: 60, // 레이아웃 지원
+                        }}
+                    >
+                        <View className="flex-row items-center gap-2 bg-[#1e293b] border border-white/20 rounded-[24px] p-1.5 pl-4 shadow-xl">
+                            <TouchableOpacity className="w-8 h-8 items-center justify-center rounded-full active:bg-white/10">
+                                <MaterialIcons name="add" size={24} color="#94a3b8" />
+                            </TouchableOpacity>
+                            <TextInput
+                                placeholder="AI에게 질문해보세요..."
+                                placeholderTextColor="#94a3b8"
+                                className="flex-1 text-[15px] text-white py-2"
+                                onFocus={handleFocus}
+                            />
+                            <TouchableOpacity className="w-8 h-8 items-center justify-center rounded-full active:bg-white/10 mr-1">
+                                <MaterialIcons name="mic" size={22} color="#94a3b8" />
+                            </TouchableOpacity>
+                            <TouchableOpacity className="w-10 h-10 bg-primary rounded-full items-center justify-center shadow-lg active:scale-95">
+                                <MaterialIcons name="arrow-upward" size={20} color="white" />
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            }
         >
             <View className="flex-1">
-                <ScrollView
-                    className="flex-1 px-5 pt-4"
-                    contentContainerStyle={{ paddingBottom: 250 }} // Floating Footer를 위한 넉넉한 하단 여백
-                    showsVerticalScrollIndicator={false}
-                >
-                    <View className="items-center mb-6">
-                        <Text className="text-[11px] text-white/20 font-medium tracking-widest">
-                            {new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit', weekday: 'short' }).toUpperCase()}
-                        </Text>
-                    </View>
+                <View className="items-center mt-4">
+                    <Text className="text-[11px] text-white/20 font-medium tracking-widest">
+                        {new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit', weekday: 'short' }).toUpperCase()}
+                    </Text>
+                </View>
 
-                    {/* Selected Vehicle Info + Change Button */}
+                {/* Selected Vehicle Info + Change Button - FIXED TOP */}
+                <View className="px-5 mt-2">
                     {selectedVehicleId && (
-                        <View className="mb-6 flex-row items-center justify-between px-4 py-3 bg-surface-dark/50 border border-white/10 rounded-2xl">
+                        <View className="mb-4 flex-row items-center justify-between px-4 py-3 bg-surface-dark/50 border border-white/10 rounded-2xl">
                             <View className="flex-row items-center gap-2">
                                 <MaterialIcons name="directions-car" size={18} color="#60a5fa" />
                                 <Text className="text-white text-[13px] font-bold">{selectedVehicleName}</Text>
@@ -120,7 +175,16 @@ export default function AiCompositeDiag() {
                             </TouchableOpacity>
                         </View>
                     )}
+                </View>
 
+                <ScrollView
+                    ref={scrollRef}
+                    className="flex-1 px-5"
+                    contentContainerStyle={{ paddingBottom: 20 }}
+                    onContentSizeChange={() => scrollToEnd()}
+                    onLayout={() => scrollToEnd()}
+                    showsVerticalScrollIndicator={false}
+                >
                     {messages.map((msg, idx) => (
                         <View key={msg.id} className={`flex-row items-start gap-3 max-w-[88%] ${idx > 0 ? 'mt-4' : 'mb-2'}`}>
                             {msg.type === 'ai' && (
@@ -150,58 +214,6 @@ export default function AiCompositeDiag() {
                         </View>
                     </View>
                 </ScrollView>
-
-                {/* Footer Input Area - Floating Overlay */}
-                <View
-                    style={{ bottom: 0 }}
-                    className="absolute left-0 right-0 px-5 pb-4 bg-background-dark/95 backdrop-blur-md pt-2"
-                >
-                    {/* Action Buttons - 키보드가 보일 때는 숨김 처리 (기기별 최적화) */}
-                    {!Keyboard.isVisible() && (
-                        <View className="flex-row justify-between pb-5 gap-3">
-                            <TouchableOpacity onPress={() => navigation.navigate('EngineSoundDiag', { from: 'chatbot' })} className="flex-1 h-[90px] p-3 rounded-2xl bg-surface-dark border border-white/10 justify-between active:scale-95 overflow-hidden relative">
-                                <View className="w-8 h-8 rounded-lg bg-primary/20 items-center justify-center mb-1">
-                                    <MaterialIcons name="mic" size={20} color="#60a5fa" />
-                                </View>
-                                <Text className="text-[12px] font-bold text-white/95 leading-tight">녹음 시작</Text>
-                                <View className="absolute bottom-0 left-0 h-[3px] w-full bg-primary" />
-                            </TouchableOpacity>
-                            <TouchableOpacity onPress={() => navigation.navigate('Filming', { from: 'chatbot' })} className="flex-1 h-[90px] p-3 rounded-2xl bg-surface-dark border border-white/10 justify-between active:scale-95 overflow-hidden relative">
-                                <View className="w-8 h-8 rounded-lg bg-primary/20 items-center justify-center mb-1">
-                                    <MaterialIcons name="camera-alt" size={20} color="#60a5fa" />
-                                </View>
-                                <Text className="text-[12px] font-bold text-white/95 leading-tight">사진 촬영</Text>
-                                <View className="absolute bottom-0 left-0 h-[3px] w-full bg-primary" />
-                            </TouchableOpacity>
-                            <TouchableOpacity onPress={() => navigation.navigate('ActiveReg')} className="flex-1 h-[90px] p-3 rounded-2xl bg-surface-dark border border-white/10 justify-between active:scale-95 overflow-hidden relative">
-                                <View className="w-8 h-8 rounded-lg bg-primary/20 items-center justify-center mb-1">
-                                    <MaterialCommunityIcons name="car-connected" size={20} color="#60a5fa" />
-                                </View>
-                                <Text className="text-[12px] font-bold text-white/95 leading-tight">OBD 스캔</Text>
-                                <View className="absolute bottom-0 left-0 h-[3px] w-full bg-primary" />
-                            </TouchableOpacity>
-                        </View>
-                    )}
-
-                    {/* Input Area */}
-                    <View className="flex-row items-center gap-2 bg-surface-dark border border-white/20 rounded-[24px] p-1.5 pl-4 shadow-xl">
-                        <TouchableOpacity className="w-8 h-8 items-center justify-center rounded-full active:bg-white/10">
-                            <MaterialIcons name="add" size={24} color="#94a3b8" />
-                        </TouchableOpacity>
-                        <TextInput
-                            placeholder="AI에게 질문해보세요..."
-                            placeholderTextColor="#94a3b8"
-                            className="flex-1 text-[15px] text-white py-2"
-                            onFocus={() => setKeyboardVisible(true)}
-                        />
-                        <TouchableOpacity className="w-8 h-8 items-center justify-center rounded-full active:bg-white/10 mr-1">
-                            <MaterialIcons name="mic" size={22} color="#94a3b8" />
-                        </TouchableOpacity>
-                        <TouchableOpacity className="w-10 h-10 bg-primary rounded-full items-center justify-center shadow-lg active:scale-95">
-                            <MaterialIcons name="arrow-upward" size={20} color="white" />
-                        </TouchableOpacity>
-                    </View>
-                </View>
             </View>
 
             <VehicleSelectModal

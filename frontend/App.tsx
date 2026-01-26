@@ -96,8 +96,8 @@ export default function App() {
     // 1. Initialize Global Stores
     loadFromStorage();
 
-    // 2. Global Keyboard Listeners
-    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    // 2. Global Keyboard Listeners (keyboard-controller polyfills 'Will' events on Android)
+    const showEvent = 'keyboardWillShow';
     const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
 
     const showListener = Keyboard.addListener(showEvent, () => setKeyboardVisible(true));
