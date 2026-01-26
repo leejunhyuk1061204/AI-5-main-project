@@ -23,11 +23,15 @@ public class SmartcarConfig {
     @Bean
     public AuthClient authClient() {
         boolean testMode = "test".equalsIgnoreCase(mode);
-        return new AuthClient.Builder()
-                .clientId(clientId)
-                .clientSecret(clientSecret)
-                .redirectUri(redirectUri)
-                .testMode(testMode)
-                .build();
+        try {
+            return new AuthClient.Builder()
+                    .clientId(clientId)
+                    .clientSecret(clientSecret)
+                    .redirectUri(redirectUri)
+                    .testMode(testMode)
+                    .build();
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to create Smartcar AuthClient", e);
+        }
     }
 }
