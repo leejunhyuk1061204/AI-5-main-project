@@ -17,7 +17,7 @@ const tripApi = {
     // [BE-TD-005] 주행 이력 목록 조회
     getTrips: async (vehicleId: string): Promise<ApiResponse<TripSummary[]>> => {
         try {
-            const response = await api.get(`/trips?vehicleId=${vehicleId}`);
+            const response = await api.get(`/api/v1/trips?vehicleId=${vehicleId}`);
             return response.data;
         } catch (error) {
             console.error('Error fetching trips:', error);
@@ -28,7 +28,7 @@ const tripApi = {
     // [BE-TD-005] 주행 이력 상세 조회
     getTripDetail: async (tripId: string): Promise<ApiResponse<TripSummary>> => {
         try {
-            const response = await api.get(`/trips/${tripId}`);
+            const response = await api.get(`/api/v1/trips/${tripId}`);
             return response.data;
         } catch (error) {
             console.error('Error fetching trip detail:', error);

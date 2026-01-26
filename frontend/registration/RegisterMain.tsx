@@ -5,9 +5,33 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import BaseScreen from '../components/layout/BaseScreen';
 
+import { useUserStore } from '../store/useUserStore';
+
 export default function RegisterMain() {
     const insets = useSafeAreaInsets();
     const navigation = useNavigation<any>();
+    const logout = useUserStore(state => state.logout);
+
+    const handleLogout = async () => {
+        Alert.alert(
+            "로그아웃",
+            "정말 로그아웃 하시겠습니까?",
+            [
+                { text: "취소", style: "cancel" },
+                {
+                    text: "로그아웃",
+                    style: "destructive",
+                    onPress: async () => {
+                        await logout();
+                        navigation.reset({
+                            index: 0,
+                            routes: [{ name: 'Login' }],
+                        });
+                    }
+                }
+            ]
+        );
+    };
 
     useEffect(() => {
         const handleDeepLink = async (event: { url: string }) => {
@@ -62,7 +86,13 @@ export default function RegisterMain() {
                     <MaterialIcons name="arrow-back" size={24} color="white" />
                 </TouchableOpacity>
                 <Text className="text-white text-lg font-bold">차량 등록</Text>
-                <View className="w-10" />
+
+                <TouchableOpacity
+                    onPress={handleLogout}
+                    className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 active:bg-white/10"
+                >
+                    <Text className="text-xs text-slate-300 font-medium">로그아웃</Text>
+                </TouchableOpacity>
             </View>
         </View>
     );
