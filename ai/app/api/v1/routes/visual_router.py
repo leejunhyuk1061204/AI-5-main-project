@@ -55,16 +55,20 @@ async def analyze_visual(request_body: VisualRequest, request: Request):
     }
     
     try:
+        # =================================================================
+        # [분석 실행]
+        # get_smart_visual_diagnosis()는 Router를 통해 장면을 분류하고,
+        # 각 도메인 전문 파이프라인(ENGINE/DASHBOARD/EXTERIOR/TIRE)으로 분기함
+        # =================================================================
         result = await get_smart_visual_diagnosis(s3_url, models)
         
-        # content가 VisualResponse 객체인 경우
-        content = result.get("content")
-        if hasattr(content, "dict"):
-            return content
-        elif isinstance(content, dict):
-            return content
-        else:
-            return result
+        # =================================================================
+        # [응답 반환]
+        # 2026-01-25 수정: 각 서비스에서 API 명세서 형식으로 직접 반환
+        # 기존의 {"type": ..., "content": ...} 래핑을 제거하고 바로 반환
+        # 반환 형식: { "status", "analysis_type", "category", "data": {...} }
+        # =================================================================
+        return result
             
     except Exception as e:
         print(f"[Visual API Error] {e}")
