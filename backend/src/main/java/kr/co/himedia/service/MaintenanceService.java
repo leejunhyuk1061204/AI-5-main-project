@@ -20,6 +20,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -139,7 +140,7 @@ public class MaintenanceService {
                                                                  // 여기서는 일단 단순하게 표시
 
                                         double intervalMileage = item.getDefaultIntervalMileage();
-                                        int intervalMonths = (item.getDefaultIntervalMonths() != null)
+                                        Integer intervalMonths = (item.getDefaultIntervalMonths() != null)
                                                         ? item.getDefaultIntervalMonths()
                                                         : 12;
 
@@ -154,6 +155,16 @@ public class MaintenanceService {
                                                 itemEnum = MaintenanceItem.OTHER;
                                         }
 
+                                        // 4. 예상 교체일 계산 (잔여 수명 기반 역산)
+                                        // 잔여 수명 %가 남은 기간 %와 같다고 가정
+                                        // 남은 기간 = 전체 주기 * (잔여 수명 / 100)
+                                        LocalDate predictedDate = null;
+                                        if (intervalMonths != null && intervalMonths > 0) {
+                                                double remainingRatio = remainingLife / 100.0;
+                                                long remainingMonths = Math.round(intervalMonths * remainingRatio);
+                                                predictedDate = LocalDate.now().plusMonths(remainingMonths);
+                                        }
+
                                         return ConsumableStatusResponse.builder()
                                                         .item(itemEnum)
                                                         .itemDescription(item.getName())
@@ -166,7 +177,21 @@ public class MaintenanceService {
                                                                         vc != null ? vc.getLastReplacedMileage() : 0.0)
                                                         .replacementIntervalMileage(intervalMileage)
                                                         .replacementIntervalMonths(intervalMonths)
+                                                        .predictedReplacementDate(predictedDate)
                                                         .build();
+                                })
+                                // 정렬: 예상 교체일 오름차순 (null은 뒤로? 앞으로? -> 급한 건 아니므로 뒤로 배치하거나, interval 없는 건 제외)
+                                // 여기서는 nullsLast로 처리
+                                .sorted((c1, c2) -> {
+                                        if (c1.getPredictedReplacementDate() == null
+                                                        && c2.getPredictedReplacementDate() == null)
+                                                return 0;
+                                        if (c1.getPredictedReplacementDate() == null)
+                                                return 1;
+                                        if (c2.getPredictedReplacementDate() == null)
+                                                return -1;
+                                        return c1.getPredictedReplacementDate()
+                                                        .compareTo(c2.getPredictedReplacementDate());
                                 })
                                 .collect(Collectors.toList());
         }

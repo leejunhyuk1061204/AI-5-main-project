@@ -9,7 +9,6 @@ import { useRegistrationStore } from '../../store/useRegistrationStore';
 import { useAlertStore } from '../../store/useAlertStore';
 import { useDatePickerStore } from '../../store/useDatePickerStore';
 import { ConsumableMaster } from '../../api/masterApi';
-import BaseScreen from '../../components/layout/BaseScreen';
 
 export default function MaintenanceReg() {
     const navigation = useNavigation<any>();

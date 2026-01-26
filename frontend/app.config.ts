@@ -32,7 +32,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
             "android.permission.CAMERA",
             "android.permission.RECORD_AUDIO"
         ],
-        package: "com.lee_kang_hyun.frontend"
+        package: "com.lee_kang_hyun.frontend",
+        softwareKeyboardLayoutMode: "resize"
     },
     web: {
         favicon: "./assets/favicon.png"

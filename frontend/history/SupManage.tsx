@@ -1,32 +1,49 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Modal, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import maintenanceApi, { VehicleConsumable } from '../api/maintenanceApi';
+import { useVehicleStore } from '../store/useVehicleStore';
+import { VehicleResponse } from '../api/vehicleApi';
 
 export default function SupManage() {
     const navigation = useNavigation();
+    const { vehicles, primaryVehicle } = useVehicleStore();
+
+    // 로컬 상태: 현재 조회 중인 차량
+    const [selectedVehicle, setSelectedVehicle] = useState<Partial<VehicleResponse> | null>(null);
     const [consumables, setConsumables] = useState<VehicleConsumable[]>([]);
     const [loading, setLoading] = useState(true);
+    const [modalVisible, setModalVisible] = useState(false);
 
+    // 초기 진입 시 대표 차량 또는 첫 번째 차량 선택
     useEffect(() => {
-        loadConsumables();
-    }, []);
+        if (primaryVehicle) {
+            setSelectedVehicle(primaryVehicle);
+        } else if (vehicles.length > 0) {
+            setSelectedVehicle(vehicles[0]);
+        }
+    }, [primaryVehicle, vehicles]);
 
-    const loadConsumables = async () => {
+    // 선택된 차량이 변경되면 소모품 조회
+    useEffect(() => {
+        if (selectedVehicle?.vehicleId) {
+            loadConsumables(selectedVehicle.vehicleId);
+        } else {
+            setLoading(false);
+        }
+    }, [selectedVehicle]);
+
+    const loadConsumables = async (vehicleId: string) => {
         try {
-            const stored = await AsyncStorage.getItem('primaryVehicle');
-            if (stored) {
-                const vehicle = JSON.parse(stored);
-                const response = await maintenanceApi.getConsumableStatus(vehicle.id);
-                if (response.success && response.data) {
-                    setConsumables(response.data);
-                }
+            setLoading(true);
+            const response = await maintenanceApi.getConsumableStatus(vehicleId);
+            if (response.success && response.data) {
+                setConsumables(response.data);
             } else {
-                console.warn("No primary vehicle found.");
+                setConsumables([]);
             }
         } catch (e) {
             console.error("Failed to load consumables:", e);
@@ -74,7 +91,13 @@ export default function SupManage() {
         return <MaterialIcons name={icon as any} size={24} color={color} />;
     };
 
-    if (loading) {
+    // 차량 선택 핸들러
+    const handleSelectVehicle = (vehicle: VehicleResponse) => {
+        setSelectedVehicle(vehicle);
+        setModalVisible(false);
+    };
+
+    if (loading && !selectedVehicle) {
         return (
             <SafeAreaView className="flex-1 bg-background-dark items-center justify-center">
                 <ActivityIndicator size="large" color="#0d7ff2" />
@@ -94,14 +117,34 @@ export default function SupManage() {
                 >
                     <MaterialIcons name="arrow-back-ios" size={20} color="white" />
                 </TouchableOpacity>
-                <Text className="text-white text-lg font-bold">소모품 관리</Text>
+
+                {/* 차량 선택 타이틀 */}
+                <TouchableOpacity
+                    className="flex-row items-center gap-1 active:opacity-70"
+                    onPress={() => setModalVisible(true)}
+                >
+                    <View className="items-center">
+                        <Text className="text-white text-base font-bold">소모품 관리</Text>
+                        <View className="flex-row items-center gap-1">
+                            <Text className="text-xs text-text-dim">
+                                {selectedVehicle ? `${selectedVehicle.manufacturer} ${selectedVehicle.modelName}` : '차량 선택'}
+                            </Text>
+                            <MaterialIcons name="arrow-drop-down" size={16} color="#94a3b8" />
+                        </View>
+                    </View>
+                </TouchableOpacity>
+
                 <TouchableOpacity className="w-10 h-10 items-center justify-center rounded-full active:bg-white/10">
                     <MaterialIcons name="more-vert" size={24} color="white" />
                 </TouchableOpacity>
             </View>
 
             <ScrollView className="flex-1 px-6 pt-4" contentContainerStyle={{ paddingBottom: 100 }}>
-                {consumables.length === 0 ? (
+                {loading ? (
+                    <View className="py-20">
+                        <ActivityIndicator size="large" color="#0d7ff2" />
+                    </View>
+                ) : consumables.length === 0 ? (
                     <View className="items-center justify-center py-20">
                         <Text className="text-text-dim">등록된 소모품 정보가 없습니다.</Text>
                     </View>
@@ -175,7 +218,7 @@ export default function SupManage() {
                                             />
                                             <Text className="text-xs text-text-muted flex-1">
                                                 {item.predictedReplacementDate
-                                                    ? `교체 예정일: ${item.predictedReplacementDate} (AI 예측)`
+                                                    ? `교체 예정일: ${item.predictedReplacementDate} (예측)`
                                                     : "주행 데이터를 분석 중입니다."}
                                             </Text>
                                         </View>
@@ -186,6 +229,60 @@ export default function SupManage() {
                     </View>
                 )}
             </ScrollView>
+
+            {/* 차량 선택 모달 */}
+            <Modal
+                animationType="fade"
+                transparent={true}
+                visible={modalVisible}
+                onRequestClose={() => setModalVisible(false)}
+            >
+                <Pressable
+                    className="flex-1 bg-black/70 justify-center items-center px-6"
+                    onPress={() => setModalVisible(false)}
+                >
+                    <Pressable
+                        className="w-full bg-surface-dark border border-white/10 rounded-3xl overflow-hidden"
+                        onPress={(e) => e.stopPropagation()}
+                    >
+                        <View className="px-6 py-5 border-b border-white/10 flex-row items-center justify-between">
+                            <Text className="text-lg font-bold text-white">차량 선택</Text>
+                            <TouchableOpacity
+                                className="w-8 h-8 items-center justify-center rounded-full bg-white/5 active:bg-white/10"
+                                onPress={() => setModalVisible(false)}
+                            >
+                                <MaterialIcons name="close" size={20} color="#94a3b8" />
+                            </TouchableOpacity>
+                        </View>
+                        <ScrollView className="max-h-80">
+                            {vehicles.map((vehicle, index) => {
+                                const isSelected = selectedVehicle?.vehicleId === vehicle.vehicleId;
+                                const isLast = index === vehicles.length - 1;
+                                return (
+                                    <TouchableOpacity
+                                        key={vehicle.vehicleId}
+                                        className={`flex-row items-center gap-4 px-6 py-4 active:bg-white/5 ${!isLast ? 'border-b border-white/5' : ''} ${isSelected ? 'bg-primary/10' : ''}`}
+                                        onPress={() => handleSelectVehicle(vehicle)}
+                                    >
+                                        <View className={`w-10 h-10 items-center justify-center rounded-xl ${isSelected ? 'bg-primary/20 border border-primary/30' : 'bg-white/5 border border-white/10'}`}>
+                                            <MaterialIcons name="directions-car" size={20} color={isSelected ? '#0d7ff2' : '#94a3b8'} />
+                                        </View>
+                                        <View className="flex-1">
+                                            <Text className={`text-base font-semibold ${isSelected ? 'text-primary' : 'text-white'}`}>
+                                                {vehicle.manufacturer} {vehicle.modelName}
+                                            </Text>
+                                            <Text className="text-text-dim text-xs">{vehicle.carNumber}</Text>
+                                        </View>
+                                        {isSelected && (
+                                            <MaterialIcons name="check" size={20} color="#0d7ff2" />
+                                        )}
+                                    </TouchableOpacity>
+                                );
+                            })}
+                        </ScrollView>
+                    </Pressable>
+                </Pressable>
+            </Modal>
         </SafeAreaView>
     );
 }

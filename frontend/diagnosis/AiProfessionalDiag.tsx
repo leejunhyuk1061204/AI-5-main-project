@@ -1,16 +1,19 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, TextInput, Platform, Alert, Keyboard, ActivityIndicator } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, TouchableOpacity, TextInput, Platform, Alert, Keyboard, ActivityIndicator, ScrollView } from 'react-native';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import BottomNav from '../nav/BottomNav';
 import Header from '../header/Header';
 import VehicleSelectModal from '../components/VehicleSelectModal';
 import { diagnoseObdOnly, getDiagnosisSessionStatus, replyToDiagnosisSession } from '../api/aiApi';
 import BaseScreen from '../components/layout/BaseScreen';
+import { useUIStore } from '../store/useUIStore';
 
 export default function AiProfessionalDiag() {
     const navigation = useNavigation<any>();
     const route = useRoute<any>();
+    const insets = useSafeAreaInsets();
 
     // UI State
     const [mode, setMode] = useState<'IDLE' | 'PROCESSING' | 'INTERACTIVE' | 'REPORT'>('IDLE');
@@ -22,8 +25,159 @@ export default function AiProfessionalDiag() {
     const [vehicleSelectVisible, setVehicleSelectVisible] = useState(false);
     const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
     const [selectedVehicleName, setSelectedVehicleName] = useState<string | null>(null);
+    const [pendingAction, setPendingAction] = useState<'OBD' | 'SOUND' | 'PHOTO' | null>(null);
+    const [isWaitingForAi, setIsWaitingForAi] = useState(false);
+    const isKeyboardVisible = useUIStore(state => state.isKeyboardVisible);
+    const scrollRef = useRef<ScrollView>(null);
 
-    // ... (All logic functions: handleVehicleSelect, startObdDiagnosis, pollDiagnosisStatus, handleSendReply, etc. - Omitting repetitive complex logic for readability in this tool call, assume they are present) ...
+    // Auto-scroll logic
+    const scrollToEnd = (animated = false) => {
+        scrollRef.current?.scrollToEnd({ animated });
+    };
+
+    // Logic Implementation
+
+    // Logic Implementation
+    const handleVehicleSelect = async (vehicle: any) => {
+        setVehicleSelectVisible(false);
+        setSelectedVehicleId(vehicle.vehicleId);
+        setSelectedVehicleName(`${vehicle.modelName} (${vehicle.carNumber})`);
+
+        // Dispatch action based on pendingAction
+        if (pendingAction === 'OBD') {
+            await startObdDiagnosis(vehicle.vehicleId);
+        } else if (pendingAction === 'SOUND') {
+            Alert.alert("알림", `[${vehicle.model}] 엔진 소리 진단 기능은 준비 중입니다.`);
+        } else if (pendingAction === 'PHOTO') {
+            Alert.alert("알림", `[${vehicle.model}] 시각적 부품 진단 기능은 준비 중입니다.`);
+        }
+        setPendingAction(null);
+    };
+
+    const startObdDiagnosis = async (vehicleId: string) => {
+        try {
+            setMode('PROCESSING');
+            setLoadingMessage('차량 데이터를 분석하고 있습니다...');
+
+            // OBD Only Diagnosis
+            const response = await diagnoseObdOnly(vehicleId);
+
+            // Fix: Access sessionId from data property if response is wrapped
+            const sessionId = response?.data?.sessionId || response?.sessionId;
+
+            if (sessionId) {
+                setCurrentSessionId(sessionId);
+                // Polling will start via useEffect
+            } else {
+                Alert.alert("알림", "진단 세션이 생성되지 않았습니다.");
+                setMode('IDLE');
+            }
+        } catch (error) {
+            console.error("Diagnosis Start Error:", error);
+            Alert.alert("오류", "진단을 시작하는 중 문제가 발생했습니다.");
+            setMode('IDLE');
+        }
+    };
+
+    const handleSendReply = async () => {
+        if (!userInput.trim() || !currentSessionId || !selectedVehicleId) return;
+
+        try {
+            const reply = userInput;
+            setUserInput(''); // Clear input immediately
+
+            // 1. UI 피드백: 메시지 목록에 즉시 추가
+            setMessages(prev => [...prev, { role: 'user', content: reply }]);
+
+            // 2. AI 답변 대기 상태로 전환 (채팅창 유지)
+            setIsWaitingForAi(true);
+
+            // Send reply
+            await replyToDiagnosisSession(currentSessionId, {
+                vehicleId: selectedVehicleId,
+                userResponse: reply
+            });
+            // Status will be updated by polling (will eventually return to INTERACTIVE or REPORT)
+        } catch (error) {
+            console.error("Reply Error:", error);
+            Alert.alert("오류", "답변 전송에 실패했습니다.");
+            setIsWaitingForAi(false);
+        }
+    };
+
+    const handleFinishDiagnosis = () => {
+        setMessages([]);
+        setCurrentSessionId(null);
+        setDiagResult(null);
+        setUserInput('');
+        setMode('IDLE');
+    };
+
+    // Polling Effect
+    useEffect(() => {
+        let intervalId: NodeJS.Timeout;
+
+        if ((mode === 'PROCESSING' || mode === 'INTERACTIVE') && currentSessionId) {
+            intervalId = setInterval(async () => {
+                try {
+                    const statusData = await getDiagnosisSessionStatus(currentSessionId);
+
+                    if (statusData) {
+                        // Update Messages if available
+                        if (statusData.messages) {
+                            setMessages(statusData.messages);
+                        }
+
+                        const currentStatus = (statusData.status || '').toUpperCase();
+
+                        // Sync messages from interactiveData
+                        if (statusData.interactiveData) {
+                            const newMessages = [];
+                            if (statusData.interactiveData.conversation) {
+                                newMessages.push(...statusData.interactiveData.conversation);
+                            }
+                            if (statusData.interactiveData.message) {
+                                const lastMsg = newMessages[newMessages.length - 1];
+                                if (!lastMsg || lastMsg.content !== statusData.interactiveData.message) {
+                                    newMessages.push({ role: 'ai', content: statusData.interactiveData.message });
+                                }
+                            }
+                            if (newMessages.length > 0) setMessages(newMessages);
+                        }
+
+                        // Check Status
+                        if (currentStatus === 'INTERACTIVE' || currentStatus === 'ACTION_REQUIRED') {
+                            if (mode !== 'INTERACTIVE') setMode('INTERACTIVE');
+                            setIsWaitingForAi(false);
+                        } else if (currentStatus === 'REPORT' || currentStatus === 'DONE' || currentStatus === 'COMPLETED' || currentStatus === 'SUCCESS') {
+                            setMode('REPORT');
+                            setIsWaitingForAi(false);
+                            setDiagResult(statusData.report || statusData.result || statusData);
+                            clearInterval(intervalId);
+                        } else if (currentStatus === 'PROCESSING') {
+                            // Update loading message with progress if available
+                            if (statusData.progressMessage) {
+                                setLoadingMessage(statusData.progressMessage);
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.error("Polling Error:", e);
+                }
+            }, 2000); // Poll every 2 seconds
+        }
+
+        return () => {
+            if (intervalId) clearInterval(intervalId);
+        };
+    }, [mode, currentSessionId]);
+
+    // Auto-scroll to bottom when messages change
+    useEffect(() => {
+        if (mode === 'INTERACTIVE') {
+            scrollToEnd(false);
+        }
+    }, [messages, mode]);
 
     const ActionButton = ({ icon, label, onPress, color = "#3b82f6", disabled = false }: { icon: any, label: string, onPress: () => void, color?: string, disabled?: boolean }) => (
         <TouchableOpacity
@@ -44,43 +198,61 @@ export default function AiProfessionalDiag() {
         </TouchableOpacity>
     );
 
+    const handleFocus = () => {
+        // 즉각적인 하단바 숨김 트리거
+        useUIStore.getState().setKeyboardVisible(true);
+    };
+
     return (
         <BaseScreen
             header={<Header />}
+            scrollable={false}
+            androidKeyboardBehavior="height"
             footer={
-                <>
-                    {/* Interactive Input Layer (Floating Layer 3) */}
+                <View className="w-full">
+                    {/* Vehicle Selection Modal */}
+                    <VehicleSelectModal
+                        visible={vehicleSelectVisible}
+                        onClose={() => setVehicleSelectVisible(false)}
+                        onSelect={handleVehicleSelect}
+                        description="진단을 진행할 차량을 선택해주세요."
+                    />
+
+                    {/* Interactive Input Area */}
                     {mode === 'INTERACTIVE' && (
-                        <View className="px-5 pb-5 bg-background-dark">
-                            <View className="flex-row items-center bg-[#1e293b] rounded-full px-4 py-2 border border-white/10">
+                        <View
+                            className="px-6 py-4 bg-[#101922] border-t border-white/5"
+                            style={{
+                                minHeight: 80, // 최소 높이 확보
+                            }}
+                        >
+                            <View className="flex-row items-center bg-[#1e293b] rounded-full px-4 py-1 border border-white/10 shadow-lg">
                                 <TextInput
-                                    className="flex-1 text-white py-2"
-                                    placeholder="답변을 입력하세요..."
+                                    className="flex-1 text-white py-3 text-[15px]"
+                                    placeholder="질문에 답변을 입력하세요..."
                                     placeholderTextColor="#64748b"
                                     value={userInput}
                                     onChangeText={setUserInput}
                                     multiline={false}
+                                    returnKeyType="send"
+                                    onFocus={handleFocus}
+                                    onSubmitEditing={handleSendReply}
                                 />
                                 <TouchableOpacity
-                                    onPress={() => {/* ... handleSendReply ... */ }}
-                                    className="w-10 h-10 bg-[#3b82f6] rounded-full items-center justify-center"
+                                    onPress={handleSendReply}
+                                    className={`w-10 h-10 rounded-full items-center justify-center ${userInput.trim() ? 'bg-primary' : 'bg-slate-700'}`}
+                                    disabled={!userInput.trim()}
                                 >
-                                    <MaterialIcons name="arrow-upward" size={20} color="white" />
+                                    <MaterialIcons name="arrow-upward" size={22} color="white" />
                                 </TouchableOpacity>
                             </View>
                         </View>
                     )}
-                    <VehicleSelectModal
-                        visible={vehicleSelectVisible}
-                        onClose={() => setVehicleSelectVisible(false)}
-                        onSelect={() => {/* ... handleVehicleSelect ... */ }}
-                        description="진단을 진행할 차량을 선택해주세요."
-                    />
-                </>
+                </View>
             }
             useBottomNav={true} // 탭 메뉴로 쓰일 때 하단바 여백 확보
         >
-            <View className="flex-1">
+            <View className="flex-1 mt-4">
                 {/* 1. Vehicle Info Card */}
                 <TouchableOpacity
                     onPress={() => mode === 'IDLE' && setVehicleSelectVisible(true)}
@@ -101,15 +273,46 @@ export default function AiProfessionalDiag() {
 
                 {/* 2. Diagnosis Modes Grid */}
                 {mode === 'IDLE' && (
-                    <View className="flex-col gap-4">
-                        <View className="flex-row gap-4">
-                            <ActionButton icon="bluetooth-audio" label="소리 진단" color="#3b82f6" onPress={() => { }} />
-                            <ActionButton icon="photo-camera" label="사진 진단" color="#0ea5e9" onPress={() => { }} />
-                        </View>
-                        <View className="flex-row gap-4">
-                            <ActionButton icon="scan-helper" label="OBD 스캔" color="#8b5cf6" onPress={() => { }} />
-                            <ActionButton icon="history" label="이전 기록" color="#64748b" onPress={() => { }} />
-                        </View>
+                    <View className="flex-row gap-3">
+                        <ActionButton
+                            icon="engine-outline"
+                            label="OBD 스캔"
+                            color="#3b82f6"
+                            onPress={() => {
+                                if (selectedVehicleId) {
+                                    startObdDiagnosis(selectedVehicleId);
+                                } else {
+                                    setPendingAction('OBD');
+                                    setVehicleSelectVisible(true);
+                                }
+                            }}
+                        />
+                        <ActionButton
+                            icon="photo-camera"
+                            label="사진 진단"
+                            color="#3b82f6"
+                            onPress={() => {
+                                if (selectedVehicleId) {
+                                    Alert.alert("알림", `${selectedVehicleName} 시각적 부품 진단 기능은 준비 중입니다.`);
+                                } else {
+                                    setPendingAction('PHOTO');
+                                    setVehicleSelectVisible(true);
+                                }
+                            }}
+                        />
+                        <ActionButton
+                            icon="bluetooth-audio"
+                            label="소리 진단"
+                            color="#3b82f6"
+                            onPress={() => {
+                                if (selectedVehicleId) {
+                                    Alert.alert("알림", `${selectedVehicleName} 엔진 소리 진단 기능은 준비 중입니다.`);
+                                } else {
+                                    setPendingAction('SOUND');
+                                    setVehicleSelectVisible(true);
+                                }
+                            }}
+                        />
                     </View>
                 )}
 
@@ -121,6 +324,81 @@ export default function AiProfessionalDiag() {
                         <Text className="text-slate-400 text-center">AI가 차량 데이터를 분석 중입니다. 잠시만 기다려주세요.</Text>
                     </View>
                 )}
+
+                {/* Interactive State (Chat) */}
+                {mode === 'INTERACTIVE' && (
+                    <ScrollView
+                        ref={scrollRef}
+                        className="flex-1"
+                        contentContainerStyle={{ paddingBottom: 40 }}
+                        onContentSizeChange={() => scrollToEnd()}
+                        onLayout={() => scrollToEnd()}
+                        showsVerticalScrollIndicator={false}
+                    >
+                        {messages.map((msg, idx) => (
+                            <View
+                                key={idx}
+                                className={`mb-4 max-w-[85%] ${msg.role === 'user' ? 'self-end' : 'self-start'}`}
+                            >
+                                <View className={`p-4 rounded-2xl ${msg.role === 'user' ? 'bg-[#3b82f6] rounded-tr-none' : 'bg-[#1e293b] border border-white/10 rounded-tl-none'}`}>
+                                    <Text className="text-white text-[15px] leading-6">{msg.content}</Text>
+                                </View>
+                                <Text className="text-slate-500 text-[10px] mt-1 px-1">
+                                    {msg.role === 'user' ? '나' : 'AI 전문 분석가'}
+                                </Text>
+                            </View>
+                        ))}
+
+                        {/* Thinking Indicator (Loading Bubble) */}
+                        {isWaitingForAi && (
+                            <View className="mb-4 max-w-[85%] self-start">
+                                <View className="p-4 rounded-2xl bg-[#1e293b] border border-white/10 rounded-tl-none flex-row items-center gap-2">
+                                    <ActivityIndicator size="small" color="#3b82f6" />
+                                    <Text className="text-slate-400 text-sm">AI가 분석 중입니다...</Text>
+                                </View>
+                            </View>
+                        )}
+
+                        {/* If messages is empty but in interactive mode, show a loading for the first message */}
+                        {messages.length === 0 && !isWaitingForAi && (
+                            <ActivityIndicator size="small" color="#3b82f6" />
+                        )}
+                    </ScrollView>
+                )}
+
+                {/* Report State */}
+                {mode === 'REPORT' && diagResult && (
+                    <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
+                        <View className="bg-[#1e293b] rounded-3xl p-6 border border-white/10 mb-6">
+                            <View className="flex-row items-center gap-3 mb-4">
+                                <View className="w-10 h-10 bg-green-500/20 rounded-full items-center justify-center">
+                                    <MaterialIcons name="fact-check" size={24} color="#22c55e" />
+                                </View>
+                                <Text className="text-white text-xl font-bold">진단 분석 결과</Text>
+                            </View>
+
+                            <Text className="text-slate-400 text-sm leading-6 mb-6">
+                                {diagResult.summary || '종합 분석이 완료되었습니다.'}
+                            </Text>
+
+                            <View className="bg-white/5 rounded-2xl p-5 border border-white/5">
+                                <Text className="text-primary font-bold mb-3">🛠️ 주요 권장 사항</Text>
+                                <Text className="text-white leading-7 text-[15px]">
+                                    {diagResult.finalReport}
+                                </Text>
+                            </View>
+
+                            <TouchableOpacity
+                                className="mt-8 bg-[#3b82f6] py-4 rounded-2xl items-center shadow-lg shadow-blue-500/20"
+                                onPress={handleFinishDiagnosis}
+                            >
+                                <Text className="text-white font-bold text-base">확인 완료</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </ScrollView>
+                )}
+
+                {/* Input Area was here - Removed as it's now in footer prop */}
             </View>
         </BaseScreen>
     );

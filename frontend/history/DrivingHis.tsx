@@ -43,7 +43,7 @@ export default function DrivingHis() {
             if (stored) {
                 const vehicle = JSON.parse(stored);
                 // Fetch trips for ONLY the primary vehicle
-                const response = await tripApi.getTrips(vehicle.id);
+                const response = await tripApi.getTrips(vehicle.vehicleId);
                 if (response.success && response.data) {
                     processTrips(response.data);
                 }
