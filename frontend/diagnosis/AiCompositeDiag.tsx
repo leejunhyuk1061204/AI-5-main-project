@@ -89,10 +89,9 @@ export default function AiCompositeDiag() {
     return (
         <BaseScreen
             header={<Header />}
-            footer={<BottomNav />}
             scrollable={false}
             padding={false}
-            useBottomNav={true}
+            useBottomNav={false}
         >
             <View className="flex-1">
                 <ScrollView

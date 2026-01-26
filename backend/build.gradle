@@ -57,6 +57,7 @@ dependencies {
 	annotationProcessor "jakarta.persistence:jakarta.persistence-api"
 
 	// Smartcar SDK
+	implementation 'com.smartcar.sdk:java-sdk:4.8.1'
 	// OkHttp for High Mobility
 	testImplementation 'org.springframework.security:spring-security-test'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'

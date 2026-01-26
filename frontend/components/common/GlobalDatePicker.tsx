@@ -19,7 +19,6 @@ const GlobalDatePicker = () => {
             date={initialDate}
             onConfirm={handleConfirm}
             onCancel={closeDatePicker}
-            headerTextIOS="날짜 선택"
             confirmTextIOS="확인"
             cancelTextIOS="취소"
             textColor="black"
