@@ -1,4 +1,4 @@
-```python
+
 # ai/app/services/engine_anomaly_service.py
 """
 엔진룸 이상 정밀 분석 파이프라인 (Engine Anomaly Pipeline)

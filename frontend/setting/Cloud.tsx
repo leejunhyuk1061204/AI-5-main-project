@@ -1,9 +1,8 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { StatusBar } from 'expo-status-bar';
+import { View, Text, TouchableOpacity } from 'react-native';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import BaseScreen from '../components/layout/BaseScreen';
 
 // 클라우드 서비스 데이터 타입
 interface CloudService {
@@ -95,7 +94,6 @@ const initialCloudServices: CloudService[] = [
 
 export default function Cloud() {
     const navigation = useNavigation<any>();
-    const insets = useSafeAreaInsets();
     const [services, setServices] = useState<CloudService[]>(initialCloudServices);
 
     // 연동 토글 핸들러
@@ -166,31 +164,27 @@ export default function Cloud() {
         </View>
     );
 
+    const HeaderCustom = (
+        <View className="bg-background-dark/80 border-b border-white/5 px-4 py-4 flex-row items-center">
+            <TouchableOpacity
+                className="p-2 -ml-2 rounded-full active:bg-white/5"
+                onPress={() => navigation.goBack()}
+            >
+                <MaterialIcons name="arrow-back-ios" size={22} color="#f1f5f9" />
+            </TouchableOpacity>
+            <Text className="flex-1 text-center text-lg font-bold text-slate-100 mr-8">
+                클라우드 연동
+            </Text>
+        </View>
+    );
+
     return (
-        <View className="flex-1 bg-background-dark">
-            <StatusBar style="light" />
-
-            {/* 헤더 */}
-            <View
-                className="bg-background-dark/80 border-b border-white/5 px-4 py-4 flex-row items-center"
-                style={{ paddingTop: insets.top + 8 }}
-            >
-                <TouchableOpacity
-                    className="p-2 -ml-2 rounded-full active:bg-white/5"
-                    onPress={() => navigation.goBack()}
-                >
-                    <MaterialIcons name="arrow-back-ios" size={22} color="#f1f5f9" />
-                </TouchableOpacity>
-                <Text className="flex-1 text-center text-lg font-bold text-slate-100 mr-8">
-                    클라우드 연동
-                </Text>
-            </View>
-
-            <ScrollView
-                className="flex-1"
-                contentContainerStyle={{ padding: 24, paddingBottom: 40 }}
-                showsVerticalScrollIndicator={false}
-            >
+        <BaseScreen
+            header={HeaderCustom}
+            scrollable={true}
+            padding={false}
+        >
+            <View className="px-6 pt-6 pb-12">
                 {/* 타이틀 섹션 */}
                 <View className="mb-8">
                     <Text className="text-xl font-bold text-slate-100 leading-8 mb-2">
@@ -216,7 +210,7 @@ export default function Cloud() {
                         차량 제조사의 인증 서버를 통해 직접 로그인하며, 사용자의 비밀번호는 저장되지 않습니다.
                     </Text>
                 </View>
-            </ScrollView>
-        </View>
+            </View>
+        </BaseScreen>
     );
 }

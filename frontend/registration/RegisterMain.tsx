@@ -1,9 +1,9 @@
+import React, { useEffect } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Platform, Linking, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
+import BaseScreen from '../components/layout/BaseScreen';
 
 export default function RegisterMain() {
     const insets = useSafeAreaInsets();
@@ -47,33 +47,34 @@ export default function RegisterMain() {
         };
     }, []);
 
-    return (
-        <View className="flex-1 bg-background-dark">
-            <StatusBar style="light" />
-
-            {/* Top Header - Sticky effect manually handled */}
-            <View
-                className="bg-background-dark/95 backdrop-blur-md z-50 sticky top-0 border-b border-[#ffffff05]"
-                style={{ paddingTop: insets.top }}
-            >
-                <View className="flex-row items-center justify-between px-4 py-3 pb-4">
-                    <TouchableOpacity
-                        className="w-10 h-10 items-center justify-center rounded-full active:bg-white/10"
-                        activeOpacity={0.7}
-                        onPress={() => navigation.goBack()}
-                    >
-                        <MaterialIcons name="arrow-back" size={24} color="white" />
-                    </TouchableOpacity>
-                    <Text className="text-white text-lg font-bold">차량 등록</Text>
-                    <View className="w-10" />
-                </View>
+    // Custom Header for BaseScreen
+    const renderHeader = () => (
+        <View
+            className="bg-background-dark/95 backdrop-blur-md z-50 border-b border-white/5"
+            style={{ paddingTop: 10, paddingBottom: 16 }} // BaseScreen handles safe area, just add internal padding
+        >
+            <View className="flex-row items-center justify-between px-4">
+                <TouchableOpacity
+                    className="w-10 h-10 items-center justify-center rounded-full active:bg-white/10"
+                    activeOpacity={0.7}
+                    onPress={() => navigation.goBack()}
+                >
+                    <MaterialIcons name="arrow-back" size={24} color="white" />
+                </TouchableOpacity>
+                <Text className="text-white text-lg font-bold">차량 등록</Text>
+                <View className="w-10" />
             </View>
+        </View>
+    );
 
-            <ScrollView
-                className="flex-1 px-5"
-                contentContainerStyle={{ paddingBottom: 40 }}
-                showsVerticalScrollIndicator={false}
-            >
+    return (
+        <BaseScreen
+            header={renderHeader()}
+            scrollable={true}
+            padding={false} // Custom padding handling in ScrollView
+            bgColor="#101922"
+        >
+            <View className="px-5 pb-10">
                 {/* Page Title */}
                 <View className="mt-4 mb-8">
                     <Text className="text-2xl font-bold text-white leading-tight mb-2">
@@ -88,7 +89,7 @@ export default function RegisterMain() {
                 <View className="gap-4">
                     {/* Card 1: Manual Entry */}
                     <TouchableOpacity
-                        className="group relative flex flex-col items-start gap-4 rounded-2xl border border-[#ffffff14] bg-[#ffffff08] p-6 active:bg-[#ffffff10] active:scale-[0.98]"
+                        className="group relative flex flex-col items-start gap-4 rounded-2xl border border-white/10 bg-white/5 p-6 active:bg-white/10 active:scale-[0.98]"
                         activeOpacity={0.9}
                         onPress={() => navigation.navigate('PassiveReg')}
                     >
@@ -101,7 +102,7 @@ export default function RegisterMain() {
                                 차량 등록증을 보고{'\n'}연식, 모델명 등을 직접 입력합니다.
                             </Text>
                         </View>
-                        {/* Arrow Icon - Visible for consistency on mobile */}
+                        {/* Arrow Icon */}
                         <View className="absolute top-6 right-6 opacity-50">
                             <MaterialIcons name="arrow-forward" size={24} color="#0d7ff2" />
                         </View>
@@ -109,7 +110,7 @@ export default function RegisterMain() {
 
                     {/* Card 2: OBD-II Auto Connect */}
                     <TouchableOpacity
-                        className="relative flex flex-col items-start gap-4 rounded-2xl border border-primary/30 bg-[#ffffff08] p-6 shadow-lg shadow-blue-500/10 active:bg-[#ffffff10] active:border-primary active:scale-[0.98]"
+                        className="relative flex flex-col items-start gap-4 rounded-2xl border border-primary/30 bg-white/5 p-6 shadow-lg shadow-blue-500/10 active:bg-white/10 active:border-primary active:scale-[0.98]"
                         activeOpacity={0.9}
                         onPress={() => navigation.navigate('ActiveReg')}
                     >
@@ -129,16 +130,13 @@ export default function RegisterMain() {
                         </View>
                     </TouchableOpacity>
 
-                    {/* Card 3: Smartcar Connect */}
+                    {/* Card 3: Smartcar Connect (From Main) */}
                     <TouchableOpacity
-                        className="group relative flex flex-col items-start gap-4 rounded-2xl border border-[#ffffff14] bg-[#ffffff08] p-6 active:bg-[#ffffff10] active:scale-[0.98]"
+                        className="group relative flex flex-col items-start gap-4 rounded-2xl border border-white/10 bg-white/5 p-6 active:bg-white/10 active:scale-[0.98]"
                         activeOpacity={0.9}
                         onPress={() => {
-                            // Assuming adb reverse tcp:8080 tcp:8080 is run
                             const backendUrl = Platform.OS === 'android' ? 'http://10.0.2.2:8080' : 'http://localhost:8080';
-                            import('react-native').then(({ Linking }) => {
-                                Linking.openURL(`${backendUrl}/api/smartcar/login`);
-                            });
+                            Linking.openURL(`${backendUrl}/api/smartcar/login`);
                         }}
                     >
                         <View className="absolute top-0 right-0 rounded-bl-xl rounded-tr-xl bg-green-500 px-3 py-1 shadow-sm">
@@ -161,7 +159,6 @@ export default function RegisterMain() {
 
                 {/* Info Panel */}
                 <View className="mt-12">
-
                     <View className="flex flex-col gap-3 rounded-xl border border-surface-highlight bg-surface-dark/50 p-4">
                         <View className="flex-row items-center gap-2">
                             <MaterialIcons name="info" size={20} color="#0d7ff2" />
@@ -174,7 +171,7 @@ export default function RegisterMain() {
                 </View>
 
                 <View className="h-10" />
-            </ScrollView>
-        </View>
+            </View>
+        </BaseScreen>
     );
 }

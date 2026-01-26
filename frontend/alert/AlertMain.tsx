@@ -4,7 +4,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
-import BottomNav from '../nav/BottomNav';
 import { getMyNotifications, markAsRead, Notification } from '../api/notificationApi';
 
 export default function AlertMain() {
@@ -113,8 +112,8 @@ export default function AlertMain() {
                                     {/* Icon */}
                                     <View
                                         className={`items-center justify-center w-12 h-12 rounded-lg border ${item.type === 'MAINTENANCE_ALERT' ? 'bg-primary/10 border-primary/20' :
-                                                item.type === 'COMMUNITY_ALERT' ? 'bg-green-500/10 border-green-500/20' :
-                                                    'bg-white/5 border-white/10'
+                                            item.type === 'COMMUNITY_ALERT' ? 'bg-green-500/10 border-green-500/20' :
+                                                'bg-white/5 border-white/10'
                                             }`}
                                     >
                                         <MaterialIcons
@@ -156,7 +155,6 @@ export default function AlertMain() {
                 </ScrollView>
             </View>
 
-            <BottomNav />
         </SafeAreaView>
     );
 }

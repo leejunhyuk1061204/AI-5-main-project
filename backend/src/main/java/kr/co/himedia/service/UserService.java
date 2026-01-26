@@ -8,6 +8,7 @@ import kr.co.himedia.entity.User;
 import kr.co.himedia.repository.RefreshTokenRepository;
 import kr.co.himedia.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -27,6 +28,7 @@ import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.api.client.json.gson.GsonFactory;
 import java.util.Collections;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional
@@ -95,15 +97,23 @@ public class UserService {
     }
 
     public TokenResponse refresh(TokenRefreshRequest req) {
+        log.info("[Token Refresh] Request received with token prefix: {}...",
+                req.getRefreshToken().substring(0, Math.min(req.getRefreshToken().length(), 10)));
+
         RefreshToken refreshToken = refreshTokenRepository.findByToken(req.getRefreshToken())
-                .orElseThrow(() -> new BaseException(ErrorCode.INVALID_REFRESH_TOKEN));
+                .orElseThrow(() -> {
+                    log.error("[Token Refresh] Token not found in DB or already rotated.");
+                    return new BaseException(ErrorCode.INVALID_REFRESH_TOKEN);
+                });
 
         if (refreshToken.getExpiryDate().isBefore(java.time.Instant.now())) {
+            log.warn("[Token Refresh] Token expired: {}", refreshToken.getExpiryDate());
             refreshTokenRepository.delete(refreshToken);
             throw new BaseException(ErrorCode.REFRESH_TOKEN_EXPIRED);
         }
 
         User user = refreshToken.getUser();
+        log.info("[Token Refresh] Refreshing for user: {}", user.getEmail());
 
         // Token Rotation: Update existing token
         String newAccessToken = jwtTokenProvider.createAccessToken(user.getUserId().toString());
@@ -113,6 +123,8 @@ public class UserService {
         refreshToken.setExpiryDate(java.time.Instant.now().plusMillis(604800000));
 
         refreshTokenRepository.save(refreshToken);
+
+        log.info("[Token Refresh] Successfully rotated token for user: {}", user.getEmail());
 
         return TokenResponse.builder()
                 .accessToken(newAccessToken)

@@ -57,8 +57,16 @@ public class MaintenanceService {
                                 .orElseThrow(() -> new BaseException(ErrorCode.VEHICLE_NOT_FOUND));
 
                 // 1. 정비 이력 저장 (Stack)
-                ConsumableItem item = consumableItemRepository.findById(request.getConsumableItemId())
-                                .orElseThrow(() -> new BaseException(ErrorCode.INVALID_INPUT_VALUE));
+                ConsumableItem item;
+                if (request.getConsumableItemId() != null) {
+                        item = consumableItemRepository.findById(request.getConsumableItemId())
+                                        .orElseThrow(() -> new BaseException(ErrorCode.INVALID_INPUT_VALUE));
+                } else if (request.getConsumableItemCode() != null) {
+                        item = consumableItemRepository.findByCode(request.getConsumableItemCode())
+                                        .orElseThrow(() -> new BaseException(ErrorCode.INVALID_INPUT_VALUE));
+                } else {
+                        throw new BaseException(ErrorCode.INVALID_INPUT_VALUE);
+                }
 
                 MaintenanceHistory history = MaintenanceHistory.builder()
                                 .vehicle(vehicle)
@@ -75,7 +83,8 @@ public class MaintenanceService {
                 MaintenanceHistory savedHistory = maintenanceHistoryRepository.save(history);
 
                 // 2. 소모품 상태 갱신 (UPSERT)
-                vehicleConsumableRepository.findByVehicleAndConsumableItem_Id(vehicle, request.getConsumableItemId())
+                // request.getConsumableItemId()가 null일 수 있으므로, 위에서 조회한 item.getId()를 사용해야 함
+                vehicleConsumableRepository.findByVehicleAndConsumableItem_Id(vehicle, item.getId())
                                 .ifPresentOrElse(vc -> {
                                         // 기존 데이터가 있으면 업데이트 (Update)
                                         vc.setLastReplacedAt(request.getMaintenanceDate().atStartOfDay());

@@ -1,24 +1,25 @@
-import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, Platform, KeyboardAvoidingView, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, Platform } from 'react-native';
+import { GoogleSignin, GoogleSigninButton } from '@react-native-google-signin/google-signin';
+import { MaterialIcons, Ionicons } from '@expo/vector-icons';
+import { useNavigation, useRoute } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useUserStore } from '../store/useUserStore';
+import { useAlertStore } from '../store/useAlertStore';
+import BaseScreen from '../components/layout/BaseScreen';
 
+// Kakao Login Import (Platform check)
 let login: () => Promise<any>;
 if (Platform.OS !== 'web') {
     login = require('@react-native-seoul/kakao-login').login;
 } else {
     login = async () => { console.warn("Kakao Login not supported on web"); return null; };
 }
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { StatusBar } from 'expo-status-bar';
-import { MaterialIcons, Ionicons } from '@expo/vector-icons';
-import { useNavigation, useRoute } from '@react-navigation/native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-
-import { authService } from '../services/auth';
 
 export default function Login() {
     const navigation = useNavigation<any>();
     const route = useRoute<any>();
+    const { loginAction, socialLoginAction } = useUserStore();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
@@ -26,51 +27,41 @@ export default function Login() {
 
     useEffect(() => {
         GoogleSignin.configure({
-            webClientId: '415824813180-to8ea5houck16m7as32t9cavi7aq87e5.apps.googleusercontent.com', // firebase 등에서 발급받은 web client id (선택)
+            webClientId: '415824813180-to8ea5houck16m7as32t9cavi7aq87e5.apps.googleusercontent.com',
         });
     }, []);
+
+    const handleNavigation = (result: any) => {
+        if (route.params?.fromSignup) {
+            navigation.navigate('RegisterMain');
+        } else if (result.hasVehicle) {
+            navigation.navigate('MainPage');
+        } else {
+            navigation.navigate('RegisterMain');
+        }
+    };
 
     const onGoogleButtonPress = async () => {
         try {
             await GoogleSignin.hasPlayServices();
             const signInResult = await GoogleSignin.signIn();
 
-            // idToken이 있으면 백엔드로 전송
             if (signInResult.data?.idToken) {
                 setLoading(true);
-                const response = await authService.socialLogin('google', signInResult.data.idToken);
+                const result = await socialLoginAction('google', signInResult.data.idToken);
 
-                if (response.success && response.data) {
-                    await AsyncStorage.setItem('accessToken', response.data.accessToken);
-                    if (response.data.refreshToken) {
-                        await AsyncStorage.setItem('refreshToken', response.data.refreshToken);
-                    }
-
-                    // Fetch user info needed?
-                    try {
-                        const profileResponse = await authService.getProfile(response.data.accessToken);
-                        if (profileResponse.success && profileResponse.data) {
-                            await AsyncStorage.setItem('userNickname', profileResponse.data.nickname);
-                        }
-                    } catch (e) {
-                        console.error("Failed to fetch profile", e);
-                    }
-
-                    if (route.params?.fromSignup) {
-                        navigation.navigate('RegisterMain');
-                    } else {
-                        navigation.navigate('MainPage');
-                    }
+                if (result.success) {
+                    handleNavigation(result);
                 } else {
-                    Alert.alert("로그인 실패", response.error?.message || "소셜 로그인에 실패했습니다.");
+                    useAlertStore.getState().showAlert("로그인 실패", result.errorMessage || "소셜 로그인 실패", "ERROR");
                 }
             } else {
-                Alert.alert("로그인 실패", "Google 계정 정보를 가져오지 못했습니다.");
+                useAlertStore.getState().showAlert("로그인 실패", "Google 계정 정보를 가져오지 못했습니다.", "ERROR");
             }
         } catch (error: any) {
             if (error.code !== 'SIGN_IN_CANCELLED') {
                 console.error("Google Sign-In Error", error);
-                Alert.alert("오류", "구글 로그인 중 오류가 발생했습니다.");
+                useAlertStore.getState().showAlert("오류", "구글 로그인 중 오류가 발생했습니다.", "ERROR");
             }
         } finally {
             setLoading(false);
@@ -80,7 +71,7 @@ export default function Login() {
     const onKakaoButtonPress = async () => {
         try {
             if (Platform.OS === 'web') {
-                Alert.alert("알림", "카카오 로그인(네이티브)은 앱에서만 가능합니다.");
+                useAlertStore.getState().showAlert("알림", "카카오 로그인(네이티브)은 앱에서만 가능합니다.", "INFO");
                 return;
             }
 
@@ -88,36 +79,18 @@ export default function Login() {
 
             if (token) {
                 setLoading(true);
-                const response = await authService.socialLogin('kakao', token.accessToken);
+                const result = await socialLoginAction('kakao', token.accessToken);
 
-                if (response.success && response.data) {
-                    await AsyncStorage.setItem('accessToken', response.data.accessToken);
-                    if (response.data.refreshToken) {
-                        await AsyncStorage.setItem('refreshToken', response.data.refreshToken);
-                    }
-
-                    try {
-                        const profileResponse = await authService.getProfile(response.data.accessToken);
-                        if (profileResponse.success && profileResponse.data) {
-                            await AsyncStorage.setItem('userNickname', profileResponse.data.nickname);
-                        }
-                    } catch (e) {
-                        console.error("Failed to fetch profile", e);
-                    }
-
-                    if (route.params?.fromSignup) {
-                        navigation.navigate('RegisterMain');
-                    } else {
-                        navigation.navigate('MainPage');
-                    }
+                if (result.success) {
+                    handleNavigation(result);
                 } else {
-                    Alert.alert("로그인 실패", response.error?.message || "카카오 로그인에 실패했습니다.");
+                    useAlertStore.getState().showAlert("로그인 실패", result.errorMessage || "카카오 로그인 실패", "ERROR");
                 }
             }
         } catch (error: any) {
             if (error.message !== 'user cancelled.') {
                 console.error("Kakao Login Error", error);
-                Alert.alert("로그인 실패", "카카오 로그인 중 오류가 발생했습니다.");
+                useAlertStore.getState().showAlert("로그인 실패", "카카오 로그인 중 오류가 발생했습니다.", "ERROR");
             }
         } finally {
             setLoading(false);
@@ -126,211 +99,168 @@ export default function Login() {
 
     const handleLogin = async () => {
         if (!email || !password) {
-            Alert.alert("입력 오류", "이메일과 비밀번호를 입력해주세요.");
+            useAlertStore.getState().showAlert("입력 오류", "이메일과 비밀번호를 입력해주세요.", "WARNING");
             return;
         }
 
         try {
             setLoading(true);
-            const response = await authService.login({ email, password });
+            const result = await loginAction(email, password);
 
-            if (response.success && response.data) {
-                // Store tokens
-                await AsyncStorage.setItem('accessToken', response.data.accessToken);
-                // RefreshToken is not yet implemented in backend
-                if (response.data.refreshToken) {
-                    await AsyncStorage.setItem('refreshToken', response.data.refreshToken);
-                }
-
-                // Fetch and store user info
-                try {
-                    const profileResponse = await authService.getProfile(response.data.accessToken);
-                    if (profileResponse.success && profileResponse.data) {
-                        await AsyncStorage.setItem('userNickname', profileResponse.data.nickname);
-                    }
-                } catch (e) {
-                    console.error("Failed to fetch profile", e);
-                }
-
-                // Navigate
-                if (route.params?.fromSignup) {
-                    navigation.navigate('RegisterMain'); // Or ActiveReg flow start
-                } else {
-                    navigation.navigate('MainPage');
-                }
+            if (result.success) {
+                handleNavigation(result);
             } else {
-                Alert.alert("로그인 실패", response.error?.message || "이메일 또는 비밀번호를 확인해주세요.");
+                useAlertStore.getState().showAlert("로그인 실패", result.errorMessage || "로그인 실패", "ERROR");
             }
         } catch (error: any) {
             console.error("Login Error:", error);
-            const errorMsg = error.response?.data?.error?.message || "서버 연결에 실패했습니다.";
-            Alert.alert("오류", errorMsg);
+            useAlertStore.getState().showAlert("오류", "로그인 중 오류가 발생했습니다.", "ERROR");
         } finally {
             setLoading(false);
         }
     };
 
     const handleReset = async () => {
+        const { logout } = useUserStore.getState();
+        await logout();
         await AsyncStorage.clear();
         navigation.replace('Tos');
     };
 
     return (
-        <SafeAreaView className="flex-1 bg-background-dark">
-            <StatusBar style="light" />
+        <BaseScreen scrollable={true} padding={false} useBottomNav={false}>
+            <View className="flex-1 px-6 w-full max-w-md mx-auto justify-center min-h-screen">
+                {/* Logo Section */}
+                <View className="items-center gap-6 mb-12 mt-10">
+                    <View className="relative items-center justify-center w-20 h-20 rounded-2xl bg-surface-dark border border-border-light shadow-xl">
+                        <MaterialIcons name="car-crash" size={40} color="#0d7ff2" />
+                        <View className="absolute -top-1 -right-1 w-3 h-3 bg-primary rounded-full shadow-lg shadow-primary" />
+                    </View>
+                    <View className="items-center">
+                        <Text className="text-white text-3xl font-bold tracking-tight mb-2">
+                            AI Vehicle Guard
+                        </Text>
+                        <Text className="text-text-muted text-base font-normal">
+                            스마트한 차량 관리의 시작
+                        </Text>
+                    </View>
+                </View>
 
-            <KeyboardAvoidingView
-                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                className="flex-1"
-            >
-                <ScrollView
-                    contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }}
-                    className="flex-1 px-6 w-full max-w-md mx-auto"
-                    showsVerticalScrollIndicator={false}
-                >
-                    {/* Logo Section */}
-                    <View className="items-center gap-6 mb-12">
-                        <View className="relative items-center justify-center w-20 h-20 rounded-2xl bg-slate-900 border border-[#314d68] shadow-xl">
-                            <MaterialIcons name="car-crash" size={40} color="#0d7ff2" />
-                            {/* Decorative dot */}
-                            <View className="absolute -top-1 -right-1 w-3 h-3 bg-primary rounded-full shadow-lg shadow-blue-500" />
-                        </View>
-                        <View className="items-center">
-                            <Text className="text-white text-3xl font-bold tracking-tight mb-2">
-                                AI Vehicle Guard
-                            </Text>
-                            <Text className="text-gray-400 text-base font-normal">
-                                스마트한 차량 관리의 시작
-                            </Text>
+                {/* Login Form */}
+                <View className="w-full gap-5">
+                    {/* Email Field */}
+                    <View className="gap-1.5">
+                        <Text className="text-sm font-medium text-text-secondary ml-1">이메일</Text>
+                        <View className="relative group">
+                            <View className="absolute inset-y-0 left-0 pl-4 justify-center z-10 pointer-events-none">
+                                <MaterialIcons name="mail" size={20} className="text-text-dim" color="#6b7280" />
+                            </View>
+                            <TextInput
+                                value={email}
+                                onChangeText={setEmail}
+                                className="block w-full rounded-xl border border-border-light bg-input-dark/80 text-white placeholder:text-text-dim focus:border-primary px-4 py-3.5 pl-11"
+                                placeholder="example@email.com"
+                                placeholderTextColor="#6b7280"
+                                keyboardType="email-address"
+                                autoCapitalize="none"
+                            />
                         </View>
                     </View>
 
-                    {/* Login Form */}
-                    <View className="w-full gap-5">
-                        {/* Email Field */}
-                        <View className="gap-1.5">
-                            <Text className="text-sm font-medium text-gray-300 ml-1">이메일</Text>
-                            <View className="relative group">
-                                <View
-                                    className="absolute inset-y-0 left-0 pl-4 justify-center z-10"
-                                    pointerEvents={Platform.OS === 'web' ? undefined : 'none'}
-                                    style={Platform.OS === 'web' ? { pointerEvents: 'none' } : undefined}
-                                >
-                                    <MaterialIcons name="mail" size={20} className="text-gray-500" color="#6b7280" />
-                                </View>
-                                <TextInput
-                                    value={email}
-                                    onChangeText={setEmail}
-                                    className="block w-full rounded-xl border border-[#314d68] bg-[#182634]/80 text-white placeholder:text-gray-500 focus:border-primary px-4 py-3.5 pl-11"
-                                    placeholder="example@email.com"
-                                    placeholderTextColor="#6b7280"
-                                    keyboardType="email-address"
-                                    autoCapitalize="none"
-                                />
+                    {/* Password Field */}
+                    <View className="gap-1.5">
+                        <Text className="text-sm font-medium text-text-secondary ml-1">비밀번호</Text>
+                        <View className="relative group">
+                            <View className="absolute inset-y-0 left-0 pl-4 justify-center z-10 pointer-events-none">
+                                <MaterialIcons name="lock" size={20} className="text-text-dim" color="#6b7280" />
                             </View>
-                        </View>
-
-                        {/* Password Field */}
-                        <View className="gap-1.5">
-                            <Text className="text-sm font-medium text-gray-300 ml-1">비밀번호</Text>
-                            <View className="relative group">
-                                <View
-                                    className="absolute inset-y-0 left-0 pl-4 justify-center z-10"
-                                    pointerEvents={Platform.OS === 'web' ? undefined : 'none'}
-                                    style={Platform.OS === 'web' ? { pointerEvents: 'none' } : undefined}
-                                >
-                                    <MaterialIcons name="lock" size={20} className="text-gray-500" color="#6b7280" />
-                                </View>
-                                <TextInput
-                                    value={password}
-                                    onChangeText={setPassword}
-                                    className="block w-full rounded-xl border border-[#314d68] bg-[#182634]/80 text-white placeholder:text-gray-500 focus:border-primary px-4 py-3.5 pl-11 pr-12"
-                                    placeholder="비밀번호를 입력하세요"
-                                    placeholderTextColor="#6b7280"
-                                    secureTextEntry={!showPassword}
+                            <TextInput
+                                value={password}
+                                onChangeText={setPassword}
+                                className="block w-full rounded-xl border border-border-light bg-input-dark/80 text-white placeholder:text-text-dim focus:border-primary px-4 py-3.5 pl-11 pr-12"
+                                placeholder="비밀번호를 입력하세요"
+                                placeholderTextColor="#6b7280"
+                                secureTextEntry={!showPassword}
+                            />
+                            <TouchableOpacity
+                                className="absolute inset-y-0 right-0 pr-4 justify-center"
+                                onPress={() => setShowPassword(!showPassword)}
+                            >
+                                <MaterialIcons
+                                    name={showPassword ? "visibility" : "visibility-off"}
+                                    size={20}
+                                    color="#6b7280"
                                 />
-                                <TouchableOpacity
-                                    className="absolute inset-y-0 right-0 pr-4 justify-center"
-                                    onPress={() => setShowPassword(!showPassword)}
-                                >
-                                    <MaterialIcons
-                                        name={showPassword ? "visibility" : "visibility-off"}
-                                        size={20}
-                                        color="#6b7280"
-                                    />
-                                </TouchableOpacity>
-                            </View>
-                        </View>
-
-                        {/* Forgot Password Link */}
-                        <View className="flex-row justify-end pt-1">
-                            <TouchableOpacity onPress={() => navigation.navigate('FindPW')}>
-                                <Text className="text-sm font-medium text-gray-400">
-                                    비밀번호를 잊으셨나요?
-                                </Text>
                             </TouchableOpacity>
                         </View>
+                    </View>
 
-                        {/* Login Button */}
-                        <TouchableOpacity
-                            onPress={handleLogin}
-                            className={`w-full rounded-xl bg-primary py-4 items-center justify-center shadow-lg shadow-blue-500/20 active:opacity-90 mt-4 ${loading ? 'opacity-70' : ''}`}
-                            disabled={loading}
-                        >
-                            <Text className="text-sm font-bold text-white">
-                                {loading ? "로그인 중..." : "로그인"}
+                    {/* Forgot Password Link */}
+                    <View className="flex-row justify-end pt-1">
+                        <TouchableOpacity onPress={() => navigation.navigate('FindPW')}>
+                            <Text className="text-sm font-medium text-text-muted">
+                                비밀번호를 잊으셨나요?
                             </Text>
                         </TouchableOpacity>
                     </View>
 
-                    {/* Divider */}
-                    <View className="relative w-full my-8">
-                        <View className="absolute inset-0 flex-row items-center">
-                            <View className="w-full border-t border-[#314d68]" />
-                        </View>
-                        <View className="relative flex-row justify-center">
-                            <Text className="bg-background-dark px-3 text-xs text-gray-500 uppercase tracking-wider">
-                                또는
-                            </Text>
-                        </View>
-                    </View>
-
-                    {/* Social Login Options */}
-                    <View className="flex-row gap-4 w-full">
-                        <TouchableOpacity
-                            onPress={onGoogleButtonPress}
-                            className="flex-1 flex-row items-center justify-center gap-3 rounded-xl bg-[#182634] border border-[#314d68] px-4 py-3 active:bg-[#203040]"
-                        >
-                            <Ionicons name="logo-google" size={20} color="white" />
-                            <Text className="text-sm font-medium text-white">Google</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            onPress={onKakaoButtonPress}
-                            className="flex-1 flex-row items-center justify-center gap-3 rounded-xl bg-[#FEE500] border border-[#FEE500] px-4 py-3 active:bg-[#E6CF00]"
-                        >
-                            <Ionicons name="chatbubble-ellipses" size={20} color="#000000" />
-                            <Text className="text-sm font-bold text-[#000000]">Kakao</Text>
-                        </TouchableOpacity>
-                    </View>
-
-                    {/* Sign Up Prompt */}
-                    <View className="mt-10 flex-row justify-center gap-1">
-                        <Text className="text-sm text-gray-400">아직 계정이 없으신가요?</Text>
-                        <TouchableOpacity onPress={() => navigation.navigate('SignUp')}>
-                            <Text className="text-sm font-semibold text-primary">회원가입</Text>
-                        </TouchableOpacity>
-                    </View>
-
-                    {/* Reset Button (For Testing) */}
+                    {/* Login Button */}
                     <TouchableOpacity
-                        onPress={handleReset}
-                        className="mt-8 mb-4 items-center"
+                        onPress={handleLogin}
+                        className={`w-full rounded-xl bg-primary py-4 items-center justify-center shadow-lg shadow-primary/20 active:opacity-90 mt-4 ${loading ? 'opacity-70' : ''}`}
+                        disabled={loading}
                     >
-                        <Text className="text-xs text-gray-600 underline">앱 초기화 (테스트용)</Text>
+                        <Text className="text-sm font-bold text-white">
+                            {loading ? "로그인 중..." : "로그인"}
+                        </Text>
                     </TouchableOpacity>
+                </View>
 
-                </ScrollView>
-            </KeyboardAvoidingView>
-        </SafeAreaView>
+                {/* Divider */}
+                <View className="relative w-full my-8">
+                    <View className="absolute inset-0 flex-row items-center">
+                        <View className="w-full border-t border-border-light" />
+                    </View>
+                    <View className="relative flex-row justify-center">
+                        <Text className="bg-background-dark px-3 text-xs text-text-dim uppercase tracking-wider">
+                            또는
+                        </Text>
+                    </View>
+                </View>
+
+                {/* Social Login Options */}
+                <View className="gap-3 w-full">
+                    <GoogleSigninButton
+                        style={{ width: '100%', height: 50 }}
+                        size={GoogleSigninButton.Size.Wide}
+                        color={GoogleSigninButton.Color.Light}
+                        onPress={onGoogleButtonPress}
+                    />
+                    <TouchableOpacity
+                        onPress={onKakaoButtonPress}
+                        className="w-full flex-row items-center justify-center gap-3 rounded-xl bg-kakao-yellow border border-kakao-yellow px-4 py-3 active:bg-yellow-400"
+                    >
+                        <Ionicons name="chatbubble-ellipses" size={20} color="#000000" />
+                        <Text className="text-sm font-bold text-[#000000]">카카오 로그인</Text>
+                    </TouchableOpacity>
+                </View>
+
+                {/* Sign Up Prompt */}
+                <View className="mt-10 mb-10 flex-row justify-center gap-1">
+                    <Text className="text-sm text-text-muted">아직 계정이 없으신가요?</Text>
+                    <TouchableOpacity onPress={() => navigation.navigate('SignUp')}>
+                        <Text className="text-sm font-semibold text-primary">회원가입</Text>
+                    </TouchableOpacity>
+                </View>
+
+                {/* Reset Button (For Testing) */}
+                <TouchableOpacity
+                    onPress={handleReset}
+                    className="mb-8 items-center"
+                >
+                    <Text className="text-xs text-gray-600 underline">앱 초기화 (테스트용)</Text>
+                </TouchableOpacity>
+            </View>
+        </BaseScreen>
     );
 }

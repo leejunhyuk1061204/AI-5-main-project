@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, Image, Dimensions, Platform, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, Image, Dimensions, Platform, ActivityIndicator } from 'react-native';
+import { useAlertStore } from '../store/useAlertStore';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -40,7 +41,7 @@ export default function Spec() {
             }
 
             if (!targetVehicleId) {
-                Alert.alert('알림', '차량 정보를 찾을 수 없습니다.');
+                useAlertStore.getState().showAlert('알림', '차량 정보를 찾을 수 없습니다.');
                 navigation.goBack();
                 return;
             }
@@ -50,7 +51,7 @@ export default function Spec() {
             setVehicle(data);
         } catch (e) {
             console.error(e);
-            Alert.alert('오류', '차량 정보를 불러올 수 없습니다.');
+            useAlertStore.getState().showAlert('오류', '차량 정보를 불러올 수 없습니다.', 'ERROR');
         } finally {
             setLoading(false);
         }

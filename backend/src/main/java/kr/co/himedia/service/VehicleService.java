@@ -18,7 +18,6 @@ import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -56,7 +55,7 @@ public class VehicleService {
         }
 
         // 첫 차량 등록 시 자동으로 대표 차량으로 설정
-        boolean hasVehicles = !vehicleRepository.findByUserIdAndDeletedAtIsNull(userId).isEmpty();
+        boolean hasVehicles = !vehicleRepository.findByUserIdAndDeletedAtIsNullOrderByCreatedAtAsc(userId).isEmpty();
 
         Vehicle vehicle = request.toEntity(userId);
         if (!hasVehicles) {
@@ -80,7 +79,7 @@ public class VehicleService {
         }
 
         // 첫 차량 등록 시 자동으로 대표 차량으로 설정
-        boolean hasVehicles = !vehicleRepository.findByUserIdAndDeletedAtIsNull(userId).isEmpty();
+        boolean hasVehicles = !vehicleRepository.findByUserIdAndDeletedAtIsNullOrderByCreatedAtAsc(userId).isEmpty();
 
         Vehicle vehicle = request.toEntity(userId);
         if (!hasVehicles) {
@@ -93,7 +92,7 @@ public class VehicleService {
 
     // 사용자 소유 차량 목록 조회
     public List<VehicleDto.Response> getVehicleList(UUID userId) {
-        return vehicleRepository.findByUserIdAndDeletedAtIsNull(userId).stream()
+        return vehicleRepository.findByUserIdAndDeletedAtIsNullOrderByCreatedAtAsc(userId).stream()
                 .map(this::convertToDtoWithDecryptedVin)
                 .collect(Collectors.toList());
     }
@@ -114,6 +113,10 @@ public class VehicleService {
         vehicle.updateInfo(request.getNickname(), request.getMemo());
         if (request.getCarNumber() != null && !request.getCarNumber().isBlank()) {
             vehicle.updateCarNumber(request.getCarNumber());
+        }
+
+        if (request.getTotalMileage() != null) {
+            vehicle.updateTotalMileage(request.getTotalMileage());
         }
 
         if (request.getVin() != null && !request.getVin().isBlank() && !request.getVin().equals(vehicle.getVin())) {

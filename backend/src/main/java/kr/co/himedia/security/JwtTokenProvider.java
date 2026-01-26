@@ -89,7 +89,7 @@ public class JwtTokenProvider {
                     .parseSignedClaims(token);
             return !claims.getPayload().getExpiration().before(new Date());
         } catch (JwtException | IllegalArgumentException e) {
-            log.error("Expired or invalid JWT token: {}", e.getMessage());
+            log.debug("Expired or invalid JWT token: {}", e.getMessage());
             return false;
         }
     }
