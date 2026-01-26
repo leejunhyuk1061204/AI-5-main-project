@@ -11,12 +11,7 @@ export default function ActiveSuccess({ navigation }: any) {
     const insets = useSafeAreaInsets();
 
     const handleGoHome = () => {
-        navigation.dispatch(
-            CommonActions.reset({
-                index: 0,
-                routes: [{ name: 'MainPage' }],
-            })
-        );
+        navigation.navigate('CarManage');
     };
 
     return (

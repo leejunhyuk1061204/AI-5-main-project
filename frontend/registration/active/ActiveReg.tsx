@@ -96,9 +96,9 @@ export default function ActiveReg({ navigation }: any) {
             >
                 {/* Main Visual Section */}
                 <View className="flex-col w-full py-6 items-center justify-center relative overflow-hidden">
-                    <View className="relative w-full max-w-[340px] aspect-[4/3] rounded-2xl bg-slate-900/50 border border-slate-700/50 flex items-center justify-center overflow-hidden shadow-2xl">
+                    <View className="relative w-full max-w-[340px] aspect-[4/3] rounded-2xl bg-surface-dark/50 border border-white/10 flex items-center justify-center overflow-hidden shadow-2xl">
                         {/* Tech Grid Background (Simplified with CSS-like overlay) */}
-                        <View className="absolute inset-0 opacity-[0.1] bg-[#0d7ff2]/5" />
+                        <View className="absolute inset-0 opacity-[0.1] bg-primary/5" />
 
                         {/* Background Image */}
                         <ImageBackground
@@ -106,6 +106,8 @@ export default function ActiveReg({ navigation }: any) {
                             className="w-[85%] h-[85%] absolute z-10 opacity-90"
                             resizeMode="contain"
                         />
+                        {/* Overlay to make it blueish */}
+                        <View className="absolute inset-0 bg-background-dark/40" />
 
                         {/* Animated Port Indicator */}
                         {/* Animated Port Indicator - Corrected Structure */}
@@ -116,7 +118,7 @@ export default function ActiveReg({ navigation }: any) {
                                 Y shift: 20sin(45) = 14.14
                                 To make visuals start at 0,0: left: -6, top: -14 */}
                             <View
-                                className="absolute h-[1.5px] bg-[#0d7ff2]"
+                                className="absolute h-[1.5px] bg-primary"
                                 style={{
                                     width: 40,
                                     left: -6,
@@ -126,14 +128,14 @@ export default function ActiveReg({ navigation }: any) {
                             />
 
                             {/* 2. Label at End of Line */}
-                            <View className="absolute left-[16px] -top-[50px] bg-[#0d1926]/80 backdrop-blur-md px-3 py-1.5 rounded-lg border border-[#0d7ff2]/50 shadow-lg">
-                                <Text className="text-[11px] font-bold text-[#0d7ff2] tracking-wide">OBD Port</Text>
+                            <View className="absolute left-[16px] -top-[50px] bg-surface-dark/80 backdrop-blur-md px-3 py-1.5 rounded-lg border border-primary/50 shadow-lg">
+                                <Text className="text-[11px] font-bold text-primary tracking-wide">OBD Port</Text>
                             </View>
 
                             {/* 3. Dot & Pulse at Anchor Point (Rendered Last to be on Top) */}
                             <View className="absolute top-0 left-0 items-center justify-center -ml-[6px] -mt-[6px]">
                                 <Animated.View style={[animatedPulseStyle, { width: 30, height: 30, borderRadius: 15, backgroundColor: 'rgba(13, 127, 242, 0.3)', position: 'absolute' }]} />
-                                <View className="w-3 h-3 bg-[#0d7ff2] rounded-full shadow-[0_0_10px_#0d7ff2]" />
+                                <View className="w-3 h-3 bg-primary rounded-full shadow-[0_0_10px_#0d7ff2]" />
                             </View>
                         </View>
                     </View>
@@ -164,7 +166,7 @@ export default function ActiveReg({ navigation }: any) {
                         {/* Step 2 */}
                         <View className="flex-row gap-4">
                             <View className="items-center">
-                                <View className="w-8 h-8 rounded-full bg-slate-800 items-center justify-center border border-slate-700">
+                                <View className="w-8 h-8 rounded-full bg-surface-dark items-center justify-center border border-surface-border">
                                     <MaterialIcons name="settings-input-hdmi" size={18} color="#cbd5e1" />
                                 </View>
                                 <View className="w-[2px] flex-1 bg-slate-700 min-h-[40px] my-1" />

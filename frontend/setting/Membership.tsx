@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, Dimensions } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { StatusBar } from 'expo-status-bar';
+import { View, Text, TouchableOpacity, Dimensions } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import BaseScreen from '../components/layout/BaseScreen';
 
 const { width } = Dimensions.get('window');
 
@@ -65,12 +64,10 @@ export default function Membership() {
     const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
 
     useEffect(() => {
-        // 현재 멤버십 상태 불러오기 (mock)
         loadMembershipStatus();
     }, []);
 
     const loadMembershipStatus = async () => {
-        // 실제로는 백엔드에서 조회
         const stored = await AsyncStorage.getItem('membershipPlan');
         if (stored) {
             setCurrentPlan(stored);
@@ -83,31 +80,51 @@ export default function Membership() {
     };
 
     const handleUpgrade = () => {
-        // 실제로는 결제 플로우로 이동
         console.log('Upgrading to:', selectedPlan);
-        // navigation.navigate('Payment', { planId: selectedPlan });
     };
 
     const currentPlanData = MEMBERSHIP_PLANS.find(p => p.id === currentPlan);
 
+    const HeaderCustom = (
+        <View className="flex-row items-center justify-between px-4 py-3 border-b border-white/5">
+            <TouchableOpacity
+                className="w-10 h-10 items-center justify-center"
+                onPress={() => navigation.goBack()}
+            >
+                <MaterialIcons name="arrow-back-ios-new" size={24} color="#0d7ff2" />
+            </TouchableOpacity>
+            <Text className="text-white text-lg font-bold flex-1 text-center pr-10">멤버십 관리</Text>
+        </View>
+    );
+
+    const FooterButton = selectedPlan && selectedPlan !== currentPlan ? (
+        <View className="p-5 bg-background-dark">
+            <TouchableOpacity
+                onPress={handleUpgrade}
+                activeOpacity={0.9}
+            >
+                <LinearGradient
+                    colors={MEMBERSHIP_PLANS.find(p => p.id === selectedPlan)?.gradientColors || ['#0d7ff2', '#0062cc']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    className="py-4 rounded-xl items-center justify-center"
+                >
+                    <Text className="text-white font-bold text-lg">
+                        {MEMBERSHIP_PLANS.find(p => p.id === selectedPlan)?.name} 플랜으로 변경
+                    </Text>
+                </LinearGradient>
+            </TouchableOpacity>
+        </View>
+    ) : null;
+
     return (
-        <View className="flex-1 bg-background-dark">
-            <StatusBar style="light" />
-
-            {/* Header */}
-            <SafeAreaView className="z-10 bg-background-dark/90 border-b border-white/5" edges={['top']}>
-                <View className="flex-row items-center justify-between px-4 py-3">
-                    <TouchableOpacity
-                        className="w-10 h-10 items-center justify-center"
-                        onPress={() => navigation.goBack()}
-                    >
-                        <MaterialIcons name="arrow-back-ios-new" size={24} color="#0d7ff2" />
-                    </TouchableOpacity>
-                    <Text className="text-white text-lg font-bold flex-1 text-center pr-10">멤버십 관리</Text>
-                </View>
-            </SafeAreaView>
-
-            <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
+        <BaseScreen
+            header={HeaderCustom}
+            footer={FooterButton}
+            scrollable={true}
+            padding={false}
+        >
+            <View className="pb-24">
                 {/* 현재 멤버십 상태 */}
                 <View className="px-5 pt-6 pb-4">
                     <LinearGradient
@@ -116,7 +133,6 @@ export default function Membership() {
                         end={{ x: 1, y: 1 }}
                         className="p-6 rounded-2xl border border-white/10 relative overflow-hidden"
                     >
-                        {/* 배경 효과 */}
                         <View className="absolute -right-10 -top-10 w-32 h-32 bg-white/10 rounded-full" />
                         <View className="absolute -left-5 -bottom-5 w-20 h-20 bg-black/20 rounded-full" />
 
@@ -151,15 +167,14 @@ export default function Membership() {
                         <TouchableOpacity
                             key={plan.id}
                             className={`mb-4 rounded-2xl border overflow-hidden ${plan.id === currentPlan
-                                    ? 'border-2 border-primary bg-primary/5'
-                                    : selectedPlan === plan.id
-                                        ? 'border-2 border-white/30 bg-white/5'
-                                        : 'border-white/10 bg-[#17212b]'
+                                ? 'border-2 border-primary bg-primary/5'
+                                : selectedPlan === plan.id
+                                    ? 'border-2 border-white/30 bg-white/5'
+                                    : 'border-white/10 bg-[#17212b]'
                                 }`}
                             onPress={() => handleSelectPlan(plan.id)}
                             activeOpacity={0.8}
                         >
-                            {/* 추천 배지 */}
                             {plan.recommended && (
                                 <View className="bg-[#c5a059] py-1.5 px-4">
                                     <Text className="text-black text-xs font-bold text-center uppercase tracking-wider">
@@ -169,7 +184,6 @@ export default function Membership() {
                             )}
 
                             <View className="p-5">
-                                {/* 플랜 헤더 */}
                                 <View className="flex-row justify-between items-start mb-4">
                                     <View>
                                         <View className="flex-row items-center gap-2 mb-1">
@@ -194,7 +208,6 @@ export default function Membership() {
                                     </View>
                                 </View>
 
-                                {/* 기능 목록 */}
                                 <View className="gap-2.5">
                                     {plan.features.map((feature, index) => (
                                         <View key={index} className="flex-row items-center gap-3">
@@ -230,30 +243,7 @@ export default function Membership() {
                         </Text>
                     </View>
                 </View>
-            </ScrollView>
-
-            {/* 하단 버튼 */}
-            {selectedPlan && selectedPlan !== currentPlan && (
-                <View className="absolute bottom-0 left-0 right-0 p-5 bg-background-dark/95 border-t border-white/10">
-                    <SafeAreaView edges={['bottom']}>
-                        <TouchableOpacity
-                            onPress={handleUpgrade}
-                            activeOpacity={0.9}
-                        >
-                            <LinearGradient
-                                colors={MEMBERSHIP_PLANS.find(p => p.id === selectedPlan)?.gradientColors || ['#0d7ff2', '#0062cc']}
-                                start={{ x: 0, y: 0 }}
-                                end={{ x: 1, y: 0 }}
-                                className="py-4 rounded-xl items-center justify-center"
-                            >
-                                <Text className="text-white font-bold text-lg">
-                                    {MEMBERSHIP_PLANS.find(p => p.id === selectedPlan)?.name} 플랜으로 변경
-                                </Text>
-                            </LinearGradient>
-                        </TouchableOpacity>
-                    </SafeAreaView>
-                </View>
-            )}
-        </View>
+            </View>
+        </BaseScreen>
     );
 }

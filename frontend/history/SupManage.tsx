@@ -37,9 +37,9 @@ export default function SupManage() {
 
     // Helper to determine color based on remaining life
     const getStatusColor = (percentage: number) => {
-        if (percentage <= 20) return '#ef4444'; // Red (Danger)
-        if (percentage <= 50) return '#f59e0b'; // Amber (Warning)
-        return '#0d7ff2'; // Blue (Good)
+        if (percentage <= 20) return '#ff6b6b'; // Error
+        if (percentage <= 50) return '#f59e0b'; // Warning
+        return '#0d7ff2'; // Primary
     };
 
     // Helper to determine status text
@@ -87,15 +87,15 @@ export default function SupManage() {
             <StatusBar style="light" />
 
             {/* Header */}
-            <View className="flex-row items-center justify-between px-4 py-3 border-b border-gray-800 bg-[#101922]/95">
+            <View className="flex-row items-center justify-between px-4 py-3 border-b border-white/5 bg-surface-dark/95">
                 <TouchableOpacity
                     onPress={() => navigation.goBack()}
-                    className="w-10 h-10 items-center justify-center rounded-full active:bg-gray-800"
+                    className="w-10 h-10 items-center justify-center rounded-full active:bg-white/10"
                 >
                     <MaterialIcons name="arrow-back-ios" size={20} color="white" />
                 </TouchableOpacity>
                 <Text className="text-white text-lg font-bold">소모품 관리</Text>
-                <TouchableOpacity className="w-10 h-10 items-center justify-center rounded-full active:bg-gray-800">
+                <TouchableOpacity className="w-10 h-10 items-center justify-center rounded-full active:bg-white/10">
                     <MaterialIcons name="more-vert" size={24} color="white" />
                 </TouchableOpacity>
             </View>
@@ -103,7 +103,7 @@ export default function SupManage() {
             <ScrollView className="flex-1 px-6 pt-4" contentContainerStyle={{ paddingBottom: 100 }}>
                 {consumables.length === 0 ? (
                     <View className="items-center justify-center py-20">
-                        <Text className="text-gray-500">등록된 소모품 정보가 없습니다.</Text>
+                        <Text className="text-text-dim">등록된 소모품 정보가 없습니다.</Text>
                     </View>
                 ) : (
                     <View className="gap-4">
@@ -115,7 +115,7 @@ export default function SupManage() {
                             return (
                                 <View
                                     key={index}
-                                    className="bg-[#ffffff05] border border-white/10 rounded-2xl p-4 overflow-hidden relative"
+                                    className="bg-white/5 border border-white/10 rounded-2xl p-4 overflow-hidden relative"
                                 >
                                     {/* Side Color Bar */}
                                     <View
@@ -154,7 +154,7 @@ export default function SupManage() {
 
                                     {/* Progress Bar & Message */}
                                     <View className="pl-3">
-                                        <View className="w-full bg-gray-800/50 rounded-full h-1.5 mb-3 overflow-hidden">
+                                        <View className="w-full bg-white/10 rounded-full h-1.5 mb-3 overflow-hidden">
                                             <View
                                                 className="h-1.5 rounded-full"
                                                 style={{
@@ -173,7 +173,7 @@ export default function SupManage() {
                                                 size={16}
                                                 color={color}
                                             />
-                                            <Text className="text-xs text-gray-400 flex-1">
+                                            <Text className="text-xs text-text-muted flex-1">
                                                 {item.predictedReplacementDate
                                                     ? `교체 예정일: ${item.predictedReplacementDate} (AI 예측)`
                                                     : "주행 데이터를 분석 중입니다."}

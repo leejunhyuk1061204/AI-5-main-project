@@ -21,7 +21,7 @@ public class SmartcarService {
     public String getAuthUrl() {
         // Define the permissions your app needs
         String[] scope = { "read_vehicle_info", "read_odometer", "read_location", "control_security" };
-        return authClient.getAuthUrl(scope);
+        return authClient.authUrlBuilder(scope).build();
     }
 
     public Auth exchangeCodeForToken(String code) throws SmartcarException {

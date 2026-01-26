@@ -22,6 +22,9 @@ public class VehicleDto {
         private String memo;
         private String carNumber;
         private String vin;
+
+        @Min(value = 0, message = "주행거리는 0 이상이어야 합니다.")
+        private Double totalMileage;
     }
 
     @Getter

@@ -84,7 +84,7 @@ encryption:
 
 jwt:
   secret: ${JWT_SECRET:vmb70atp-bd59-400a-9450-523a253d0a90-this-is-a-long-secret-key-for-development}
-  access-expiration: 3600000 # 1시간으로 원복
+  access-expiration: 3600000 # 1시간 (테스트 완료 후 원복)
   refresh-expiration: 604800000 # 7일
 
 smartcar:

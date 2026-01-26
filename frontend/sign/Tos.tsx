@@ -5,6 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
+import { useAlertStore } from '../store/useAlertStore';
 
 type Agreements = {
     service: boolean;
@@ -61,7 +62,7 @@ export default function Tos() {
         // Optional: Validate required agreements
         // For now, allowing proceed if user clicks start, or we can enforce service/privacy
         if (!agreements.service || !agreements.privacy || !agreements.location) {
-            Alert.alert('알림', '필수 약관에 모두 동의해주세요.');
+            useAlertStore.getState().showAlert('알림', '필수 약관에 모두 동의해주세요.', 'WARNING');
             return;
         }
 
@@ -77,7 +78,7 @@ export default function Tos() {
         <View
             className={`w-5 h-5 rounded border-2 items-center justify-center transition-all ${checked
                 ? 'bg-primary border-primary'
-                : 'border-[#314d68] bg-transparent'
+                : 'border-border-light bg-transparent'
                 }`}
         >
             {checked && (
@@ -91,7 +92,7 @@ export default function Tos() {
             <StatusBar style="light" />
 
             {/* Header */}
-            <View className="flex-row items-center justify-between p-4 pb-2 bg-background-dark/95 border-b border-[#ffffff0a] z-50 sticky top-0 backdrop-blur-md">
+            <View className="flex-row items-center justify-between p-4 pb-2 bg-background-dark/95 border-b border-white/5 z-50 sticky top-0 backdrop-blur-md">
                 <TouchableOpacity
                     className="w-12 h-12 items-center justify-center rounded-full active:bg-white/5"
                     activeOpacity={0.7}
@@ -122,7 +123,7 @@ export default function Tos() {
                 {/* Select All Section */}
                 <Pressable
                     onPress={toggleAll}
-                    className="bg-surface-dark rounded-xl border border-[#ffffff0d] mb-6 overflow-hidden flex-row items-center gap-4 p-4 active:bg-white/5"
+                    className="bg-surface-dark rounded-xl border border-white/5 mb-6 overflow-hidden flex-row items-center gap-4 p-4 active:bg-white/5"
                 >
                     <View className="w-6 h-6 items-center justify-center">
                         <Checkbox checked={allAgreed} />
@@ -134,7 +135,7 @@ export default function Tos() {
                 </Pressable>
 
                 {/* Divider */}
-                <View className="h-px w-full bg-[#ffffff0d] mb-6 mx-2" />
+                <View className="h-px w-full bg-white/5 mb-6 mx-2" />
 
                 {/* List Items */}
                 <View className="gap-2">
