@@ -45,4 +45,9 @@ public class CloudVehicleResponse {
      * 현재 주행거리 (km)
      */
     private Double mileage;
+
+    /**
+     * 클라우드 연동 상태 (APPROVED, PENDING, REJECTED 등)
+     */
+    private String status;
 }

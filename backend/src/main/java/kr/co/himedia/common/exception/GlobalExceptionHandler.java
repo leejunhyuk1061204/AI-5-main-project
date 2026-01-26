@@ -1,8 +1,10 @@
 package kr.co.himedia.common.exception;
 
 import kr.co.himedia.common.ApiResponse;
+import kr.co.himedia.common.exception.ErrorCode;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -34,6 +36,19 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status((org.springframework.http.HttpStatusCode) ErrorCode.INVALID_INPUT_VALUE.getStatus())
                 .body(ApiResponse.fail(ErrorCode.INVALID_INPUT_VALUE.getCode(), message));
+    }
+
+    /**
+     * 지원하지 않는 HTTP 메서드로 요청 시 발생하는 예외 처리
+     */
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    protected ResponseEntity<ApiResponse<?>> handleHttpRequestMethodNotSupportedException(
+            HttpRequestMethodNotSupportedException e) {
+        log.error("HttpRequestMethodNotSupportedException", e);
+        return ResponseEntity
+                .status((org.springframework.http.HttpStatusCode) ErrorCode.METHOD_NOT_ALLOWED.getStatus())
+                .body(ApiResponse.fail(ErrorCode.METHOD_NOT_ALLOWED.getCode(),
+                        ErrorCode.METHOD_NOT_ALLOWED.getMessage()));
     }
 
     /**

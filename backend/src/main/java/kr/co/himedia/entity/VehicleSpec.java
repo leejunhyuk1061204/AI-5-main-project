@@ -5,6 +5,7 @@ import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
@@ -13,6 +14,7 @@ import java.util.UUID;
 @Entity
 @Table(name = "vehicle_specs")
 @Getter
+@Setter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class VehicleSpec {
 
@@ -48,6 +50,13 @@ public class VehicleSpec {
     @Column(name = "official_fuel_economy")
     private Double officialFuelEconomy;
 
+    @Column(name = "spec_source", length = 20)
+    private String specSource;
+
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
+    @Column(name = "extra_specs", columnDefinition = "jsonb")
+    private java.util.Map<String, Object> extraSpecs;
+
     @UpdateTimestamp
     @Column(name = "last_updated")
     private LocalDateTime lastUpdated;
@@ -55,7 +64,8 @@ public class VehicleSpec {
     @Builder
     public VehicleSpec(Vehicle vehicle, Double length, Double width, Double height, Integer displacement,
             String engineType, Double maxPower, Double maxTorque, String tireSizeFront,
-            String tireSizeRear, Double officialFuelEconomy) {
+            String tireSizeRear, Double officialFuelEconomy, String specSource,
+            java.util.Map<String, Object> extraSpecs) {
         this.vehicle = vehicle;
         this.length = length;
         this.width = width;
@@ -67,5 +77,7 @@ public class VehicleSpec {
         this.tireSizeFront = tireSizeFront;
         this.tireSizeRear = tireSizeRear;
         this.officialFuelEconomy = officialFuelEconomy;
+        this.specSource = specSource;
+        this.extraSpecs = extraSpecs != null ? extraSpecs : new java.util.HashMap<>();
     }
 }

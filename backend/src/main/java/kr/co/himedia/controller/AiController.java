@@ -67,7 +67,7 @@ public class AiController {
             @PathVariable UUID sessionId,
             @RequestPart(value = "image", required = false) org.springframework.web.multipart.MultipartFile image,
             @RequestPart(value = "audio", required = false) org.springframework.web.multipart.MultipartFile audio,
-            @RequestPart(value = "data") kr.co.himedia.dto.ai.ReplyRequestDto replyDto) {
+            @RequestPart(value = "data", required = false) kr.co.himedia.dto.ai.ReplyRequestDto replyDto) {
         return ApiResponse.success(aiDiagnosisService.replyToSession(sessionId, replyDto, image, audio));
     }
 }

@@ -20,6 +20,8 @@ public class VehicleDto {
     public static class UpdateRequest {
         private String nickname;
         private String memo;
+        private String carNumber;
+        private String vin;
     }
 
     @Getter
@@ -114,9 +116,11 @@ public class VehicleDto {
         private String carNumber;
         private String nickname;
         private String memo;
+        private String vin;
         private Boolean isPrimary;
         private String registrationSource;
         private String obdDeviceId;
+        private Boolean cloudLinked; // 추가: 클라우드 연동 여부
 
         public static Response from(Vehicle vehicle) {
             Response response = new Response();
@@ -130,10 +134,12 @@ public class VehicleDto {
             response.setCarNumber(vehicle.getCarNumber());
             response.setNickname(vehicle.getNickname());
             response.setMemo(vehicle.getMemo());
+            response.setVin(vehicle.getVin());
             response.setIsPrimary(vehicle.getIsPrimary());
             response.setRegistrationSource(
                     vehicle.getRegistrationSource() != null ? vehicle.getRegistrationSource().name() : null);
             response.setObdDeviceId(vehicle.getObdDeviceId());
+            response.setCloudLinked(vehicle.getCloudLinked()); // 클라우드 연동 여부 설정
             return response;
         }
     }
