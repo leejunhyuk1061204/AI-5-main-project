@@ -1,13 +1,51 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, ScrollView, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, Platform, Linking, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
+import { useEffect } from 'react';
 
 export default function RegisterMain() {
     const insets = useSafeAreaInsets();
     const navigation = useNavigation<any>();
+
+    useEffect(() => {
+        const handleDeepLink = async (event: { url: string }) => {
+            const { url } = event;
+            if (url && url.includes('smartcar/callback')) {
+                // Extract access token from URL
+                const regex = /[?&]accessToken=([^&#]*)/;
+                const match = regex.exec(url);
+                const accessToken = match && match[1];
+
+                if (accessToken) {
+                    try {
+                        // Fetch vehicles
+                        const backendUrl = Platform.OS === 'android' ? 'http://10.0.2.2:8080' : 'http://localhost:8080';
+                        const response = await fetch(`${backendUrl}/api/smartcar/vehicles?accessToken=${accessToken}`);
+                        const data = await response.json();
+
+                        Alert.alert("Smartcar 연결 성공", `차량 정보를 가져왔습니다:\n${JSON.stringify(data, null, 2)}`);
+                    } catch (error) {
+                        Alert.alert("오류", "차량 정보를 가져오는 중 오류가 발생했습니다.");
+                        console.error(error);
+                    }
+                }
+            }
+        };
+
+        // Add event listener
+        const subscription = Linking.addEventListener('url', handleDeepLink);
+
+        // Check if app was opened by a link
+        Linking.getInitialURL().then((url) => {
+            if (url) handleDeepLink({ url });
+        });
+
+        return () => {
+            subscription.remove();
+        };
+    }, []);
 
     return (
         <View className="flex-1 bg-background-dark">
@@ -90,10 +128,40 @@ export default function RegisterMain() {
                             </Text>
                         </View>
                     </TouchableOpacity>
+
+                    {/* Card 3: Smartcar Connect */}
+                    <TouchableOpacity
+                        className="group relative flex flex-col items-start gap-4 rounded-2xl border border-[#ffffff14] bg-[#ffffff08] p-6 active:bg-[#ffffff10] active:scale-[0.98]"
+                        activeOpacity={0.9}
+                        onPress={() => {
+                            // Assuming adb reverse tcp:8080 tcp:8080 is run
+                            const backendUrl = Platform.OS === 'android' ? 'http://10.0.2.2:8080' : 'http://localhost:8080';
+                            import('react-native').then(({ Linking }) => {
+                                Linking.openURL(`${backendUrl}/api/smartcar/login`);
+                            });
+                        }}
+                    >
+                        <View className="absolute top-0 right-0 rounded-bl-xl rounded-tr-xl bg-green-500 px-3 py-1 shadow-sm">
+                            <Text className="text-[10px] font-bold text-white">NEW</Text>
+                        </View>
+                        <View className="rounded-full bg-green-500/10 p-3">
+                            <MaterialIcons name="electric-car" size={32} color="#22c55e" />
+                        </View>
+                        <View>
+                            <Text className="text-lg font-bold text-white mb-1">Smartcar 연결</Text>
+                            <Text className="text-sm text-slate-400 leading-relaxed">
+                                Smartcar 계정을 연결하여{'\n'}차량 정보를 불러옵니다.
+                            </Text>
+                        </View>
+                        <View className="absolute top-6 right-6 opacity-50">
+                            <MaterialIcons name="arrow-forward" size={24} color="#22c55e" />
+                        </View>
+                    </TouchableOpacity>
                 </View>
 
                 {/* Info Panel */}
                 <View className="mt-12">
+
                     <View className="flex flex-col gap-3 rounded-xl border border-surface-highlight bg-surface-dark/50 p-4">
                         <View className="flex-row items-center gap-2">
                             <MaterialIcons name="info" size={20} color="#0d7ff2" />
