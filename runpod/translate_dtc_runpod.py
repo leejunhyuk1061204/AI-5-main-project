@@ -12,8 +12,8 @@ from automotive_terms import AUTOMOTIVE_TERMS
 # --- 설정 (Configuration) ---
 OLLAMA_URL = "http://localhost:11434/api/generate"
 OLLAMA_CHECK_URL = "http://localhost:11434"
-MODEL_NAME = "qwen2.5:32b"
-BATCH_SIZE = 5  # 32B 모델은 무거우므로 4090에서도 배치를 줄여야 안정적입니다 (Timeout 방지)
+MODEL_NAME = "qwen2.5:14b"  # 32B(20GB+)는 4090(24GB)에서 메모리 스왑으로 느려짐. 14B가 최적(속도 5배 이상)
+BATCH_SIZE = 30  # 14B 모델은 가벼우므로 배치 30개도 충분히 소화 가능
 
 # 스크립트 실행 위치 기준 경로 설정
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
