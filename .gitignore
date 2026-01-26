@@ -1,17 +1,35 @@
 # --- Java & Spring Boot ---
+HELP.md
 .gradle/
 build/
 !gradle/wrapper/gradle-wrapper.jar
 !**/src/main/resources/ant-static-assets/
 !**/src/test/resources/ant-static-assets/
+!**/src/main/**/build/
+!**/src/test/**/build/
 bin/
+!**/src/main/**/bin/
+!**/src/test/**/bin/
 out/
+!**/src/main/**/out/
+!**/src/test/**/out/
 .settings/
 .classpath
 .project
+.apt_generated
+.factorypath
+.springBeans
+.sts4-cache
 *.iml
 *.ipr
 *.iws
+
+# --- NetBeans ---
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
 
 # --- Python (FastAPI/AI) ---
 __pycache__/
@@ -36,7 +54,7 @@ ai_env/
 logs/
 *.log
 
-# --- RAG Data (ZIP/DB는 제외, JSON은 커밋) ---
+# --- RAG Data (ZIP/DB ???, JSON ???) ---
 data/postgres/
 data/manuals/zips/
 data/manuals/Sonata_2012/
@@ -85,16 +103,18 @@ yarn-error.*
 *.tsbuildinfo
 
 # generated native folders
-FrontEnd/ios/
-FrontEnd/android/
+frontend/ios/
+frontend/android/
 
 # AI-Agent
 GEMINI.md
 
-# Firebase (FCM)
+# Security & Firebase
 **/firebase-service-account.json
+backend/google-services.json
+frontend/google-services.json
 
-# --- AI Large Files (모델, 데이터셋, 학습 결과) ---
+# --- AI Large Files (Model, Dataset, Results) ---
 *.pt
 *.pth
 *.onnx
@@ -105,4 +125,3 @@ ai/data/
 ai/weights/
 ai/runs/
 yolo*.pt
-
