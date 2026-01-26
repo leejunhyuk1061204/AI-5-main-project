@@ -26,6 +26,8 @@ module.exports = {
         "premium": "#c5a059",
         "error": "#ff6b6b",
         "warning": "#f59e0b",
+        "kakao-yellow": "#FEE500",
+        "google-white": "#FFFFFF",
       },
     },
   },
