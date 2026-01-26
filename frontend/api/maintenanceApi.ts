@@ -11,6 +11,7 @@ export interface VehicleConsumable {
     replacementIntervalMileage: number | null;
     replacementIntervalMonths: number | null;
     predictedReplacementDate: string | null;
+    unevenWearDetected?: boolean;
 }
 
 export interface MaintenanceStatusResponse {
