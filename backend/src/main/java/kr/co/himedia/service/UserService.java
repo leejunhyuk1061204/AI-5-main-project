@@ -149,9 +149,10 @@ public class UserService {
                     nickname = "Google User";
                 }
             } else if ("kakao".equalsIgnoreCase(req.getProvider())) {
-                // 카카오 검증 로직 (여기서는 생략, 추후 구현)
-                throw new BaseException(ErrorCode.INTERNAL_SERVER_ERROR,
-                        "Kakao login not fully implemented on backend yet.");
+                // 카카오 토큰 검증
+                KakaoProfile kakaoProfile = verifyKakaoToken(req.getToken());
+                email = kakaoProfile.getEmail();
+                nickname = kakaoProfile.getNickname();
             } else {
                 throw new BaseException(ErrorCode.INVALID_INPUT_VALUE, "Unsupported provider: " + req.getProvider());
             }
@@ -285,6 +286,49 @@ public class UserService {
         }
     }
 
+    // Kakao Access Token 검증
+    private KakaoProfile verifyKakaoToken(String accessToken) {
+        String reqURL = "https://kapi.kakao.com/v2/user/me";
+        try {
+            java.net.URL url = new java.net.URL(reqURL);
+            java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("GET");
+            conn.setRequestProperty("Authorization", "Bearer " + accessToken);
+
+            int responseCode = conn.getResponseCode();
+            if (responseCode != 200) {
+                throw new BaseException(ErrorCode.INVALID_CREDENTIALS, "Kakao API Error: " + responseCode);
+            }
+
+            java.io.BufferedReader br = new java.io.BufferedReader(
+                    new java.io.InputStreamReader(conn.getInputStream()));
+            String line;
+            StringBuilder result = new StringBuilder();
+            while ((line = br.readLine()) != null) {
+                result.append(line);
+            }
+            br.close();
+
+            // Jackson ObjectMapper (Spring Boot Default)
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            com.fasterxml.jackson.databind.JsonNode root = mapper.readTree(result.toString());
+
+            long id = root.path("id").asLong();
+            String email = root.path("kakao_account").path("email").asText(null);
+            String nickname = root.path("kakao_account").path("profile").path("nickname").asText("Kakao User");
+
+            if (email == null || email.isEmpty()) {
+                // 이메일 동의를 안 한 경우, 임의의 이메일 생성 (kakao_id@kakao.login)
+                email = id + "@kakao.login";
+            }
+
+            return new KakaoProfile(id, email, nickname);
+
+        } catch (IOException e) {
+            throw new BaseException(ErrorCode.INVALID_CREDENTIALS, "Failed to connect to Kakao API");
+        }
+    }
+
     // Google ID Token 검증 (Frontend에서 Firebase Auth 미사용 시)
     private GoogleIdToken.Payload verifyGoogleIdToken(String tokenString) {
         // Web Client ID (from frontend/sign/Login.tsx or google-services.json)
@@ -305,5 +349,14 @@ public class UserService {
             throw new BaseException(ErrorCode.INVALID_CREDENTIALS,
                     "Google Token Verification Error: " + e.getMessage());
         }
+    }
+
+    // Inner class for Kakao Profile
+    @lombok.Data
+    @lombok.AllArgsConstructor
+    private static class KakaoProfile {
+        private long id;
+        private String email;
+        private String nickname;
     }
 }
