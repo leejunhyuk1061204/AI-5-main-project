@@ -4,7 +4,7 @@ import Constants from 'expo-constants';
 
 // Dynamically determine the host IP from the Expo Go URI
 const getBaseUrl = () => {
-    // For physical device testing, hardcode the local IP
+    // ADB Reverse Tunneling enabled
     return 'http://localhost:8080';
 };
 

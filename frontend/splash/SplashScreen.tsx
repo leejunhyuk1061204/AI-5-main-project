@@ -15,7 +15,6 @@ export default function SplashScreen({ onFinish }: { onFinish: () => void }) {
 
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const slideAnim = useRef(new Animated.Value(20)).current;
-    const slowFadeAnim = useRef(new Animated.Value(0)).current;
     const delayedFadeAnim = useRef(new Animated.Value(0)).current;
 
     useEffect(() => {
@@ -28,11 +27,6 @@ export default function SplashScreen({ onFinish }: { onFinish: () => void }) {
             Animated.timing(slideAnim, {
                 toValue: 0,
                 duration: 1500,
-                useNativeDriver: false,
-            }),
-            Animated.timing(slowFadeAnim, {
-                toValue: 1,
-                duration: 2000,
                 useNativeDriver: false,
             }),
             Animated.sequence([
@@ -52,7 +46,6 @@ export default function SplashScreen({ onFinish }: { onFinish: () => void }) {
 
     // Calculated sizes
     const iconSize = normalize(100);
-    const glowSize = normalize(160); // w-40 h-40 is 10rem = 160px
     const titleSize = normalize(36); // text-4xl is ~36px
     const subtitleSize = normalize(12); // text-xs is ~12px
     const spacingBottom = normalize(64); // pb-16
@@ -61,10 +54,6 @@ export default function SplashScreen({ onFinish }: { onFinish: () => void }) {
     return (
         <View className="flex-1 bg-deep-black items-center justify-center overflow-hidden">
             <StatusBar style="light" />
-
-            {/* Glow Effects - Scaled relative to screen but kept large */}
-            <Animated.View style={{ opacity: slowFadeAnim, width: width * 1.5, height: width * 1.5 }} className="absolute -top-[30%] -left-[20%] bg-primary/10 rounded-full blur-3xl" />
-            <Animated.View style={{ opacity: slowFadeAnim, width: width * 1.2, height: width * 1.2 }} className="absolute -bottom-[20%] -right-[10%] bg-primary/5 rounded-full blur-3xl" />
 
             <View style={{ paddingBottom: spacingBottom }} className="relative z-10 flex-col items-center justify-center w-full px-6 flex-grow">
                 <Animated.View
@@ -75,12 +64,9 @@ export default function SplashScreen({ onFinish }: { onFinish: () => void }) {
                     }}
                     className="relative items-center"
                 >
-                    {/* Central Glow/Blur */}
-                    <View style={{ width: glowSize, height: glowSize }} className="absolute bg-primary/20 rounded-full blur-2xl opacity-50" />
-
                     <View className="items-center justify-center">
                         <View className="relative z-20">
-                            <MaterialIcons name="directions-car" size={iconSize} color="#00f0ff" style={{ opacity: 0.9 }} />
+                            <MaterialIcons name="directions-car" size={iconSize} color="#0d7ff2" style={{ opacity: 0.9 }} />
                         </View>
 
                         {/* Waveform SVG */}
