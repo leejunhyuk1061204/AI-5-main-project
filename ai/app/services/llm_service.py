@@ -183,6 +183,54 @@ async def suggest_anomaly_label_with_base64(
             "recommended_action": "육안 점검 권장"
         }
 
+
+async def call_openai_vision(s3_url: str, prompt: str) -> Dict[str, Any]:
+    """
+    [범용 Vision API 호출 함수]
+    
+    이미지 URL과 커스텀 프롬프트를 받아 GPT-4o Vision으로 분석합니다.
+    타이어 마모도 측정, 부품 상태 확인 등 다양한 용도로 사용됩니다.
+    
+    Args:
+        s3_url: 분석할 이미지의 S3 URL
+        prompt: LLM에게 전달할 분석 지시 프롬프트
+    
+    Returns:
+        LLM이 반환한 JSON 파싱 결과 (dict)
+    
+    Example:
+        result = await call_openai_vision(
+            s3_url="s3://bucket/tire.jpg",
+            prompt="타이어 마모도를 측정하세요..."
+        )
+        # result: {"wear_level_pct": 45, "status": "FAIR", ...}
+    """
+    try:
+        response = await client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": prompt},
+                {"role": "user", "content": [
+                    {"type": "text", "text": "이 이미지를 분석해주세요."},
+                    {"type": "image_url", "image_url": {"url": s3_url}}
+                ]}
+            ],
+            response_format={"type": "json_object"},
+            max_tokens=1000,
+            timeout=30.0
+        )
+        
+        content = response.choices[0].message.content
+        result = json.loads(content)
+        return result
+        
+    except json.JSONDecodeError as e:
+        print(f"[LLM Vision] JSON 파싱 오류: {e}")
+        return {"status": "ERROR", "error": "JSON 파싱 실패"}
+    except Exception as e:
+        print(f"[LLM Vision Error] {e}")
+        return {"status": "ERROR", "error": str(e)}
+
 async def analyze_general_image(s3_url: str) -> VisualResponse:
     """
     [Path B: Fallback / 범용 분석]
@@ -458,3 +506,130 @@ async def interpret_tire_status(status_list: List[Dict]) -> Dict[str, str]:
     except Exception as e:
         print(f"[LLM Tire Error] {e}")
         return {"description": "타이어 상태 정보를 처리하는 도중 오류가 발생했습니다.", "recommendation": "공기압 및 트레드 상태를 수동으로 확인하십시오."}
+
+
+# ---------------------------------------------------------
+# 4. Active Learning용 라벨 생성 (Training Data Generation)
+# ---------------------------------------------------------
+
+async def generate_training_labels(s3_url: str, domain: str) -> dict:
+    """
+    [Active Learning] 저신뢰 이미지에 대해 LLM이 정답 라벨 생성
+    
+    Args:
+        s3_url: 이미지 S3 URL
+        domain: 도메인 (engine, dashboard, tire, exterior)
+    
+    Returns:
+        {"labels": [{"class": "...", "bbox": [...]}], "status": "..."}
+    """
+    DOMAIN_PROMPTS = {
+        "engine": "엔진룸 부품(Battery, Oil_Cap, Radiator 등)을 찾아 바운딩 박스를 제시하세요.",
+        "dashboard": "켜진 경고등(Check_Engine, Low_Tire_Pressure 등)을 식별하세요.",
+        "tire": "타이어 상태(normal, worn, cracked, flat)를 판단하세요.",
+        "exterior": "차량 파손 부위(scratch, dent, crack)와 위치(Front_Bumper 등)를 찾으세요."
+    }
+    
+    PROMPT = f"""
+    이 차량 이미지를 분석하여 AI 학습용 라벨을 생성하세요.
+    도메인: {domain}
+    
+    작업 지시: {DOMAIN_PROMPTS.get(domain, "차량 관련 객체를 식별하세요.")}
+    
+    [출력 형식 - JSON]
+    {{
+        "labels": [
+            {{"class": "객체명", "bbox": [x_center, y_center, width, height]}}
+        ],
+        "status": "NORMAL" | "WARNING" | "CRITICAL"
+    }}
+    
+    bbox는 이미지 크기 대비 0~1 사이 비율로 표현하세요.
+    """
+    
+    try:
+        response = await client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "user", "content": [
+                    {"type": "text", "text": PROMPT},
+                    {"type": "image_url", "image_url": {"url": s3_url}}
+                ]}
+            ],
+            response_format={"type": "json_object"},
+            max_tokens=800,
+            timeout=30.0
+        )
+        return json.loads(response.choices[0].message.content)
+    except Exception as e:
+        print(f"[LLM Training Labels Error] {e}")
+        return {"labels": [], "status": "ERROR"}
+
+
+async def generate_audio_labels(s3_url: str, audio_bytes: Optional[bytes] = None) -> dict:
+    """
+    [Active Learning] 저신뢰 오디오에 대해 LLM이 정답 라벨 생성
+    
+    Args:
+        s3_url: 오디오 S3 URL
+        audio_bytes: 이미 다운로드된 오디오 바이트 (선택)
+    
+    Returns:
+        {"label": "진단명", "category": "카테고리", "status": "..."}
+    """
+    PROMPT = """
+    이 차량 소리를 분석하여 AI 학습용 라벨을 생성하세요.
+    
+    [분류 카테고리]
+    - ENGINE: 엔진 관련 (노킹, 미스파이어 등)
+    - BRAKES: 브레이크 관련 (스키, 갈리는 소리)
+    - SUSPENSION: 서스펜션 관련 (덜컹, 쿵쿵)
+    - EXHAUST: 배기 관련 (터진 소리, 비정상 배기음)
+    - NORMAL: 정상 구동음
+    
+    [출력 형식 - JSON]
+    {
+        "label": "구체적_진단명 (예: Engine_Knock)",
+        "category": "카테고리명",
+        "status": "NORMAL" | "FAULTY",
+        "confidence": 0.0 ~ 1.0
+    }
+    """
+    
+    try:
+        # 오디오 데이터 준비
+        if audio_bytes is None:
+            async with httpx.AsyncClient(timeout=10.0) as httpx_client:
+                audio_response = await httpx_client.get(s3_url)
+                audio_response.raise_for_status()
+                audio_data = base64.b64encode(audio_response.content).decode('utf-8')
+        else:
+            audio_data = base64.b64encode(audio_bytes).decode('utf-8')
+        
+        response = await client.chat.completions.create(
+            model="gpt-4o-audio-preview",
+            modalities=["text", "audio"],
+            audio={"voice": "alloy", "format": "wav"},
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": PROMPT},
+                        {
+                            "type": "input_audio",
+                            "input_audio": {"data": audio_data, "format": "wav"}
+                        }
+                    ]
+                }
+            ]
+        )
+        
+        content = response.choices[0].message.audio.transcript
+        match = re.search(r'\{.*\}', content, re.DOTALL)
+        if match:
+            return json.loads(match.group())
+        return {"label": "UNKNOWN", "category": "UNKNOWN", "status": "ERROR"}
+        
+    except Exception as e:
+        print(f"[LLM Audio Labels Error] {e}")
+        return {"label": "UNKNOWN", "category": "UNKNOWN", "status": "ERROR"}
