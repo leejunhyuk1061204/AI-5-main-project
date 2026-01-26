@@ -116,6 +116,7 @@ export default function App() {
         }
 
         // Check for persistent login
+        /* TEMPORARY: Force Login to fix navigation stuck issue
         const token = await AsyncStorage.getItem('accessToken');
         if (token) {
           try {
@@ -127,8 +128,8 @@ export default function App() {
               setInitialRoute('RegisterMain');
             }
           } catch (e) {
-            console.error("Failed to fetch vehicles on startup", e);
-            setInitialRoute('MainPage');
+             console.error("Failed to fetch vehicles on startup", e);
+            setInitialRoute('Login');
           }
         } else {
           // Check Tos agreement
@@ -139,6 +140,9 @@ export default function App() {
             setInitialRoute('Tos');
           }
         }
+        */
+        // Always start at Login
+        setInitialRoute('Login');
       } catch (e) {
         console.warn(e);
       } finally {
