@@ -1,52 +1,72 @@
-# app/services/yolo_service.py
+# ai/app/services/engine_yolo_service.py
 """
-YOLO 서비스 - 엔진룸 부품 감지 전용
-(Dashboard YOLO 제거됨 - LLM이 처리)
+엔진룸 부품 감지 서비스 (Engine YOLO)
+
+[역할]
+1. 엔진룸 부품 식별: 오일 캡, 배터리, 냉각수 탱크 등 26가지 주요 부품의 위치를 탐지합니다.
+2. 분석 대상 추출: 탐지된 각 부품의 좌표를 기반으로 이미지를 크롭하여 하위 분석 단계(이상탐지)에 전달합니다.
+3. 실시간 추론: 최적화된 YOLOv8 모델을 사용하여 고속으로 부품을 찾아냅니다.
+
+[주요 기능]
+- 엔진 부품 객체 탐지 (run_yolo_inference)
 """
+import torch
+import os
 from ultralytics import YOLO
 from ai.app.schemas.visual_schema import VisualResponse, DetectionItem
-import os
+from PIL import Image
+from typing import Optional, Union
+
+# =============================================================================
+# Reliability Thresholds
+# =============================================================================
+FAST_PATH_THRESHOLD = 0.9  # 90% 확신할 때만 LLM 스킵
 
 # =============================================================================
 # [설정] 모델 경로 - 엔진룸 부품 감지용
 # =============================================================================
-MODEL_PATH = "ai/weights/engine/best.pt"
+MODEL_PATH = os.path.join("ai", "weights", "engine", "best.pt")
 
 # =============================================================================
 # 엔진룸 부품 카테고리 매핑
 # =============================================================================
 ENGINE_PARTS = {
-    # ICE Parts
-    "Oil_Cap", "Engine_Oil_Filler", "Engine_Cover", "Radiator_Cap", 
-    "Coolant_Reservoir", "Brake_Fluid_Reservoir", "Washer_Fluid_Reservoir",
-    "Air_Filter", "Belt", "Battery", "Fuse_Box",
-    # EV Parts
-    "Inverter", "Electric_Motor", "Charging_Port", 
-    "Inverter_Coolant_Reservoir", "Secondary_Coolant_Reservoir"
+    "Inverter_Coolant_Reservoir", "Battery", "Radiator_Cap", "Windshield_Wiper_Fluid",
+    "Fuse_Box", "Power_Steering_Reservoir", "Brake_Fluid", "Engine_Oil_Fill_Cap",
+    "Engine_Oil_Dip_Stick", "Air_Filter_Cover", "ABS_Unit", "Alternator",
+    "Engine_Coolant_Reservoir", "Radiator", "Air_Filter", "Engine_Cover",
+    "Cold_Air_Intake", "Clutch_Fluid_Reservoir", "Transmission_Oil_Dip_Stick",
+    "Intercooler_Coolant_Reservoir", "Oil_Filter_Housing", "ATF_Oil_Reservoir",
+    "Cabin_Air_Filter_Housing", "Secondary_Coolant_Reservoir", "Electric_Motor",
+    "Oil_Filter"
 }
 
 def get_category_from_label(label_name: str) -> str:
     """
     엔진룸 부품 라벨 -> 카테고리 매핑
-    (현재는 모두 ENGINE_ROOM으로 분류)
     """
-    # 모든 엔진 부품은 ENGINE_ROOM
-    if label_name in ENGINE_PARTS or label_name.upper().startswith("ENG_"):
+    if label_name in ENGINE_PARTS:
         return "ENGINE_ROOM"
     
-    # 기본값
-    return "ENGINE_ROOM"  # 이 서비스는 엔진 전용이므로 기본값도 ENGINE_ROOM
+    # 부분 일치 검사 (접두사 등)
+    label_upper = label_name.upper()
+    if any(p.upper() in label_upper for p in ENGINE_PARTS):
+        return "ENGINE_ROOM"
+    
+    return "ENGINE_ROOM"
 
 # =============================================================================
 # 추론 함수
 # =============================================================================
-async def run_yolo_inference(s3_url: str, model=None) -> VisualResponse:
+async def run_yolo_inference(
+    s3_url: str, 
+    image: Optional[Union[str, Image.Image]] = None,
+    model=None
+) -> VisualResponse:
     """
-    S3 URL 이미지를 받아 YOLOv8 모델로 엔진 부품을 감지합니다.
-    
-    Returns:
-        VisualResponse: 감지 결과 (detected_count == 0이면 Path B로 전환)
+    S3 URL 또는 pre-loaded 이미지를 받아 YOLOv8 모델로 엔진 부품을 감지합니다.
     """
+    source = image if image is not None else s3_url
     
     # Model is None -> Return empty response (for Path B fallback)
     if model is None:
@@ -62,7 +82,7 @@ async def run_yolo_inference(s3_url: str, model=None) -> VisualResponse:
 
     # YOLO 추론
     try:
-        results = model.predict(source=s3_url, save=False, conf=0.25)
+        results = model.predict(source=source, save=False, conf=0.25)
     except Exception as e:
         print(f"[YOLO Service] Inference Error: {e}")
         return VisualResponse(

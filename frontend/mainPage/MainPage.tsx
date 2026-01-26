@@ -168,36 +168,39 @@ export default function MainPage() {
                         </View>
                     </View>
 
-                    {/* AI Recommendation Card */}
+                    {/* Membership Promotion Card */}
                     <View className="px-6 pb-4">
-                        <View className="relative overflow-hidden rounded-xl border border-primary/30 p-5">
-                            {/* Gradient Background - simulating bg-gradient-to-br from-[#111923] to-[#0D0D0D] */}
-                            <View className="absolute inset-0 bg-slate-900" />
-                            {/* Decorative blurs Removed */}
+                        <TouchableOpacity
+                            className="relative overflow-hidden rounded-xl border border-[#c5a059]/30 p-5 active:scale-[0.99]"
+                            activeOpacity={0.9}
+                            onPress={() => navigation.navigate('Membership')}
+                        >
+                            {/* Gradient Background */}
+                            <View className="absolute inset-0 bg-gradient-to-br from-[#1c1917] to-[#0c0a09]" />
+                            <View className="absolute inset-0 bg-[#c5a059]/5" />
 
                             <View className="flex-row items-center justify-between mb-2">
                                 <View className="flex-row items-center gap-2">
-                                    <MaterialIcons name="auto-awesome" size={18} color="#0d7ff2" />
-                                    <Text className="text-primary text-xs font-bold tracking-wider uppercase">AI 맞춤 권고</Text>
+                                    <MaterialIcons name="workspace-premium" size={20} color="#c5a059" />
+                                    <Text className="text-[#c5a059] text-xs font-bold tracking-wider uppercase">Premium Membership</Text>
                                 </View>
-                                <View className="bg-red-500/20 px-2 py-0.5 rounded border border-red-500/20">
-                                    <Text className="text-xs font-bold text-red-400">D-15</Text>
-                                </View>
+                                <MaterialIcons name="arrow-forward-ios" size={14} color="#78716c" />
                             </View>
 
-                            <Text className="text-white text-lg font-bold mb-1">엔진오일 교체 15일 전</Text>
-                            <Text className="text-[#9cabba] text-sm mb-4 leading-relaxed">
-                                차량 데이터를 분석한 결과, 15일 내에 엔진오일을 교체하는 것이 권장됩니다.
+                            <Text className="text-white text-lg font-bold mb-1">프리미엄 멤버십 혜택</Text>
+                            <Text className="text-[#a8a29e] text-sm mb-4 leading-relaxed">
+                                AI 기반 정밀 진단과 무제한 리포트, 더 많은 혜택을 누려보세요.
                             </Text>
 
-                            <TouchableOpacity
-                                className="w-full py-3 bg-primary rounded-lg flex-row items-center justify-center gap-2 shadow-lg shadow-primary/30 active:bg-blue-600"
-                                activeOpacity={0.8}
-                            >
-                                <Text className="text-white text-sm font-bold">예약하고 할인 받기</Text>
-                                <MaterialIcons name="arrow-forward" size={16} color="white" />
-                            </TouchableOpacity>
-                        </View>
+                            <View className="flex-row gap-2">
+                                <View className="bg-[#c5a059]/10 px-2 py-1 rounded border border-[#c5a059]/20">
+                                    <Text className="text-[#c5a059] text-xs font-medium">AI 정밀 진단</Text>
+                                </View>
+                                <View className="bg-[#c5a059]/10 px-2 py-1 rounded border border-[#c5a059]/20">
+                                    <Text className="text-[#c5a059] text-xs font-medium">무제한 리포트</Text>
+                                </View>
+                            </View>
+                        </TouchableOpacity>
                     </View>
 
                 </ScrollView>

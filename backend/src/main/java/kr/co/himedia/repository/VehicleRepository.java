@@ -15,4 +15,6 @@ public interface VehicleRepository extends JpaRepository<Vehicle, UUID> {
     Optional<Vehicle> findByUserIdAndIsPrimaryTrueAndDeletedAtIsNull(UUID userId);
 
     boolean existsByVinAndDeletedAtIsNull(String vin);
+
+    List<Vehicle> findByCloudLinkedTrueAndDeletedAtIsNull();
 }

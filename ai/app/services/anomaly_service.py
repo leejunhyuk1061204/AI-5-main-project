@@ -1,8 +1,16 @@
 # ai/app/services/anomaly_service.py
 """
-PatchCore 기반 이상 탐지 서비스
-- 학습된 모델이 있으면 실제 추론
-- 없으면 Mock 모드로 동작
+PatchCore 기반 이상 탐지 서비스 (Anomaly Detection Core)
+
+[역할]
+1. 미세 결함 탐지: 정상 데이터만으로 학습된 모델이 새로운 이미지에서 비정상(Anomaly) 패턴을 찾아냅니다.
+2. 부품별 특화 모델: 엔진룸의 각 부품별로 최적화된 임계값(Threshold)과 가중치를 관리합니다.
+3. 히트맵 데이터 생성: 결함의 위치와 정도를 수치화된 맵(Heatmap)으로 반환합니다.
+
+[주요 기능]
+- 모델 로드 및 관리 (_load_models)
+- 실제 이상 탐지 추론 (_real_detect)
+- 학습 전 시뮬레이션을 위한 Mock 모드 (_mock_detect)
 """
 import torch
 import numpy as np
@@ -34,10 +42,15 @@ class AnomalyDetector:
         self.thresholds = self._load_thresholds(config_path)
         
         # 절대경로로 변환 (실행 위치 무관)
+        base_dir = Path(__file__).parent.parent.parent
         if weights_dir is None:
-            self.weights_dir = Path(__file__).parent.parent.parent / "weights" / "anomaly"
+            self.weights_dir = base_dir / "weights" / "anomaly"
         else:
             self.weights_dir = Path(weights_dir)
+        
+        # config_path가 상대경로인 경우 처리
+        self.config_path = base_dir / config_path.replace("ai/", "") if "ai/" in config_path else Path(config_path)
+        self.thresholds = self._load_thresholds(str(self.config_path))
         
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         

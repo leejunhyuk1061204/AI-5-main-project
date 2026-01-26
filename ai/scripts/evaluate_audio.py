@@ -1,19 +1,34 @@
+# ai/scripts/evaluate_audio.py
+"""
+AST 오디오 모델 성능 평가 도구 (Audio Evaluator)
+
+[역할]
+1. 모델 검증: 학습 완료된 AST(Audio Spectrogram Transformer) 모델의 분류 정확도(Accuracy)를 측정합니다.
+2. 외부 데이터 테스트: 학습 데이터셋이 아닌 새로운 현장 녹음 데이터를 사용하여 모델의 일반화 성능을 확인합니다.
+3. 리포트 생성: 클래스별 정확도와 전체 에러율을 요약하여 출력합니다.
+
+[사용법]
+python ai/scripts/evaluate_audio.py
+
+[주요 설정]
+- EVAL_DATA_PATHS: 평가하고 싶은 오디오 데이터가 있는 폴더 목록
+- MODEL_PATH: 평가 대상 모델 가중치 경로 (ai/weights/audio/best_ast_model)
+"""
 import os
 import torch
 import numpy as np
+import evaluate
 from transformers import ASTForAudioClassification, ASTFeatureExtractor, Trainer, TrainingArguments
 from datasets import Dataset, Audio
-import evaluate
 
 # -----------------------------------------------------------------------------
 # [설정] 평가할 데이터 소스 경로
 # -----------------------------------------------------------------------------
-# 테스트하고 싶은 데이터가 있는 폴더 경로를 리스트에 추가하세요.
 EVAL_DATA_PATHS = [
-    # "C:/Users/301/Downloads/New_Test_Data" 
+    "./ai/data/ast/test"  # 기본 테스트셋 경로로 수정
 ]
 
-MODEL_PATH = "./Ai/weights/audio/best_ast_model"
+MODEL_PATH = "./ai/weights/audio/best_ast_model"
 
 # [설정] 라벨 맵핑 규칙 (학습 때와 동일하게 맞춰야 함)
 LABEL_MAP = {

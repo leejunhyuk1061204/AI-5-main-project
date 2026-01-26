@@ -8,6 +8,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @SpringBootApplication
 @EnableRetry
 @EnableScheduling
+@org.springframework.scheduling.annotation.EnableAsync
 public class HimediaApplication {
 
 	public static void main(String[] args) {
