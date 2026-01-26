@@ -16,6 +16,7 @@ import os
 from ai.app.services.hertz import process_to_16khz
 from ai.app.services.ast_service import run_ast_inference
 from ai.app.services.llm_service import analyze_audio_with_llm
+from ai.app.services.audio_enhancement import denoise_audio
 from ai.app.schemas.audio_schema import AudioResponse, AudioDetail
 import httpx
 import io
@@ -109,9 +110,12 @@ class AudioService:
         from ai.app.services.hertz import convert_bytes_to_16khz
         audio_buffer = convert_bytes_to_16khz(audio_bytes)
         
-        if not audio_buffer:
-            # 변환 실패 시 바로 LLM 시도
-            return await analyze_audio_with_llm(s3_url)
+        if not audio_buffer is None: # audio_buffer is np.ndarray from hertz
+             # [Enhancement] 전처리: 소음 제거 (U-Net Denoising)
+             try:
+                 audio_buffer = await denoise_audio(audio_buffer)
+             except Exception as e:
+                 print(f"[Audio Service] Denoising 실패 (Pass-through): {e}")
 
         # 2. 1차 진단: AST 모델
         ast_result = await run_ast_inference(audio_buffer, ast_model_payload=ast_model)
