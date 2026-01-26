@@ -115,6 +115,10 @@ public class VehicleService {
             vehicle.updateCarNumber(request.getCarNumber());
         }
 
+        if (request.getTotalMileage() != null) {
+            vehicle.updateTotalMileage(request.getTotalMileage());
+        }
+
         if (request.getVin() != null && !request.getVin().isBlank() && !request.getVin().equals(vehicle.getVin())) {
             // VIN 중복 체크
             // [Fix] 암호화된 VIN으로 비교해야 하지만, existsByVinAndDeletedAtIsNull은 DB 값을 기준으로 할 것이므로
