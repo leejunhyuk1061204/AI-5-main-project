@@ -1,9 +1,10 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import Svg, { Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
 import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import tripApi from '../api/tripApi';
 import Header from '../header/Header';
 import BaseScreen from '../components/layout/BaseScreen';
 import { useVehicleStore } from '../store/useVehicleStore';
@@ -11,12 +12,36 @@ import { useVehicleStore } from '../store/useVehicleStore';
 export default function MainPage() {
     const navigation = useNavigation<any>();
     const { primaryVehicle, fetchVehicles } = useVehicleStore();
+    const [safetyScore, setSafetyScore] = useState(95);
 
     useEffect(() => {
         fetchVehicles();
         const unsubscribe = navigation.addListener('focus', fetchVehicles);
         return unsubscribe;
     }, [navigation]);
+
+    useEffect(() => {
+        if (primaryVehicle && primaryVehicle.vehicleId) {
+            calculateSafetyScore(primaryVehicle.vehicleId);
+        }
+    }, [primaryVehicle]);
+
+    const calculateSafetyScore = async (vehicleId: string) => {
+        try {
+            const tripsResponse = await tripApi.getTrips(vehicleId);
+            const trips = Array.isArray(tripsResponse) ? tripsResponse : (tripsResponse as any).data;
+
+            if (trips && trips.length > 0) {
+                const totalScore = trips.reduce((sum: number, trip: any) => sum + (trip.driveScore || 0), 0);
+                const avgScore = Math.round(totalScore / trips.length);
+                setSafetyScore(avgScore);
+            } else {
+                setSafetyScore(95);
+            }
+        } catch (tripError) {
+            console.log('Failed to load trips for score:', tripError);
+        }
+    };
 
     // fallback for display
     const currentVehicle = primaryVehicle || {
@@ -86,7 +111,7 @@ export default function MainPage() {
                     <View className="absolute inset-0 items-center justify-center z-10">
                         <Text className="text-text-muted text-sm font-medium tracking-wide mb-1">종합 점수</Text>
                         <Text className="text-6xl font-bold text-white tracking-tighter">
-                            95<Text className="text-2xl text-text-dim font-normal">점</Text>
+                            {safetyScore}<Text className="text-2xl text-text-dim font-normal">점</Text>
                         </Text>
                         <View className="mt-3 flex-row items-center gap-1.5 px-3 py-1 rounded-full bg-success/10 border border-success/20">
                             <View className="w-1.5 h-1.5 rounded-full bg-success" />
