@@ -32,7 +32,7 @@ export default function SupManage() {
         if (selectedVehicle?.vehicleId) {
             loadConsumables(selectedVehicle.vehicleId);
         } else {
-            setLoading(false);
+            console.log("No vehicleId available in SupManage", selectedVehicle);
         }
     }, [selectedVehicle]);
 
@@ -47,6 +47,7 @@ export default function SupManage() {
             }
         } catch (e) {
             console.error("Failed to load consumables:", e);
+            setConsumables([]);
         } finally {
             setLoading(false);
         }
@@ -78,7 +79,8 @@ export default function SupManage() {
             'SPARK_PLUG': { icon: 'engine', family: 'MaterialCommunityIcons' },
             'BRAKE_FLUID': { icon: 'water-drop', family: 'MaterialIcons' },
             'COOLANT': { icon: 'thermostat', family: 'MaterialIcons' },
-            'TRANSMISSION_FLUID': { icon: 'cog-transfer', family: 'MaterialCommunityIcons' }
+            'TRANSMISSION_FLUID': { icon: 'cog-transfer', family: 'MaterialCommunityIcons' },
+            'TIRES': { icon: 'car-tire-alert', family: 'MaterialCommunityIcons' }
         };
         return map[code] || { icon: 'settings', family: 'MaterialIcons' };
     };
@@ -145,8 +147,19 @@ export default function SupManage() {
                         <ActivityIndicator size="large" color="#0d7ff2" />
                     </View>
                 ) : consumables.length === 0 ? (
-                    <View className="items-center justify-center py-20">
-                        <Text className="text-text-dim">등록된 소모품 정보가 없습니다.</Text>
+                    <View className="items-center justify-center py-20 gap-4">
+                        <View className="w-16 h-16 rounded-full bg-gray-800 items-center justify-center mb-2">
+                            <MaterialIcons name="inventory" size={32} color="#64748b" />
+                        </View>
+                        <Text className="text-gray-400 text-base font-medium text-center">
+                            등록된 소모품 정보가 없습니다.
+                        </Text>
+                        <TouchableOpacity
+                            onPress={() => selectedVehicle?.vehicleId && loadConsumables(selectedVehicle.vehicleId)}
+                            className="px-4 py-2 bg-[#1e293b] rounded-lg border border-white/10 active:bg-[#334155]"
+                        >
+                            <Text className="text-primary font-bold text-sm">다시 불러오기</Text>
+                        </TouchableOpacity>
                     </View>
                 ) : (
                     <View className="gap-4">
@@ -185,6 +198,12 @@ export default function SupManage() {
                                                 >
                                                     {statusAvailable}
                                                 </Text>
+                                                {/* Tire Specific Warning */}
+                                                {(item.item === 'TIRE' || item.item === 'TIRES') && item.unevenWearDetected && (
+                                                    <View className="bg-red-500/20 px-2 py-0.5 rounded mt-1 self-start">
+                                                        <Text className="text-red-400 text-[10px] font-bold">⚠️ 편마모 감지됨</Text>
+                                                    </View>
+                                                )}
                                             </View>
                                         </View>
                                         <Text
@@ -229,7 +248,6 @@ export default function SupManage() {
                     </View>
                 )}
             </ScrollView>
-
             {/* 차량 선택 모달 */}
             <Modal
                 animationType="fade"
@@ -283,6 +301,6 @@ export default function SupManage() {
                     </Pressable>
                 </Pressable>
             </Modal>
-        </SafeAreaView>
+        </SafeAreaView >
     );
 }

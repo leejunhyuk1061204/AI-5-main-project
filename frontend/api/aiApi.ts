@@ -116,6 +116,7 @@ export const diagnoseEngineSound = async (audioUri: string, vehicleId?: string):
 };
 
 /**
+<<<<<<< Updated upstream
  * AI OBD 단독 진단 요청
  * @param vehicleId 차량 ID
  */
@@ -181,6 +182,23 @@ export const replyToDiagnosisSession = async (sessionId: string, replyData: { us
         return response.data.data;
     } catch (error) {
         console.error('[aiApi] Reply failed:', error);
+        throw error;
+    }
+};
+
+/**
+ * AI 종합 진단 (텍스트 기반 수동 진단 포함)
+ */
+export const predictComprehensive = async (data: {
+    vehicleId: string;
+    conversation_history: { role: string; content: string }[];
+    analysis_results?: any;
+}) => {
+    try {
+        const response = await api.post('/api/v1/connect/predict/comprehensive', data);
+        return response.data;
+    } catch (error) {
+        console.error('[aiApi] Comprehensive Prediction failed:', error);
         throw error;
     }
 };

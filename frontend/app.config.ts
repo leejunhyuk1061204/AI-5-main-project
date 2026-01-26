@@ -2,11 +2,11 @@ import { ExpoConfig, ConfigContext } from 'expo/config';
 
 export default ({ config }: ConfigContext): ExpoConfig => ({
     ...config,
-    name: "frontend",
-    slug: "frontend",
+    name: "차봄",
+    slug: "chabom",
     version: "1.0.0",
     orientation: "portrait",
-    icon: "./assets/icon.png",
+    icon: "./assets/Gemini_Generated_Image_v1i03bv1i03bv1i0.png",
     userInterfaceStyle: "dark",
     newArchEnabled: true,
     splash: {
@@ -20,7 +20,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     },
     android: {
         adaptiveIcon: {
-            foregroundImage: "./assets/adaptive-icon.png",
+            foregroundImage: "./assets/adaptive_icon_fixed.png",
             backgroundColor: "#101922"
         },
         edgeToEdgeEnabled: true,
@@ -30,13 +30,16 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
             "android.permission.BLUETOOTH_ADMIN",
             "android.permission.BLUETOOTH_CONNECT",
             "android.permission.CAMERA",
-            "android.permission.RECORD_AUDIO"
+            "android.permission.RECORD_AUDIO",
+            "android.permission.FOREGROUND_SERVICE",
+            "android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE",
+            "android.permission.WAKE_LOCK"
         ],
         package: "com.lee_kang_hyun.frontend",
         softwareKeyboardLayoutMode: "resize"
     },
     web: {
-        favicon: "./assets/favicon.png"
+        favicon: "./assets/Gemini_Generated_Image_v1i03bv1i03bv1i0.png"
     },
     plugins: [
         "expo-font",
@@ -49,6 +52,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
             }
         ],
         "./plugins/withBleManager",
+        "./plugins/withAndroidForegroundService",
+        "./plugins/withNotifeeRepo",
         [
             "expo-build-properties",
             {

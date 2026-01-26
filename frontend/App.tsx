@@ -1,6 +1,6 @@
 import './global.css';
 import { StatusBar } from 'expo-status-bar';
-import { View, Text, Platform, Keyboard } from 'react-native';
+import { View, Text, Platform, Keyboard, AppState } from 'react-native';
 import * as ExpoSplashScreen from 'expo-splash-screen';
 import { useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -15,6 +15,8 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { useVehicleStore } from './store/useVehicleStore';
 import { useUIStore } from './store/useUIStore';
 import { useUserStore } from './store/useUserStore';
+import ObdService from './services/ObdService';
+import BackgroundService from './services/BackgroundService';
 import GlobalAlert from './components/common/GlobalAlert';
 import GlobalDatePicker from './components/common/GlobalDatePicker';
 import BottomNav from './nav/BottomNav';
@@ -152,6 +154,25 @@ export default function App() {
     return () => {
       showListener.remove();
       hideListener.remove();
+    };
+  }, []);
+
+  // 3. Background Service Handling
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', async (nextAppState) => {
+      if (nextAppState === 'background') {
+        // 앱이 백그라운드로 갈 때, OBD가 연결되어 있다면 백그라운드 서비스 시작
+        if (ObdService.isConnected()) {
+          await BackgroundService.start();
+        }
+      } else if (nextAppState === 'active') {
+        // 앱이 포그라운드로 오면 백그라운드 알림 제거 (서비스 중지)
+        await BackgroundService.stop();
+      }
+    });
+
+    return () => {
+      subscription.remove();
     };
   }, []);
 
