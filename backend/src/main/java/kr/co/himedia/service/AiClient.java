@@ -51,7 +51,6 @@ public class AiClient {
         org.springframework.http.client.SimpleClientHttpRequestFactory factory = new org.springframework.http.client.SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(5000);
         factory.setReadTimeout(60000); // 분석 시간이 길어질 수 있으므로 60초 설정
-        factory.setReadTimeout(60000); // 분석 시간이 길어질 수 있으므로 60초 설정
         this.restTemplate = new RestTemplate(factory);
     }
 

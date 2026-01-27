@@ -63,7 +63,7 @@ public class AiController {
      * 데이터 부족 시 AI와 대화형으로 추가 정보를 수집하기 위한 엔드포인트
      */
     @PostMapping(value = "/diagnose/session/{sessionId}/reply", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ApiResponse<DiagnosisResponseDto> replyToSession(
+    public ApiResponse<Object> replyToSession(
             @PathVariable UUID sessionId,
             @RequestPart(value = "image", required = false) org.springframework.web.multipart.MultipartFile image,
             @RequestPart(value = "audio", required = false) org.springframework.web.multipart.MultipartFile audio,

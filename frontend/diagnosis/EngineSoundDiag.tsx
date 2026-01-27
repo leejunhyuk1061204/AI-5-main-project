@@ -9,14 +9,49 @@ import * as DocumentPicker from 'expo-document-picker';
 import { diagnoseEngineSound, replyToDiagnosisSession } from '../api/aiApi';
 import BaseScreen from '../components/layout/BaseScreen';
 
+const RecordingText = () => {
+    const opacity = React.useRef(new Animated.Value(1)).current;
+
+    useEffect(() => {
+        const animation = Animated.loop(
+            Animated.sequence([
+                Animated.timing(opacity, {
+                    toValue: 0.3,
+                    duration: 800,
+                    useNativeDriver: true,
+                }),
+                Animated.timing(opacity, {
+                    toValue: 1,
+                    duration: 800,
+                    useNativeDriver: true,
+                }),
+            ])
+        );
+        animation.start();
+        return () => animation.stop();
+    }, []);
+
+    return (
+        <Animated.Text
+            style={{ opacity }}
+            className="text-sm font-medium text-white"
+        >
+            녹음 중...
+        </Animated.Text>
+    );
+};
+
 export default function EngineSoundDiag() {
     const navigation = useNavigation<any>();
     const route = useRoute<any>();
 
     // State for Diagnosis Flow
-    const [step, setStep] = useState(1); // 1: Record, 2: Analyze, 3: Result
+    const [step, setStep] = useState(1); // 1: Record/Review, 2: Analyze, 3: Result
     const [isRecording, setIsRecording] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
+    const [recordedUri, setRecordedUri] = useState<string | null>(null);
+    const [sound, setSound] = useState<Audio.Sound | null>(null);
+    const [isPlaying, setIsPlaying] = useState(false);
 
     // Recording Ref for thread safety
     const recordingRef = useRef<Audio.Recording | null>(null);
@@ -31,13 +66,54 @@ export default function EngineSoundDiag() {
             if (recordingRef.current) {
                 recordingRef.current.stopAndUnloadAsync();
             }
+            if (sound) {
+                sound.unloadAsync();
+            }
         };
-    }, []);
+    }, [sound]);
+
+    // Animation Effect for Analysis or Recording
+    useEffect(() => {
+        if (step === 2 || isRecording) {
+            const loops = animations.map((anim, i) => {
+                return Animated.loop(
+                    Animated.sequence([
+                        Animated.timing(anim, {
+                            toValue: Math.random() * 0.5 + 0.5, // Random scale between 0.5 and 1.0
+                            duration: 200 + Math.random() * 300,
+                            useNativeDriver: true,
+                        }),
+                        Animated.timing(anim, {
+                            toValue: 1.2, // Scale up to 1.2
+                            duration: 200 + Math.random() * 300,
+                            useNativeDriver: true,
+                        }),
+                        Animated.timing(anim, {
+                            toValue: 1,
+                            duration: 200,
+                            useNativeDriver: true,
+                        })
+                    ])
+                );
+            });
+
+            loops.forEach(loop => loop.start());
+
+            return () => {
+                loops.forEach(loop => loop.stop());
+                // Reset values
+                animations.forEach(anim => {
+                    anim.setValue(1);
+                });
+            };
+        }
+    }, [step, isRecording]);
 
     // Start Recording
     const startRecording = async () => {
         if (isProcessing) return;
         setIsProcessing(true);
+        setRecordedUri(null); // Clear previous recording
 
         try {
             const permission = await Audio.requestPermissionsAsync();
@@ -65,30 +141,66 @@ export default function EngineSoundDiag() {
         }
     };
 
-    // Stop Recording & Analyze
+    // Stop Recording
     const stopRecording = async () => {
         if (!recordingRef.current || isProcessing) return;
         setIsProcessing(true);
         setIsRecording(false);
-        setStep(2);
+        // Do NOT set step 2 here, stay in step 1 to review
 
         try {
             const recording = recordingRef.current;
-            const uri = recording.getURI();
             await recording.stopAndUnloadAsync();
+            const uri = recording.getURI();
 
             if (uri) {
-                analyzeSound(uri);
+                setRecordedUri(uri);
             } else {
                 throw new Error('No URI found');
             }
         } catch (error) {
             console.error(error);
             useAlertStore.getState().showAlert('오류', '녹음 파일을 저장하는 중 문제가 발생했습니다.', 'ERROR');
-            setStep(1);
         } finally {
             recordingRef.current = null;
             setIsProcessing(false);
+        }
+    };
+
+    // Play Recording
+    const playRecording = async () => {
+        if (!recordedUri) return;
+
+        try {
+            if (sound) {
+                await sound.unloadAsync();
+            }
+
+            const { sound: newSound } = await Audio.Sound.createAsync(
+                { uri: recordedUri },
+                { shouldPlay: true }
+            );
+            setSound(newSound);
+            setIsPlaying(true);
+
+            newSound.setOnPlaybackStatusUpdate((status) => {
+                if (status.isLoaded) {
+                    if (status.didJustFinish) {
+                        setIsPlaying(false);
+                    }
+                }
+            });
+        } catch (error) {
+            console.error('Failed to play sound', error);
+            useAlertStore.getState().showAlert('오류', '녹음 파일을 재생할 수 없습니다.', 'ERROR');
+        }
+    };
+
+    // Stop Playback
+    const stopPlayback = async () => {
+        if (sound) {
+            await sound.stopAsync();
+            setIsPlaying(false);
         }
     };
 
@@ -103,8 +215,8 @@ export default function EngineSoundDiag() {
 
             if (!result.canceled && result.assets && result.assets.length > 0) {
                 const uri = result.assets[0].uri;
-                setStep(2);
-                analyzeSound(uri);
+                setRecordedUri(uri);
+                // Stay in step 1 to review
             }
         } catch (err) {
             console.error('Failed to pick document', err);
@@ -112,22 +224,40 @@ export default function EngineSoundDiag() {
         }
     };
 
+    // Confirm & Analyze
+    const handleConfirmAnalysis = () => {
+        if (recordedUri) {
+            setStep(2);
+            analyzeSound(recordedUri);
+        }
+    };
+
     // Analyze Sound via API
     const analyzeSound = async (uri: string) => {
         const sessionId = route.params?.sessionId;
-        const { updateStatus, setVehicleId, currentSessionId } = useAiDiagnosisStore.getState();
+        const vehicleId = route.params?.vehicleId || useAiDiagnosisStore.getState().selectedVehicleId;
 
+        if (!vehicleId) {
+            useAlertStore.getState().showAlert('차량 미선택', '분석을 진행할 차량 정보를 찾을 수 없습니다. 차량을 먼저 선택해 주세요.', 'WARNING');
+            return;
+        }
+
+        executeSoundAnalysis(uri, sessionId || null);
+    };
+
+    const executeSoundAnalysis = async (uri: string, sessionId: string | null) => {
+        const { updateStatus, setVehicleId } = useAiDiagnosisStore.getState();
+        const vehicleId = route.params?.vehicleId || useAiDiagnosisStore.getState().selectedVehicleId;
+        if (!vehicleId) return;
         try {
             let result;
             if (sessionId) {
                 // INTERACTIVE 모드 답변인 경우
-                result = await replyToDiagnosisSession(sessionId, {
+                result = await replyToDiagnosisSession(sessionId as string, {
                     userResponse: "엔진 소리를 녹음했습니다.",
-                    vehicleId: route.params?.vehicleId || '00000000-0000-0000-0000-000000000000'
+                    vehicleId: vehicleId as string
                 }, undefined, uri);
 
-                // 답변 후에는 스토어 상태 업데이트만 하고 폴링은 DiagMain이나 현재 화면의 Effect가 처리
-                // 단, 여기서도 폴링이 필요할 수 있음.
                 useAiDiagnosisStore.setState({ isWaitingForAi: true });
             } else {
                 // 신규 진단인 경우
@@ -139,19 +269,14 @@ export default function EngineSoundDiag() {
                     currentSessionId: null
                 });
 
-                result = await diagnoseEngineSound(uri);
+                result = await diagnoseEngineSound(uri, vehicleId as string);
             }
 
             setDiagnosisResult(result);
 
             if (result.sessionId) {
-                setVehicleId(route.params?.vehicleId || '00000000-0000-0000-0000-000000000000');
+                setVehicleId(vehicleId as string);
                 useAiDiagnosisStore.setState({ currentSessionId: result.sessionId });
-
-                // 즉시 이동하지 않고 Polling을 기다림
-                // 아래 useEffect에서 status 변화를 감지하여 이동 처리
-
-                // 만약 백엔드가 이미 완료된 상태로 리턴했다면(Mock 등) 한 번 업데이트
                 await updateStatus(result.sessionId);
             } else {
                 setStep(3);
@@ -184,7 +309,7 @@ export default function EngineSoundDiag() {
         if (!currentSessionId) return;
 
         if (status === 'INTERACTIVE' || status === 'ACTION_REQUIRED') {
-            navigation.replace('AiDiagChat', {
+            navigation.navigate('AiDiagChat', {
                 sessionId: currentSessionId,
                 vehicleId: route.params?.vehicleId
             });
@@ -197,12 +322,27 @@ export default function EngineSoundDiag() {
 
     const handleRecordToggle = () => {
         if (isProcessing) return;
-        if (!isRecording && !recordingRef.current) {
-            startRecording();
-        } else {
+
+        if (isPlaying) {
+            stopPlayback();
+            return;
+        }
+
+        if (isRecording) {
             stopRecording();
+        } else {
+            // If we have a recording, this button might act as "Re-record" if we want, 
+            // but let's handle that in the render logic to keep it clean.
+            // For now, if not recording and no uri, start.
+            startRecording();
         }
     };
+
+    // Retake handler
+    const handleRetake = () => {
+        setRecordedUri(null);
+        if (isPlaying) stopPlayback();
+    }
 
     const barHeights = [32, 48, 64, 96, 56, 80, 40, 48, 24];
 
@@ -223,7 +363,7 @@ export default function EngineSoundDiag() {
         <BaseScreen
             header={HeaderCustom}
             scrollable={step === 3} // Only result screen might need scrolling
-            padding={true}
+            padding={false}
         >
             <View className="flex-1 items-center justify-center relative">
                 {/* Progress Indicator */}
@@ -247,12 +387,14 @@ export default function EngineSoundDiag() {
                         <View className="items-center mb-12">
                             <Text className="text-2xl font-bold text-white text-center leading-9 mb-3">
                                 {step === 1
-                                    ? (isRecording ? "소리를 녹음 중입니다..." : "엔진 시동을 걸고\n소리를 녹음해 주세요")
+                                    ? (recordedUri
+                                        ? "녹음된 소리를 확인해 주세요"
+                                        : (isRecording ? "소리를 녹음 중입니다..." : "엔진 시동을 걸고\n소리를 녹음해 주세요"))
                                     : "AI가 소리를 분석 중입니다..."}
                             </Text>
                             <Text className="text-sm text-slate-400 text-center leading-5">
                                 {step === 1
-                                    ? "정확한 분석을 위해 주변 소음을\n최소화해 주시기 바랍니다."
+                                    ? (recordedUri ? "재생 버튼을 눌러 소리를 확인할 수 있습니다.\n문제가 없다면 진단 시작 버튼을 눌러주세요." : "정확한 분석을 위해 주변 소음을\n최소화해 주시기 바랍니다.")
                                     : "잠시만 기다려주세요\n엔진과 부품의 상태를 정밀 진단하고 있습니다."}
                             </Text>
                         </View>
@@ -265,10 +407,10 @@ export default function EngineSoundDiag() {
                                         style={{
                                             width: 6,
                                             height: barHeights[index],
-                                            backgroundColor: step === 2 ? '#a855f7' : '#0d7ff2',
+                                            backgroundColor: (step === 2 || isPlaying || isRecording) ? '#a855f7' : '#0d7ff2',
                                             borderRadius: 9999,
                                             transform: [{ scaleY: anim }],
-                                            shadowColor: step === 2 ? '#a855f7' : '#0d7ff2',
+                                            shadowColor: (step === 2 || isPlaying || isRecording) ? '#a855f7' : '#0d7ff2',
                                             shadowOffset: { width: 0, height: 0 },
                                             shadowOpacity: 0.6,
                                             shadowRadius: 15,
@@ -280,49 +422,79 @@ export default function EngineSoundDiag() {
                         </View>
 
                         {step === 1 && (
-                            <View className="w-full max-w-sm bg-[#1a2430] rounded-xl p-4 flex-row items-center gap-4 border border-slate-800">
-                                <View className="w-12 h-12 rounded-lg bg-[#0d7ff2]/10 items-center justify-center">
-                                    <MaterialIcons name="straighten" size={24} color="#0d7ff2" />
-                                </View>
-                                <View className="flex-1">
-                                    <Text className="text-sm font-semibold text-white">거리 유지</Text>
-                                    <Text className="text-xs text-slate-400 mt-0.5">보닛에서 약 30cm 거리를 유지해 주세요</Text>
-                                </View>
-                            </View>
-                        )}
+                            <View className="w-full flex-col items-center gap-8">
+                                {/* Recording/Playback Controls */}
+                                {!recordedUri ? (
+                                    /* Recording State */
+                                    <View className="items-center gap-8 w-full flex-row justify-center mt-4">
+                                        <View className="items-center gap-4">
+                                            <TouchableOpacity
+                                                onPress={handleRecordToggle}
+                                                className={`relative items-center justify-center w-20 h-20 rounded-full shadow-lg active:scale-95 transition-all ${isRecording ? 'bg-red-500 shadow-red-500/40' : 'bg-[#0d7ff2] shadow-blue-500/40'}`}
+                                            >
+                                                <MaterialIcons
+                                                    name={isRecording ? "stop" : "mic"}
+                                                    size={32}
+                                                    color="white"
+                                                />
+                                            </TouchableOpacity>
+                                            {isRecording ? (
+                                                <RecordingText />
+                                            ) : (
+                                                <Text className="text-sm font-medium text-slate-500">
+                                                    녹음 시작
+                                                </Text>
+                                            )}
+                                        </View>
 
-                        {step === 1 && (
-                            <View className="mt-12 items-center gap-8 w-full flex-row justify-center">
-                                <View className="items-center gap-4">
-                                    <TouchableOpacity
-                                        onPress={handleRecordToggle}
-                                        className={`relative items-center justify-center w-20 h-20 rounded-full shadow-lg active:scale-95 transition-all ${isRecording ? 'bg-red-500 shadow-red-500/40' : 'bg-[#0d7ff2] shadow-blue-500/40'}`}
-                                    >
-                                        <MaterialIcons
-                                            name={isRecording ? "stop" : "mic"}
-                                            size={32}
-                                            color="white"
-                                        />
-                                    </TouchableOpacity>
-                                    <Text className={`text-sm font-medium ${isRecording ? 'text-red-400 animate-pulse' : 'text-slate-500'}`}>
-                                        {isRecording ? "녹음 중..." : "녹음 시작"}
-                                    </Text>
-                                </View>
-
-                                {!isRecording && (
-                                    <View className="items-center gap-4">
+                                        {!isRecording && (
+                                            <View className="items-center gap-4">
+                                                <TouchableOpacity
+                                                    onPress={pickAudioFile}
+                                                    disabled={isProcessing}
+                                                    className="relative items-center justify-center w-20 h-20 rounded-full bg-[#1a2430] border border-slate-700 shadow-lg active:scale-95 transition-all"
+                                                >
+                                                    <MaterialIcons
+                                                        name="file-present"
+                                                        size={32}
+                                                        color="white"
+                                                    />
+                                                </TouchableOpacity>
+                                                <Text className="text-sm font-medium text-slate-500">파일 선택</Text>
+                                            </View>
+                                        )}
+                                    </View>
+                                ) : (
+                                    /* Review State */
+                                    <View className="w-full items-center">
+                                        {/* Play/Pause Button - Centered */}
                                         <TouchableOpacity
-                                            onPress={pickAudioFile}
-                                            disabled={isProcessing}
-                                            className="relative items-center justify-center w-20 h-20 rounded-full bg-[#1a2430] border border-slate-700 shadow-lg active:scale-95 transition-all"
+                                            onPress={isPlaying ? stopPlayback : playRecording}
+                                            className="w-24 h-24 rounded-full bg-[#0d7ff2] items-center justify-center shadow-lg shadow-blue-500/30 mb-10"
                                         >
-                                            <MaterialIcons
-                                                name="file-present"
-                                                size={32}
-                                                color="white"
-                                            />
+                                            <MaterialIcons name={isPlaying ? "pause" : "play-arrow"} size={48} color="white" style={{ marginLeft: isPlaying ? 0 : 4 }} />
                                         </TouchableOpacity>
-                                        <Text className="text-sm font-medium text-slate-500">파일 선택</Text>
+
+                                        {/* Action Buttons Row */}
+                                        <View className="w-full px-4 mb-4">
+                                            <View className="flex-row items-center gap-3 w-full">
+                                                {/* Retake */}
+                                                <TouchableOpacity
+                                                    onPress={handleRetake}
+                                                    className="flex-1 h-14 bg-[#1e293b] rounded-xl items-center justify-center border border-slate-600 active:bg-slate-700"
+                                                >
+                                                    <Text className="text-slate-300 font-bold text-base">재녹음</Text>
+                                                </TouchableOpacity>
+
+                                                {/* Analyze */}
+                                                <TouchableOpacity
+                                                    onPress={handleConfirmAnalysis}
+                                                    className="flex-1 h-14 bg-[#0d7ff2] rounded-xl items-center justify-center border border-[#0d7ff2] active:bg-blue-600"
+                                                >
+                                                    <Text className="text-white font-bold text-base">진단 시작</Text>
+                                                </TouchableOpacity>
+                                            </View>
+                                        </View>
                                     </View>
                                 )}
                             </View>
@@ -334,7 +506,7 @@ export default function EngineSoundDiag() {
                 {step === 3 && (
                     <View className="w-full items-center py-4">
                         <View className="w-32 h-32 rounded-full border-4 border-[#0d7ff2] items-center justify-center mb-6 shadow-[0_0_30px_rgba(13,127,242,0.3)] bg-[#0d7ff2]/10">
-                            <MaterialIcons name="check-circle" size={64} color="#0d7ff2" />
+                            <ActivityIndicator size="small" color="#0d7ff2" />
                         </View>
 
                         <Text className="text-3xl font-bold text-white mb-2">

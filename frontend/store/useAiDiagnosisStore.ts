@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { getDiagnosisSessionStatus, replyToDiagnosisSession, diagnoseObdOnly } from '../api/aiApi';
 
-export type DiagMode = 'IDLE' | 'PROCESSING' | 'INTERACTIVE' | 'REPORT' | 'ACTION_REQUIRED';
+export type DiagMode = 'IDLE' | 'PROCESSING' | 'REPLY_PROCESSING' | 'INTERACTIVE' | 'REPORT' | 'ACTION_REQUIRED';
 
 interface AiDiagnosisState {
     // Data State
@@ -10,6 +10,7 @@ interface AiDiagnosisState {
     status: DiagMode;
     messages: any[];
     diagResult: any | null;
+    requestedAction: string | null;
     loadingMessage: string;
     isWaitingForAi: boolean;
 
@@ -28,13 +29,14 @@ export const useAiDiagnosisStore = create<AiDiagnosisState>((set, get) => ({
     status: 'IDLE',
     messages: [],
     diagResult: null,
+    requestedAction: null,
     loadingMessage: '차량 진단 중...',
     isWaitingForAi: false,
 
     setVehicleId: (id) => set({ selectedVehicleId: id }),
 
     startDiagnosis: async (vehicleId) => {
-        set({ status: 'PROCESSING', loadingMessage: 'OBD 스캔을 시작합니다...', messages: [], diagResult: null });
+        set({ status: 'PROCESSING', loadingMessage: 'OBD 스캔을 시작합니다...', messages: [], diagResult: null, requestedAction: null });
         try {
             const response = await diagnoseObdOnly(vehicleId);
             const sessionId = response?.data?.sessionId || response?.sessionId;
@@ -57,7 +59,9 @@ export const useAiDiagnosisStore = create<AiDiagnosisState>((set, get) => ({
         // 즉각적인 UI 반영
         set(state => ({
             messages: [...state.messages, { role: 'user', content: reply }],
-            isWaitingForAi: true
+            isWaitingForAi: true,
+            status: 'REPLY_PROCESSING', // Explicitly switch to processing mode
+            requestedAction: null // 답변을 보냈으므로 요청된 액션 초기화
         }));
 
         try {
@@ -68,7 +72,7 @@ export const useAiDiagnosisStore = create<AiDiagnosisState>((set, get) => ({
             // 이후 updateStatus 폴링에서 결과를 처리함
         } catch (error) {
             console.error("Send Reply Error:", error);
-            set({ isWaitingForAi: false });
+            set({ isWaitingForAi: false, status: 'ACTION_REQUIRED' });
         }
     },
 
@@ -76,6 +80,8 @@ export const useAiDiagnosisStore = create<AiDiagnosisState>((set, get) => ({
         try {
             const statusData = await getDiagnosisSessionStatus(sessionId);
             if (!statusData) return;
+
+            console.log("[useAiDiagnosisStore] Polling Status:", statusData.status, "Action:", statusData.requestedAction);
 
             // 메시지 동기화
             let newMessages = statusData.messages || [];
@@ -93,7 +99,7 @@ export const useAiDiagnosisStore = create<AiDiagnosisState>((set, get) => ({
             const currentStatus = (statusData.status || '').toUpperCase();
             let mode: DiagMode = 'PROCESSING';
 
-            if (currentStatus === 'INTERACTIVE' || currentStatus === 'ACTION_REQUIRED') {
+            if (currentStatus === 'INTERACTIVE' || currentStatus === 'ACTION_REQUIRED' || currentStatus === 'REPLY_PROCESSING') {
                 mode = currentStatus as DiagMode;
             } else if (['REPORT', 'DONE', 'COMPLETED', 'SUCCESS'].includes(currentStatus)) {
                 mode = 'REPORT';
@@ -102,7 +108,8 @@ export const useAiDiagnosisStore = create<AiDiagnosisState>((set, get) => ({
             set({
                 messages: newMessages,
                 status: mode,
-                isWaitingForAi: false,
+                isWaitingForAi: mode === 'PROCESSING' || mode === 'REPLY_PROCESSING',
+                requestedAction: statusData.requestedAction || null,
                 diagResult: mode === 'REPORT' ? (statusData.report || statusData.result || statusData) : null,
                 loadingMessage: statusData.progressMessage || '분석 중...'
             });
@@ -121,6 +128,7 @@ export const useAiDiagnosisStore = create<AiDiagnosisState>((set, get) => ({
         status: 'IDLE',
         messages: [],
         diagResult: null,
+        requestedAction: null,
         isWaitingForAi: false,
         loadingMessage: '차량 진단 중...'
     })

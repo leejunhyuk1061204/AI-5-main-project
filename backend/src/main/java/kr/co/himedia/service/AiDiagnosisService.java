@@ -1,6 +1,7 @@
 package kr.co.himedia.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import kr.co.himedia.domain.DiagAction;
 import kr.co.himedia.dto.ai.*;
 import kr.co.himedia.entity.*;
 import kr.co.himedia.entity.DiagSession.DiagStatus;
@@ -199,6 +200,7 @@ public class AiDiagnosisService {
         DiagnosisTaskMessage message = DiagnosisTaskMessage.builder()
                 .sessionId(session.getDiagSessionId())
                 .requestDto(requestDto)
+                .messageType(DiagnosisTaskMessage.MessageType.INITIAL)
                 .imageFilename(imageFile)
                 .audioFilename(audioFile)
                 .build();
@@ -226,6 +228,7 @@ public class AiDiagnosisService {
         DiagnosisTaskMessage message = DiagnosisTaskMessage.builder()
                 .sessionId(session.getDiagSessionId())
                 .requestDto(requestDto)
+                .messageType(DiagnosisTaskMessage.MessageType.INITIAL)
                 .build();
 
         rabbitTemplate.convertAndSend(kr.co.himedia.config.RabbitConfig.EXCHANGE_NAME,
@@ -253,125 +256,247 @@ public class AiDiagnosisService {
      */
     public void processUnifiedFlow(DiagnosisTaskMessage taskMessage) {
         UUID sessionId = taskMessage.getSessionId();
-        UnifiedDiagnosisRequestDto requestDto = taskMessage.getRequestDto();
-        String imageFile = taskMessage.getImageFilename();
-        String audioFile = taskMessage.getAudioFilename();
-
         DiagSession session = diagSessionRepository.findById(sessionId)
                 .orElseThrow(() -> new RuntimeException("Session not found: " + sessionId));
 
         try {
-            session.updateStatus(DiagStatus.PROCESSING, "[Step 1/5] 병렬 분석 시작 (이미지/음성/OBD)");
-            diagSessionRepository.save(session);
-            Thread.sleep(2000); // Polling Test Delay
-
-            // 1. 병렬 분석 태스크 생성
-            CompletableFuture<Map<String, Object>> visualTask = CompletableFuture.supplyAsync(() -> {
-                if (imageFile != null) {
-                    return aiClient.callVisualAnalysis(imageFile);
-                }
-                return requestDto.getVisualAnalysis();
-            });
-
-            CompletableFuture<Map<String, Object>> audioTask = CompletableFuture.supplyAsync(() -> {
-                if (audioFile != null) {
-                    return aiClient.callAudioAnalysis(audioFile);
-                }
-                return requestDto.getAudioAnalysis();
-            });
-
-            CompletableFuture<Map<String, Object>> anomalyTask = CompletableFuture.supplyAsync(() -> {
-                return performAnomalyDetection(requestDto);
-            });
-
-            // 모든 결과 대기 (80초 타임아웃 - 개별 재시도는 AiClient에서 처리)
-            try {
-                CompletableFuture.allOf(visualTask, audioTask, anomalyTask).get(80, TimeUnit.SECONDS);
-            } catch (Exception e) {
-                log.error("[Timeout/Error] Parallel analysis failed or timed out", e);
-                throw new RuntimeException("병렬 분석 작업 중 타임아웃 또는 에러 발생", e);
-            }
-
-            Map<String, Object> visualResult = visualTask.join();
-            Map<String, Object> audioResult = audioTask.join();
-            Map<String, Object> anomalyResult = anomalyTask.join();
-
-            // 2. 통합 요청 객체 구축 및 RAG 검색
-            log.info("[Step 2/5] 분석 완료, 컨텍스트 취합 시작 [Session: {}]", sessionId);
-            session.updateStatus(DiagStatus.PROCESSING, "[Step 2/5] 분석 완료, 컨텍스트 취합 중...");
-            diagSessionRepository.save(session);
-            Thread.sleep(2000); // Polling Test Delay
-
-            AiUnifiedRequestDto.AiUnifiedRequestDtoBuilder aiRequestBuilder = AiUnifiedRequestDto.builder()
-                    .vehicleId(requestDto.getVehicleId())
-                    .visualAnalysis(visualResult)
-                    .audioAnalysis(audioResult)
-                    .anomalyAnalysis(anomalyResult);
-
-            log.info("[Step 2/5] 차량 및 소모품 정보 조회 시작 [Vehicle: {}]", requestDto.getVehicleId());
-            populateVehicleAndConsumableInfo(aiRequestBuilder, requestDto.getVehicleId());
-            log.info("[Step 2/5] 차량 및 소모품 정보 조회 완료");
-
-            StringBuilder searchQuery = new StringBuilder();
-            if (visualResult != null && visualResult.containsKey("category")) {
-                searchQuery.append(visualResult.get("category")).append(" ");
-            }
-            if (audioResult != null && audioResult.containsKey("status")) {
-                searchQuery.append(audioResult.get("status")).append(" ");
-            }
-            if (anomalyResult != null && Boolean.TRUE.equals(anomalyResult.get("is_anomaly"))) {
-                @SuppressWarnings("unchecked")
-                List<String> factors = (List<String>) anomalyResult.get("contributing_factors");
-                if (factors != null && !factors.isEmpty()) {
-                    searchQuery.append(String.join(" ", factors)).append(" 이상징후");
-                }
-            }
-
-            String query = searchQuery.toString().trim();
-            if (!query.isEmpty()) {
-                log.info("[Step 3/5] RAG 지식 검색 시작 (Query: '{}')", query);
-                session.updateStatus(DiagStatus.PROCESSING, "[Step 3/5] RAG 지식 검색 수행 중");
-                diagSessionRepository.save(session);
-                Thread.sleep(2000); // Polling Test Delay
-                List<String> knowledgeResults = knowledgeService.searchKnowledge(query, 3);
-                aiRequestBuilder.knowledgeData(knowledgeResults);
-                log.info("[Step 3/5] RAG 검색 완료");
+            // [Branch] Initial Diagnosis vs Reply Diagnosis
+            if (taskMessage.getMessageType() == DiagnosisTaskMessage.MessageType.REPLY) {
+                processReplyPhase(taskMessage, session);
             } else {
-                log.info("[Step 3/5] RAG 검색 스킵 (검색어 없음)");
+                processInitialPhase(taskMessage, session);
             }
-
-            // 3. 최종 통합 진단 요청
-            AiUnifiedRequestDto aiRequest = aiRequestBuilder.build();
-            log.info("[Step 4/5] AI 서버 통합 진단 요청 중 [Session: {}]", sessionId);
-            session.updateStatus(DiagStatus.PROCESSING, "[Step 4/5] AI 서버 최종 통합 진단 중");
-            diagSessionRepository.save(session);
-            Thread.sleep(2000); // Polling Test Delay
-
-            @SuppressWarnings("unchecked")
-            Map<String, Object> finalResponse = aiClient
-                    .callComprehensiveDiagnosis(objectMapper.convertValue(aiRequest, Map.class));
-            log.info("[Step 4/5] AI 서버 통합 진단 결과 수신 완료");
-
-            // 4. 결과 저장 및 상태 결정
-            DiagStatus finalStatus = saveDiagnosisResult(sessionId, finalResponse, imageFile, audioFile, visualResult,
-                    audioResult);
-            session.updateStatus(finalStatus, finalStatus == DiagStatus.DONE ? "[Step 5/5] 진단 완료 및 저장 성공"
-                    : "[Step 5/5] 추가 정보 요청됨 (ACTION_REQUIRED)");
-            diagSessionRepository.save(session);
-
-            log.info("[Step 5/5] AI 통합 진단 최종 단계 완료 [Session: {}, Mode: {}]", sessionId,
-                    finalResponse.get("response_mode"));
-
-            // 5. FCM 알림 발송 (진단 완료 또는 추가 요청)
-            String responseMode = (String) finalResponse.getOrDefault("response_mode", "REPORT");
-            sendDiagnosisNotification(requestDto.getVehicleId(), sessionId, responseMode);
-
         } catch (Exception e) {
             log.error("Unified Diagnosis Pipeline Failed [Session: {}]", sessionId, e);
             session.updateStatus(DiagStatus.FAILED, "진단 실패: " + e.getMessage());
             diagSessionRepository.save(session);
             throw new RuntimeException("진단 파이프라인 오류", e);
         }
+    }
+
+    private void processInitialPhase(DiagnosisTaskMessage taskMessage, DiagSession session) throws Exception {
+        UUID sessionId = session.getDiagSessionId();
+        UnifiedDiagnosisRequestDto requestDto = taskMessage.getRequestDto();
+        String imageFile = taskMessage.getImageFilename();
+        String audioFile = taskMessage.getAudioFilename();
+
+        // 1. 병렬 분석 태스크 생성
+        CompletableFuture<Map<String, Object>> visualTask = CompletableFuture.supplyAsync(() -> {
+            if (imageFile != null) {
+                return aiClient.callVisualAnalysis(imageFile);
+            }
+            return requestDto.getVisualAnalysis();
+        });
+
+        CompletableFuture<Map<String, Object>> audioTask = CompletableFuture.supplyAsync(() -> {
+            if (audioFile != null) {
+                return aiClient.callAudioAnalysis(audioFile);
+            }
+            return requestDto.getAudioAnalysis();
+        });
+
+        CompletableFuture<Map<String, Object>> anomalyTask = CompletableFuture.supplyAsync(() -> {
+            return performAnomalyDetection(requestDto);
+        });
+
+        // 모든 결과 대기
+        CompletableFuture.allOf(visualTask, audioTask, anomalyTask).get(80, TimeUnit.SECONDS);
+
+        Map<String, Object> visualResult = visualTask.join();
+        Map<String, Object> audioResult = audioTask.join();
+        Map<String, Object> anomalyResult = anomalyTask.join();
+
+        // 2. 통합 요청 객체 구축 및 RAG 검색
+        AiUnifiedRequestDto.AiUnifiedRequestDtoBuilder aiRequestBuilder = AiUnifiedRequestDto.builder()
+                .visualAnalysis(visualResult)
+                .audioAnalysis(audioResult)
+                .anomalyAnalysis(anomalyResult);
+
+        populateVehicleAndConsumableInfo(aiRequestBuilder, requestDto.getVehicleId());
+
+        String query = buildSearchQuery(visualResult, audioResult, anomalyResult);
+        if (!query.isEmpty()) {
+            List<String> knowledgeResults = knowledgeService.searchKnowledge(query, 3);
+            aiRequestBuilder.knowledgeData(knowledgeResults);
+        }
+
+        // 3. 최종 통합 진단 요청 (Phase 1: 6대 항목)
+        AiUnifiedRequestDto aiRequest = aiRequestBuilder.build();
+        @SuppressWarnings("unchecked")
+        Map<String, Object> finalResponse = aiClient
+                .callComprehensiveDiagnosis(objectMapper.convertValue(aiRequest, Map.class));
+
+        // 4. 결과 저장 및 상태 결정
+        DiagStatus finalStatus = saveDiagnosisResult(sessionId, finalResponse, imageFile, audioFile, visualResult,
+                audioResult);
+        session.updateStatus(finalStatus, finalStatus == DiagStatus.DONE ? "[Step 5/5] 진단 완료 및 저장 성공"
+                : "[Step 5/5] 추가 정보 요청됨 (ACTION_REQUIRED)");
+        diagSessionRepository.save(session);
+
+        // 5. 알림 발송
+        String responseMode = (String) finalResponse.getOrDefault("response_mode", "REPORT");
+        sendDiagnosisNotification(requestDto.getVehicleId(), sessionId, responseMode);
+    }
+
+    private void processReplyPhase(DiagnosisTaskMessage taskMessage, DiagSession session) throws Exception {
+        UUID sessionId = session.getDiagSessionId();
+        ReplyRequestDto replyDto = taskMessage.getReplyRequest();
+        String imageFile = taskMessage.getImageFilename();
+        String audioFile = taskMessage.getAudioFilename();
+
+        session.updateStatus(DiagStatus.REPLY_PROCESSING, "[Chat] AI가 답변을 분석 중입니다...");
+        diagSessionRepository.save(session);
+
+        DiagResult existingResult = diagResultRepository.findByDiagSessionId(sessionId)
+                .orElseThrow(() -> new RuntimeException("DiagResult not found for session: " + sessionId));
+
+        // 1. 기존 대화 이력 파싱
+        List<Map<String, Object>> conversation = new ArrayList<>();
+        if (existingResult.getInteractiveJson() != null) {
+            Map<String, Object> interactiveData = objectMapper.readValue(existingResult.getInteractiveJson(),
+                    Map.class);
+            List<Map<String, Object>> existingConv = (List<Map<String, Object>>) interactiveData.get("conversation");
+            if (existingConv != null)
+                conversation.addAll(existingConv);
+
+            String aiMessage = (String) interactiveData.get("message");
+            if (aiMessage != null) {
+                Map<String, Object> aiTurn = new HashMap<>();
+                aiTurn.put("role", "ai");
+                aiTurn.put("content", aiMessage);
+                aiTurn.put("timestamp", java.time.LocalDateTime.now().toString());
+                conversation.add(aiTurn);
+            }
+        }
+
+        // 2. 추가 미디어 분석 (YOLO/AST)
+        Map<String, Object> visualResult = null;
+        if (imageFile != null) {
+            visualResult = aiClient.callVisualAnalysis(imageFile);
+            saveEvidences(sessionId, imageFile, null, visualResult, null);
+        }
+
+        Map<String, Object> audioResult = null;
+        if (audioFile != null) {
+            audioResult = aiClient.callAudioAnalysis(audioFile);
+            saveEvidences(sessionId, null, audioFile, null, audioResult);
+        }
+
+        // 3. 사용자 답변 및 미디어 분석 결과 합쳐서 이력 추가
+        Map<String, Object> userTurn = new HashMap<>();
+        userTurn.put("role", "user");
+        userTurn.put("content", replyDto != null ? replyDto.getUserResponse() : "[Media Received]");
+        userTurn.put("timestamp", java.time.LocalDateTime.now().toString());
+
+        List<Map<String, Object>> mediaRefs = new ArrayList<>();
+        if (visualResult != null) {
+            mediaRefs.add(Map.of("type", "IMAGE", "analysis", visualResult.get("category")));
+        }
+        if (audioResult != null) {
+            mediaRefs.add(Map.of("type", "AUDIO", "analysis", audioResult.get("status")));
+        }
+        if (!mediaRefs.isEmpty()) {
+            userTurn.put("media_refs", mediaRefs);
+        }
+        conversation.add(userTurn);
+
+        // 4. GPT 요청 (Phase 2: 7대 항목)
+        AiUnifiedRequestDto.AiUnifiedRequestDtoBuilder aiRequestBuilder = AiUnifiedRequestDto.builder()
+                .conversationHistory(conversation);
+
+        populateVehicleAndConsumableInfo(aiRequestBuilder, session.getVehiclesId());
+        // 필요 시 신규 분석 결과도 최상위에 포함
+        if (visualResult != null)
+            aiRequestBuilder.visualAnalysis(visualResult);
+        if (audioResult != null)
+            aiRequestBuilder.audioAnalysis(audioResult);
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> aiResponse = aiClient
+                .callComprehensiveDiagnosis(objectMapper.convertValue(aiRequestBuilder.build(), Map.class));
+
+        // 5. 결과 저장 및 상태 업데이트
+        long userTurnCount = conversation.stream().filter(t -> "user".equals(t.get("role"))).count();
+        log.info("[Reply] User Turn Count: {}", userTurnCount);
+
+        String effectiveMode = updateReplyResult(sessionId, aiResponse, conversation, userTurnCount, existingResult);
+
+        DiagStatus finalStatus = "REPORT".equalsIgnoreCase(effectiveMode) ? DiagStatus.DONE
+                : DiagStatus.ACTION_REQUIRED;
+        session.updateStatus(finalStatus, finalStatus == DiagStatus.DONE ? "최종 진단 리포트가 생성되었습니다." : "추가 정보를 기다리고 있습니다.");
+        diagSessionRepository.save(session);
+
+        // 6. 알림 발송
+        sendDiagnosisNotification(session.getVehiclesId(), sessionId, effectiveMode);
+    }
+
+    private String buildSearchQuery(Map<String, Object> visualResult, Map<String, Object> audioResult,
+            Map<String, Object> anomalyResult) {
+        StringBuilder searchQuery = new StringBuilder();
+        if (visualResult != null && visualResult.containsKey("category")) {
+            searchQuery.append(visualResult.get("category")).append(" ");
+        }
+        if (audioResult != null && audioResult.containsKey("status")) {
+            searchQuery.append(audioResult.get("status")).append(" ");
+        }
+        if (anomalyResult != null && Boolean.TRUE.equals(anomalyResult.get("is_anomaly"))) {
+            @SuppressWarnings("unchecked")
+            List<String> factors = (List<String>) anomalyResult.get("contributing_factors");
+            if (factors != null && !factors.isEmpty()) {
+                searchQuery.append(String.join(" ", factors)).append(" 이상징후");
+            }
+        }
+        return searchQuery.toString().trim();
+    }
+
+    private String updateReplyResult(UUID sessionId, Map<String, Object> aiResponse,
+            List<Map<String, Object>> conversation, long userTurnCount, DiagResult existingResult) throws Exception {
+        String mode = (String) aiResponse.getOrDefault("response_mode", "REPORT");
+        boolean forceReport = userTurnCount >= 3 && "INTERACTIVE".equalsIgnoreCase(mode);
+
+        if (forceReport) {
+            log.info("[Reply] Force switching to REPORT mode (Turns: {})", userTurnCount);
+            mode = "REPORT";
+        }
+
+        diagResultRepository.delete(existingResult);
+        DiagResult.DiagResultBuilder resultBuilder = DiagResult.builder()
+                .diagSessionId(sessionId)
+                .responseMode(mode)
+                .confidenceLevel((String) aiResponse.getOrDefault("confidence_level", "LOW"))
+                .summary((String) aiResponse.getOrDefault("summary", ""));
+
+        if (aiResponse.containsKey("requested_actions") && aiResponse.get("requested_actions") != null) {
+            @SuppressWarnings("unchecked")
+            List<String> actions = (List<String>) aiResponse.get("requested_actions");
+            if (!actions.isEmpty()) {
+                try {
+                    resultBuilder.requestedAction(DiagAction.valueOf(actions.get(0).toUpperCase()));
+                } catch (Exception e) {
+                    log.warn("[Reply] Unknown action requested: {}", actions.get(0));
+                }
+            }
+        }
+
+        if ("REPORT".equalsIgnoreCase(mode)) {
+            // ... (기존 REPORT 저장 로직과 동일하거나 간소화)
+            Map<String, Object> reportData = (Map<String, Object>) aiResponse.get("report_data");
+            resultBuilder
+                    .finalReport(reportData != null ? (String) reportData.get("final_guide") : "원인 파악 중 오류가 발생했습니다.");
+            resultBuilder.detectedIssues(objectMapper
+                    .writeValueAsString(reportData != null ? reportData.get("suspected_causes") : List.of()));
+            resultBuilder.riskLevel(DiagResult.RiskLevel.LOW);
+        } else {
+            Map<String, Object> interactiveData = (Map<String, Object>) aiResponse.get("interactive_data");
+            if (interactiveData == null) {
+                interactiveData = new HashMap<>(); // Safeguard
+            }
+            interactiveData.put("conversation", conversation);
+            resultBuilder.interactiveJson(objectMapper.writeValueAsString(interactiveData));
+        }
+        diagResultRepository.save(resultBuilder.build());
+
+        return mode;
     }
 
     private void sendDiagnosisNotification(UUID vehicleId, UUID sessionId, String responseMode) {
@@ -421,9 +546,9 @@ public class AiDiagnosisService {
                 timeSeries = logs.stream().limit(100).map(l -> {
                     Map<String, Object> point = new HashMap<>();
                     point.put("rpm", l.getRpm());
-                    point.put("load", l.getEngineLoad() != null ? l.getEngineLoad() : 0.0);
-                    point.put("coolant", l.getCoolantTemp() != null ? l.getCoolantTemp() : 0.0);
-                    point.put("voltage", l.getVoltage() != null ? l.getVoltage() : 12.0); // Fixed: Use real voltage
+                    point.put("load", l.getEngineLoad());
+                    point.put("coolant", l.getCoolantTemp());
+                    point.put("voltage", l.getVoltage());
                     return point;
                 }).collect(Collectors.toList());
             }
@@ -471,6 +596,17 @@ public class AiDiagnosisService {
 
                 return DiagStatus.DONE;
             } else {
+                if (response.containsKey("requested_actions") && response.get("requested_actions") != null) {
+                    @SuppressWarnings("unchecked")
+                    List<String> actions = (List<String>) response.get("requested_actions");
+                    if (!actions.isEmpty()) {
+                        try {
+                            resultBuilder.requestedAction(DiagAction.valueOf(actions.get(0).toUpperCase()));
+                        } catch (Exception e) {
+                            log.warn("[Diagnosis] Unknown action requested: {}", actions.get(0));
+                        }
+                    }
+                }
                 resultBuilder.interactiveJson(objectMapper.writeValueAsString(response.get("interactive_data")));
                 diagResultRepository.save(resultBuilder.build());
                 return DiagStatus.ACTION_REQUIRED;
@@ -544,6 +680,9 @@ public class AiDiagnosisService {
                 if (result.getInteractiveJson() != null) {
                     builder.interactiveData(objectMapper.readValue(result.getInteractiveJson(), Map.class));
                 }
+                if (result.getRequestedAction() != null) {
+                    builder.requestedAction(result.getRequestedAction());
+                }
             } catch (Exception e) {
                 log.error("Failed to parse JSON fields in DiagResult", e);
             }
@@ -600,30 +739,13 @@ public class AiDiagnosisService {
 
     // calculateRemainingLife 제거 (VehicleConsumable.currentLife 사용)
 
-    /**
-     * INTERACTIVE 모드에서 사용자 답변을 받아 AI 서버에 동기 재진단 요청
-     * 대화 이력을 누적하여 최종 REPORT 생성까지 반복 가능
-     */
     @Transactional
-    public DiagnosisResponseDto replyToSession(UUID sessionId, ReplyRequestDto replyDto,
+    public Map<String, Object> replyToSession(UUID sessionId, ReplyRequestDto replyDto,
             org.springframework.web.multipart.MultipartFile additionalImage,
             org.springframework.web.multipart.MultipartFile additionalAudio) {
 
-        log.info("[Reply] 세션 {} 에 대한 사용자 답변 처리 시작", sessionId);
+        log.info("[Reply] 세션 {} 에 대한 비동기 답변 처리 접수", sessionId);
 
-        // 0. 파라미터 유효성 검사 (최소 하나는 있어야 함)
-        boolean hasText = replyDto != null && replyDto.getUserResponse() != null
-                && !replyDto.getUserResponse().trim().isEmpty();
-        boolean hasImage = additionalImage != null && !additionalImage.isEmpty();
-        boolean hasAudio = additionalAudio != null && !additionalAudio.isEmpty();
-
-        if (!hasText && !hasImage && !hasAudio) {
-            throw new kr.co.himedia.common.exception.BaseException(
-                    kr.co.himedia.common.exception.ErrorCode.INVALID_INPUT_VALUE,
-                    "답변 텍스트, 사진, 또는 오디오 중 최소 하나는 제공되어야 합니다.");
-        }
-
-        // 1. 기존 세션 및 결과 조회
         DiagSession session = diagSessionRepository.findById(sessionId)
                 .orElseThrow(() -> new RuntimeException("Session not found: " + sessionId));
 
@@ -631,190 +753,29 @@ public class AiDiagnosisService {
             throw new RuntimeException("현재 세션은 추가 답변을 받을 수 없는 상태입니다: " + session.getStatus());
         }
 
-        DiagResult existingResult = diagResultRepository.findByDiagSessionId(sessionId)
-                .orElseThrow(() -> new RuntimeException("DiagResult not found for session: " + sessionId));
+        // 1. 상태 변경 (폴링 시작 유도)
+        session.updateStatus(DiagStatus.REPLY_PROCESSING, "답변 분석을 준비 중입니다...");
+        diagSessionRepository.save(session);
 
-        // 2. 기존 대화 이력 파싱 및 사용자 답변 추가
-        List<Map<String, Object>> conversation = new ArrayList<>();
-        try {
-            if (existingResult.getInteractiveJson() != null) {
-                @SuppressWarnings("unchecked")
-                Map<String, Object> interactiveData = objectMapper.readValue(existingResult.getInteractiveJson(),
-                        Map.class);
-                @SuppressWarnings("unchecked")
-                List<Map<String, Object>> existingConv = (List<Map<String, Object>>) interactiveData
-                        .get("conversation");
-                if (existingConv != null) {
-                    conversation.addAll(existingConv);
-                }
-                // AI 질문도 대화에 추가
-                String aiMessage = (String) interactiveData.get("message");
-                if (aiMessage != null) {
-                    Map<String, Object> aiTurn = new HashMap<>();
-                    aiTurn.put("role", "ai");
-                    aiTurn.put("content", aiMessage);
-                    aiTurn.put("timestamp", java.time.LocalDateTime.now().toString());
-                    conversation.add(aiTurn);
-                }
-            }
-        } catch (Exception e) {
-            log.warn("[Reply] 기존 대화 이력 파싱 실패, 빈 대화로 시작", e);
-        }
-
-        // 사용자 답변 추가 (텍스트가 있는 경우에만)
-        if (hasText) {
-            Map<String, Object> userTurn = new HashMap<>();
-            userTurn.put("role", "user");
-            userTurn.put("content", replyDto.getUserResponse());
-            userTurn.put("timestamp", java.time.LocalDateTime.now().toString());
-            conversation.add(userTurn);
-        }
-
-        log.info("[Reply] 대화 이력 누적 완료. 총 {} 턴", conversation.size());
-
-        // 3. 추가 파일 처리 (임시 저장)
+        // 2. 미디어 파일 로컬 저장
         String imageFile = saveMultipartFile(additionalImage, "reply_visual");
         String audioFile = saveMultipartFile(additionalAudio, "reply_audio");
 
-        // 4. AI 서버에 재진단 요청 (동기 호출)
-        Map<String, Object> aiRequest = new HashMap<>();
-        aiRequest.put("vehicleId", session.getVehiclesId().toString());
-        aiRequest.put("conversation_history", conversation);
+        // 3. RabbitMQ 메시지 발행
+        DiagnosisTaskMessage message = DiagnosisTaskMessage.builder()
+                .sessionId(sessionId)
+                .replyRequest(replyDto)
+                .messageType(DiagnosisTaskMessage.MessageType.REPLY)
+                .imageFilename(imageFile)
+                .audioFilename(audioFile)
+                .build();
 
-        // 추가 파일이 있으면 분석 수행
-        if (imageFile != null) {
-            Map<String, Object> visualResult = aiClient.callVisualAnalysis(imageFile);
-            aiRequest.put("visualAnalysis", visualResult);
-            log.info("[Reply] 추가 이미지 분석 완료");
-        }
-        if (audioFile != null) {
-            Map<String, Object> audioResult = aiClient.callAudioAnalysis(audioFile);
-            aiRequest.put("audioAnalysis", audioResult);
-            log.info("[Reply] 추가 오디오 분석 완료");
-        }
+        rabbitTemplate.convertAndSend(kr.co.himedia.config.RabbitConfig.EXCHANGE_NAME,
+                kr.co.himedia.config.RabbitConfig.ROUTING_KEY, message);
 
-        // 차량 및 소모품 정보 추가
-        AiUnifiedRequestDto.AiUnifiedRequestDtoBuilder tempBuilder = AiUnifiedRequestDto.builder();
-        populateVehicleAndConsumableInfo(tempBuilder, session.getVehiclesId());
-        AiUnifiedRequestDto tempDto = tempBuilder.build();
-        if (tempDto.getVehicleInfo() != null) {
-            aiRequest.put("vehicleInfo", tempDto.getVehicleInfo());
-        }
-        if (tempDto.getConsumablesStatus() != null) {
-            aiRequest.put("consumablesStatus", tempDto.getConsumablesStatus());
-        }
-
-        log.info("[Reply] AI 서버에 재진단 요청 전송");
-        @SuppressWarnings("unchecked")
-        Map<String, Object> aiResponse = aiClient.callComprehensiveDiagnosis(aiRequest);
-
-        // 5. 사용자 턴 수 카운트 (대화 제한 체크용)
-        long userTurnCount = conversation.stream()
-                .filter(turn -> "user".equals(turn.get("role")))
-                .count();
-        log.info("[Reply] 현재 사용자 턴 수: {}", userTurnCount);
-
-        // 6. 응답에 따라 세션 상태 및 결과 업데이트
-        String mode = (String) aiResponse.getOrDefault("response_mode", "REPORT");
-        String confidence = (String) aiResponse.getOrDefault("confidence_level", "LOW");
-        String summary = (String) aiResponse.getOrDefault("summary", "");
-
-        // 3턴 제한: 사용자가 3번 답변했는데도 AI가 INTERACTIVE로 응답하면 강제 REPORT 변환
-        boolean forceReport = userTurnCount >= 3 && "INTERACTIVE".equalsIgnoreCase(mode);
-        if (forceReport) {
-            log.info("[Reply] 대화 3턴 초과 + INTERACTIVE 응답 -> 강제 REPORT 변환");
-            mode = "REPORT";
-            confidence = "LOW";
-        }
-
-        DiagStatus newStatus;
-        if ("REPORT".equalsIgnoreCase(mode)) {
-            newStatus = DiagStatus.DONE;
-
-            String finalReport;
-            String detectedIssuesJson;
-
-            if (forceReport) {
-                // 강제 종료: AI가 수집한 정보 + 안내 멘트 생성
-                @SuppressWarnings("unchecked")
-                Map<String, Object> interactiveData = (Map<String, Object>) aiResponse.get("interactive_data");
-                String lastAiMessage = interactiveData != null ? (String) interactiveData.get("message") : "";
-
-                finalReport = "수집된 정보만으로는 정확한 원인을 파악하기 어렵습니다. " +
-                        "증상을 바탕으로 가까운 정비소 방문을 권장합니다.";
-                // summary 포함 로직 삭제 (사용자 요청)
-
-                // FE 호환성을 위해 단순 String이 아닌 객체 구조로 생성
-                Map<String, String> causeMap = new HashMap<>();
-                causeMap.put("cause", "원인 미상 - 정비소 점검 필요");
-                causeMap.put("basis", "사용자 답변 정보 부족");
-                causeMap.put("source_type", "INFERRED");
-                causeMap.put("reliability", "LOW");
-
-                List<Map<String, String>> forcedCauses = List.of(causeMap);
-                try {
-                    detectedIssuesJson = objectMapper.writeValueAsString(forcedCauses);
-                } catch (Exception e) {
-                    detectedIssuesJson = "[]";
-                }
-                log.info("[Reply] 강제 REPORT 생성 완료 (3턴 초과)");
-            } else {
-                // 정상 REPORT 처리
-                @SuppressWarnings("unchecked")
-                Map<String, Object> reportData = (Map<String, Object>) aiResponse.get("report_data");
-                finalReport = reportData != null ? (String) reportData.get("final_guide") : "";
-                try {
-                    detectedIssuesJson = reportData != null
-                            ? objectMapper.writeValueAsString(reportData.get("suspected_causes"))
-                            : null;
-                } catch (Exception e) {
-                    log.error("[Reply] 결과 직렬화 실패", e);
-                    detectedIssuesJson = null;
-                }
-                log.info("[Reply] 최종 REPORT 생성 완료");
-            }
-
-            // 기존 DiagResult 삭제 후 새로 생성
-            diagResultRepository.delete(existingResult);
-            DiagResult newResult = DiagResult.builder()
-                    .diagSessionId(sessionId)
-                    .responseMode("REPORT")
-                    .confidenceLevel(confidence)
-                    .summary(summary)
-                    .finalReport(finalReport)
-                    .detectedIssues(detectedIssuesJson)
-                    .riskLevel(forceReport ? DiagResult.RiskLevel.MID : DiagResult.RiskLevel.LOW)
-                    .build();
-            diagResultRepository.save(newResult);
-
-        } else {
-            newStatus = DiagStatus.ACTION_REQUIRED;
-            // INTERACTIVE 데이터 업데이트 (대화 이력 포함)
-            try {
-                @SuppressWarnings("unchecked")
-                Map<String, Object> interactiveData = (Map<String, Object>) aiResponse.get("interactive_data");
-                if (interactiveData != null) {
-                    interactiveData.put("conversation", conversation);
-                }
-                diagResultRepository.delete(existingResult);
-                DiagResult newResult = DiagResult.builder()
-                        .diagSessionId(sessionId)
-                        .responseMode(mode)
-                        .confidenceLevel(confidence)
-                        .summary(summary)
-                        .interactiveJson(objectMapper.writeValueAsString(interactiveData))
-                        .build();
-                diagResultRepository.save(newResult);
-            } catch (Exception e) {
-                log.error("[Reply] INTERACTIVE 데이터 저장 실패", e);
-            }
-            log.info("[Reply] INTERACTIVE 모드 유지, 추가 질문 발송 (턴 {}/3)", userTurnCount);
-        }
-
-        session.updateStatus(newStatus, newStatus == DiagStatus.DONE ? "진단 완료" : "추가 정보 요청 중");
-        diagSessionRepository.save(session);
-
-        // 6. 결과 반환
-        return getDiagnosisResult(sessionId);
+        return Map.of(
+                "message", "답변이 접수되었습니다. 분석 완료 후 결과가 업데이트됩니다.",
+                "sessionId", sessionId,
+                "status", "REPLY_ACCEPTED");
     }
 }
