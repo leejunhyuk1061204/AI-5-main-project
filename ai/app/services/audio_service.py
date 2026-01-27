@@ -110,20 +110,56 @@ class AudioService:
         from ai.app.services.hertz import convert_bytes_to_16khz
         audio_buffer = convert_bytes_to_16khz(audio_bytes)
         
-        if not audio_buffer is None: # audio_buffer is np.ndarray from hertz
+        if audio_buffer is not None:
              # [Enhancement] 전처리: 소음 제거 (U-Net Denoising)
-             try:
-                 audio_buffer = await denoise_audio(audio_buffer)
-             except Exception as e:
-                 print(f"[Audio Service] Denoising 실패 (Pass-through): {e}")
+             # [Debug] 서버 충돌 의심으로 Denoising 일시 비활성화
+             # try:
+             #     import librosa
+             #     import soundfile as sf
+             #     
+             #     # BytesIO -> np.ndarray
+             #     audio_buffer.seek(0)
+             #     y, _ = librosa.load(audio_buffer, sr=16000)
+             #     
+             #     # Denoising
+             #     y_denoised = await denoise_audio(y)
+             #     
+             #     # np.ndarray -> BytesIO (WAV)
+             #     new_buffer = io.BytesIO()
+             #     sf.write(new_buffer, y_denoised, 16000, format='WAV')
+             #     new_buffer.seek(0)
+             #     
+             #     audio_buffer = new_buffer # 교체
+             #     # print("[Audio Service] 소음 제거 적용 완료")
+             #     
+             # except Exception as e:
+             #     print(f"[Audio Service] Denoising 실패 (Pass-through): {e}")
+             #     # 실패 시 원본 audio_buffer 유지 (seek(0) 필수)
+             #     audio_buffer.seek(0)
+             pass
 
         # 2. 1차 진단: AST 모델
-        ast_result = await run_ast_inference(audio_buffer, ast_model_payload=ast_model)
+        try:
+            ast_result = await run_ast_inference(audio_buffer, ast_model_payload=ast_model)
+        except Exception as e:
+            print(f"[Audio Service] AST Inference Error: {e}")
+            from ai.app.schemas.audio_schema import AudioResponse, AudioDetail
+            # AST 실패 시 LLM으로 넘기기 위해 Low Confidence & UNKNOWN 설정
+            ast_result = AudioResponse(
+                status="UNKNOWN",
+                analysis_type="AST_FAILED",
+                category="UNKNOWN_AUDIO",
+                detail=AudioDetail(diagnosed_label="Error", description="AST Model Failed"),
+                confidence=0.0,
+                is_critical=False
+            )
         
         # 3. 2차 진단 판단
         if ast_result.confidence < 0.85 or ast_result.status == "UNKNOWN":
-            print(f"[Audio Service] AST 결과 미흡. LLM으로 전환.")
-            final_result = await analyze_audio_with_llm(s3_url, audio_bytes=audio_bytes)
+            print(f"[Audio Service] AST 결과 미흡 (또는 에러). LLM으로 전환.")
+            # [Fix] LLM은 WAV 포맷을 선호하므로, 전처리된(16kHz WAV) 버퍼를 전달
+            wav_bytes = audio_buffer.getvalue() if audio_buffer else audio_bytes
+            final_result = await analyze_audio_with_llm(s3_url, audio_bytes=wav_bytes)
         else:
             final_result = ast_result
 

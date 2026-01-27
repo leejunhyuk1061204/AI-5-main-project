@@ -18,6 +18,7 @@ from enum import Enum
 from typing import Optional, Union, Tuple
 from io import BytesIO
 from PIL import Image
+import torch
 
 # =============================================================================
 # Scene Type Enum
@@ -28,12 +29,13 @@ class SceneType(str, Enum):
     SCENE_DASHBOARD = "SCENE_DASHBOARD"
     SCENE_EXTERIOR = "SCENE_EXTERIOR"
     SCENE_TIRE = "SCENE_TIRE"
+    SCENE_ETC = "SCENE_ETC"
 
 
 # =============================================================================
 # Confidence Threshold (이 값 이하면 LLM Fallback)
 # 초기 모델의 불안정성을 고려하여 0.85로 상향
-CONFIDENCE_THRESHOLD = 0.85
+CONFIDENCE_THRESHOLD = 0.7
 
 
 # =============================================================================
@@ -55,7 +57,7 @@ class RouterService:
         """
         self.model = None
         self.mock_mode = True
-        self.device = "cpu"
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         
         # 기본 경로
         if model_path is None:
@@ -70,7 +72,7 @@ class RouterService:
             try:
                 self._load_model(model_path)
                 self.mock_mode = False
-                print(f"[Router] ✅ MobileNetV3 모델 로드 완료: {model_path}")
+                print(f"[Router] ✅ MobileNetV3 모델 로드 완료: {model_path} (Device: {self.device})")
             except Exception as e:
                 print(f"[Router] ⚠️ 모델 로드 실패, Mock 모드로 전환: {e}")
                 self.mock_mode = True
@@ -96,9 +98,10 @@ class RouterService:
         # 가중치 로드
         state_dict = torch.load(model_path, map_location=self.device)
         self.model.load_state_dict(state_dict)
-        self.model.eval()
+        self.model.to(self.device).eval()
         
-        # 클래스 매핑 (훈련 데이터 폴더의 알파벳 순서와 정확히 일치해야 함)
+        # 클래스 매핑 (중요: 학습 데이터 폴더의 알파벳 순서와 일치해야 함 D->E(ngine)->E(xterior)->T)
+        # 만약 모델 재학습 시 폴더 구조가 바뀌면 이 리스트도 수정해야 합니다.
         # 0: dashboard, 1: engine, 2: exterior, 3: tire
         self.class_names = [
             SceneType.SCENE_DASHBOARD,
@@ -173,7 +176,7 @@ class RouterService:
                 std=[0.229, 0.224, 0.225]
             )
         ])
-        input_tensor = preprocess(image).unsqueeze(0)
+        input_tensor = preprocess(image).unsqueeze(0).to(self.device)
         
         # 3. 추론
         with torch.no_grad():
