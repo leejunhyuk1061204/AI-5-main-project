@@ -51,6 +51,9 @@ import SettingMain from './setting/SettingMain';
 import CarManage from './setting/CarManage';
 import CarEdit from './setting/CarEdit';
 import VisualDiagnosis from './diagnosis/VisualDiagnosis';
+import AiDiagChat from './diagnosis/AiDiagChat';
+import DiagnosisReport from './diagnosis/DiagnosisReport';
+import DiagnosisHistory from './diagnosis/DiagnosisHistory';
 import Cloud from './setting/Cloud';
 import Membership from './setting/Membership';
 
@@ -69,7 +72,7 @@ function MainTabNavigator() {
       }}
     >
       <Tab.Screen name="MainHome" component={MainPage} />
-      <Tab.Screen name="DiagTab" component={AiProfessionalDiag} />
+      <Tab.Screen name="DiagTab" component={DiagMain} />
       <Tab.Screen name="HistoryTab" component={HistoryMain} />
       <Tab.Screen name="SettingTab" component={SettingMain} />
     </Tab.Navigator>
@@ -118,7 +121,6 @@ export default function App() {
         }
 
         // Check for persistent login
-        /* TEMPORARY: Force Login to fix navigation stuck issue
         const token = await AsyncStorage.getItem('accessToken');
         if (token) {
           try {
@@ -130,7 +132,7 @@ export default function App() {
               setInitialRoute('RegisterMain');
             }
           } catch (e) {
-             console.error("Failed to fetch vehicles on startup", e);
+            console.error("Failed to fetch vehicles on startup", e);
             setInitialRoute('Login');
           }
         } else {
@@ -142,9 +144,6 @@ export default function App() {
             setInitialRoute('Tos');
           }
         }
-        */
-        // Always start at Login
-        setInitialRoute('Login');
       } catch (e) {
         console.warn(e);
       } finally {
@@ -235,11 +234,10 @@ export default function App() {
                   component={AiCompositeDiag}
                   options={{ animation: 'none' }}
                 />
-                <Stack.Screen
-                  name="AiProfessionalDiag"
-                  component={AiProfessionalDiag}
-                  options={{ animation: 'none' }}
-                />
+                <Stack.Screen name="AiProfessionalDiag" component={AiProfessionalDiag} />
+                <Stack.Screen name="AiDiagChat" component={AiDiagChat} />
+                <Stack.Screen name="DiagnosisReport" component={DiagnosisReport} />
+                <Stack.Screen name="DiagnosisHistory" component={DiagnosisHistory} />
                 <Stack.Screen name="VisualDiagnosis" component={VisualDiagnosis} />
                 <Stack.Screen name="Filming" component={Filming} />
                 <Stack.Screen name="DrivingHis" component={DrivingHis} />
@@ -258,11 +256,11 @@ export default function App() {
                 <Stack.Screen name="Cloud" component={Cloud} />
                 <Stack.Screen name="Membership" component={Membership} />
               </Stack.Navigator>
+              <GlobalAlert />
+              <GlobalDatePicker />
             </>
           )}
         </NavigationContainer>
-        <GlobalAlert />
-        <GlobalDatePicker />
       </KeyboardProvider>
     </SafeAreaProvider>
   );

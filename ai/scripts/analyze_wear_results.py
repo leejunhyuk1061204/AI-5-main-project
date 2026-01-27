@@ -3,7 +3,7 @@ import pandas as pd
 # CSV 로드
 df = pd.read_csv("results/wear_factor_results.csv")
 
-# category 추출 (frei / nomal / stau)
+# category 추출 (frei / normal / stau)
 df["category"] = df["file"].str.split("__").str[0]
 
 print("\n=== 데이터 개수 ===")

@@ -10,17 +10,19 @@
 [섹션 2] /test - ISC님 코드 (main 브랜치)
 ===============================================================================
 """
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, HTTPException, Request
 from fastapi.responses import JSONResponse
 from ai.app.services.local_service import process_visual_mock, process_audio_mock
+from ai.app.services.router_service import SceneType
 from ai.app.schemas.visual_schema import VisualResponse, DetectionItem
 from ai.app.schemas.audio_schema import AudioResponse
 from ai.app.schemas.wear_factor import VehicleMetadata, DrivingHabits # 공통 메타데이터는 재사용
 from pydantic import BaseModel, Field
-from typing import List, Dict
+from typing import List, Dict, Optional
 from PIL import Image
 import io
 import os
+import base64
 
 # Singleton AnomalyDetector (한 번만 로드)
 from ai.app.services.anomaly_service import AnomalyDetector
@@ -209,30 +211,57 @@ async def connect_comprehensive_mock(data: dict):
     # 분기 조건: 사진/오디오 있으면 → REPORT, 없으면 → 4회까지 INTERACTIVE
     has_media = bool(visual) or bool(audio)
     
+    # [수정] 오디오 데이터가 있으면 무조건 INTERACTIVE로 응답 (사용자 요청 사항)
+    if audio:
+        return {
+            "response_mode": "INTERACTIVE",
+            "confidence_level": "LOW",
+            "summary": "녹음된 소리에서 비정상적인 패턴이 감지되었으나, 정확한 원인 파악을 위해 추가 정보가 필요합니다.",
+            "report_data": None,
+            "interactive_data": {
+                "message": "엔진 부근에서 규칙적인 소음이 감지됩니다. 이 소리가 **공회전(멈춰 있을 때)** 시에도 들리는지, 아니면 **주행 중에만** 들리는지 확인해 주세요.",
+                "follow_up_questions": [
+                    "계기판에 '엔진 체크 경고등'이 켜져 있나요?",
+                    "최근 3개월 내에 엔진 오일을 교환하신 적이 있나요?"
+                ],
+                "requested_actions": ["ANSWER_TEXT", "CAPTURE_PHOTO"]
+            },
+            "disclaimer": "본 진단은 청각 데이터에 기반한 추정이며, 정확한 상태는 전문가의 점검이 필요합니다."
+        }
+
     if has_media:
         # 사진 또는 오디오가 있으면 → REPORT 생성
         is_anomaly = anomaly.get("is_anomaly") if anomaly else False
         has_visual_issue = visual.get("status") == "FAULTY" if visual else False
         has_audio_issue = audio.get("status") == "FAULTY" if audio else False
         
+        # 초안 가이드라인: 단정적 표현 금지, 추정형 표현 사용
+        summary_text = "제공해주신 데이터를 종합적으로 분석한 결과, 몇 가지 점검이 필요한 항목이 확인되었습니다."
+        final_guide_text = "현재 데이터로는 즉각적인 운행 정지가 필요해 보이지 않으나, 예방 정비를 위해 가까운 정비소 방문을 권장합니다."
+        
+        if is_anomaly or has_visual_issue:
+            summary_text = "냉각 계통 및 엔진룸 육안 점검 결과, 주의가 필요한 이상 징후가 발견되었습니다."
+            final_guide_text = "냉각수 누수 또는 부품 노후화 가능성이 있습니다. 장거리 운행 전 정비소에서 정밀 점검을 받으시는 것을 추천합니다."
+        
         return {
             "response_mode": "REPORT",
-            "confidence_level": "HIGH" if (audio or visual) else "MEDIUM",
-            "summary": "수집된 데이터를 바탕으로 종합 분석을 완료했습니다.",
+            # 초안 가이드라인: 데이터가 충분하면 HIGH, 아니면 MEDIUM
+            "confidence_level": "HIGH" if (has_visual_issue or is_anomaly) else "MEDIUM",
+            "summary": summary_text,
             "report_data": {
                 "suspected_causes": [
                     {
-                        "cause": "냉각 계통 점검 필요" if (is_anomaly or has_visual_issue) else "정상 상태",
-                        "basis": "사용자 제공 미디어 분석 결과",
-                        "source_type": "CONFIRMED",
-                        "reliability": "HIGH"
+                        "cause": "냉각 계통 부품(라디에이터/호스) 노후화 의심" if (is_anomaly or has_visual_issue) else "특이 사항 없음 (정상 범위)",
+                        "basis": "이미지 분석상 붉은색 Heatmap 영역(이상 발열/누수 의심) 확인" if (is_anomaly or has_visual_issue) else "데이터 분석 결과 정상 패턴",
+                        "source_type": "INFERRED", # 초안: 이미지 분석 등 확률적 데이터는 INFERRED
+                        "reliability": "HIGH" if (is_anomaly or has_visual_issue) else "MEDIUM"
                     }
                 ],
-                "final_guide": "미디어 분석 결과를 종합하여, 정기적인 점검을 권장합니다." if (is_anomaly or has_visual_issue or has_audio_issue) else "차량 상태가 양호합니다.",
+                "final_guide": final_guide_text,
                 "risk_level": "MID" if (is_anomaly or has_visual_issue) else "LOW"
             },
             "interactive_data": None,
-            "disclaimer": "본 진단은 AI 분석에 기반하며, 실제 정비 전문가의 의견과 다를 수 있습니다."
+            "disclaimer": "본 결과는 AI 분석에 기반한 참고 정보이며, 실제 차량 상태와 다를 수 있습니다."
         }
     
     # 사진/오디오 없이 텍스트만 → 4회까지 INTERACTIVE (백엔드 3턴 제한 테스트용)
@@ -241,29 +270,30 @@ async def connect_comprehensive_mock(data: dict):
         return {
             "response_mode": "REPORT",
             "confidence_level": "MEDIUM",
-            "summary": "대화를 통해 수집된 정보를 바탕으로 분석을 완료했습니다.",
+            "summary": "사용자님과의 대화를 통해 수집된 정보를 바탕으로 분석을 완료했습니다.",
             "report_data": {
                 "suspected_causes": [
                     {
-                        "cause": "추가 점검 권장",
-                        "basis": "사용자 답변 종합 분석",
+                        "cause": "노후화로 인한 일반적인 진동/소음 가능성",
+                        "basis": "사용자 답변 종합 분석 (주행거리 및 연식 고려)",
                         "source_type": "INFERRED",
                         "reliability": "MEDIUM"
                     }
                 ],
-                "final_guide": "대화를 통해 수집된 정보로는 명확한 진단이 어렵습니다. 정비소 방문을 권장합니다.",
+                "final_guide": "대화 내용만으로는 명확한 고장 부위를 특정하기 어렵습니다. 소리가 심해지면 정비소를 방문해 주세요.",
                 "risk_level": "MID"
             },
             "interactive_data": None,
-            "disclaimer": "본 진단은 AI 추론에 기반하며 참고용입니다."
+            "disclaimer": "본 진단은 대화 내용에 기반한 추론이며, 실제 진단과 다를 수 있습니다."
         }
     
     # 0~3회: INTERACTIVE 모드 유지
+    # 초안 가이드라인: 쉽고 명확한 행동 요청, 위험 행동 금지
     follow_up_messages = [
-        "정확한 진단을 위해 추가 정보가 필요합니다. 이상 증상이 언제부터 시작되었나요?",
-        "감사합니다. 시동을 켤 때 특별한 소리가 나나요?",
-        "알겠습니다. 최근 냉각수나 엔진오일 점검을 하신 적 있나요?",
-        "추가 확인이 필요합니다. 계기판에 경고등이 켜진 적 있나요?"
+        "정확한 분석을 위해 추가 정보가 필요합니다. **언제부터** 이런 증상이 나타났나요? (예: 일주일 전, 오늘 아침)",
+        "네, 알겠습니다. 시동을 걸 때 평소와 다른 **소리(끼익, 덜컹 등)**나 **진동**이 느껴지시나요?",
+        "확인해 주셔서 감사합니다. 혹시 **본넷을 열고 엔진룸 사진**을 찍어주실 수 있나요? (무리하지 마시고 안전한 곳에서 촬영해주세요)",
+        "마지막으로, 계기판에 **경고등**이 켜져 있다면 어떤 모양인지 알려주시거나 사진을 찍어주세요."
     ]
     
     return {
@@ -374,19 +404,16 @@ async def analyze_visual_local(file: UploadFile = File(...)):
 
 
 @router.post("/predict/yolo")
-async def analyze_yolo_local(file: UploadFile = File(...)):
+async def analyze_yolo_local(category: str = "auto", force: Optional[str] = None, file: UploadFile = File(...), request: Request = None):
     """
-    [ISC - Real YOLO + Real PatchCore] 로컬 이미지 → 실제 파이프라인 (S3/LLM 제외)
-    
-    프로덕션 (/predict/engine)과 동일한 로직:
-    - YOLO: 엔진 부품 탐지
-    - Crop: 부품별 이미지 추출
-    - Anomaly (PatchCore): 이상 탐지
-    - LLM: 건너뜀 (테스트용)
+    [ISC - Real YOLO] 로컬 이미지 → 실제 YOLO 추론
+    카테고리에 따라 다른 모델 사용: engine, dashboard, tire, exterior
     """
     import tempfile
     import asyncio
-    from dataclasses import asdict
+    import io
+    from PIL import Image
+    from fastapi.responses import JSONResponse
     
     try:
         if not file.content_type or not file.content_type.startswith("image/"):
@@ -398,115 +425,149 @@ async def analyze_yolo_local(file: UploadFile = File(...)):
         if image.mode != "RGB":
             image = image.convert("RGB")
         
-        # 1. YOLO 추론 (로컬 이미지 버전)
-        from ultralytics import YOLO
+        # 1. 모델 선택 (app.state 에서 가져옴)
+        model = None
+        scene_info = {}
         
-        model_path = "ai/weights/engine/best.pt"
-        if not os.path.exists(model_path):
-            # 모델 없으면 기본 모델 사용
-            from ultralytics import YOLO as BaseYOLO
-            model = BaseYOLO("yolov8n.pt")
-            print(f"[Warning] 학습 모델 없음. 기본 모델 사용")
-        else:
-            model = YOLO(model_path)
+        # 'force' 쿼리 파라미터가 있으면 라우터 무시하고 강제 적용
+        if force:
+            category = force
+            print(f"[Test Router] Forced category: {category}")
+        elif category == "auto" and request and hasattr(request.app.state, "get_router"):
+            router = request.app.state.get_router()
+            scene_type, confidence = await router.classify(image)
+            scene_info = {
+                "detected_scene": scene_type.value,
+                "scene_confidence": round(float(confidence), 4)
+            }
+            # SceneType을 내부 카테고리 문자열로 매핑
+            mapping = {
+                SceneType.SCENE_ENGINE: "engine",
+                SceneType.SCENE_DASHBOARD: "dashboard",
+                SceneType.SCENE_EXTERIOR: "exterior",
+                SceneType.SCENE_TIRE: "tire"
+            }
+            category = mapping.get(scene_type, "engine")
+            print(f"[Test Router] Auto-detected category: {category} ({confidence:.2f})")
+
+        if request and hasattr(request.app.state, "get_engine_yolo"):
+            if category == "engine":
+                model = request.app.state.get_engine_yolo()
+            elif category == "dashboard":
+                model = request.app.state.get_dashboard_yolo()
+            elif category == "tire":
+                model = request.app.state.get_tire_yolo()
+            elif category == "exterior":
+                # 외관은 cardd 모델 기본 사용
+                model = request.app.state.get_exterior_yolo().get("cardd")
         
-        tmp_path = os.path.join(tempfile.gettempdir(), f"yolo_test_{os.getpid()}.jpg")
-        image.save(tmp_path, "JPEG")
+        # app.state에 모델이 없는 경우 (로컬 단독 실행 등) 직접 로드 시도
+        if model is None:
+            from ultralytics import YOLO
+            paths = {
+                "engine": "ai/weights/engine/best.pt",
+                "dashboard": "ai/weights/dashboard/best.pt",
+                "tire": "ai/weights/tire/best.pt",
+                "exterior": "ai/weights/exterior/cardd/best.pt"
+            }
+            model_path = paths.get(category, "ai/weights/engine/best.pt")
+            if os.path.exists(model_path):
+                model = YOLO(model_path)
+            else:
+                # 최후의 수단: 기본 모델
+                model_path = "ai/weights/yolov8n.pt"
+                if os.path.exists(model_path):
+                    model = YOLO(model_path)
+                    print(f"[Warning] {category} 전용 가중치 없음. 기본 YOLOv8n 사용.")
+                else:
+                    return JSONResponse(status_code=400, content={
+                        "status": "ERROR",
+                        "message": f"{category} 모델 가중치가 없습니다. 학습을 먼저 진행하거나 Weights 폴더를 확인해 주세요.",
+                        "category": category
+                    })
+
+        # 2. 전용 파이프라인 호출 (표준 JSON 규격 반영)
+        # S3 URL 대신 Base64를 전달하여 로컬에서도 LLM 분석이 가능하도록 함
+        img_b64 = base64.b64encode(content).decode('utf-8')
+        s3_url_mock = f"data:image/jpeg;base64,{img_b64}"
         
         try:
-            yolo_results = model.predict(source=tmp_path, conf=0.25, save=False)
-        finally:
-            if os.path.exists(tmp_path):
-                os.remove(tmp_path)
-        
-        # YOLO 결과 파싱
-        detections = []
-        for r in yolo_results:
-            for box in r.boxes:
-                label_idx = int(box.cls[0])
-                label_name = model.names[label_idx]
-                confidence = float(box.conf[0])
-                bbox = box.xyxy[0].tolist()  # [x1, y1, x2, y2]
-                
-                detections.append({
-                    "label": label_name,
-                    "confidence": round(confidence, 3),
-                    "bbox": [int(v) for v in bbox]
-                })
-        
-        # 신뢰도 낮은 탐지 필터링 (오탐 방지)
-        MIN_CONFIDENCE = 0.5
-        detections = [d for d in detections if d["confidence"] >= MIN_CONFIDENCE]
-        
-        # Path B: 부품 미감지
-        if len(detections) == 0:
-            return JSONResponse(content={
-                "status": "SUCCESS",
-                "path": "B",
-                "source": f"uploaded:{file.filename}",
-                "vehicle_type": None,
-                "parts_detected": 0,
-                "message": "엔진룸 부품을 감지하지 못했습니다. 선명한 이미지로 재촬영해주세요."
-            })
-        
-        # Path A: 부품별 분석
-        EV_PARTS = {"Inverter", "Electric_Motor", "Charging_Port", "Inverter_Coolant_Reservoir"}
-        detected_labels = [d["label"] for d in detections]
-        is_ev = any(part in EV_PARTS for part in detected_labels)
-        vehicle_type = "EV" if is_ev else "ICE"
-        
-        # 2. Crop + PatchCore Anomaly Detection (싱글톤 사용)
-        anomaly_detector = get_anomaly_detector()
-        
-        results = []
-        anomaly_count = 0
-        
-        for det in detections:
-            # Crop 이미지 추출
-            x1, y1, x2, y2 = det["bbox"]
-            crop_img = image.crop((x1, y1, x2, y2))
+            if category == "engine":
+                from ai.app.services.engine_anomaly_service import EngineAnomalyPipeline
+                pipeline = EngineAnomalyPipeline(anomaly_detector=request.app.state.get_anomaly_detector())
+                try:
+                    result = await pipeline.analyze(s3_url_mock, image=image, image_bytes=content, yolo_model=model)
+                    
+                    # 만약 결과가 여전히 에러(모델 없음 + API키 없음)라면 안내 강화
+                    if result.get("status") == "ERROR" and "API Key" in str(result.get("data", {}).get("description")):
+                        return JSONResponse(status_code=401, content=result)
+                        
+                    return JSONResponse(content=result)
+                finally:
+                    await pipeline.close()
             
-            # PatchCore 이상 탐지
-            anomaly_result = await anomaly_detector.detect(crop_img, det["label"])
+            elif category == "dashboard":
+                from ai.app.services.dashboard_service import analyze_dashboard_image
+                result = await analyze_dashboard_image(image, s3_url_mock, model)
+                return JSONResponse(content=result)
             
-            is_anomaly = bool(anomaly_result.is_anomaly)
-            if is_anomaly:
-                anomaly_count += 1
-                defect_info = {
-                    "defect_category": "ANOMALY",
-                    "defect_label": f"{det['label']}_Anomaly",
-                    "description": f"{det['label']}에서 이상이 감지되었습니다. (Score: {anomaly_result.score:.2f})",
-                    "severity": "WARNING" if anomaly_result.score < 0.8 else "CRITICAL",
-                    "recommended_action": "정비소 점검 권장"
-                }
+            elif category == "tire":
+                from ai.app.services.tire_service import analyze_tire_image
+                result = await analyze_tire_image(image, s3_url_mock, model)
+                return JSONResponse(content=result)
+            
+            elif category == "exterior":
+                from ai.app.services.exterior_service import analyze_exterior_image
+                # 외관은 cardd와 carparts 두 모델이 필요함
+                exterior_models = request.app.state.get_exterior_yolo() if request else {}
+                cardd = exterior_models.get("cardd")
+                carparts = exterior_models.get("carparts")
+                result = await analyze_exterior_image(image, s3_url_mock, cardd, carparts)
+                return JSONResponse(content=result)
+            
             else:
-                defect_info = {
-                    "defect_category": "NORMAL",
-                    "defect_label": "Normal",
-                    "description": f"{det['label']}은(는) 정상 상태입니다.",
-                    "severity": "NORMAL",
-                    "recommended_action": "조치 불필요"
+                # 기본 처리 (YOLO Raw 데이터)
+                # 기존 tmp_path 저장 및 predict 로직
+                tmp_path = os.path.join(tempfile.gettempdir(), f"yolo_test_{os.getpid()}.jpg")
+                image.save(tmp_path, "JPEG")
+                try:
+                    results = model.predict(source=tmp_path, conf=0.25, save=False)
+                finally:
+                    if os.path.exists(tmp_path):
+                        os.remove(tmp_path)
+
+                output = {
+                    "status": "SUCCESS",
+                    "category": category,
+                    **scene_info,
+                    "source": f"uploaded:{file.filename}",
+                    "model_type": "detection"
                 }
-            
-            results.append({
-                "part_name": det["label"],
-                "bbox": det["bbox"],
-                "confidence": det["confidence"],
-                "is_anomaly": is_anomaly,
-                "anomaly_score": round(anomaly_result.score, 4),
-                "threshold": anomaly_result.threshold,
-                **defect_info
-            })
-        
-        return JSONResponse(content={
-            "status": "SUCCESS",
-            "path": "A",
-            "source": f"uploaded:{file.filename}",
-            "vehicle_type": vehicle_type,
-            "parts_detected": len(detections),
-            "anomalies_found": anomaly_count,
-            "results": results
-        })
+                if hasattr(results[0], 'probs') and results[0].probs is not None:
+                    output["model_type"] = "classification"
+                    top1_idx = int(results[0].probs.top1)
+                    output["top1_label"] = model.names[top1_idx]
+                    output["top1_confidence"] = round(float(results[0].probs.top1conf), 4)
+                    output["all_probs"] = {model.names[i]: round(float(p), 4) for i, p in enumerate(results[0].probs.data)}
+                else:
+                    detections = []
+                    for r in results:
+                        for box in r.boxes:
+                            detections.append({
+                                "label": model.names[int(box.cls[0])],
+                                "confidence": round(float(box.conf[0]), 3),
+                                "bbox": [int(v) for v in box.xyxy[0].tolist()]
+                            })
+                    output["detections"] = detections
+                    output["count"] = len(detections)
+                return JSONResponse(content=output)
+                
+        except Exception as e:
+            print(f"[Test Router] Service Pipeline Error: {e}")
+            import traceback
+            traceback.print_exc()
+            # 서비스 실패 시 롤백 (Raw 데이터라도 반환)
+            return JSONResponse(content={"status": "ERROR", "message": f"Service Pipeline Failed: {str(e)}"}, status_code=500)
         
     except Exception as e:
         import traceback

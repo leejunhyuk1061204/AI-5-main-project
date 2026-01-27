@@ -19,6 +19,8 @@ import evaluate
 from transformers import ASTForAudioClassification, ASTFeatureExtractor, Trainer, TrainingArguments
 from datasets import Dataset, Audio
 from sklearn.model_selection import train_test_split
+from sklearn.metrics import f1_score, precision_recall_fscore_support
+from ai.app.services.audio_enhancement import denoise_audio, calculate_si_sdr
 
 # =============================================================================
 # [설정] 경로 및 하이퍼파라미터
@@ -136,7 +138,16 @@ def prepare_data():
     id2label = {i: label for i, label in enumerate(labels)}
     print(f"[Info] 감지된 라벨({len(labels)}개): {labels}")
     
-    # 7:2:1 분할
+    # [기존 로직 주석 처리]
+    # train_val, test_data = train_test_split(
+    #     data_list, test_size=0.2, stratify=[x['label'] for x in data_list], random_state=42
+    # )
+    # train_data, val_data = train_test_split(
+    #     train_val, test_size=0.125, stratify=[x['label'] for x in train_val], random_state=42
+    # )
+    
+    # [고도화 로직] 세션/파일 기반 분할 (여기서는 단순 폴더 기반을 유지하되 그룹핑 고려 가능)
+    # 현재는 파일명 기반 세션 구분이 어려우므로 기존 stratify를 유지하되 로직만 명확히 함
     train_val, test_data = train_test_split(
         data_list, test_size=0.2, stratify=[x['label'] for x in data_list], random_state=42
     )
@@ -161,8 +172,8 @@ def prepare_data():
             print(f"[Warning] 오디오 로드 실패: {file_path} - {e}")
             return None
     
-    def preprocess_batch(data_list, desc="Processing"):
-        """배치 전처리 (librosa 사용)"""
+    async def preprocess_batch_async(data_list, desc="Processing"):
+        """배치 전처리 (librosa + U-Net Denoising)"""
         processed_data = []
         
         for item in data_list:
@@ -170,9 +181,13 @@ def prepare_data():
             if audio_array is None:
                 continue
             
+            # [고도화 로직] U-Net Denoising 적용
+            # 기존: audio_array_input = audio_array
+            audio_array_clean = await denoise_audio(audio_array)
+            
             # Feature extraction
             inputs = feature_extractor(
-                audio_array, 
+                audio_array_clean, 
                 sampling_rate=16000, 
                 return_tensors="pt", 
                 padding="max_length"
@@ -184,6 +199,11 @@ def prepare_data():
             })
         
         return processed_data
+
+    # [기존 함수 보존을 위해 새 이름으로 래핑함]
+    def preprocess_batch(data_list, desc="Processing"):
+        import asyncio
+        return asyncio.run(preprocess_batch_async(data_list, desc))
     
     # Dataset 생성 및 전처리
     print("[Info] 데이터 전처리 중 (librosa 사용)...")
@@ -228,12 +248,22 @@ def evaluate_baseline():
         ignore_mismatched_sizes=True
     )
     
-    accuracy_metric = evaluate.load("accuracy")
+    # accuracy_metric = evaluate.load("accuracy")
     
     def compute_metrics(eval_pred):
         predictions, labels_arr = eval_pred
         predictions = np.argmax(predictions, axis=1)
-        return accuracy_metric.compute(predictions=predictions, references=labels_arr)
+        
+        # [고도화 로직] F1, Precision, Recall 추가
+        precision, recall, f1, _ = precision_recall_fscore_support(labels_arr, predictions, average='weighted')
+        acc = (predictions == labels_arr).mean()
+        
+        return {
+            "accuracy": acc,
+            "f1": f1,
+            "precision": precision,
+            "recall": recall
+        }
     
     training_args = TrainingArguments(
         output_dir="./ai/runs/baseline_eval",
@@ -276,12 +306,22 @@ def train_model(epochs=10):
         ignore_mismatched_sizes=True
     )
     
-    accuracy_metric = evaluate.load("accuracy")
+    # accuracy_metric = evaluate.load("accuracy")
     
     def compute_metrics(eval_pred):
         predictions, labels_arr = eval_pred
         predictions = np.argmax(predictions, axis=1)
-        return accuracy_metric.compute(predictions=predictions, references=labels_arr)
+        
+        # [고도화 로직] F1, Precision, Recall 추가
+        precision, recall, f1, _ = precision_recall_fscore_support(labels_arr, predictions, average='weighted')
+        acc = (predictions == labels_arr).mean()
+        
+        return {
+            "accuracy": acc,
+            "f1": f1,
+            "precision": precision,
+            "recall": recall
+        }
     
     training_args = TrainingArguments(
         output_dir=OUTPUT_DIR,
@@ -335,12 +375,22 @@ def evaluate_final():
     # 학습된 모델 로드
     model = ASTForAudioClassification.from_pretrained(SAVE_PATH)
     
-    accuracy_metric = evaluate.load("accuracy")
+    # accuracy_metric = evaluate.load("accuracy")
     
     def compute_metrics(eval_pred):
         predictions, labels_arr = eval_pred
         predictions = np.argmax(predictions, axis=1)
-        return accuracy_metric.compute(predictions=predictions, references=labels_arr)
+        
+        # [고도화 로직] F1, Precision, Recall 추가
+        precision, recall, f1, _ = precision_recall_fscore_support(labels_arr, predictions, average='weighted')
+        acc = (predictions == labels_arr).mean()
+        
+        return {
+            "accuracy": acc,
+            "f1": f1,
+            "precision": precision,
+            "recall": recall
+        }
     
     training_args = TrainingArguments(
         output_dir="./ai/runs/final_eval",

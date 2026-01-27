@@ -4,21 +4,25 @@ from ai.app.schemas.audio_schema import AudioResponse, AudioDetail
 
 async def process_visual_mock(file_bytes: bytes) -> VisualResponse:
     """
-    로컬 테스트용 Mock Visual Analysis
-    실제 모델 추론 없이 고정된 결과(손상 감지됨)를 반환합니다.
+    로컬 테스트용 Mock Visual Analysis (표준 규격 준수)
     """
     return VisualResponse(
-        status="DAMAGED",
-        analysis_type="VISUAL_MOCK",
-        detected_count=1,
-        detections=[
-            DetectionItem(
-                label="SCRATCH",
-                confidence=0.95,
-                bbox=[100, 100, 200, 50]
-            )
-        ],
-        processed_image_url="http://localhost:8000/mock/result_image.jpg"
+        status="WARNING",
+        analysis_type="SCENE_EXTERIOR",
+        category="EXTERIOR",
+        data={
+            "damage_found": True,
+            "detections": [
+                {
+                    "part": "Front_Bumper",
+                    "damage_type": "Scratch",
+                    "confidence": 0.95,
+                    "bbox": [100, 100, 200, 50]
+                }
+            ],
+            "description": "앞 범퍼에 스크래치가 발견되었습니다. (Mock 데이터)",
+            "repair_estimate": "부분 도색을 권장합니다."
+        }
     )
 
 async def process_audio_mock(file_bytes: bytes) -> AudioResponse:

@@ -77,14 +77,12 @@ public class TripService {
         trip.setEndTime(endTime);
 
         var startOffset = trip.getStartTime().atZone(java.time.ZoneId.systemDefault()).toOffsetDateTime();
-        var endOffset = endTime.atZone(java.time.ZoneId.systemDefault()).toOffsetDateTime();
 
-        log.info("[TripEnd] Query Range: {} ~ {} (vehicleId={})", startOffset, endOffset, trip.getVehicleId());
+        log.info("[TripEnd] Query for all logs from startTime: {} (vehicleId={})", startOffset, trip.getVehicleId());
 
-        List<ObdLog> tripLogs = obdLogRepository.findByVehicleIdAndTimeBetweenOrderByTimeAsc(
+        List<ObdLog> tripLogs = obdLogRepository.findByVehicleIdAndTimeGreaterThanEqualOrderByTimeAsc(
                 trip.getVehicleId(),
-                startOffset,
-                endOffset);
+                startOffset);
 
         log.info("[TripEnd] Found {} logs for trip {}", tripLogs.size(), tripId);
 
@@ -137,7 +135,8 @@ public class TripService {
                     log.info("[TripEnd] Updated Vehicle Total Mileage: {} -> {}", currentTotal, newTotal);
 
                     try {
-                        wearFactorService.calculateAndSaveWearFactors(trip.getVehicleId(), newTotal);
+                        wearFactorService.calculateAndSaveWearFactors(trip.getVehicleId(), newTotal,
+                                trip.getDistance());
                         log.info("Successfully triggered wear factor calculation for vehicle: {}", trip.getVehicleId());
                     } catch (Exception e) {
                         log.error("Wear factor trigger failed", e);

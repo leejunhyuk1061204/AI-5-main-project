@@ -184,8 +184,8 @@ async def analyze_exterior_image(
             "data": {
                 "damage_found": False,
                 "detections": [],
-                "description": llm_result.description if hasattr(llm_result, 'description') else None,
-                "repair_estimate": None,
+                "description": llm_result.data.get("description") if hasattr(llm_result, 'data') else "이미지 분석 실패",
+                "repair_estimate": llm_result.data.get("recommendation") if hasattr(llm_result, 'data') else "전문가 점검 권장",
                 "llm_fallback": True
             }
         }
@@ -219,8 +219,8 @@ async def analyze_exterior_image(
             "data": {
                 "damage_found": True,
                 "detections": [],
-                "description": llm_result.description if hasattr(llm_result, 'description') else None,
-                "repair_estimate": None,
+                "description": llm_result.data.get("description") if hasattr(llm_result, 'data') else "신뢰할 수 없는 분석 결과",
+                "repair_estimate": llm_result.data.get("recommendation") if hasattr(llm_result, 'data') else "정교한 재촬영 권장",
                 "llm_fallback": True
             }
         }

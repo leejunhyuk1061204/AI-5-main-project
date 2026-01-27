@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, TouchableOpacity, Dimensions, StyleSheet, Image, ActivityIndicator, StatusBar as RNStatusBar } from 'react-native';
 import { useAlertStore } from '../store/useAlertStore';
+import { useAiDiagnosisStore } from '../store/useAiDiagnosisStore';
 import { diagnoseImage, replyToDiagnosisSession } from '../api/aiApi';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -59,6 +60,7 @@ export default function Filming({ navigation, route }: { navigation?: any; route
     const analyzeImage = async () => {
         if (!capturedImage) return;
         const sessionId = route?.params?.sessionId;
+        const { updateStatus, setVehicleId, currentSessionId } = useAiDiagnosisStore.getState();
 
         setIsAnalyzing(true);
         try {
@@ -66,34 +68,84 @@ export default function Filming({ navigation, route }: { navigation?: any; route
             if (sessionId) {
                 // If we are in an interactive session, use REPLY endpoint
                 result = await replyToDiagnosisSession(sessionId, {
-                    userResponse: "사진을 촬영했습니다.", // Default text for media reply 
+                    userResponse: "사진을 촬영했습니다.",
                     vehicleId: route?.params?.vehicleId || '00000000-0000-0000-0000-000000000000'
                 }, capturedImage);
+                // After reply, set waiting state
+                useAiDiagnosisStore.setState({ isWaitingForAi: true });
             } else {
                 // Otherwise start a new diagnosis
+                useAiDiagnosisStore.setState({
+                    status: 'PROCESSING',
+                    loadingMessage: '촬영된 이미지를 분석하고 있습니다...',
+                    messages: [],
+                    diagResult: null,
+                    currentSessionId: null
+                });
                 result = await diagnoseImage(capturedImage);
             }
 
             if (!navigation) {
                 useAlertStore.getState().showAlert('진단 완료', '진단 결과가 준비되었습니다.', 'SUCCESS');
+                setIsAnalyzing(false);
                 return;
             }
 
-            if (route?.params?.from === 'chatbot') {
-                navigation.navigate('AiCompositeDiag', { diagnosisResult: result });
-            } else if (route?.params?.from === 'professional') {
-                navigation.navigate('AiProfessionalDiag', { diagnosisResult: result });
+            // 통합 진단 흐름 분기: REPORT vs INTERACTIVE
+            if (result.sessionId) {
+                setVehicleId(route?.params?.vehicleId || '00000000-0000-0000-0000-000000000000');
+                useAiDiagnosisStore.setState({ currentSessionId: result.sessionId });
+
+                // Trigger immediate update but rely on polling effect for navigation
+                await updateStatus(result.sessionId);
             } else {
+                // Fallback (Legacy)
+                setIsAnalyzing(false);
                 navigation.navigate('VisualDiagnosis', { diagnosisResult: result, capturedImage: capturedImage });
             }
 
         } catch (error: any) {
             console.error('Diagnosis Error:', error);
             useAlertStore.getState().showAlert('진단 실패', error.message || '서버 통신 중 오류가 발생했습니다.', 'ERROR');
-        } finally {
             setIsAnalyzing(false);
+            useAiDiagnosisStore.setState({ status: 'IDLE' });
         }
+        // Note: setIsAnalyzing(false) is handled effectively by navigation unmount or status change
     };
+
+    // Polling Effect and Status Watcher
+    const { status, currentSessionId, updateStatus } = useAiDiagnosisStore();
+
+    // 1. Polling
+    useEffect(() => {
+        let intervalId: NodeJS.Timeout;
+        if (status === 'PROCESSING' && currentSessionId) {
+            intervalId = setInterval(() => {
+                updateStatus(currentSessionId);
+            }, 2000);
+        }
+        return () => {
+            if (intervalId) clearInterval(intervalId);
+        };
+    }, [status, currentSessionId]);
+
+    // 2. Navigation
+    useEffect(() => {
+        if (!currentSessionId) return;
+
+        if (status === 'INTERACTIVE' || status === 'ACTION_REQUIRED') {
+            setIsAnalyzing(false);
+            navigation.replace('AiDiagChat', {
+                sessionId: currentSessionId,
+                vehicleId: route?.params?.vehicleId
+            });
+        } else if (status === 'REPORT') {
+            setIsAnalyzing(false);
+            navigation.replace('DiagnosisReport', {
+                reportData: { sessionId: currentSessionId }
+            });
+        }
+    }, [status, currentSessionId]);
 
     useEffect(() => {
         if (!permission) {
