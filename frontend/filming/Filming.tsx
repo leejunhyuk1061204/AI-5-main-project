@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
 import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
+import * as ImagePicker from 'expo-image-picker';
 
 const { width } = Dimensions.get('window');
 
@@ -55,6 +56,19 @@ export default function Filming({ navigation, route }: { navigation?: any; route
 
     const retakePicture = () => {
         setCapturedImage(null);
+    };
+
+    const pickImage = async () => {
+        const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ['images'],
+            allowsEditing: false,
+            quality: 0.8,
+        });
+
+        if (!result.canceled && result.assets && result.assets.length > 0) {
+            setCapturedImage(result.assets[0].uri);
+            setEnableTorch(false);
+        }
     };
 
     const analyzeImage = async () => {
@@ -310,6 +324,17 @@ export default function Filming({ navigation, route }: { navigation?: any; route
                                 <MaterialIcons name="flip-camera-ios" size={22} color="white" />
                             </View>
                             <Text style={[styles.controlText, { color: '#94a3b8' }]}>전환</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={styles.controlButton}
+                            onPress={pickImage}
+                            disabled={isCapturing}
+                        >
+                            <View style={[styles.controlIcon, { backgroundColor: '#1e2936' }]}>
+                                <MaterialIcons name="photo-library" size={22} color="white" />
+                            </View>
+                            <Text style={[styles.controlText, { color: '#94a3b8' }]}>갤러리</Text>
                         </TouchableOpacity>
                     </View>
                 )}

@@ -45,4 +45,5 @@ node_modules
 
 ### Generated Native Projects ###
 frontend/android/
-frontend/ios/
+frontend/ios/  
+/uploads/ 

@@ -5,6 +5,7 @@ import { useAiDiagnosisStore } from '../store/useAiDiagnosisStore';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Audio } from 'expo-av';
+import * as DocumentPicker from 'expo-document-picker';
 import { diagnoseEngineSound, replyToDiagnosisSession } from '../api/aiApi';
 import BaseScreen from '../components/layout/BaseScreen';
 
@@ -88,6 +89,26 @@ export default function EngineSoundDiag() {
         } finally {
             recordingRef.current = null;
             setIsProcessing(false);
+        }
+    };
+
+    // Pick Audio File
+    const pickAudioFile = async () => {
+        if (isProcessing) return;
+        try {
+            const result = await DocumentPicker.getDocumentAsync({
+                type: 'audio/*',
+                copyToCacheDirectory: true,
+            });
+
+            if (!result.canceled && result.assets && result.assets.length > 0) {
+                const uri = result.assets[0].uri;
+                setStep(2);
+                analyzeSound(uri);
+            }
+        } catch (err) {
+            console.error('Failed to pick document', err);
+            useAlertStore.getState().showAlert('오류', '파일을 선택하는 중 문제가 발생했습니다.', 'ERROR');
         }
     };
 
@@ -271,20 +292,39 @@ export default function EngineSoundDiag() {
                         )}
 
                         {step === 1 && (
-                            <View className="mt-12 items-center gap-4 w-full">
-                                <TouchableOpacity
-                                    onPress={handleRecordToggle}
-                                    className={`relative items-center justify-center w-20 h-20 rounded-full shadow-lg active:scale-95 transition-all ${isRecording ? 'bg-red-500 shadow-red-500/40' : 'bg-[#0d7ff2] shadow-blue-500/40'}`}
-                                >
-                                    <MaterialIcons
-                                        name={isRecording ? "stop" : "mic"}
-                                        size={32}
-                                        color="white"
-                                    />
-                                </TouchableOpacity>
-                                <Text className={`text-sm font-medium ${isRecording ? 'text-red-400 animate-pulse' : 'text-slate-500'}`}>
-                                    {isRecording ? "녹음 중..." : "녹음 준비 완료"}
-                                </Text>
+                            <View className="mt-12 items-center gap-8 w-full flex-row justify-center">
+                                <View className="items-center gap-4">
+                                    <TouchableOpacity
+                                        onPress={handleRecordToggle}
+                                        className={`relative items-center justify-center w-20 h-20 rounded-full shadow-lg active:scale-95 transition-all ${isRecording ? 'bg-red-500 shadow-red-500/40' : 'bg-[#0d7ff2] shadow-blue-500/40'}`}
+                                    >
+                                        <MaterialIcons
+                                            name={isRecording ? "stop" : "mic"}
+                                            size={32}
+                                            color="white"
+                                        />
+                                    </TouchableOpacity>
+                                    <Text className={`text-sm font-medium ${isRecording ? 'text-red-400 animate-pulse' : 'text-slate-500'}`}>
+                                        {isRecording ? "녹음 중..." : "녹음 시작"}
+                                    </Text>
+                                </View>
+
+                                {!isRecording && (
+                                    <View className="items-center gap-4">
+                                        <TouchableOpacity
+                                            onPress={pickAudioFile}
+                                            disabled={isProcessing}
+                                            className="relative items-center justify-center w-20 h-20 rounded-full bg-[#1a2430] border border-slate-700 shadow-lg active:scale-95 transition-all"
+                                        >
+                                            <MaterialIcons
+                                                name="file-present"
+                                                size={32}
+                                                color="white"
+                                            />
+                                        </TouchableOpacity>
+                                        <Text className="text-sm font-medium text-slate-500">파일 선택</Text>
+                                    </View>
+                                )}
                             </View>
                         )}
                     </>
