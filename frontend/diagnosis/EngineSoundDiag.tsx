@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, Animated, ActivityIndicator } from 'react-native';
 import { useAlertStore } from '../store/useAlertStore';
+import { useAiDiagnosisStore } from '../store/useAiDiagnosisStore';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Audio } from 'expo-av';
@@ -93,24 +94,44 @@ export default function EngineSoundDiag() {
     // Analyze Sound via API
     const analyzeSound = async (uri: string) => {
         const sessionId = route.params?.sessionId;
+        const { updateStatus, setVehicleId, currentSessionId } = useAiDiagnosisStore.getState();
 
         try {
             let result;
             if (sessionId) {
+                // INTERACTIVE 모드 답변인 경우
                 result = await replyToDiagnosisSession(sessionId, {
                     userResponse: "엔진 소리를 녹음했습니다.",
                     vehicleId: route.params?.vehicleId || '00000000-0000-0000-0000-000000000000'
                 }, undefined, uri);
+
+                // 답변 후에는 스토어 상태 업데이트만 하고 폴링은 DiagMain이나 현재 화면의 Effect가 처리
+                // 단, 여기서도 폴링이 필요할 수 있음.
+                useAiDiagnosisStore.setState({ isWaitingForAi: true });
             } else {
+                // 신규 진단인 경우
+                useAiDiagnosisStore.setState({
+                    status: 'PROCESSING',
+                    loadingMessage: '엔진 소리를 분석하고 있습니다...',
+                    messages: [],
+                    diagResult: null,
+                    currentSessionId: null
+                });
+
                 result = await diagnoseEngineSound(uri);
             }
 
             setDiagnosisResult(result);
 
-            if (route.params?.from === 'chatbot') {
-                navigation.navigate('AiCompositeDiag', { diagnosisResult: result });
-            } else if (route.params?.from === 'professional') {
-                navigation.navigate('AiProfessionalDiag', { diagnosisResult: result });
+            if (result.sessionId) {
+                setVehicleId(route.params?.vehicleId || '00000000-0000-0000-0000-000000000000');
+                useAiDiagnosisStore.setState({ currentSessionId: result.sessionId });
+
+                // 즉시 이동하지 않고 Polling을 기다림
+                // 아래 useEffect에서 status 변화를 감지하여 이동 처리
+
+                // 만약 백엔드가 이미 완료된 상태로 리턴했다면(Mock 등) 한 번 업데이트
+                await updateStatus(result.sessionId);
             } else {
                 setStep(3);
             }
@@ -118,8 +139,40 @@ export default function EngineSoundDiag() {
             console.error(error);
             useAlertStore.getState().showAlert('진단 실패', error.message || '서버 통신 중 오류가 발생했습니다.', 'ERROR');
             setStep(1);
+            useAiDiagnosisStore.setState({ status: 'IDLE' });
         }
     };
+
+    // Polling Effect (소리 진단 화면용)
+    const { status, currentSessionId, updateStatus } = useAiDiagnosisStore();
+
+    useEffect(() => {
+        let intervalId: NodeJS.Timeout;
+        if (status === 'PROCESSING' && currentSessionId) {
+            intervalId = setInterval(() => {
+                updateStatus(currentSessionId);
+            }, 2000);
+        }
+        return () => {
+            if (intervalId) clearInterval(intervalId);
+        };
+    }, [status, currentSessionId]);
+
+    // Status Watcher: 상태 변화에 따른 네비게이션
+    useEffect(() => {
+        if (!currentSessionId) return;
+
+        if (status === 'INTERACTIVE' || status === 'ACTION_REQUIRED') {
+            navigation.replace('AiDiagChat', {
+                sessionId: currentSessionId,
+                vehicleId: route.params?.vehicleId
+            });
+        } else if (status === 'REPORT') {
+            navigation.replace('DiagnosisReport', {
+                reportData: { sessionId: currentSessionId }
+            });
+        }
+    }, [status, currentSessionId]);
 
     const handleRecordToggle = () => {
         if (isProcessing) return;

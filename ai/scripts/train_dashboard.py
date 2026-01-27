@@ -35,7 +35,7 @@ def train_model(epochs=DEFAULT_EPOCHS):
         return
     
     model = YOLO(BASE_MODEL)
-    model.train(
+    results = model.train(
         data=DATA_YAML_PATH,
         epochs=epochs,
         imgsz=IMG_SIZE,
@@ -47,12 +47,18 @@ def train_model(epochs=DEFAULT_EPOCHS):
         workers=WORKERS  # Windows 메모리 문제 방지
     )
     
-    # 가중치 저장
-    best_path = os.path.join(OUTPUT_DIR, "run", "weights", "best.pt")
+    # 가중치 저장 - 실제 저장 경로를 동적으로 추적
+    if hasattr(results, 'save_dir'):
+        best_path = os.path.join(results.save_dir, "weights", "best.pt")
+    else:
+        best_path = os.path.join(OUTPUT_DIR, "run", "weights", "best.pt")
+
     if os.path.exists(best_path):
         os.makedirs(os.path.dirname(SAVE_PATH), exist_ok=True)
         shutil.copy(best_path, SAVE_PATH)
         print(f"[✓] 모델이 저장되었습니다: {SAVE_PATH}")
+    else:
+        print(f"[Warning] Best model weight file not found at: {best_path}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Dashboard Warning Light Training")

@@ -47,9 +47,17 @@ export default function AiProfessionalDiag() {
         if (pendingAction === 'OBD') {
             await startObdDiagnosis(vehicle.vehicleId);
         } else if (pendingAction === 'SOUND') {
-            Alert.alert("알림", `[${vehicle.model}] 엔진 소리 진단 기능은 준비 중입니다.`);
+            navigation.navigate('EngineSoundDiag', {
+                from: 'professional',
+                vehicleId: vehicle.vehicleId,
+                sessionId: currentSessionId
+            });
         } else if (pendingAction === 'PHOTO') {
-            Alert.alert("알림", `[${vehicle.model}] 시각적 부품 진단 기능은 준비 중입니다.`);
+            navigation.navigate('Filming', {
+                from: 'professional',
+                vehicleId: vehicle.vehicleId,
+                sessionId: currentSessionId
+            });
         }
         setPendingAction(null);
     };
@@ -112,6 +120,27 @@ export default function AiProfessionalDiag() {
         setUserInput('');
         setMode('IDLE');
     };
+
+    // Handle returned diagnosis results from Photo/Sound pages
+    useEffect(() => {
+        if (route.params?.diagnosisResult) {
+            const result = route.params.diagnosisResult;
+            const newMsg = {
+                role: 'ai',
+                content: `진단이 완료되었습니다.\n결과: ${result.result === 'NORMAL' ? '정상' : '이상 감지'}\n\n${result.description}`,
+                isResult: true
+            };
+            setMessages(prev => [...prev, newMsg]);
+
+            // If the user was in IDLE or PROCESSING, move to INTERACTIVE to show the chat
+            if (mode === 'IDLE' || mode === 'PROCESSING') {
+                setMode('INTERACTIVE');
+            }
+
+            // Clear params to avoid duplicate messages on re-render
+            navigation.setParams({ diagnosisResult: null });
+        }
+    }, [route.params?.diagnosisResult]);
 
     // Polling Effect
     useEffect(() => {
@@ -293,7 +322,11 @@ export default function AiProfessionalDiag() {
                             color="#3b82f6"
                             onPress={() => {
                                 if (selectedVehicleId) {
-                                    Alert.alert("알림", `${selectedVehicleName} 시각적 부품 진단 기능은 준비 중입니다.`);
+                                    navigation.navigate('Filming', {
+                                        from: 'professional',
+                                        vehicleId: selectedVehicleId,
+                                        sessionId: currentSessionId
+                                    });
                                 } else {
                                     setPendingAction('PHOTO');
                                     setVehicleSelectVisible(true);
@@ -306,7 +339,11 @@ export default function AiProfessionalDiag() {
                             color="#3b82f6"
                             onPress={() => {
                                 if (selectedVehicleId) {
-                                    Alert.alert("알림", `${selectedVehicleName} 엔진 소리 진단 기능은 준비 중입니다.`);
+                                    navigation.navigate('EngineSoundDiag', {
+                                        from: 'professional',
+                                        vehicleId: selectedVehicleId,
+                                        sessionId: currentSessionId
+                                    });
                                 } else {
                                     setPendingAction('SOUND');
                                     setVehicleSelectVisible(true);

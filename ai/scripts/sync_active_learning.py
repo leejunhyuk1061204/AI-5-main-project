@@ -25,13 +25,19 @@ S3_BUCKET = os.getenv("S3_BUCKET_NAME", "car-sentry-data")
 
 # 도메인별 클래스 매핑 (실제 모델의 names 리스트와 일치해야 함)
 DOMAIN_CLASSES = {
-    "dashboard": ["ABS", "Brake", "Battery", "Engine", "ESP", "Overheating", "Oil", "Tire", "Master", "Airbag"],
-    "tire": ["normal", "cracked", "worn", "flat", "bulge", "uneven"], # uneven 추가
-    "engine": ["Battery", "Engine_Cover", "Oil_Cap", "Coolant_Reservoir", "Fuse_Box"], # 예시
-    "exterior": ["dent", "scratch", "crack", "glass_shatter", "lamp_broken", "tire_flat"],
-    "audio": ["ENG_IDLE", "ENG_KNOCKING", "BRAKE_SQUEAL", "SUSP_CLUNK"] # AST용 예시
+    "dashboard": ['Anti Lock Braking System', 'Braking System Issue', 'Charging System Issue', 'Check Engine', 'Electronic Stability Problem -ESP-', 'Engine Overheating Warning Light', 'Low Engine Oil Warning Light', 'Low Tire Pressure Warning Light', 'Master warning light', 'SRS-Airbag'],
+    "tire": ["normal", "cracked", "worn", "flat", "bulge", "uneven"], # 미래 확장성(데이터 수집) 고려
+    "engine": [
+        "Inverter_Coolant_Reservoir", "Battery", "Radiator_Cap", "Windshield_Wiper_Fluid", "Fuse_Box",
+        "Power_Steering_Reservoir", "Brake_Fluid", "Engine_Oil_Fill_Cap", "Engine_Oil_Dip_Stick", "Air_Filter_Cover",
+        "ABS_Unit", "Alternator", "Engine_Coolant_Reservoir", "Radiator", "Air_Filter", "Engine_Cover",
+        "Cold_Air_Intake", "Clutch_Fluid_Reservoir", "Transmission_Oil_Dip_Stick", "Intercooler_Coolant_Reservoir",
+        "Oil_Filter_Housing", "ATF_Oil_Reservoir", "Cabin_Air_Filter_Housing", "Secondary_Coolant_Reservoir",
+        "Electric_Motor", "Oil_Filter"
+    ],
+    "exterior": ["dent", "scratch", "crack", "glass_shatter", "lamp_broken", "tire_flat"], # CarDD (파손)
+    "audio": ["Normal", "Engine_Knocking", "Engine_Misfire", "Belt_Issue", "Abnormal_Noise", "Brake_Squeal", "Suspension_Clunk", "Exhaust_Leak", "Wheel_Bearing_Hum"] # 서비스 키워드 중심
 }
-
 async def download_file(s3_url, target_path):
     """S3 URL에서 파일을 다운로드하여 로컬에 저장"""
     # boto3를 사용하는 것이 더 안정적임 (인증 문제)
@@ -87,21 +93,24 @@ async def sync_data(domain, limit):
     json_files = [obj['Key'] for obj in response['Contents'] if obj['Key'].endswith('.json')]
     print(f"[Info] {len(json_files)}개의 정답지를 발견했습니다.")
 
-    # 3. 로컬 디렉토리 준비
-    target_data_dir = BASE_DIR / "data" / domain / "retrain" # retrain 폴더 사용
-    if domain == "audio":
-        target_wav_dir = target_data_dir / "wavs"
-        target_wav_dir.mkdir(parents=True, exist_ok=True)
-        label_file = target_data_dir / "labels.csv"
-    else:
-        target_img_dir = target_data_dir / "images"
-        target_lbl_dir = target_data_dir / "labels"
-        target_img_dir.mkdir(parents=True, exist_ok=True)
-        target_lbl_dir.mkdir(parents=True, exist_ok=True)
+    # [수정] 디렉토리는 실제 파일 저장 직전에 생성하여 빈 폴더 방지
+    target_data_dir = BASE_DIR / "data" / domain / "retrain"
+    target_img_dir = target_data_dir / "images"
+    target_lbl_dir = target_data_dir / "labels"
+    target_wav_dir = target_data_dir / "wavs"
 
     class_list = DOMAIN_CLASSES.get(domain, [])
     success_count = 0
     new_classes_found = set()
+    
+    # COCO 데이터 구조 (exterior 전용)
+    coco_data = {
+        "images": [],
+        "annotations": [],
+        "categories": [{"id": i, "name": name} for i, name in enumerate(class_list)]
+    }
+    ann_id_counter = 1
+    img_id_counter = 1
 
     for key in json_files[:limit]:
         file_id = os.path.basename(key).split('.')[0]
@@ -126,20 +135,75 @@ async def sync_data(domain, limit):
         file_path = target_data_dir / sub_dir / f"{file_id}{ext}"
         
         if not file_path.exists():
+            file_path.parent.mkdir(parents=True, exist_ok=True) # 파일 저장 직전 폴더 생성
             if not await download_file(source_url, file_path):
                 continue
 
-        # 라벨 저장 (YOLO vs AST)
+        # 라벨 저장 (YOLO vs AST vs COCO vs Classification)
         if domain == "audio":
             label = data.get("label", "NORMAL")
             if label not in class_list:
                 new_classes_found.add(label)
             with open(label_file, "a", encoding="utf-8") as f:
                 f.write(f"{file_id}{ext},{label}\n")
-        else:
-            # YOLO txt 포맷 생성
+        elif domain == "exterior":
+            # COCO 포맷 데이터 수집 (생략 - 이전과 동일)
+            coco_data["images"].append({
+                "id": img_id_counter,
+                "width": 1024,
+                "height": 1024,
+                "file_name": f"{file_id}{ext}"
+            })
             labels = data.get("labels", [])
-            # 타이어 마모도(pct) 학습용 데이터는 별도 처리가 필요할 수 있으나, 일단 YOLO 클래스 학습 위주
+            for lbl in labels:
+                cls_name = lbl.get("class")
+                if cls_name in class_list:
+                    cls_id = class_list.index(cls_name)
+                    bbox = lbl.get("bbox", [0.5, 0.5, 0.1, 0.1])
+                    cw, ch = 1024, 1024
+                    x = (bbox[0] - bbox[2]/2) * cw
+                    y = (bbox[1] - bbox[3]/2) * ch
+                    w = bbox[2] * cw
+                    h = bbox[3] * ch
+                    coco_data["annotations"].append({
+                        "id": ann_id_counter,
+                        "image_id": img_id_counter,
+                        "category_id": cls_id,
+                        "bbox": [x, y, w, h],
+                        "area": w * h,
+                        "iscrowd": 0
+                    })
+                    ann_id_counter += 1
+                else:
+                    new_classes_found.add(cls_name)
+            img_id_counter += 1
+        elif domain == "tire":
+            # 분류(Classification) 모델용: 폴더별 자동 분류
+            # LLM이 판단한 critical_issues 중 첫 번째 요소를 클래스로 선택 (없으면 normal)
+            issues = data.get("critical_issues", [])
+            target_class = "normal"
+            if issues:
+                # class_list에 있는 것 중 가장 우선순위 높은 것 선택
+                for issue in issues:
+                    if issue in class_list:
+                        target_class = issue
+                        break
+                if target_class == "normal": # class_list에 없는 새로운 이슈
+                    new_classes_found.add(issues[0])
+            
+            # 이미지를 해당 클래스 폴더로 이동/저장
+            class_dir = target_data_dir / target_class
+            class_dir.mkdir(parents=True, exist_ok=True)
+            
+            # 이미 다운로드된 파일을 클래스 폴더로 이동 (또는 처음부터 경로 지정)
+            final_file_path = class_dir / f"{file_id}{ext}"
+            if file_path.exists() and not final_file_path.exists():
+                os.replace(file_path, final_file_path)
+            
+            print(f"  - [✓] {file_id} ({target_class}) 분류 완료")
+        else:
+            # YOLO txt 포맷 생성 (Detection 모델용)
+            labels = data.get("labels", [])
             yolo_lines = []
             for lbl in labels:
                 cls_name = lbl.get("class")
@@ -150,21 +214,20 @@ async def sync_data(domain, limit):
                 else:
                     new_classes_found.add(cls_name)
             
-            # 타이어 마모도의 경우 critical_issues를 클래스로 활용
-            if domain == "tire" and not yolo_lines:
-                issues = data.get("critical_issues", [])
-                if issues:
-                    for issue in issues:
-                        if issue in class_list:
-                            cls_id = class_list.index(issue)
-                            yolo_lines.append(f"{cls_id} 0.5 0.5 0.8 0.8") # 전체 영역 근사
-
             if yolo_lines:
                 with open(target_lbl_dir / f"{file_id}.txt", "w") as f:
                     f.write("\n".join(yolo_lines))
         
-        print(f"  - [✓] {file_id} 동기화 및 변환 완료")
+        if domain != "tire": # 타이어는 위에서 별도 출력
+            print(f"  - [✓] {file_id} 동기화 완료")
         success_count += 1
+
+    # 외관(exterior) 도메인인 경우 최종 COCO JSON 저장
+    if domain == "exterior":
+        coco_json_path = target_data_dir / "retrain_coco.json"
+        with open(coco_json_path, "w", encoding="utf-8") as f:
+            json.dump(coco_data, f, ensure_ascii=False, indent=2)
+        print(f"[Info] COCO 통합 장부 저장 완료: {coco_json_path}")
 
     print(f"\n[✓] 총 {success_count}개의 데이터가 로컬 'retrain' 폴더에 성공적으로 저장되었습니다.")
     
@@ -172,6 +235,13 @@ async def sync_data(domain, limit):
         print("\n[🚨 New Classes Discovered]")
         for nc in new_classes_found:
             print(f"  - {nc}")
+
+    # 4. 빈 폴더 정리 (실수로 생성된 경우)
+    for root, dirs, files in os.walk(target_data_dir, topdown=False):
+        for name in dirs:
+            dir_path = os.path.join(root, name)
+            if not os.listdir(dir_path): # 비어있으면
+                os.rmdir(dir_path)
 
 if __name__ == "__main__":
     import asyncio

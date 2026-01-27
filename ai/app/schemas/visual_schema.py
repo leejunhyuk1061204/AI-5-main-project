@@ -144,7 +144,7 @@ class TireData(BaseModel):
     """타이어 분석 data 객체"""
     wear_status: str = Field(..., description="마모 상태 (GOOD/DANGER)")
     wear_level_pct: Optional[int] = Field(None, description="마모 진행도 (%)")
-    uneven_wear_detected: bool = Field(False, description="편마모 감지 여부")
+    critical_issues: Optional[List[str]] = Field(None, description="['cracked', 'flat', 'bulge', 'uneven'] 등")
     description: Optional[str] = Field(None, description="상태 설명 (LLM)")
     recommendation: Optional[str] = Field(None, description="권장 조치 (LLM)")
     is_replacement_needed: bool = Field(False, description="교체 필요 여부")

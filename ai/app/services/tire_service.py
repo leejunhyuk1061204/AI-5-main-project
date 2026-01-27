@@ -40,6 +40,12 @@
 import os
 from typing import List, Union, Dict, Any
 from PIL import Image
+from ai.app.services.router_service import CONFIDENCE_THRESHOLD
+
+# =============================================================================
+# Reliability Thresholds
+# =============================================================================
+FAST_PATH_THRESHOLD = 0.9  # 이 값 이상이면 LLM 없이 로컬 결과 반환 (테스트용)
 
 
 async def run_tire_yolo(
@@ -71,20 +77,34 @@ async def run_tire_yolo(
     try:
         results = yolo_model.predict(source=image, save=False, conf=0.25)
         
+        if not results or len(results) == 0:
+            return {"is_worn": None, "confidence": 0.0, "label": None}
+            
+        r = results[0]
+        # Classification 모델은 r.probs를 사용함
+        if hasattr(r, 'probs') and r.probs is not None:
+            top1_idx = int(r.probs.top1)
+            label_name = yolo_model.names[top1_idx].lower()
+            confidence = float(r.probs.top1conf)
+            
+            return {
+                "is_worn": label_name == "cracked" or label_name == "worn", # cracked와 worn 모두 이상으로 간주
+                "confidence": round(confidence, 2),
+                "label": label_name
+            }
+        
+        # 만약 Detection 모델인 경우 (하위 호환성 유지)
         best_detection = None
         max_confidence = 0.0
-        
-        for r in results:
+        if hasattr(r, 'boxes'):
             for box in r.boxes:
                 label_idx = int(box.cls[0])
                 label_name = yolo_model.names[label_idx].lower()
                 confidence = float(box.conf[0])
-                
-                # 가장 신뢰도 높은 감지 결과 선택
                 if confidence > max_confidence:
                     max_confidence = confidence
                     best_detection = {
-                        "is_worn": label_name == "worn",
+                        "is_worn": label_name == "cracked" or label_name == "worn",
                         "confidence": round(confidence, 2),
                         "label": label_name
                     }
@@ -218,14 +238,46 @@ async def analyze_tire_image(
         yolo_result = await run_tire_yolo(image, yolo_model)
         print(f"[Tire] YOLO 1차 판단: {yolo_result}")
     
+    # 신뢰도가 매우 높으면 로컬 결과만으로 리포트 생성 (LLM 비용 절감 및 속도)
+    if yolo_result and yolo_result.get("confidence", 0) >= FAST_PATH_THRESHOLD:
+        print(f"[Tire] Fast Path 적용 (신뢰도: {yolo_result['confidence']}). LLM 스킵.")
+        label = yolo_result.get("label", "normal")
+        
+        if label == "worn" or label == "cracked":
+            wear_status = "DANGER"
+            wear_level_pct = 85
+            critical_issues = ["crack"] if label == "cracked" else None
+            description = "타이어 마모가 심각하거나 균열이 감지되었습니다. 즉시 교체가 필요합니다."
+            recommendation = "가까운 정비소에서 즉시 타이어를 교체하십시오."
+            is_replacement_needed = True
+            final_status = "CRITICAL"
+        else:
+            wear_status = "GOOD"
+            wear_level_pct = 20
+            critical_issues = None
+            description = "타이어 상태가 양호합니다. 홈의 깊이가 충분하며 마모 한계선과의 거리가 멉니다."
+            recommendation = "현재 상태가 양호하므로 정기적인 공기압 보충과 위치 교환을 권장합니다."
+            is_replacement_needed = False
+            final_status = "NORMAL"
+            
+        return {
+            "status": final_status,
+            "analysis_type": "SCENE_TIRE",
+            "category": "TIRE",
+            "data": {
+                "wear_status": wear_status,
+                "wear_level_pct": wear_level_pct,
+                "critical_issues": critical_issues,
+                "description": description,
+                "recommendation": recommendation,
+                "is_replacement_needed": is_replacement_needed
+            }
+        }
+
     # =================================================================
-    # Step 2: LLM으로 마모도(%) + 위험상태 정밀 측정
+    # Step 2: LLM으로 마모도(%) + 위험상태 정밀 측정 (저신뢰 데이터 등)
     # =================================================================
-    # YOLO는 normal/worn만 알려주므로, LLM이 전체 분석 담당:
-    # - 마모도 % (0~100)
-    # - 위험 상태 (cracked, flat, bulge, uneven)
-    # - 상태 판단 및 권고사항
-    print(f"[Tire] LLM 정밀 분석 시작...")
+    print(f"[Tire] LLM 정밀 분석 시작 (신뢰도 낮음)...")
     llm_result = await get_tire_analysis_from_llm(s3_url)
     
     wear_level_pct = llm_result.get("wear_level_pct")
@@ -315,7 +367,14 @@ async def _save_tire_analysis_data(
         # S3에 저장
         s3 = boto3.client('s3')
         bucket = os.getenv("S3_BUCKET_NAME", "car-sentry-data")
-        file_id = os.path.basename(s3_url).split('.')[0]
+        
+        # 파일 ID 추출: s3_url이 base64인 경우 처리
+        if s3_url.startswith("data:"):
+            import hashlib
+            file_id = hashlib.md5(s3_url.encode()).hexdigest()[:10]
+        else:
+            file_id = os.path.basename(s3_url).split('.')[0]
+            
         label_key = f"dataset/llm_confirmed/visual/tire/{file_id}.json"
         
         # 저장할 데이터 구조
