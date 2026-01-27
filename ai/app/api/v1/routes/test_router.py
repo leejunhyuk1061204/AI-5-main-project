@@ -211,30 +211,57 @@ async def connect_comprehensive_mock(data: dict):
     # 분기 조건: 사진/오디오 있으면 → REPORT, 없으면 → 4회까지 INTERACTIVE
     has_media = bool(visual) or bool(audio)
     
+    # [수정] 오디오 데이터가 있으면 무조건 INTERACTIVE로 응답 (사용자 요청 사항)
+    if audio:
+        return {
+            "response_mode": "INTERACTIVE",
+            "confidence_level": "LOW",
+            "summary": "녹음된 소리에서 비정상적인 패턴이 감지되었으나, 정확한 원인 파악을 위해 추가 정보가 필요합니다.",
+            "report_data": None,
+            "interactive_data": {
+                "message": "엔진 부근에서 규칙적인 소음이 감지됩니다. 이 소리가 **공회전(멈춰 있을 때)** 시에도 들리는지, 아니면 **주행 중에만** 들리는지 확인해 주세요.",
+                "follow_up_questions": [
+                    "계기판에 '엔진 체크 경고등'이 켜져 있나요?",
+                    "최근 3개월 내에 엔진 오일을 교환하신 적이 있나요?"
+                ],
+                "requested_actions": ["ANSWER_TEXT", "CAPTURE_PHOTO"]
+            },
+            "disclaimer": "본 진단은 청각 데이터에 기반한 추정이며, 정확한 상태는 전문가의 점검이 필요합니다."
+        }
+
     if has_media:
         # 사진 또는 오디오가 있으면 → REPORT 생성
         is_anomaly = anomaly.get("is_anomaly") if anomaly else False
         has_visual_issue = visual.get("status") == "FAULTY" if visual else False
         has_audio_issue = audio.get("status") == "FAULTY" if audio else False
         
+        # 초안 가이드라인: 단정적 표현 금지, 추정형 표현 사용
+        summary_text = "제공해주신 데이터를 종합적으로 분석한 결과, 몇 가지 점검이 필요한 항목이 확인되었습니다."
+        final_guide_text = "현재 데이터로는 즉각적인 운행 정지가 필요해 보이지 않으나, 예방 정비를 위해 가까운 정비소 방문을 권장합니다."
+        
+        if is_anomaly or has_visual_issue:
+            summary_text = "냉각 계통 및 엔진룸 육안 점검 결과, 주의가 필요한 이상 징후가 발견되었습니다."
+            final_guide_text = "냉각수 누수 또는 부품 노후화 가능성이 있습니다. 장거리 운행 전 정비소에서 정밀 점검을 받으시는 것을 추천합니다."
+        
         return {
             "response_mode": "REPORT",
-            "confidence_level": "HIGH" if (audio or visual) else "MEDIUM",
-            "summary": "수집된 데이터를 바탕으로 종합 분석을 완료했습니다.",
+            # 초안 가이드라인: 데이터가 충분하면 HIGH, 아니면 MEDIUM
+            "confidence_level": "HIGH" if (has_visual_issue or is_anomaly) else "MEDIUM",
+            "summary": summary_text,
             "report_data": {
                 "suspected_causes": [
                     {
-                        "cause": "냉각 계통 점검 필요" if (is_anomaly or has_visual_issue) else "정상 상태",
-                        "basis": "사용자 제공 미디어 분석 결과",
-                        "source_type": "CONFIRMED",
-                        "reliability": "HIGH"
+                        "cause": "냉각 계통 부품(라디에이터/호스) 노후화 의심" if (is_anomaly or has_visual_issue) else "특이 사항 없음 (정상 범위)",
+                        "basis": "이미지 분석상 붉은색 Heatmap 영역(이상 발열/누수 의심) 확인" if (is_anomaly or has_visual_issue) else "데이터 분석 결과 정상 패턴",
+                        "source_type": "INFERRED", # 초안: 이미지 분석 등 확률적 데이터는 INFERRED
+                        "reliability": "HIGH" if (is_anomaly or has_visual_issue) else "MEDIUM"
                     }
                 ],
-                "final_guide": "미디어 분석 결과를 종합하여, 정기적인 점검을 권장합니다." if (is_anomaly or has_visual_issue or has_audio_issue) else "차량 상태가 양호합니다.",
+                "final_guide": final_guide_text,
                 "risk_level": "MID" if (is_anomaly or has_visual_issue) else "LOW"
             },
             "interactive_data": None,
-            "disclaimer": "본 진단은 AI 분석에 기반하며, 실제 정비 전문가의 의견과 다를 수 있습니다."
+            "disclaimer": "본 결과는 AI 분석에 기반한 참고 정보이며, 실제 차량 상태와 다를 수 있습니다."
         }
     
     # 사진/오디오 없이 텍스트만 → 4회까지 INTERACTIVE (백엔드 3턴 제한 테스트용)
@@ -243,29 +270,30 @@ async def connect_comprehensive_mock(data: dict):
         return {
             "response_mode": "REPORT",
             "confidence_level": "MEDIUM",
-            "summary": "대화를 통해 수집된 정보를 바탕으로 분석을 완료했습니다.",
+            "summary": "사용자님과의 대화를 통해 수집된 정보를 바탕으로 분석을 완료했습니다.",
             "report_data": {
                 "suspected_causes": [
                     {
-                        "cause": "추가 점검 권장",
-                        "basis": "사용자 답변 종합 분석",
+                        "cause": "노후화로 인한 일반적인 진동/소음 가능성",
+                        "basis": "사용자 답변 종합 분석 (주행거리 및 연식 고려)",
                         "source_type": "INFERRED",
                         "reliability": "MEDIUM"
                     }
                 ],
-                "final_guide": "대화를 통해 수집된 정보로는 명확한 진단이 어렵습니다. 정비소 방문을 권장합니다.",
+                "final_guide": "대화 내용만으로는 명확한 고장 부위를 특정하기 어렵습니다. 소리가 심해지면 정비소를 방문해 주세요.",
                 "risk_level": "MID"
             },
             "interactive_data": None,
-            "disclaimer": "본 진단은 AI 추론에 기반하며 참고용입니다."
+            "disclaimer": "본 진단은 대화 내용에 기반한 추론이며, 실제 진단과 다를 수 있습니다."
         }
     
     # 0~3회: INTERACTIVE 모드 유지
+    # 초안 가이드라인: 쉽고 명확한 행동 요청, 위험 행동 금지
     follow_up_messages = [
-        "정확한 진단을 위해 추가 정보가 필요합니다. 이상 증상이 언제부터 시작되었나요?",
-        "감사합니다. 시동을 켤 때 특별한 소리가 나나요?",
-        "알겠습니다. 최근 냉각수나 엔진오일 점검을 하신 적 있나요?",
-        "추가 확인이 필요합니다. 계기판에 경고등이 켜진 적 있나요?"
+        "정확한 분석을 위해 추가 정보가 필요합니다. **언제부터** 이런 증상이 나타났나요? (예: 일주일 전, 오늘 아침)",
+        "네, 알겠습니다. 시동을 걸 때 평소와 다른 **소리(끼익, 덜컹 등)**나 **진동**이 느껴지시나요?",
+        "확인해 주셔서 감사합니다. 혹시 **본넷을 열고 엔진룸 사진**을 찍어주실 수 있나요? (무리하지 마시고 안전한 곳에서 촬영해주세요)",
+        "마지막으로, 계기판에 **경고등**이 켜져 있다면 어떤 모양인지 알려주시거나 사진을 찍어주세요."
     ]
     
     return {

@@ -135,19 +135,13 @@ export default function BaseScreen({
                     {footer}
                 </View>
             )}
-
-            {/* Bottom Navigation Spacer & Bottom Safe Area (Navigator의 Docked 바 사용 시 불필요하므로 제거) */}
-            {/* 키보드가 없고 하단바도 없는 일반 화면에서만 기기 기본 안전 영역 확보 */}
-            {!isKeyboardVisible && !useBottomNav && (
-                <View style={{ height: insets.bottom }} />
-            )}
         </View>
     );
 
     return (
         <View className="flex-1" style={{ backgroundColor: bgColor }}>
             <StatusBar style="light" />
-            <SafeAreaView className="flex-1" edges={['top', 'left', 'right']}>
+            <SafeAreaView className="flex-1" edges={['top', 'left', 'right', 'bottom']}>
                 {avoidKeyboard ? (
                     <KeyboardAvoidingView
                         behavior="padding"

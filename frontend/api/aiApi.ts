@@ -14,6 +14,8 @@ export interface AiDiagnosisResponse {
     soundStatus?: string; // For sound diagnosis
     imageUrl?: string;
     audioUrl?: string; // For sound diagnosis
+    sessionId?: string; // Unified Diagnosis Session ID
+    response_mode?: 'REPORT' | 'INTERACTIVE';
 }
 
 
@@ -199,6 +201,20 @@ export const predictComprehensive = async (data: {
         return response.data;
     } catch (error) {
         console.error('[aiApi] Comprehensive Prediction failed:', error);
+        throw error;
+    }
+};
+/**
+ * 차량별 진단 목록 조회
+ */
+export const getDiagnosisList = async (vehicleId: string): Promise<any[]> => {
+    try {
+        const response = await api.get('/api/v1/ai/diagnose/list', {
+            params: { vehicleId }
+        });
+        return response.data.data;
+    } catch (error) {
+        console.error('[aiApi] Failed to fetch diagnosis list:', error);
         throw error;
     }
 };
