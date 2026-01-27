@@ -35,11 +35,13 @@ public class WearFactorService {
 
     /**
      * 운행 종료 시 호출 - 해당 차량의 모든 AI 지원 소모품에 대해 마모율 일괄 계산 (비동기 처리)
+     * [Modified] 증분 업데이트를 위해 tripDistance 추가
      */
     @Async
     @Transactional
-    public void calculateAndSaveWearFactors(UUID vehicleId, Double currentTotalMileage) {
-        log.info("[WearFactor] 마모율 일괄 계산 시작 [Vehicle: {}, Mileage: {}]", vehicleId, currentTotalMileage);
+    public void calculateAndSaveWearFactors(UUID vehicleId, Double currentTotalMileage, Double tripDistance) {
+        log.info("[WearFactor] 마모율 일괄 계산 시작 [Vehicle: {}, Mileage: {}, Trip: {}]", vehicleId, currentTotalMileage,
+                tripDistance);
 
         Vehicle vehicle = vehicleRepository.findById(vehicleId)
                 .orElseThrow(() -> new RuntimeException("차량을 찾을 수 없습니다: " + vehicleId));
@@ -50,7 +52,8 @@ public class WearFactorService {
                 .map(vc -> AiWearFactorRequest.ConsumableContext.builder()
                         .code(vc.getConsumableItem().getCode())
                         .lastReplacedMileage(vc.getLastReplacedMileage() != null ? vc.getLastReplacedMileage() : 0.0)
-                        .isInferred(vc.getIsInferred() != null ? vc.getIsInferred() : true)
+                        .isInferred(vc.getIsInferred() != null ? vc.getIsInferred() : false) // [Fix] 기본적으로 false 취급하여
+                                                                                             // 안정성 확보
                         .build())
                 .collect(java.util.stream.Collectors.toList());
 
@@ -70,7 +73,7 @@ public class WearFactorService {
         try {
             AiWearFactorResponse response = aiClient.getWearFactor(request);
             if (response != null && response.getWearFactors() != null) {
-                updateAllFactors(vehicle, response, currentTotalMileage);
+                updateAllFactors(vehicle, response, currentTotalMileage, tripDistance);
             }
         } catch (Exception e) {
             log.error("[WearFactor] 일괄 마모율 계산 실패: {}", e.getMessage());
@@ -80,10 +83,13 @@ public class WearFactorService {
     }
 
     /**
-     * AI 응답에 따른 소모품 상태 업데이트 (isInferred 분기 로직 포함)
+     * AI 응답에 따른 소모품 상태 업데이트
+     * [Fix] is_inferred 여부와 무관하게 모든 항목에 대해 '증분(Incremental)' 업데이트 적용
+     * AI의 절대 수명 예측값(remainingLifes)은 사용하지 않음 (안정성 문제 해소)
      */
     @Transactional
-    public void updateAllFactors(Vehicle vehicle, AiWearFactorResponse response, Double currentTotalMileage) {
+    public void updateAllFactors(Vehicle vehicle, AiWearFactorResponse response, Double currentTotalMileage,
+            Double tripDistance) {
         java.util.Map<String, Double> wearFactors = response.getWearFactors();
         java.util.Map<String, Double> remainingLifes = response.getRemainingLifes();
 
@@ -105,22 +111,21 @@ public class WearFactorService {
                     continue;
                 }
 
-                // 마모율 업데이트 (공통)
+                // 마모율 업데이트
                 vehicleConsumable.setWearFactor(wearFactor);
 
-                // isInferred 분기 로직
+                // [Fix] is_inferred 여부에 따른 분기 처리
+                // true: AI 예측값으로 덮어쓰기 (사용자 요청 사항)
+                // false: 증분 업데이트 (안정성 확보)
                 Boolean isInferred = vehicleConsumable.getIsInferred();
                 if (isInferred != null && isInferred && remainingLifes != null
                         && remainingLifes.containsKey(itemCode)) {
-                    // 보정 모드: AI가 계산한 잔존 수명을 그대로 적용
                     Double aiLife = remainingLifes.get(itemCode);
                     vehicleConsumable.updateRemainingLife(aiLife);
-                    log.info("[WearFactor] 보정 모드 적용 - {}: AI 수명={}%", itemCode, aiLife);
+                    log.info("[WearFactor] 보정 모드(Inferred) - {}: AI 수명 덮어쓰기={}%", itemCode, aiLife);
                 } else {
-                    // 누적 모드: 기존 수식 기반으로 잔존 수명 계산
-                    updateRemainingLife(vehicleConsumable, currentTotalMileage);
-                    log.info("[WearFactor] 누적 모드 적용 - {}: 수식 기반 수명={}%", itemCode,
-                            vehicleConsumable.getRemainingLife());
+                    updateRemainingLifeIncremental(vehicleConsumable, tripDistance);
+                    log.info("[WearFactor] 증분 모드(Standard) - {}: 차감 반영 완료 (Factor={})", itemCode, wearFactor);
                 }
 
                 // 잔존 수명 15% 이하 시 알림 발송
@@ -144,7 +149,7 @@ public class WearFactorService {
                     vc.setVehicle(vehicle);
                     vc.setConsumableItem(item);
                     vc.setWearFactor(1.0);
-                    // 초기 생성 시: 사용자가 현재 시점부터 관리한다고 가정하고 수명 100% (LastReplaced = CurrentMileage)
+                    // 초기 생성 시: 사용자가 현재 시점부터 관리한다고 가정하고 수명 100%
                     vc.setLastReplacedMileage(currentTotalMileage);
                     vc.setRemainingLife(100.0);
                     return vc;
@@ -152,23 +157,28 @@ public class WearFactorService {
                 .orElse(null);
     }
 
-    private void updateRemainingLife(VehicleConsumable vc, double currentTotalMileage) {
-        double lastReplaced = vc.getLastReplacedMileage() != null ? vc.getLastReplacedMileage() : 0.0;
-        double distanceDriven = currentTotalMileage - lastReplaced;
-        if (distanceDriven < 0)
-            distanceDriven = 0; // 역전 방지
+    /**
+     * [New] 증분 수명 차감 로직
+     * 남은 수명 -= (이번 주행 거리 * 마모계수 / 전체 수명 주기) * 100
+     */
+    private void updateRemainingLifeIncremental(VehicleConsumable vc, double tripDistance) {
+        if (tripDistance <= 0)
+            return;
 
-        // 거리 보정 (마모율 적용)
-        double adjustedDistance = distanceDriven * vc.getWearFactor();
-
-        // 표준 교체 주기
+        double currentLife = vc.getRemainingLife() != null ? vc.getRemainingLife() : 100.0;
         int defaultInterval = vc.getConsumableItem().getDefaultIntervalMileage();
+        double wearFactor = vc.getWearFactor() != null ? vc.getWearFactor() : 1.0;
 
-        // 수명 계산 (%)
-        double lifePercentage = 100.0 - (adjustedDistance / defaultInterval * 100.0);
+        // 마모된 거리 (가중치 적용)
+        double wornDistance = tripDistance * wearFactor;
 
-        // 잔존 수명 업데이트
-        vc.updateRemainingLife(lifePercentage);
+        // 수명 감소량 (%)
+        double lifeDecreasePercent = (wornDistance / defaultInterval) * 100.0;
+
+        // 최종 수명 계산 (0% 미만 방지)
+        double newLife = Math.max(0.0, currentLife - lifeDecreasePercent);
+
+        vc.updateRemainingLife(newLife);
     }
 
     /**

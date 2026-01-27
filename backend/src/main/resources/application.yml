@@ -59,17 +59,6 @@ app:
   firebase:
     config-path: ${FIREBASE_CONFIG_PATH:firebase-service-account.json}
 
-# AI 설정은 Java AiClient 클래스의 @Value 기본값을 사용하지만, 
-# Docker 환경을 고려하여 기본 호스트를 host.docker.internal로 명시적 설정
-ai:
-  server:
-    url:
-      visual: ${AI_SERVER_URL_VISUAL:http://localhost:8000/api/v1/connect/predict/visual}
-      audio: ${AI_SERVER_URL_AUDIO:http://localhost:8000/api/v1/connect/predict/audio}
-      comprehensive: ${AI_SERVER_URL_COMPREHENSIVE:http://localhost:8000/api/v1/connect/predict/comprehensive}
-      anomaly: ${AI_SERVER_URL_ANOMALY:http://localhost:8000/api/v1/connect/predict/anomaly}
-      wear-factor: ${AI_SERVER_URL_WEAR_FACTOR:http://localhost:8000/api/v1/connect/predict/wear-factor}
-
 logging:
   file:
     name: logs/backend.log

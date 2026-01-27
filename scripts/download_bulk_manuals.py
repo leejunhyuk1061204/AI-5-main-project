@@ -44,6 +44,9 @@ TARGETS = [
     ("Mercedes%20Benz", "2011", "E%20350%20%28212.056%29%20V6-3.5L"),
     ("Mercedes%20Benz", "2012", "E%20350%20Sedan%20%28212.059%29%20V6-3.5L%20%28276.952%29"),
     ("Mercedes%20Benz", "2013", "C%20250%20Sedan%20%28204.047%29%20L4-1.8L%20Turbo%20%28271.860%29"),
+
+    # === Hyundai ===
+    ("Hyundai", "2012", "Sonata%20L4-2.4L"),
 ]
 
 def download_zip(brand, year, model):
@@ -70,8 +73,8 @@ def download_zip(brand, year, model):
     
     print(f"  Downloading {brand} {year} {model.replace('%20', ' ')}...")
     try:
-        # 타임아웃 600초로 상향
-        response = requests.get(url, headers=headers, stream=True, timeout=600)
+        # 타임아웃 900초로 상향 (15분)
+        response = requests.get(url, headers=headers, stream=True, timeout=900)
         if response.status_code == 200:
             with open(filepath, 'wb') as f:
                 for chunk in response.iter_content(chunk_size=8192):

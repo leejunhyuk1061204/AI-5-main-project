@@ -137,7 +137,8 @@ public class TripService {
                     log.info("[TripEnd] Updated Vehicle Total Mileage: {} -> {}", currentTotal, newTotal);
 
                     try {
-                        wearFactorService.calculateAndSaveWearFactors(trip.getVehicleId(), newTotal);
+                        wearFactorService.calculateAndSaveWearFactors(trip.getVehicleId(), newTotal,
+                                trip.getDistance());
                         log.info("Successfully triggered wear factor calculation for vehicle: {}", trip.getVehicleId());
                     } catch (Exception e) {
                         log.error("Wear factor trigger failed", e);
