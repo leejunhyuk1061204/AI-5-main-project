@@ -450,6 +450,27 @@ async def analyze_yolo_local(category: str = "auto", force: Optional[str] = None
             category = mapping.get(scene_type, "engine")
             print(f"[Test Router] Auto-detected category: {category} ({confidence:.2f})")
 
+            # [Reliability Check] 신뢰도가 너무 낮으면(0.7 미만) UNKNOWN 처리 (사자, 엉뚱한 사진 등)
+            if confidence < 0.7:
+                print(f"[Test Router] Low confidence ({confidence:.2f}). Rejecting as UNKNOWN.")
+                return JSONResponse(content={
+                    "status": "UNKNOWN",
+                    "analysis_type": "SCENE_CLASSIFICATION",
+                    "category": "UNKNOWN",
+                    "data": {
+                        "detected_count": 0,
+                        "detections": [],
+                        "integrated_analysis": {
+                            "severity_score": 0,
+                            "description": "이미지가 차량 관련 부품(엔진룸, 계기판, 외관, 타이어)으로 식별되지 않습니다."
+                        },
+                        "recommendation": {
+                            "primary_action": "차량 관련 이미지를 다시 촬영해 주세요."
+                        },
+                        "confidence": round(float(confidence), 4)
+                    }
+                })
+
         if request and hasattr(request.app.state, "get_engine_yolo"):
             if category == "engine":
                 model = request.app.state.get_engine_yolo()
@@ -459,7 +480,8 @@ async def analyze_yolo_local(category: str = "auto", force: Optional[str] = None
                 model = request.app.state.get_tire_yolo()
             elif category == "exterior":
                 # 외관은 cardd 모델 기본 사용
-                model = request.app.state.get_exterior_yolo().get("cardd")
+                # 외관은 Unified YOLO 모델 기본 사용
+                model = request.app.state.get_exterior_yolo() if hasattr(request.app.state, "get_exterior_yolo") else None
         
         # app.state에 모델이 없는 경우 (로컬 단독 실행 등) 직접 로드 시도
         if model is None:
@@ -468,8 +490,15 @@ async def analyze_yolo_local(category: str = "auto", force: Optional[str] = None
                 "engine": "ai/weights/engine/best.pt",
                 "dashboard": "ai/weights/dashboard/best.pt",
                 "tire": "ai/weights/tire/best.pt",
-                "exterior": "ai/weights/exterior/cardd/best.pt"
+                "exterior": "ai/weights/exterior/unified_v1/train/weights/best.pt"
             }
+            # 추가 폴더 시도 (train/weights/ or runs/detect/)
+            if category == "exterior" and not os.path.exists(paths["exterior"]):
+                # 1. ai/weights/... (Already checked above, but logic reuse)
+                paths["exterior"] = "ai/weights/exterior/unified_v1/train/weights/best.pt"
+                # 2. runs/detect/...
+                if not os.path.exists(paths["exterior"]):
+                     paths["exterior"] = "runs/detect/ai/weights/exterior/unified_v1/train/weights/best.pt"
             model_path = paths.get(category, "ai/weights/engine/best.pt")
             if os.path.exists(model_path):
                 model = YOLO(model_path)
@@ -518,11 +547,9 @@ async def analyze_yolo_local(category: str = "auto", force: Optional[str] = None
             
             elif category == "exterior":
                 from ai.app.services.exterior_service import analyze_exterior_image
-                # 외관은 cardd와 carparts 두 모델이 필요함
-                exterior_models = request.app.state.get_exterior_yolo() if request else {}
-                cardd = exterior_models.get("cardd")
-                carparts = exterior_models.get("carparts")
-                result = await analyze_exterior_image(image, s3_url_mock, cardd, carparts)
+                # 외관은 Unified YOLO 모델 하나만 사용
+                # 위에서 이미 model 변수에 로드됨 (state or local fallback)
+                result = await analyze_exterior_image(image, s3_url_mock, model)
                 return JSONResponse(content=result)
             
             else:
@@ -588,6 +615,8 @@ async def analyze_audio_local(file: UploadFile = File(...)):
         
         import tempfile
         import librosa
+        import soundfile as sf
+        import io
         import torch
         import torch.nn.functional as F
         from ai.app.services.ast_service import NORMAL_LABELS, get_category_from_label
@@ -638,14 +667,38 @@ async def analyze_audio_local(file: UploadFile = File(...)):
             # ast_service.py의 함수 사용
             category = get_category_from_label(label_name)
             
-            # ast_service.py의 NORMAL_LABELS 사용
+            # [Fix] NameError 방지: label_lower 정의 복구
             label_lower = label_name.lower()
-            if confidence < 0.5:
-                status = "UNKNOWN"
-                is_critical = False
-                category = "UNKNOWN_AUDIO"
-                label_name = "unknown"  # 라벨도 unknown으로 변경
-                description = "분류할 수 없는 소리입니다. 차량 관련 소리인지 확인해주세요."
+            
+            # ast_service.py의 NORMAL_LABELS 사용
+            # [Test Router] Production(AudioService)와 동일한 LLM Fallback 로직 적용
+            if confidence < 0.85:
+                print(f"[Test Router] AST Low Confidence ({confidence:.2f}). Fallback to LLM...")
+                from ai.app.services.llm_service import analyze_audio_with_llm
+                
+                # [Safe] 라이브러리 충돌 방지를 위해 원본 바이트(content)를 그대로 사용
+                # (librosa/soundfile 변환 과정 제거)
+                target_bytes = content
+
+                # 로컬 테스트용 Mock Data URI 생성
+                mock_s3_url = f"data:audio/wav;base64,{base64.b64encode(target_bytes).decode('utf-8')}"
+                
+                # LLM 분석 호출
+                llm_result = await analyze_audio_with_llm(mock_s3_url, audio_bytes=target_bytes)
+                
+                return JSONResponse(content={
+                    "status": llm_result.status,
+                    "analysis_type": "LLM_AUDIO_FALLBACK", # 구분 위해 명시
+                    "category": llm_result.category,
+                    "detail": {
+                        "diagnosed_label": llm_result.detail.diagnosed_label,
+                        "description": llm_result.detail.description
+                    },
+                    "confidence": llm_result.confidence,
+                    "is_critical": llm_result.is_critical,
+                    "source": f"uploaded:{file.filename}"
+                })
+
             elif label_lower in NORMAL_LABELS or "normal" in label_lower:
                 status = "NORMAL"
                 is_critical = False
