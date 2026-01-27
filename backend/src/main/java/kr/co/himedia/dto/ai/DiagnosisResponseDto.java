@@ -1,5 +1,6 @@
 package kr.co.himedia.dto.ai;
 
+import kr.co.himedia.domain.DiagAction;
 import java.time.LocalDateTime;
 import java.util.UUID;
 import lombok.Builder;
@@ -23,6 +24,7 @@ public class DiagnosisResponseDto {
 
     // INTERACTIVE Mode Data
     private Object interactiveData; // JSON Object
+    private DiagAction requestedAction;
 
     private LocalDateTime createdAt;
 }

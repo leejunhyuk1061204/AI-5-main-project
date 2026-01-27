@@ -23,6 +23,7 @@ from PIL import Image
 import io
 import os
 import base64
+import json
 
 # Singleton AnomalyDetector (한 번만 로드)
 from ai.app.services.anomaly_service import AnomalyDetector
@@ -192,13 +193,25 @@ async def connect_comprehensive_mock(data: dict):
     - 사진 또는 오디오 있음: REPORT 생성
     """
     import asyncio
+    
+    # 들어온 데이터 전체 로그 출력
+    print("\n" + "="*50)
+    print("[Comprehensive Request Data]")
+    print(json.dumps(data, indent=2, ensure_ascii=False))
+    print("="*50 + "\n")
+
     await asyncio.sleep(1)  # 분석 지연 시뮬레이션 (테스트용으로 단축)
     
-    vehicle_id = data.get("vehicleId", "unknown")
-    audio = data.get("analysis_results", {}).get("audioAnalysis") or data.get("audioAnalysis")
-    visual = data.get("analysis_results", {}).get("visualAnalysis") or data.get("visualAnalysis")
-    anomaly = data.get("analysis_results", {}).get("anomalyAnalysis") or data.get("anomalyAnalysis")
-    rag_context = data.get("rag_context") or data.get("knowledgeData")
+    # [수정] 통합 DTO 규격(snake_case) 및 기존 규격(camelCase) 모두 지원
+    vehicle_info = data.get("vehicle_info") or data.get("vehicleInfo")
+    vehicle_id = data.get("vehicleId") or (vehicle_info.get("id") if vehicle_info else "unknown")
+    
+    analysis = data.get("analysis_results", {})
+    audio = data.get("audio_analysis") or analysis.get("audioAnalysis") or data.get("audioAnalysis")
+    visual = data.get("visual_analysis") or analysis.get("visualAnalysis") or data.get("visualAnalysis")
+    anomaly = data.get("anomaly_analysis") or analysis.get("anomalyAnalysis") or data.get("anomalyAnalysis")
+    knowledge = data.get("knowledge_data") or data.get("knowledgeData")
+    consumables = data.get("consumables_status") or data.get("consumablesStatus")
     
     # 대화 이력 파싱
     conversation = data.get("conversation_history", [])
@@ -211,23 +224,8 @@ async def connect_comprehensive_mock(data: dict):
     # 분기 조건: 사진/오디오 있으면 → REPORT, 없으면 → 4회까지 INTERACTIVE
     has_media = bool(visual) or bool(audio)
     
-    # [수정] 오디오 데이터가 있으면 무조건 INTERACTIVE로 응답 (사용자 요청 사항)
-    if audio:
-        return {
-            "response_mode": "INTERACTIVE",
-            "confidence_level": "LOW",
-            "summary": "녹음된 소리에서 비정상적인 패턴이 감지되었으나, 정확한 원인 파악을 위해 추가 정보가 필요합니다.",
-            "report_data": None,
-            "interactive_data": {
-                "message": "엔진 부근에서 규칙적인 소음이 감지됩니다. 이 소리가 **공회전(멈춰 있을 때)** 시에도 들리는지, 아니면 **주행 중에만** 들리는지 확인해 주세요.",
-                "follow_up_questions": [
-                    "계기판에 '엔진 체크 경고등'이 켜져 있나요?",
-                    "최근 3개월 내에 엔진 오일을 교환하신 적이 있나요?"
-                ],
-                "requested_actions": ["ANSWER_TEXT", "CAPTURE_PHOTO"]
-            },
-            "disclaimer": "본 진단은 청각 데이터에 기반한 추정이며, 정확한 상태는 전문가의 점검이 필요합니다."
-        }
+    # [수정] 오디오/사진 데이터가 있으면 무조건 REPORT 생성 (사용자 요청 사항)
+    # 기존 if audio: ... 블록 삭제됨
 
     if has_media:
         # 사진 또는 오디오가 있으면 → REPORT 생성
@@ -288,26 +286,42 @@ async def connect_comprehensive_mock(data: dict):
         }
     
     # 0~3회: INTERACTIVE 모드 유지
-    # 초안 가이드라인: 쉽고 명확한 행동 요청, 위험 행동 금지
-    follow_up_messages = [
-        "정확한 분석을 위해 추가 정보가 필요합니다. **언제부터** 이런 증상이 나타났나요? (예: 일주일 전, 오늘 아침)",
-        "네, 알겠습니다. 시동을 걸 때 평소와 다른 **소리(끼익, 덜컹 등)**나 **진동**이 느껴지시나요?",
-        "확인해 주셔서 감사합니다. 혹시 **본넷을 열고 엔진룸 사진**을 찍어주실 수 있나요? (무리하지 마시고 안전한 곳에서 촬영해주세요)",
-        "마지막으로, 계기판에 **경고등**이 켜져 있다면 어떤 모양인지 알려주시거나 사진을 찍어주세요."
+    # 시나리오 정의: 0회(Text) -> 1회(Audio) -> 2회(Photo) -> 3회(Text)
+    scenario_steps = [
+        {
+            "message": "정확한 분석을 위해 추가 정보가 필요합니다. **언제부터** 이런 증상이 나타났나요? (예: 일주일 전, 오늘 아침)",
+            "action": "ANSWER_TEXT"
+        },
+        {
+            "message": "확인 감사합니다. 시동을 걸었을 때 들리는 **소리(끼익, 덜컹 등)**를 **녹음**해서 보내주실 수 있나요?",
+            "action": "RECORD_AUDIO"
+        },
+        {
+            "message": "소리 관련 답변 확인했습니다. 이번에는 **본넷을 열고 엔진룸 전체 사진**을 찍어주세요.",
+            "action": "CAPTURE_PHOTO"
+        },
+        {
+            "message": "사진 정보 감사합니다. 마지막으로, 계기판에 **경고등**이 켜져 있거나 특이사항이 있다면 글로 남겨주세요.",
+            "action": "ANSWER_TEXT"
+        }
     ]
-    
+
+    current_step = min(user_reply_count, 3)
+    step_data = scenario_steps[current_step]
+
     return {
         "response_mode": "INTERACTIVE",
         "confidence_level": "LOW",
         "summary": f"대화 {user_reply_count + 1}회차 - 추가 정보 수집 중",
         "report_data": None,
         "interactive_data": {
-            "message": follow_up_messages[min(user_reply_count, 3)],
+            "message": step_data["message"],
             "follow_up_questions": [
-                "엔진룸 사진을 찍어서 보내주시면 더 정확한 분석이 가능합니다."
+                "엔진룸 사진을 찍어서 보내주시면 더 정확한 분석이 가능합니다." if step_data["action"] == "CAPTURE_PHOTO" else "더 자세한 상황을 설명해 주세요."
             ],
-            "requested_actions": ["CAPTURE_PHOTO", "RECORD_AUDIO"]
+            "requested_action": step_data["action"]
         },
+        "requested_action": step_data["action"],
         "disclaimer": "추가 정보가 필요한 상태입니다."
     }
 

@@ -14,6 +14,12 @@ import java.util.UUID;
 public class DiagnosisTaskMessage {
     private UUID sessionId;
     private UnifiedDiagnosisRequestDto requestDto;
-    private String imageFilename; // 서버 로컬에 저장된 이미지 파일명
-    private String audioFilename; // 서버 로컬에 저장된 오디오 파일명
+    private ReplyRequestDto replyRequest; // 채팅 답변 요청 시 포함
+    private MessageType messageType; // INITIAL vs REPLY
+    private String imageFilename;
+    private String audioFilename;
+
+    public enum MessageType {
+        INITIAL, REPLY
+    }
 }

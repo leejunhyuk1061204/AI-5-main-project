@@ -72,19 +72,41 @@ export default function Filming({ navigation, route }: { navigation?: any; route
     };
 
     const analyzeImage = async () => {
-        if (!capturedImage) return;
         const sessionId = route?.params?.sessionId;
-        const { updateStatus, setVehicleId, currentSessionId } = useAiDiagnosisStore.getState();
+        const vehicleId = route?.params?.vehicleId || useAiDiagnosisStore.getState().selectedVehicleId;
 
+        if (!vehicleId) {
+            useAlertStore.getState().showAlert('차량 미선택', '분석을 진행할 차량 정보를 찾을 수 없습니다. 차량을 먼저 선택해 주세요.', 'WARNING');
+            return;
+        }
+
+        if (sessionId) {
+            // 사용자 확인 단계 추가
+            useAlertStore.getState().showAlert(
+                '데이터 전송',
+                '촬영된 사진을 AI 분석에 사용하시겠습니까?',
+                'INFO',
+                () => executeAnalysis(sessionId),
+                { cancelText: '취소' }
+            );
+        } else {
+            executeAnalysis(null);
+        }
+    };
+
+    const executeAnalysis = async (sessionId: string | null) => {
+        const { updateStatus, setVehicleId } = useAiDiagnosisStore.getState();
+        const vehicleId = route?.params?.vehicleId || useAiDiagnosisStore.getState().selectedVehicleId;
+        if (!vehicleId) return;
         setIsAnalyzing(true);
         try {
             let result;
             if (sessionId) {
                 // If we are in an interactive session, use REPLY endpoint
-                result = await replyToDiagnosisSession(sessionId, {
+                result = await replyToDiagnosisSession(sessionId as string, {
                     userResponse: "사진을 촬영했습니다.",
-                    vehicleId: route?.params?.vehicleId || '00000000-0000-0000-0000-000000000000'
-                }, capturedImage);
+                    vehicleId: vehicleId as string
+                }, capturedImage || undefined);
                 // After reply, set waiting state
                 useAiDiagnosisStore.setState({ isWaitingForAi: true });
             } else {
@@ -96,7 +118,7 @@ export default function Filming({ navigation, route }: { navigation?: any; route
                     diagResult: null,
                     currentSessionId: null
                 });
-                result = await diagnoseImage(capturedImage);
+                result = await diagnoseImage(capturedImage || '', vehicleId as string);
             }
 
             if (!navigation) {
@@ -107,7 +129,7 @@ export default function Filming({ navigation, route }: { navigation?: any; route
 
             // 통합 진단 흐름 분기: REPORT vs INTERACTIVE
             if (result.sessionId) {
-                setVehicleId(route?.params?.vehicleId || '00000000-0000-0000-0000-000000000000');
+                setVehicleId(vehicleId as string);
                 useAiDiagnosisStore.setState({ currentSessionId: result.sessionId });
 
                 // Trigger immediate update but rely on polling effect for navigation
@@ -149,7 +171,7 @@ export default function Filming({ navigation, route }: { navigation?: any; route
 
         if (status === 'INTERACTIVE' || status === 'ACTION_REQUIRED') {
             setIsAnalyzing(false);
-            navigation.replace('AiDiagChat', {
+            navigation.navigate('AiDiagChat', {
                 sessionId: currentSessionId,
                 vehicleId: route?.params?.vehicleId
             });

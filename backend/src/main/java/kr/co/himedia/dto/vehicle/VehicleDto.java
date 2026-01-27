@@ -97,8 +97,8 @@ public class VehicleDto {
             return Vehicle.builder()
                     .userId(userId)
                     .vin(vin)
-                    .manufacturer("Unknown") // API 승인 전까지 임시 값
-                    .modelName("Unknown")
+                    .manufacturer("TBD") // API 승인 전까지 임시 값
+                    .modelName("TBD")
                     .modelYear(0)
                     .registrationSource(RegistrationSource.OBD)
                     .isPrimary(false)

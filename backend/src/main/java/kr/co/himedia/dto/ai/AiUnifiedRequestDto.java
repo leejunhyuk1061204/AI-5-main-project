@@ -4,7 +4,6 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.*;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 
 /**
  * AI 서버로 통합 진단을 요청하기 위한 내부 DTO
@@ -16,16 +15,24 @@ import java.util.UUID;
 @Builder
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class AiUnifiedRequestDto {
-    private UUID vehicleId;
-    private Map<String, Object> audioAnalysis;
+    @com.fasterxml.jackson.annotation.JsonProperty("visual_analysis")
     private Map<String, Object> visualAnalysis;
-    private Map<String, Object> anomalyAnalysis; // /anomaly 이상 탐지 결과
-    private java.util.List<String> knowledgeData; // RAG 검색 결과
-    private List<String> ragContext; // RAG 검색 결과 문서 리스트
 
-    // 차량 제원 정보 (manufacturer, model, year, fuelType, totalMileage)
+    @com.fasterxml.jackson.annotation.JsonProperty("audio_analysis")
+    private Map<String, Object> audioAnalysis;
+
+    @com.fasterxml.jackson.annotation.JsonProperty("anomaly_analysis")
+    private Map<String, Object> anomalyAnalysis;
+
+    @com.fasterxml.jackson.annotation.JsonProperty("knowledge_data")
+    private List<String> knowledgeData;
+
+    @com.fasterxml.jackson.annotation.JsonProperty("conversation_history")
+    private List<Map<String, Object>> conversationHistory;
+
+    @com.fasterxml.jackson.annotation.JsonProperty("vehicle_info")
     private Map<String, Object> vehicleInfo;
 
-    // 소모품 잔여 수명 정보 (item, remainingLifePct, wearFactor)
+    @com.fasterxml.jackson.annotation.JsonProperty("consumables_status")
     private List<Map<String, Object>> consumablesStatus;
 }

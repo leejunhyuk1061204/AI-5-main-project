@@ -19,28 +19,21 @@ export interface AiDiagnosisResponse {
 }
 
 
-import { getVehicleList } from './vehicleApi';
 
 /**
  * AI 이미지 진단 요청
  * @param imageUri 촬영된 이미지의 로컬 URI
+ * @param vehicleId 차량 ID
  */
-export const diagnoseImage = async (imageUri: string): Promise<AiDiagnosisResponse> => {
+export const diagnoseImage = async (imageUri: string, vehicleId: string): Promise<AiDiagnosisResponse> => {
     try {
         const formData = new FormData();
         const filename = imageUri.split('/').pop() || 'diagnosis_image.jpg';
         const match = /\.(\w+)$/.exec(filename);
         const type = match ? `image/${match[1]}` : 'image/jpeg';
 
-        // 1. 차량 정보 조회 (필수: data 파트 구성을 위해)
-        let vehicleId = '00000000-0000-0000-0000-000000000000'; // Default fallback
-        try {
-            const vehicles = await getVehicleList();
-            const primary = vehicles.find(v => v.isPrimary) || vehicles[0];
-            if (primary) vehicleId = primary.vehicleId;
-        } catch (e) {
-            console.warn('Failed to fetch vehicle info, using default ID');
-        }
+        // 1. 차량 정보 (Parameter로 전달받음)
+        if (!vehicleId) throw new Error("Vehicle ID is missing");
 
         // 2. 이미지 파일 추가
         formData.append('image', {
@@ -74,9 +67,9 @@ export const diagnoseImage = async (imageUri: string): Promise<AiDiagnosisRespon
 /**
  * AI 엔진 소리 진단 요청
  * @param audioUri 녹음된 오디오 파일의 로컬 URI
- * @param vehicleId 차량 ID (선택사항)
+ * @param vehicleId 차량 ID
  */
-export const diagnoseEngineSound = async (audioUri: string, vehicleId?: string): Promise<any> => {
+export const diagnoseEngineSound = async (audioUri: string, vehicleId: string): Promise<any> => {
     try {
         const formData = new FormData();
         const filename = audioUri.split('/').pop() || 'engine_sound.m4a';
@@ -85,15 +78,7 @@ export const diagnoseEngineSound = async (audioUri: string, vehicleId?: string):
         if (filename.endsWith('.wav')) type = 'audio/wav';
         else if (filename.endsWith('.mp3')) type = 'audio/mpeg';
 
-        if (!vehicleId) {
-            try {
-                const vehicles = await getVehicleList();
-                const primary = vehicles.find(v => v.isPrimary) || vehicles[0];
-                if (primary) vehicleId = primary.vehicleId;
-            } catch (e) {
-                vehicleId = '00000000-0000-0000-0000-000000000000';
-            }
-        }
+        if (!vehicleId) throw new Error("Vehicle ID is missing for engine sound diagnosis");
 
         formData.append('audio', {
             uri: audioUri,

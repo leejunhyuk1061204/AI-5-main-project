@@ -19,7 +19,7 @@ CREATE TYPE charging_status AS ENUM ('DISCONNECTED', 'CHARGING', 'FULL', 'ERROR'
 
 CREATE TYPE diag_trigger_type AS ENUM ('MANUAL', 'DTC', 'ANOMALY', 'ROUTINE');
 
-CREATE TYPE diag_status AS ENUM ('PENDING', 'PROCESSING', 'DONE', 'FAILED');
+CREATE TYPE diag_status AS ENUM ('PENDING', 'PROCESSING', 'REPLY_PROCESSING', 'DONE', 'FAILED');
 
 CREATE TYPE risk_level AS ENUM ('LOW', 'MID', 'HIGH', 'CRITICAL');
 
@@ -196,9 +196,11 @@ CREATE TABLE IF NOT EXISTS diag_results (
     diag_result_id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
     diag_session_id UUID REFERENCES diag_sessions (diag_session_id),
     final_report TEXT,
-    confidence FLOAT,
+    confidence_level VARCHAR(20), -- HIGH | MEDIUM | LOW
+    summary TEXT,
     detected_issues JSONB,
     actions_json JSONB,
+    requested_actions JSONB,
     risk_level risk_level
 );
 

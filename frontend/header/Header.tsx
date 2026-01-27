@@ -5,8 +5,12 @@ import { useNavigation } from '@react-navigation/native';
 import { useUserStore } from '../store/useUserStore';
 import { useBleStore } from '../store/useBleStore';
 
-export default function Header() {
-    const navigation = useNavigation<any>();
+interface HeaderProps {
+    navigation?: any;
+}
+
+export default function Header({ navigation: propNavigation }: HeaderProps) {
+    const navigation = propNavigation || useNavigation<any>();
     const { nickname, loadUser } = useUserStore();
     const { status } = useBleStore();
 

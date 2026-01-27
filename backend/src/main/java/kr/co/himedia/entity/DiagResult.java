@@ -1,6 +1,7 @@
 package kr.co.himedia.entity;
 
 import jakarta.persistence.*;
+import kr.co.himedia.domain.DiagAction;
 import lombok.*;
 
 import java.util.UUID;
@@ -47,7 +48,11 @@ public class DiagResult {
     private String actionsJson; // JSON String
 
     @Column(name = "interactive_json", columnDefinition = "TEXT")
-    private String interactiveJson; // JSON String (질문 및 요청 액션)
+    private String interactiveJson; // JSON String (질문 및 대화 이력)
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "requested_action", length = 30)
+    private DiagAction requestedAction;
 
     public enum RiskLevel {
         LOW, MID, HIGH, CRITICAL
