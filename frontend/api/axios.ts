@@ -4,11 +4,17 @@ import Constants from 'expo-constants';
 
 // Dynamically determine the host IP from the Expo Go URI
 const getBaseUrl = () => {
-    // Android Emulator requires 10.0.2.2 to access host localhost
+    // 1. Prefer environment variable if set
+    if (process.env.EXPO_PUBLIC_API_URL) {
+        return process.env.EXPO_PUBLIC_API_URL;
+    }
+    
+    // 2. Android Emulator default
     if (Platform.OS === 'android') {
         return 'http://10.0.2.2:8080';
     }
-    // For iOS simulator and web
+    
+    // 3. iOS Simulator and Web default
     return 'http://localhost:8080';
 };
 

@@ -6,8 +6,8 @@ from datetime import datetime
 
 # 설정
 BASE_URL = "http://localhost:8080/api/v1"
-VEHICLE_ID = "c85e0759-9632-4923-b876-93746dc07281"
-ACCESS_TOKEN = "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiIzZTVhNjA0MC04M2JlLTQ1YWEtOGYwMC0wMWQ1ZTQyMjcwZjUiLCJpYXQiOjE3NjkzMDc0NzQsImV4cCI6MTc2OTMxMTA3NH0.x-IfcaUV-HSTXYygx4gwbG0IX0vKleX2vL78val7EoBnv0yVKTOx77IeSdIgsgMuuonCrIu4nzIqcHQJjURN3g"
+VEHICLE_ID = "6e67c1d5-bab2-426d-954a-0322d6f547f2"
+ACCESS_TOKEN = "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiI2ZjcxOThmZi05NTJjLTQzOGQtYmIxMi0xOTQ0YmJiYjc3OTciLCJpYXQiOjE3Njk0OTU4MzEsImV4cCI6MTc2OTQ5OTQzMX0.C0FZyZXpzttr9zGFXa6It2euyiOh3kmubgQuQbG6Uwvz36Y_Qf4vi377Q_kIyIcJI0JZ_JFXOWvbROy13-t-hw"
 
 def get_headers():
     # 1. 파일이 있으면 파일 우선
@@ -43,11 +43,11 @@ def send_bulk_logs(vehicle_id):
     headers = get_headers()
     if not headers: return
     
-    LOG_COUNT = 200
+    LOG_COUNT = 3500
     print(f"[*] Sending Bulk Logs ({LOG_COUNT} EA / Aggressive Mode)...")
     
     logs = []
-    # [Active] 현재 시간 기준으로 +0.1초씩 증가 (sleep 사용)
+    # [Active] 현재 시간 기준으로 +0.01초씩 증가 (고속 데이터 전송 시뮬레이션)
     base_time = time.time()
     
     # 초기 속도/RPM
@@ -55,8 +55,8 @@ def send_bulk_logs(vehicle_id):
     current_rpm = 800.0
     
     for i in range(LOG_COUNT):
-        # 0.1초 간격 타임스탬프 (현실적인 주행)
-        ts = datetime.fromtimestamp(base_time + (i * 0.1)).isoformat()
+        # 0.01초 간격 타임스탬프 (Backend counts 1 log = 1 sec driving distance)
+        ts = datetime.fromtimestamp(base_time + (i * 0.01)).isoformat()
         
         # 난폭 운전 (점수 깎기: 속도 > 140 또는 RPM > 5000)
         if i % 5 == 0: # 5번마다 급발진
@@ -89,10 +89,16 @@ def send_bulk_logs(vehicle_id):
         else:
              print(f"   [-] Batch failed: {res.text}")
         
-        # [KEY] 서버가 '시간 흐름'을 인지하도록 실제로 10초(100개 * 0.1s) 대기
-        # 한 배치(100개)가 10초 분량 데이터임.
-        print("   ...Waiting 10s for realistic simulation...")
-        time.sleep(10)
+        # Fast processing: minimal sleep
+        time.sleep(0.5)
+
+    # Ensure we wait until the last timestamp has passed in wall clock time
+    # Total duration = 3500 * 0.01 = 35 seconds
+    elapsed = time.time() - base_time
+    remaining = 36 - elapsed
+    if remaining > 0:
+        print(f"   ...Waiting {remaining:.1f}s for timestamps to catch up...")
+        time.sleep(remaining)
 
 def end_trip(trip_id):
     headers = get_headers()
