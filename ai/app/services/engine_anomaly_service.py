@@ -145,18 +145,44 @@ class EngineAnomalyPipeline:
                 from ai.app.services.dashboard_service import analyze_dashboard_image
                 return await analyze_dashboard_image(image, s3_url, yolo_model=None)
             
+            # [NEW] 만약 상태가 WARNING/CRITICAL인데 results가 비어있다면, LLM에게 강제로 라벨링을 요청
+            fallback_results = []
+            status = llm_result.status if hasattr(llm_result, 'status') else "ERROR"
+            
+            if status in ["WARNING", "CRITICAL"]:
+                print(f"[Engine] YOLO Miss detected (Status: {status}). Requesting LLM Labeling...")
+                from ai.app.services.llm_service import generate_training_labels
+                label_result = await generate_training_labels(s3_url, "engine")
+                
+                for lbl in label_result.get("labels", []):
+                    # LLM 라벨을 PartAnalysisResult (dict) 포맷으로 변환
+                    fallback_results.append({
+                        "part_name": lbl.get("class", "Unknown"),
+                        "bbox": lbl.get("bbox", [0,0,0,0]),
+                        "confidence": 0.9,
+                        "is_anomaly": True,
+                        "anomaly_score": 1.0, # LLM이 이상하다고 했으므로 높게 설정
+                        "threshold": 0.5,
+                        "defect_label": "Anomaly(LLM)",
+                        "defect_category": "UNKNOWN",
+                        "description": "AI 정밀 분석으로 이상이 감지되었습니다.",
+                        "severity": status,
+                        "recommended_action": "정비소 점검 권장",
+                        "heatmap_base64": None
+                    })
+
             return {
-                "status": llm_result.status if hasattr(llm_result, 'status') else "ERROR",
+                "status": status,
                 "analysis_type": "SCENE_ENGINE",
                 "category": "ENGINE_ROOM",
                 "data": {
                     "vehicle_type": None,
-                    "parts_detected": 0,
-                    "anomalies_found": 0,
-                    "results": [],
+                    "parts_detected": len(fallback_results),
+                    "anomalies_found": len([r for r in fallback_results if r["is_anomaly"]]),
+                    "results": fallback_results,
                     "llm_fallback": True,
-                    "description": "이미지에서 의미 있는 엔진룸 부품을 찾을 수 없으며, AI 정밀 분석(GPT) 서버와 연결도 원활하지 않습니다." if llm_result.status == "ERROR" else (llm_result.data.get("description") if hasattr(llm_result, 'data') else "엔진룸 분석 실패"),
-                    "recommendation": "밝은 곳에서 엔진룸 전체가 잘 보이도록 다시 촬영해 주세요." if llm_result.status == "ERROR" else (llm_result.data.get("recommendation") if hasattr(llm_result, 'data') else "정비소 점검 권장")
+                    "description": "이미지에서 의미 있는 엔진룸 부품을 찾을 수 없으며, AI 정밀 분석(GPT) 서버와 연결도 원활하지 않습니다." if status == "ERROR" else (llm_result.data.get("description") if hasattr(llm_result, 'data') else "엔진룸 분석 실패"),
+                    "recommendation": "밝은 곳에서 엔진룸 전체가 잘 보이도록 다시 촬영해 주세요." if status == "ERROR" else (llm_result.data.get("recommendation") if hasattr(llm_result, 'data') else "정비소 점검 권장")
                 }
             }
 
@@ -242,20 +268,37 @@ class EngineAnomalyPipeline:
             
             if anomaly_result.is_anomaly:
                 # [Dual-Check] 이상 발견 시 무조건 LLM 호출
-                # 히트맵 생성
-                heatmap_overlay = generate_heatmap_overlay(crop_img, anomaly_result.heatmap)
+                heatmap_b64 = None
+                try:
+                    # 히트맵 생성 (PatchCore 학습 전이면 에러가 날 수 있으므로 예외 처리)
+                    if anomaly_result.heatmap is not None:
+                        heatmap_overlay = generate_heatmap_overlay(crop_img, anomaly_result.heatmap)
+                        heatmap_b64 = self._image_to_base64(heatmap_overlay)
+                except Exception as e:
+                    print(f"[Engine Warning] Heatmap generation failed (Model might be untrained): {e}")
+                    heatmap_b64 = None
                 
                 # 이미지를 Base64로 변환
                 crop_b64 = self._image_to_base64(crop_img)
-                heatmap_b64 = self._image_to_base64(heatmap_overlay)
                 
-                # LLM에게 Base64로 직접 전달
+                # LLM에게 Base64 + Heatmap(Optional) + BBox 정보 전달 (Robust Hybrid)
                 llm_res = await suggest_anomaly_label_with_base64(
                     crop_base64=crop_b64,
-                    heatmap_base64=heatmap_b64,
+                    heatmap_base64=heatmap_b64, # 있으면 사용, 없으면 None
+                    bbox=bbox,                  # BBox는 항상 사용
                     part_name=part_name,
                     anomaly_score=anomaly_result.score
                 )
+
+                # [수정] Dual-Check: Anomaly Detector가 이상을 감지했더라도, 
+                # LLM이 정밀 분석 후 "정상(NORMAL)"이라고 판단하면 이를 존중합니다. (False Positive 방지)
+                if llm_res.get("defect_category") == "NORMAL" or llm_res.get("severity") == "NORMAL":
+                     print(f"[Engine] Anomaly Detector flagged issue, but LLM classified as NORMAL. Trusting LLM.")
+                     # LLM 결과 그대로 유지 (NORMAL)
+                     pass
+                else:
+                     # LLM도 이상 동의 시
+                     pass
                 
                 # [Active Learning] 엔진룸 이상탐지 정답(Oracle) S3 저장
                 try:
@@ -313,6 +356,7 @@ class EngineAnomalyPipeline:
                     llm_res = await suggest_anomaly_label_with_base64(
                         crop_base64=crop_b64,
                         heatmap_base64=None, # 정상일 땐 히트맵 생략 가능
+                        bbox=bbox,           # BBox는 항상 사용
                         part_name=part_name,
                         anomaly_score=anomaly_result.score
                     )

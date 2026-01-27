@@ -49,8 +49,7 @@ async def analyze_visual(request_body: VisualRequest, request: Request):
         "router": request.app.state.get_router(),
         "engine_yolo": request.app.state.get_engine_yolo(),
         "dashboard_yolo": request.app.state.get_dashboard_yolo(),
-        "cardd_yolo": request.app.state.get_exterior_yolo()["cardd"],
-        "carparts_yolo": request.app.state.get_exterior_yolo()["carparts"],
+        "exterior_yolo": request.app.state.get_exterior_yolo(),
         "tire_yolo": request.app.state.get_tire_yolo(),
         "anomaly_detector": request.app.state.get_anomaly_detector(),
     }

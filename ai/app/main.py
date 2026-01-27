@@ -16,6 +16,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import os
+import asyncio
 from ultralytics import settings, YOLO
 from dotenv import load_dotenv, find_dotenv
 
@@ -109,29 +110,25 @@ def load_dashboard_yolo_model():
     return YOLO(model_path)
 
 
-def load_exterior_yolo_models():
-    """외관 분석용 YOLO 모델 로드 (CarDD + CarParts)"""
-    print("[Model] Loading Exterior YOLO Models (CarDD + CarParts)...")
+def load_exterior_yolo_model():
+    """외관 분석용 통합 YOLO 모델 로드 (Unified 22 Classes)"""
+    print("[Model] Loading Exterior Unified YOLO Model...")
     
-    cardd_path = os.path.join("ai", "weights", "exterior", "cardd", "best.pt")
-    carparts_path = os.path.join("ai", "weights", "exterior", "carparts", "best.pt")
+    # 통합 모델 경로
+    model_path = os.path.join("ai", "weights", "exterior", "unified_v1", "train", "weights", "best.pt")
     
-    cardd_model = None
-    carparts_model = None
-    
-    if os.path.exists(cardd_path):
-        print(f"[Model] CarDD YOLO 로드: {cardd_path}")
-        cardd_model = YOLO(cardd_path)
-    else:
-        print(f"[Warning] CarDD YOLO 가중치 없음: {cardd_path}")
-    
-    if os.path.exists(carparts_path):
-        print(f"[Model] CarParts YOLO 로드: {carparts_path}")
-        carparts_model = YOLO(carparts_path)
-    else:
-        print(f"[Warning] CarParts YOLO 가중치 없음: {carparts_path}")
-    
-    return {"cardd": cardd_model, "carparts": carparts_model}
+    # Fallback: 학습 직후 runs 폴더에 있는 경우
+    if not os.path.exists(model_path):
+        fallback_path = os.path.join("runs", "detect", "ai", "weights", "exterior", "unified_v1", "train", "weights", "best.pt")
+        if os.path.exists(fallback_path):
+            print(f"[Info] Default path missing. Using fallback: {fallback_path}")
+            model_path = fallback_path
+        else:
+            print(f"[Warning] Unified Exterior YOLO 가중치 없음: {model_path}")
+            return None
+
+    print(f"[Model] Exterior Unified YOLO 로드: {model_path}")
+    return YOLO(model_path)
 
 
 def load_tire_yolo_model():
@@ -170,8 +167,7 @@ async def lifespan(app: FastAPI):
     app.state.router_model = None
     app.state.engine_yolo_model = None
     app.state.dashboard_yolo_model = None
-    app.state.cardd_yolo_model = None
-    app.state.carparts_yolo_model = None
+    app.state.exterior_yolo_model = None
     app.state.tire_yolo_model = None
     app.state.anomaly_detector_model = None
 
@@ -184,15 +180,19 @@ async def lifespan(app: FastAPI):
             # Getter를 통해 모델 로드 강제 실행
             app.state.get_router()
             app.state.get_engine_yolo()
-            print("[Warmup] 주요 모델(Router, Engine YOLO) 로드 완료!")
+            app.state.get_ast_model() # [Add] AST 모델도 Eager Loading에 포함
+            print("[Warmup] 주요 모델(Router, Engine YOLO, AST) 로드 완료!")
         except Exception as e:
             print(f"[Warmup Error] 모델 로딩 중 오류 발생: {e}")
             import traceback
             traceback.print_exc()
 
-    yield
-    
-    print("🛑 AI Server 종료 중...")
+    try:
+        yield
+    except asyncio.CancelledError:
+        print("[Info] Server shutdown cancelled (Normal behavior during forced exit)")
+    finally:
+        print("🛑 AI Server 종료 중...")
 
 
 # =============================================================================
@@ -254,11 +254,9 @@ def _setup_model_getters(app: FastAPI):
         return app.state.dashboard_yolo_model
 
     def get_exterior_yolo():
-        if app.state.cardd_yolo_model is None or app.state.carparts_yolo_model is None:
-            ext = load_exterior_yolo_models()
-            app.state.cardd_yolo_model = ext["cardd"]
-            app.state.carparts_yolo_model = ext["carparts"]
-        return {"cardd": app.state.cardd_yolo_model, "carparts": app.state.carparts_yolo_model}
+        if app.state.exterior_yolo_model is None:
+            app.state.exterior_yolo_model = load_exterior_yolo_model()
+        return app.state.exterior_yolo_model
 
     def get_tire_yolo():
         if app.state.tire_yolo_model is None:

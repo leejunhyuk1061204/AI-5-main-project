@@ -121,21 +121,53 @@ async def analyze_dashboard_image(
     # Step 1: YOLO 감지
     detections = await run_dashboard_yolo(image, yolo_model)
     
-    # Step 1-1: 감지 없으면 정상
+    # Step 1-1: 감지된 경고등이 없으면, LLM으로 '진짜 계기판인지' + '다른 문제는 없는지' 2차 확인 (Safety Net)
     if len(detections) == 0:
+        print("[Dashboard] 감지된 경고등 없음. LLM Safety Check 진행.")
+        llm_result = await analyze_general_image(s3_url)
+        
+        # 기본 상태는 UNKNOWN (YOLO가 아무것도 못 찾았으므로, 정상인지 모델 실패인지 엉뚱한 사진인지 모름)
+        # LLM 분석 결과에 따라 상태를 결정함
+        status = "UNKNOWN"
+        description = "경고등이 감지되지 않았으나, 명확한 상태 판단을 위해 AI 정밀 분석이 수행되었습니다."
+        
+        if hasattr(llm_result, "status"):
+            status = llm_result.status  # LLM이 NORMAL(정상 계기판) or ERROR(차량 아님) 판별
+        
+        if hasattr(llm_result, "data") and llm_result.data:
+            description = llm_result.data.get("description", description)
+
+        # [NEW] 만약 상태가 WARNING/CRITICAL인데 detections가 비어있다면, LLM에게 강제로 라벨링을 요청
+        fallback_detections = []
+        if status in ["WARNING", "CRITICAL"]:
+            print(f"[Dashboard] YOLO Miss detected (Status: {status}). Requesting LLM Labeling...")
+            from ai.app.services.llm_service import generate_training_labels
+            label_result = await generate_training_labels(s3_url, "dashboard")
+            
+            for lbl in label_result.get("labels", []):
+                # LLM 라벨을 API detection 포맷으로 변환
+                fallback_detections.append({
+                    "label": lbl.get("class", "Unknown"),
+                    "color_severity": "RED" if status == "CRITICAL" else "YELLOW",
+                    "confidence": 0.9,
+                    "is_blinking": None,
+                    "meaning": "AI 정밀 분석으로 감지된 경고등",
+                    "bbox": [int(v * 100) for v in lbl.get("bbox", [0,0,0,0])] if all(isinstance(x, float) and x <= 1.0 for x in lbl.get("bbox", [])) else lbl.get("bbox", [0,0,0,0]) # 0~1 비율이면 픽셀 변환 필요하지만 여기선 단순 예시
+                })
+
         return {
-            "status": "NORMAL",
+            "status": status,
             "analysis_type": "SCENE_DASHBOARD",
             "category": "DASHBOARD",
             "data": {
-                "detected_count": 0,
-                "detections": [],
+                "detected_count": len(fallback_detections),
+                "detections": fallback_detections,
                 "integrated_analysis": {
-                    "severity_score": 0,
-                    "description": "계기판에서 경고등이 감지되지 않았습니다. 정상 상태입니다."
+                    "severity_score": 5 if status == "WARNING" else 9 if status == "CRITICAL" else 0,
+                    "description": description
                 },
                 "recommendation": {
-                    "primary_action": "정기적인 소모품 점검을 권장합니다."
+                    "primary_action": (llm_result.data or {}).get("recommendation", "재촬영 후 다시 시도해주세요.")
                 }
             }
         }

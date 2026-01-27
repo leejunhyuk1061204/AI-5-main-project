@@ -304,6 +304,8 @@ async def analyze_tire_image(
             final_status = "CRITICAL"
         else:
             final_status = "WARNING"
+    elif wear_status == "UNKNOWN":
+        final_status = "UNKNOWN"
     else:
         final_status = "NORMAL"
     

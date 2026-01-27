@@ -125,8 +125,7 @@ async def get_smart_visual_diagnosis(
             - router: RouterService
             - engine_yolo: Engine YOLO 모델
             - dashboard_yolo: Dashboard YOLO 모델
-            - cardd_yolo: CarDD YOLO 모델
-            - carparts_yolo: CarParts YOLO 모델
+            - exterior_yolo: Exterior Unified YOLO 모델 (22종)
             - tire_yolo: Tire YOLO 모델
     
     Returns:
@@ -157,7 +156,30 @@ async def get_smart_visual_diagnosis(
         # 신뢰도가 낮으면 LLM에게 직접 판단 요청 (Fallback)
         if confidence < 0.85:
             print(f"[Visual Service] Router 신뢰도 낮음, LLM Fallback 실행")
-            return await analyze_general_image(s3_url)
+            # Map LLM result to VisualResponse (llm_result is VisualResponse object)
+            # IRRELEVANT 처리 -> SCENE_ETC로 통합하되 Status로 구분
+            if llm_result.category == "IRRELEVANT":
+                 return {
+                    "status": "ERROR",
+                    "analysis_type": "SCENE_ETC",
+                    "category": "IRRELEVANT",
+                    "data": llm_result.data
+                }
+
+            # Mapping sub_type (category) to SceneType string
+            # llm_service에서 이미 ETC로 분류했겠지만 안전장치
+            sub_type = llm_result.category
+            if sub_type in ["DASHBOARD", "EXTERIOR", "TIRE", "ENGINE"]:
+                mapped_type = f"SCENE_{sub_type}"
+            else:
+                mapped_type = "SCENE_ETC"
+
+            return {
+                "status": llm_result.status,
+                "analysis_type": mapped_type,
+                "category": sub_type,
+                "data": llm_result.data
+            }
             
     except Exception as e:
         print(f"[Visual Service] Router 실패, LLM Fallback: {e}")
@@ -189,10 +211,9 @@ async def get_smart_visual_diagnosis(
             return result_data
         
         elif scene_type == SceneType.SCENE_EXTERIOR:
-            # EXTERIOR: CarDD + CarParts → IoU → LLM
-            cardd_yolo = models.get("cardd_yolo")
-            carparts_yolo = models.get("carparts_yolo")
-            result_data = await analyze_exterior_image(image, s3_url, cardd_yolo, carparts_yolo)
+            # EXTERIOR: Unified YOLO (22 classes)
+            exterior_yolo = models.get("exterior_yolo")
+            result_data = await analyze_exterior_image(image, s3_url, exterior_yolo)
             # API 명세서 형식으로 바로 반환
             return result_data
         
