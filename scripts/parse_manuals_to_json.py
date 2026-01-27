@@ -2,38 +2,12 @@ import os
 import json
 import time
 import zipfile
-import requests
 from bs4 import BeautifulSoup
 
 # --- 설정 ---
 ZIP_DIR = "data/manuals/zips"
 PARSED_DIR = "data/manuals/parsed"
 MAX_CONTENT_LENGTH = 5000
-OLLAMA_URL = "http://localhost:11434/api/generate"
-MODEL_NAME = "qwen2.5:3b" # 7b -> 3b로 하향 조정
-
-def translate_text_ollama(text):
-    """Ollama를 사용하여 텍스트 번역 (간결한 요약 번역)"""
-    if not text or len(text.strip()) < 10:
-        return ""
-    
-    prompt = f"Translate the following automotive repair manual text into natural Korean. Output only the translation:\n\n{text[:1000]}"
-    
-    try:
-        response = requests.post(
-            OLLAMA_URL,
-            json={
-                "model": MODEL_NAME,
-                "prompt": prompt,
-                "stream": False
-            },
-            timeout=30
-        )
-        if response.status_code == 200:
-            return response.json().get('response', '').strip()
-    except Exception as e:
-        print(f"      [Translation Error] {e}")
-    return ""
 
 def extract_text_from_html(html_content):
     """HTML에서 텍스트 추출"""
@@ -43,10 +17,15 @@ def extract_text_from_html(html_content):
     return soup.get_text(separator='\n', strip=True)
 
 def process_zip_file(zip_path):
-    """ZIP 파일에서 HTML 추출, 파싱 및 번역"""
+    """ZIP 파일에서 HTML 추출 및 파싱 (번역 제외)"""
     results = []
     filename = os.path.basename(zip_path)
+    # 파일명 형식: Brand_Year_Model...zip
     parts = filename.replace('.zip', '').split('_')
+    if len(parts) < 3:
+        print(f"  Invalid filename format: {filename}")
+        return results
+        
     brand, year = parts[0], parts[1]
     model = ' '.join(parts[2:]).replace('_', ' ')
     
@@ -65,9 +44,6 @@ def process_zip_file(zip_path):
                         text = extract_text_from_html(content)
                         
                         if len(text) > 300:
-                            # 번역 수행
-                            translated_text = translate_text_ollama(text)
-                            
                             results.append({
                                 "brand": brand,
                                 "year": year,
@@ -75,14 +51,13 @@ def process_zip_file(zip_path):
                                 "source": html_file,
                                 "category": "MANUAL",
                                 "content": text[:MAX_CONTENT_LENGTH],
-                                "content_ko": translated_text,
                                 "extracted_at": time.strftime("%Y-%m-%d %H:%M:%S")
                             })
                 except:
                     pass
                 
-                if (i + 1) % 100 == 0:
-                    print(f"    Processed {i+1}/{total} files (with translation)...")
+                if (i + 1) % 500 == 0:
+                    print(f"    Processed {i+1}/{total} files...")
                     
     except Exception as e:
         print(f"  Error: {e}")
@@ -91,27 +66,36 @@ def process_zip_file(zip_path):
 
 def main():
     os.makedirs(PARSED_DIR, exist_ok=True)
+    if not os.path.exists(ZIP_DIR):
+        print(f"Directory not found: {ZIP_DIR}")
+        return
+
     zip_files = [f for f in os.listdir(ZIP_DIR) if f.endswith('.zip')]
+    print(f"Found {len(zip_files)} ZIP files to process.")
     
     for zip_file in zip_files:
         zip_path = os.path.join(ZIP_DIR, zip_file)
+        # 이미 처리된 파일인지 확인 (확장자 제거 후 _full.json 붙임)
         output_name = zip_file.replace('.zip', '_full.json')
         output_path = os.path.join(PARSED_DIR, output_name)
         
         if os.path.exists(output_path):
-            print(f"Skipping {zip_file}, already parsed.")
+            # print(f"Skipping {zip_file}, already parsed.")
             continue
             
         results = process_zip_file(zip_path)
         
-        with open(output_path, 'w', encoding='utf-8') as f:
-            json.dump(results, f, ensure_ascii=False, indent=2)
+        if results:
+            with open(output_path, 'w', encoding='utf-8') as f:
+                json.dump(results, f, ensure_ascii=False, indent=2)
             
-        print(f"  -> Saved {len(results)} pages. Deleting ZIP...")
-        try:
-            os.remove(zip_path)
-        except:
-            pass
+            print(f"  -> Saved {len(results)} pages. Deleting ZIP...")
+            try:
+                os.remove(zip_path)
+            except Exception as e:
+                print(f"  Failed to delete {zip_file}: {e}")
+        else:
+            print(f"  No valid content found in {zip_file}. Skipping deletion to be safe.")
 
 if __name__ == "__main__":
     main()

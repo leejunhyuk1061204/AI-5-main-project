@@ -88,7 +88,7 @@ export default function AiCompositeDiag() {
             const newMsg = {
                 id: Date.now(),
                 type: 'ai',
-                text: `진단이 완료되었습니다.\n결과: ${result.result === 'NORMAL' ? '정상' : '이상 감지'}\n\n${result.description}`,
+                text: `진단이 완료되었습니다.\n결과: ${result.result === 'NORMAL' ? '정상' : '이상 감지'}\n\n${result.description || result.summary || '분석된 내용이 없습니다.'}`,
                 isFirst: false
             };
             setMessages(prev => [...prev, newMsg]);

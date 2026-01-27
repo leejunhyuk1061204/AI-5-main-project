@@ -133,6 +133,24 @@ export default function HistoryMain() {
                     </View>
                 </TouchableOpacity>
 
+                {/* Card 2.5: AI Diagnosis History (NEW) */}
+                <TouchableOpacity
+                    onPress={() => navigation.navigate('DiagnosisHistory' as never)}
+                    className="w-full bg-white/5 border border-white/10 rounded-2xl p-6 active:bg-white/10"
+                >
+                    <View className="flex-row justify-between items-center">
+                        <View className="flex-col gap-1">
+                            <View className="flex-row items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 self-start">
+                                <MaterialIcons name="auto-awesome" size={10} color="#0d7ff2" />
+                                <Text className="text-xs font-bold text-primary uppercase tracking-wider">AI Report</Text>
+                            </View>
+                            <Text className="text-lg font-bold text-white mt-2">AI 진단 내역</Text>
+                            <Text className="text-sm text-text-muted">진행했던 모든 AI 분석 보고서 보기</Text>
+                        </View>
+                        <MaterialIcons name="chevron-right" size={24} color="#64748b" />
+                    </View>
+                </TouchableOpacity>
+
                 {/* Card 3: Vehicle Detailed Specs */}
                 <TouchableOpacity
                     onPress={() => navigation.navigate('Spec' as never)}
