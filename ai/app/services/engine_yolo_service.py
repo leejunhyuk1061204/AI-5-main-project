@@ -110,7 +110,8 @@ async def run_yolo_inference(
             ))
 
     # 신뢰도 낮은 탐지 필터링 (오탐 방지)
-    MIN_CONFIDENCE = 0.9
+    # [Test Mode] 0.9 -> 0.7로 임시 하향 (실제 부품 놓침 방지)
+    MIN_CONFIDENCE = 0.7
     detections = [d for d in detections if d.confidence >= MIN_CONFIDENCE]
 
     status = "WARNING" if len(detections) > 0 else "NORMAL"
