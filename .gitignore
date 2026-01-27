@@ -48,3 +48,8 @@ backend/logs/
 ### Generated Native Projects ###
 frontend/android/
 frontend/ios/
+
+### Frontend Build & Cache ###
+.expo/
+web-build/
+dist/
