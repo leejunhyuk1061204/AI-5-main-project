@@ -1,0 +1,14 @@
+{
+  "features": [
+    "engine_coolant_temp_c",
+    "imap_kpa",
+    "engine_rpm",
+    "vehicle_speed_kmh",
+    "intake_air_temp_c",
+    "maf_gps",
+    "throttle_pos_pct",
+    "ambient_air_temp_c",
+    "acc_pedal_pos_d_pct",
+    "acc_pedal_pos_e_pct"
+  ]
+}
