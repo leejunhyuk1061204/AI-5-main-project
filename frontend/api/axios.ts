@@ -36,7 +36,7 @@ api.interceptors.request.use(
     async (config) => {
         try {
             const token = await AsyncStorage.getItem('accessToken');
-            if (token && !config.headers.Authorization) {
+            if (token && !config.headers.Authorization && !config.url?.includes('/auth/')) {
                 config.headers.Authorization = `Bearer ${token}`;
                 console.log('Added Authorization header:', config.headers.Authorization);
             }

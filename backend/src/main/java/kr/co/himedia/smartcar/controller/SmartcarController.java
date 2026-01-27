@@ -21,13 +21,15 @@ public class SmartcarController {
     }
 
     @GetMapping("/login")
-    public ResponseEntity<String> getLoginUrl() {
+    public ResponseEntity<?> getLoginUrl() {
         String authUrl = smartcarService.getAuthUrl();
-        return ResponseEntity.ok(authUrl);
+        return ResponseEntity.status(HttpStatus.FOUND)
+                .header("Location", authUrl)
+                .build();
     }
 
     @GetMapping("/callback")
-    public ResponseEntity<Void> handleCallback(@RequestParam String code) {
+    public ResponseEntity<?> handleCallback(@RequestParam("code") String code) {
         try {
             Auth auth = smartcarService.exchangeCodeForToken(code);
             String accessToken = auth.getAccessToken();
@@ -39,14 +41,14 @@ public class SmartcarController {
                     .header("Location", redirectUrl)
                     .build();
         } catch (Exception e) {
-            // In case of error, you might want to redirect to an error page or app with
-            // error param
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            e.printStackTrace(); // 서버 로그에 에러 출력
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("SmartCar Callback Error: " + e.getMessage()); // 화면에 에러 표시
         }
     }
 
     @GetMapping("/vehicles")
-    public ResponseEntity<?> getVehicles(@RequestParam String accessToken) {
+    public ResponseEntity<?> getVehicles(@RequestParam("accessToken") String accessToken) {
         try {
             return ResponseEntity.ok(smartcarService.getVehicles(accessToken));
         } catch (Exception e) {
@@ -56,7 +58,8 @@ public class SmartcarController {
     }
 
     @GetMapping("/vehicles/{vehicleId}")
-    public ResponseEntity<?> getVehicleAttributes(@PathVariable String vehicleId, @RequestParam String accessToken) {
+    public ResponseEntity<?> getVehicleAttributes(@PathVariable("vehicleId") String vehicleId,
+            @RequestParam("accessToken") String accessToken) {
         try {
             return ResponseEntity.ok(smartcarService.getVehicleAttributes(vehicleId, accessToken));
         } catch (Exception e) {

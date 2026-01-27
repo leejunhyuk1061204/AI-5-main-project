@@ -5,6 +5,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     name: "차봄",
     slug: "chabom",
     version: "1.0.0",
+    scheme: "frontend",
     orientation: "portrait",
     icon: "./assets/Gemini_Generated_Image_v1i03bv1i03bv1i0.png",
     userInterfaceStyle: "dark",
