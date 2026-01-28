@@ -55,7 +55,7 @@ public class DiagSession {
     }
 
     public enum DiagTriggerType {
-        MANUAL, DTC, ANOMALY, ROUTINE
+        AUTO, DATA, VISUAL, AUDIO, DTC, ROUTINE
     }
 
     public enum DiagStatus {

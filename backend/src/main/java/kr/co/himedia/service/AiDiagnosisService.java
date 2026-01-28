@@ -171,18 +171,19 @@ public class AiDiagnosisService {
     @Transactional
     public Map<String, Object> requestUnifiedDiagnosis(UnifiedDiagnosisRequestDto requestDto,
             org.springframework.web.multipart.MultipartFile image,
-            org.springframework.web.multipart.MultipartFile audio) {
-        log.info("Requesting Manual Unified Diagnosis (Async via MQ) for vehicle: {}", requestDto.getVehicleId());
+            org.springframework.web.multipart.MultipartFile audio,
+            DiagTriggerType diagType) {
+        log.info("[통합진단] 요청 - 차량: {}, 타입: {}", requestDto.getVehicleId(), diagType);
 
         // 기존 PENDING 세션이 있으면 재사용
         DiagSession session = diagSessionRepository
-                .findFirstByVehiclesIdAndTriggerTypeAndStatusOrderByCreatedAtDesc(
-                        requestDto.getVehicleId(), DiagTriggerType.MANUAL, DiagStatus.PENDING)
+                .findFirstByVehiclesIdAndStatusOrderByCreatedAtDesc(
+                        requestDto.getVehicleId(), DiagStatus.PENDING)
                 .orElseGet(() -> {
                     // PENDING이 없으면 FAILED도 확인
                     return diagSessionRepository
-                            .findFirstByVehiclesIdAndTriggerTypeAndStatusOrderByCreatedAtDesc(
-                                    requestDto.getVehicleId(), DiagTriggerType.MANUAL, DiagStatus.FAILED)
+                            .findFirstByVehiclesIdAndStatusOrderByCreatedAtDesc(
+                                    requestDto.getVehicleId(), DiagStatus.FAILED)
                             .orElse(null);
                 });
 
@@ -190,7 +191,7 @@ public class AiDiagnosisService {
             log.info("Reusing existing session [{}] with status [{}]", session.getDiagSessionId(), session.getStatus());
             session.updateStatus(DiagStatus.PENDING, "진단 대기 중 (재요청)");
         } else {
-            session = new DiagSession(requestDto.getVehicleId(), null, DiagTriggerType.MANUAL);
+            session = new DiagSession(requestDto.getVehicleId(), null, diagType);
         }
         session = diagSessionRepository.save(session);
 
@@ -215,15 +216,15 @@ public class AiDiagnosisService {
     }
 
     /**
-     * 통합 진단 비동기 처리 (Trigger 1: 운행 종료 등 이벤트 기반 - RabbitMQ 발행)
+     * 자동 진단 비동기 요청 (주행 종료 시 트리거)
      */
     public void requestUnifiedDiagnosisAsync(UnifiedDiagnosisRequestDto requestDto) {
-        log.info("Requesting Auto Unified Diagnosis (Async via MQ) for vehicle: {}", requestDto.getVehicleId());
+        log.info("[자동진단] 비동기 요청 - 차량: {}", requestDto.getVehicleId());
 
         DiagSession session = diagSessionRepository.save(new DiagSession(
                 requestDto.getVehicleId(),
                 requestDto.getTripId(),
-                DiagTriggerType.ANOMALY));
+                DiagTriggerType.AUTO));
 
         DiagnosisTaskMessage message = DiagnosisTaskMessage.builder()
                 .sessionId(session.getDiagSessionId())
@@ -706,11 +707,34 @@ public class AiDiagnosisService {
                     .status(session.getStatus().name())
                     .progressMessage(session.getProgressMessage())
                     .triggerType(session.getTriggerType().name())
+                    .triggerTypeLabel(getTriggerTypeLabel(session.getTriggerType()))
                     .responseMode(result != null ? result.getResponseMode() : null)
                     .riskLevel(result != null && result.getRiskLevel() != null ? result.getRiskLevel().name() : null)
                     .createdAt(session.getCreatedAt())
                     .build();
         }).collect(Collectors.toList());
+    }
+
+    /**
+     * 진단 타입 한글 라벨 변환 헬퍼
+     */
+    private String getTriggerTypeLabel(DiagTriggerType type) {
+        switch (type) {
+            case AUTO:
+                return "자동 진단";
+            case DATA:
+                return "데이터 진단";
+            case VISUAL:
+                return "사진 진단";
+            case AUDIO:
+                return "소리 진단";
+            case DTC:
+                return "고장코드 진단";
+            case ROUTINE:
+                return "정기 진단";
+            default:
+                return "진단";
+        }
     }
 
     private void populateVehicleAndConsumableInfo(AiUnifiedRequestDto.AiUnifiedRequestDtoBuilder builder,

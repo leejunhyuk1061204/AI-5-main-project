@@ -14,8 +14,9 @@ public class DiagnosisListItemDto {
     private UUID sessionId;
     private String status;
     private String progressMessage;
-    private String triggerType; // MANUAL | AUTO
-    private String responseMode; // REPORT | INTERACTIVE
+    private String triggerType;
+    private String triggerTypeLabel; // 신규: 한글 라벨
+    private String responseMode;
     private String riskLevel;
     private LocalDateTime createdAt;
 }

@@ -8,8 +8,8 @@ from datetime import datetime
 
 # 설정
 BASE_URL = "http://localhost:8080/api/v1"
-VEHICLE_ID = "a3ef43f6-ba98-4b31-927d-4a5b869b95eb"
-ACCESS_TOKEN = "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiI2ZjcxOThmZi05NTJjLTQzOGQtYmIxMi0xOTQ0YmJiYjc3OTciLCJpYXQiOjE3Njk0OTk1MDIsImV4cCI6MTc2OTUwMzEwMn0.81KUDyRag8TxjgjDYICv0PNdNeMUQBuIGi9JIiRmtzXGZJKg1wftCniYSMXrmdLJjxAuPNa7Q-22OiTXIw5g9Q"
+VEHICLE_ID = "32cbfa4d-ed68-44fd-b13e-36fe357bd74f"
+ACCESS_TOKEN = "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiIyZmQyMDE4MS1mYmE1LTQwYzYtOGFlNi1jMjg5N2YwYTE0ZjciLCJpYXQiOjE3Njk1ODkyMzQsImV4cCI6MTc2OTU5MjgzNH0.sFVtVplcBLleUJYPRoG2qoazSZ6thu_Ab_WLVts0fIR6_n7qqD8GkaHfZmK0aTdZuOnJy7v9kTP6oNDJr8_okg"
 
 def get_headers():
     if os.path.exists("token.json"):
