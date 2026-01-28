@@ -39,8 +39,8 @@ export default function DiagnosisHistory() {
     };
 
     const getDisplayTitle = (item: any) => {
-        // progressMessage가 있으면 사용
-        if (item.progressMessage) return item.progressMessage;
+        // progressMessage가 있으면 사용 (비교를 위해 주석 처리)
+        // if (item.progressMessage) return item.progressMessage;
 
         // 상태에 따라 기본 제목 생성
         if (item.status === 'ACTION_REQUIRED' || item.responseMode === 'INTERACTIVE') {
@@ -49,10 +49,35 @@ export default function DiagnosisHistory() {
         if (item.status === 'DONE' || item.status === 'COMPLETED') {
             return '진단 완료';
         }
-        if (item.status === 'PROCESSING') {
+        if (item.status === 'PROCESSING' || item.status === 'REPLY_PROCESSING') {
             return '진단 진행 중';
         }
+        if (item.status === 'FAILED') {
+            return '진단 실패';
+        }
+        if (item.status === 'PENDING') {
+            return '진단 대기 중';
+        }
         return '종합 진단 보고서';
+    };
+
+    const getTriggerIcon = (triggerType: string) => {
+        switch (triggerType) {
+            case 'AUTO':
+                return { name: 'auto-fix-high', color: '#10b981' };
+            case 'DATA':
+                return { name: 'data-usage', color: '#3b82f6' };
+            case 'VISUAL':
+                return { name: 'camera-alt', color: '#f59e0b' };
+            case 'AUDIO':
+                return { name: 'mic', color: '#ec4899' };
+            case 'DTC':
+                return { name: 'warning', color: '#ef4444' };
+            case 'ROUTINE':
+                return { name: 'event-repeat', color: '#8b5cf6' };
+            default:
+                return { name: 'help-outline', color: '#64748b' };
+        }
     };
 
 
@@ -73,36 +98,56 @@ export default function DiagnosisHistory() {
                 ) : history.length > 0 ? (
                     <FlatList
                         data={history}
-                        renderItem={({ item }) => (
-                            <TouchableOpacity
-                                className="bg-surface-card rounded-2xl p-5 mb-4 border border-white/10 flex-row items-center justify-between active:bg-white/5"
-                                onPress={() => {
-                                    if (item.responseMode === 'INTERACTIVE' || item.status === 'ACTION_REQUIRED') {
-                                        navigation.navigate('AiDiagChat', { sessionId: item.sessionId });
-                                    } else {
-                                        navigation.navigate('DiagnosisReport', { reportData: item });
-                                    }
-                                }}
-                            >
-                                <View className="flex-1">
-                                    <View className="flex-row items-center gap-2 mb-1">
-                                        <Text className="text-text-dim text-xs font-bold">{formatDate(item.createdAt)}</Text>
-                                        <View className={`px-2 py-0.5 rounded-full ${item.status === 'COMPLETED' ? 'bg-success/10' : 'bg-primary/10'}`}>
-                                            <Text className={`text-[10px] font-bold ${item.status === 'COMPLETED' ? 'text-success' : 'text-primary'}`}>
-                                                {item.status || '진단완료'}
+                        renderItem={({ item }) => {
+                            const iconData = getTriggerIcon(item.triggerType);
+                            return (
+                                <TouchableOpacity
+                                    className="bg-surface-card rounded-2xl p-5 mb-4 border border-white/10 flex-row items-center justify-between active:bg-white/5"
+                                    onPress={() => {
+                                        if (item.responseMode === 'INTERACTIVE' || item.status === 'ACTION_REQUIRED') {
+                                            navigation.navigate('AiDiagChat', { sessionId: item.sessionId });
+                                        } else {
+                                            navigation.navigate('DiagnosisReport', { reportData: item });
+                                        }
+                                    }}
+                                >
+                                    <View className="flex-1 flex-row items-center">
+                                        {/* 진단 타입 아이콘 */}
+                                        <View className="mr-4">
+                                            <MaterialIcons
+                                                name={iconData.name as any}
+                                                size={28}
+                                                color={iconData.color}
+                                            />
+                                        </View>
+
+                                        <View className="flex-1">
+                                            <View className="flex-row items-center gap-2 mb-1">
+                                                <Text className="text-text-dim text-xs font-bold">{formatDate(item.createdAt)}</Text>
+                                                <View className={`px-2 py-0.5 rounded-full ${item.status === 'COMPLETED' || item.status === 'DONE' ? 'bg-success/10' :
+                                                    item.status === 'FAILED' ? 'bg-danger/10' :
+                                                        'bg-primary/10'
+                                                    }`}>
+                                                    <Text className={`text-[10px] font-bold ${item.status === 'COMPLETED' || item.status === 'DONE' ? 'text-success' :
+                                                        item.status === 'FAILED' ? 'text-danger' :
+                                                            'text-primary'
+                                                        }`}>
+                                                        {item.status || '진단완료'}
+                                                    </Text>
+                                                </View>
+                                            </View>
+                                            <Text className="text-white text-base font-bold mb-1" numberOfLines={1}>
+                                                {getDisplayTitle(item)}
+                                            </Text>
+                                            <Text className="text-text-muted text-sm" numberOfLines={1}>
+                                                {item.triggerTypeLabel || '진단'} · {item.riskLevel || '분석 중'}
                                             </Text>
                                         </View>
                                     </View>
-                                    <Text className="text-white text-base font-bold mb-1" numberOfLines={1}>
-                                        {getDisplayTitle(item)}
-                                    </Text>
-                                    <Text className="text-text-muted text-sm" numberOfLines={1}>
-                                        {item.triggerType === 'MANUAL' ? '수동 진단' : '자동 진단'} · {item.riskLevel || '분석 중'}
-                                    </Text>
-                                </View>
-                                <MaterialIcons name="chevron-right" size={24} color="#64748b" />
-                            </TouchableOpacity>
-                        )}
+                                    <MaterialIcons name="chevron-right" size={24} color="#64748b" />
+                                </TouchableOpacity>
+                            );
+                        }}
                         keyExtractor={(item) => item.sessionId || item.diagnosisId || Math.random().toString()}
                         showsVerticalScrollIndicator={false}
                         contentContainerStyle={{ paddingBottom: 20 }}

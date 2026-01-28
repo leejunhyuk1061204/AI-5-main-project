@@ -74,7 +74,7 @@ export default function EngineSoundDiag() {
 
     // Animation Effect for Analysis or Recording
     useEffect(() => {
-        if (step === 2 || isRecording) {
+        if (step === 2 || isRecording || isPlaying) {
             const loops = animations.map((anim, i) => {
                 return Animated.loop(
                     Animated.sequence([
@@ -107,7 +107,7 @@ export default function EngineSoundDiag() {
                 });
             };
         }
-    }, [step, isRecording]);
+    }, [step, isRecording, isPlaying]);
 
     // Start Recording
     const startRecording = async () => {

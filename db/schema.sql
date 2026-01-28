@@ -17,7 +17,7 @@ CREATE TYPE registration_source AS ENUM ('MANUAL', 'OBD', 'CLOUD');
 
 CREATE TYPE charging_status AS ENUM ('DISCONNECTED', 'CHARGING', 'FULL', 'ERROR');
 
-CREATE TYPE diag_trigger_type AS ENUM ('MANUAL', 'DTC', 'ANOMALY', 'ROUTINE');
+CREATE TYPE diag_trigger_type AS ENUM ('AUTO', 'DATA', 'VISUAL', 'AUDIO', 'DTC', 'ROUTINE');
 
 CREATE TYPE diag_status AS ENUM ('PENDING', 'PROCESSING', 'REPLY_PROCESSING', 'DONE', 'FAILED');
 

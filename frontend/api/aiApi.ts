@@ -50,7 +50,7 @@ export const diagnoseImage = async (imageUri: string, vehicleId: string): Promis
 
         console.log('[aiApi] Uploading image to unified endpoint:', filename);
 
-        const response = await api.post('/api/v1/ai/diagnose/unified', formData, {
+        const response = await api.post('/api/v1/ai/diagnose/unified?diagType=VISUAL', formData, {
             headers: {
                 'Content-Type': 'multipart/form-data',
             },
@@ -91,7 +91,7 @@ export const diagnoseEngineSound = async (audioUri: string, vehicleId: string): 
             type: 'application/json',
         } as any);
 
-        const response = await api.post('/api/v1/ai/diagnose/unified', formData, {
+        const response = await api.post('/api/v1/ai/diagnose/unified?diagType=AUDIO', formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
         });
 
@@ -116,7 +116,7 @@ export const diagnoseObdOnly = async (vehicleId: string): Promise<any> => {
             type: 'application/json',
         } as any);
 
-        const response = await api.post('/api/v1/ai/diagnose/unified', formData, {
+        const response = await api.post('/api/v1/ai/diagnose/unified?diagType=DATA', formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
         });
 

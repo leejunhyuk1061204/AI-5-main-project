@@ -36,8 +36,17 @@ public class AiController {
     public ApiResponse<Object> requestUnifiedDiagnosis(
             @RequestPart(value = "image", required = false) org.springframework.web.multipart.MultipartFile image,
             @RequestPart(value = "audio", required = false) org.springframework.web.multipart.MultipartFile audio,
-            @RequestPart(value = "data") UnifiedDiagnosisRequestDto requestDto) {
-        Object result = aiDiagnosisService.requestUnifiedDiagnosis(requestDto, image, audio);
+            @RequestPart(value = "data") UnifiedDiagnosisRequestDto requestDto,
+            @RequestParam(value = "diagType", defaultValue = "DATA") String diagTypeStr) {
+
+        kr.co.himedia.entity.DiagSession.DiagTriggerType diagType;
+        try {
+            diagType = kr.co.himedia.entity.DiagSession.DiagTriggerType.valueOf(diagTypeStr.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            diagType = kr.co.himedia.entity.DiagSession.DiagTriggerType.DATA;
+        }
+
+        Object result = aiDiagnosisService.requestUnifiedDiagnosis(requestDto, image, audio, diagType);
         return ApiResponse.success(result);
     }
 

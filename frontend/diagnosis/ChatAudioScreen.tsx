@@ -140,10 +140,12 @@ export default function ChatAudioScreen() {
         } else {
             const { sound: newSound } = await Audio.Sound.createAsync({ uri: recordedUri });
             setSound(newSound);
-            setIsPlaying(true);
             await newSound.playAsync();
+            setIsPlaying(true);
             newSound.setOnPlaybackStatusUpdate(status => {
-                if (status.isLoaded && status.didJustFinish) setIsPlaying(false);
+                if (status.isLoaded && status.didJustFinish) {
+                    setIsPlaying(false);
+                }
             });
         }
     };
