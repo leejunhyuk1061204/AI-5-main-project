@@ -38,6 +38,23 @@ export default function DiagnosisHistory() {
         return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
     };
 
+    const getDisplayTitle = (item: any) => {
+        // progressMessage가 있으면 사용
+        if (item.progressMessage) return item.progressMessage;
+
+        // 상태에 따라 기본 제목 생성
+        if (item.status === 'ACTION_REQUIRED' || item.responseMode === 'INTERACTIVE') {
+            return '추가 정보 필요';
+        }
+        if (item.status === 'DONE' || item.status === 'COMPLETED') {
+            return '진단 완료';
+        }
+        if (item.status === 'PROCESSING') {
+            return '진단 진행 중';
+        }
+        return '종합 진단 보고서';
+    };
+
 
     return (
         <BaseScreen header={<Header />} padding={false} useBottomNav={true} scrollable={false}>
@@ -59,7 +76,13 @@ export default function DiagnosisHistory() {
                         renderItem={({ item }) => (
                             <TouchableOpacity
                                 className="bg-surface-card rounded-2xl p-5 mb-4 border border-white/10 flex-row items-center justify-between active:bg-white/5"
-                                onPress={() => navigation.navigate('DiagnosisReport', { reportData: item })}
+                                onPress={() => {
+                                    if (item.responseMode === 'INTERACTIVE' || item.status === 'ACTION_REQUIRED') {
+                                        navigation.navigate('AiDiagChat', { sessionId: item.sessionId });
+                                    } else {
+                                        navigation.navigate('DiagnosisReport', { reportData: item });
+                                    }
+                                }}
                             >
                                 <View className="flex-1">
                                     <View className="flex-row items-center gap-2 mb-1">
@@ -71,10 +94,10 @@ export default function DiagnosisHistory() {
                                         </View>
                                     </View>
                                     <Text className="text-white text-base font-bold mb-1" numberOfLines={1}>
-                                        {item.summary || '종합 진단 보고서'}
+                                        {getDisplayTitle(item)}
                                     </Text>
                                     <Text className="text-text-muted text-sm" numberOfLines={1}>
-                                        {item.finalReport || item.description || '상세 내역 보기'}
+                                        {item.triggerType === 'MANUAL' ? '수동 진단' : '자동 진단'} · {item.riskLevel || '분석 중'}
                                     </Text>
                                 </View>
                                 <MaterialIcons name="chevron-right" size={24} color="#64748b" />

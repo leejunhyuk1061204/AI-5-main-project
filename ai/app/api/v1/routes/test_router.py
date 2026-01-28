@@ -221,71 +221,51 @@ async def connect_comprehensive_mock(data: dict):
     print(f"- Visual: {'YES' if visual else 'NO'}, Audio: {'YES' if audio else 'NO'}, Anomaly: {'YES' if anomaly else 'NO'}")
     print(f"- Conversation history: {user_reply_count} user replies")
 
-    # 분기 조건: 사진/오디오 있으면 → REPORT, 없으면 → 4회까지 INTERACTIVE
-    has_media = bool(visual) or bool(audio)
-    
-    # [수정] 오디오/사진 데이터가 있으면 무조건 REPORT 생성 (사용자 요청 사항)
-    # 기존 if audio: ... 블록 삭제됨
+    # [수정] 사용자 요청: "0, 1, 2" 로직
+    # - 0 (첫 번째): 무조건 INTERACTIVE (사진 있어도 추가 정보 요청)
+    # - 1, 2 (두 번째, 세 번째): 파일(사진/오디오) 있으면 REPORT
+    # - 나머지: INTERACTIVE
 
-    if has_media:
-        # 사진 또는 오디오가 있으면 → REPORT 생성
+    has_visua = bool(visual)
+    has_audio = bool(audio)
+    has_media = has_visua or has_audio
+    
+    print(f"[Comprehensive] Visual: {has_visua}, Audio: {has_audio}, Turn: {user_reply_count}")
+
+    # 1회차 이상이고 미디어(사진/오디오)가 있으면 -> REPORT
+    if has_media and user_reply_count >= 2:
         is_anomaly = anomaly.get("is_anomaly") if anomaly else False
-        has_visual_issue = visual.get("status") == "FAULTY" if visual else False
-        has_audio_issue = audio.get("status") == "FAULTY" if audio else False
+        has_issue = (visual.get("status") == "FAULTY" if visual else False) or \
+                    (audio.get("status") == "FAULTY" if audio else False)
         
-        # 초안 가이드라인: 단정적 표현 금지, 추정형 표현 사용
         summary_text = "제공해주신 데이터를 종합적으로 분석한 결과, 몇 가지 점검이 필요한 항목이 확인되었습니다."
         final_guide_text = "현재 데이터로는 즉각적인 운행 정지가 필요해 보이지 않으나, 예방 정비를 위해 가까운 정비소 방문을 권장합니다."
         
-        if is_anomaly or has_visual_issue:
-            summary_text = "냉각 계통 및 엔진룸 육안 점검 결과, 주의가 필요한 이상 징후가 발견되었습니다."
-            final_guide_text = "냉각수 누수 또는 부품 노후화 가능성이 있습니다. 장거리 운행 전 정비소에서 정밀 점검을 받으시는 것을 추천합니다."
-        
+        if is_anomaly or has_issue:
+            summary_text = "분석 결과, 주의가 필요한 이상 징후가 발견되었습니다."
+            final_guide_text = "부품 노후화 또는 이상 소음 가능성이 있습니다. 정밀 점검을 받으시는 것을 추천합니다."
+
         return {
             "response_mode": "REPORT",
-            # 초안 가이드라인: 데이터가 충분하면 HIGH, 아니면 MEDIUM
-            "confidence_level": "HIGH" if (has_visual_issue or is_anomaly) else "MEDIUM",
+            "confidence_level": "HIGH" if (has_issue or is_anomaly) else "MEDIUM",
             "summary": summary_text,
             "report_data": {
                 "suspected_causes": [
                     {
-                        "cause": "냉각 계통 부품(라디에이터/호스) 노후화 의심" if (is_anomaly or has_visual_issue) else "특이 사항 없음 (정상 범위)",
-                        "basis": "이미지 분석상 붉은색 Heatmap 영역(이상 발열/누수 의심) 확인" if (is_anomaly or has_visual_issue) else "데이터 분석 결과 정상 패턴",
-                        "source_type": "INFERRED", # 초안: 이미지 분석 등 확률적 데이터는 INFERRED
-                        "reliability": "HIGH" if (is_anomaly or has_visual_issue) else "MEDIUM"
+                        "cause": "부품 노후화 또는 이상 징후" if (is_anomaly or has_issue) else "특이 사항 없음 (정상 범위)",
+                        "basis": "AI 이미지/오디오 분석 및 데이터 패턴 감지",
+                        "source_type": "INFERRED",
+                        "reliability": "HIGH" if (is_anomaly or has_issue) else "MEDIUM"
                     }
                 ],
                 "final_guide": final_guide_text,
-                "risk_level": "MID" if (is_anomaly or has_visual_issue) else "LOW"
+                "risk_level": "MID" if (is_anomaly or has_issue) else "LOW"
             },
             "interactive_data": None,
-            "disclaimer": "본 결과는 AI 분석에 기반한 참고 정보이며, 실제 차량 상태와 다를 수 있습니다."
+            "disclaimer": "본 결과는 AI 분석에 기반한 참고 정보입니다."
         }
-    
-    # 사진/오디오 없이 텍스트만 → 4회까지 INTERACTIVE (백엔드 3턴 제한 테스트용)
-    if user_reply_count >= 4:
-        # 4회 이상이면 AI에서도 REPORT (정상 케이스)
-        return {
-            "response_mode": "REPORT",
-            "confidence_level": "MEDIUM",
-            "summary": "사용자님과의 대화를 통해 수집된 정보를 바탕으로 분석을 완료했습니다.",
-            "report_data": {
-                "suspected_causes": [
-                    {
-                        "cause": "노후화로 인한 일반적인 진동/소음 가능성",
-                        "basis": "사용자 답변 종합 분석 (주행거리 및 연식 고려)",
-                        "source_type": "INFERRED",
-                        "reliability": "MEDIUM"
-                    }
-                ],
-                "final_guide": "대화 내용만으로는 명확한 고장 부위를 특정하기 어렵습니다. 소리가 심해지면 정비소를 방문해 주세요.",
-                "risk_level": "MID"
-            },
-            "interactive_data": None,
-            "disclaimer": "본 진단은 대화 내용에 기반한 추론이며, 실제 진단과 다를 수 있습니다."
-        }
-    
-    # 0~3회: INTERACTIVE 모드 유지
+
+    # 그 외 (0회차이거나 미디어 없음) -> INTERACTIVE
     # 시나리오 정의: 0회(Text) -> 1회(Audio) -> 2회(Photo) -> 3회(Text)
     scenario_steps = [
         {
@@ -306,23 +286,27 @@ async def connect_comprehensive_mock(data: dict):
         }
     ]
 
-    current_step = min(user_reply_count, 3)
-    step_data = scenario_steps[current_step]
+    # Index boundary check (User Count 1 -> Index 0)
+    step_idx = min(max(0, user_reply_count - 1), 3)
+    step_data = scenario_steps[step_idx]
+
+    # 만약 파일은 보냈는데 0회차라서 반려된 경우 메시지 살짝 수정 (Optional)
+    msg = step_data["message"]
+    if has_media and user_reply_count == 1:
+        msg = "파일 확인했습니다. 더 정확한 진단을 위해 우선 증상 발생 시점을 알려주세요."
 
     return {
         "response_mode": "INTERACTIVE",
         "confidence_level": "LOW",
-        "summary": f"대화 {user_reply_count + 1}회차 - 추가 정보 수집 중",
+        "summary": f"진단 진행 중 ({user_reply_count + 1}/4)",
         "report_data": None,
         "interactive_data": {
-            "message": step_data["message"],
-            "follow_up_questions": [
-                "엔진룸 사진을 찍어서 보내주시면 더 정확한 분석이 가능합니다." if step_data["action"] == "CAPTURE_PHOTO" else "더 자세한 상황을 설명해 주세요."
-            ],
+            "message": msg,
+            "follow_up_questions": ["자세한 설명을 부탁드립니다."],
             "requested_action": step_data["action"]
         },
         "requested_action": step_data["action"],
-        "disclaimer": "추가 정보가 필요한 상태입니다."
+        "disclaimer": "추가 정보 수집 중"
     }
 
 # ---- /connect 전용 Phase 2 Mock 스키마 ----

@@ -1,13 +1,135 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, TextInput, ActivityIndicator, ScrollView, Animated } from 'react-native';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { View, Text, TouchableOpacity, TextInput, ActivityIndicator, ScrollView, Animated, Platform, StyleSheet, KeyboardAvoidingView, Keyboard, Image } from 'react-native';
+import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
-// import { useNavigation, useRoute } from '@react-navigation/native'; // Removed
-import Header from '../header/Header';
-import BaseScreen from '../components/layout/BaseScreen';
-import { useAiDiagnosisStore } from '../store/useAiDiagnosisStore';
+
+// Global Stores
 import { useUIStore } from '../store/useUIStore';
 import { useVehicleStore } from '../store/useVehicleStore';
+import { useUserStore } from '../store/useUserStore';
+import { useBleStore } from '../store/useBleStore';
 
+// API
+import { getDiagnosisSessionStatus, replyToDiagnosisSession } from '../api/aiApi';
+
+// Types
+type RootStackParamList = {
+    Login: undefined;
+    AlertMain: undefined;
+    Filming: { sessionId: string | null; vehicleId?: number };
+    EngineSoundDiag: { sessionId: string | null; vehicleId?: number };
+    DiagnosisReport: { sessionId: string; reportData: any };
+    AiDiagChat: { autoStart?: boolean; vehicleId?: string; sessionId?: string; pendingMessage?: { type: 'image' | 'audio'; uri: string; text: string; timestamp: number } };
+    ChatCameraScreen: { sessionId: string | null; vehicleId?: string };
+    ChatAudioScreen: { sessionId: string | null; vehicleId?: string };
+    MainHome: undefined;
+    DiagTab: undefined;
+    HistoryTab: undefined;
+    SettingTab: undefined;
+};
+
+/**
+ * INLINE HEADER (StyleSheet Version)
+ */
+const InlineHeader = ({
+    onBack,
+    onNavigate,
+    nickname,
+    bleStatus
+}: {
+    onBack: () => void;
+    onNavigate: (screen: keyof RootStackParamList) => void;
+    nickname: string | null;
+    bleStatus: string;
+}) => {
+
+    const getStatusColor = (s: string) => {
+        if (s === 'connected') return '#22c55e'; // green-500
+        if (s === 'connecting') return '#eab308'; // yellow-500
+        return '#9ca3af'; // gray-400
+    };
+
+    return (
+        <View style={styles.headerContainer}>
+            <View>
+                {nickname ? (
+                    <Text style={styles.headerTitle}>
+                        {nickname}님
+                    </Text>
+                ) : (
+                    <TouchableOpacity onPress={() => onNavigate('Login')}>
+                        <Text style={styles.headerTitle}>
+                            로그인
+                        </Text>
+                    </TouchableOpacity>
+                )}
+                <Text style={[styles.headerStatus, { color: getStatusColor(bleStatus) }]}>
+                    Vehicle Status: {bleStatus}
+                </Text>
+            </View>
+
+            <View style={styles.headerIcons}>
+                <TouchableOpacity
+                    style={styles.iconButton}
+                    onPress={() => onNavigate('AlertMain')}
+                >
+                    <Text style={styles.iconText}>🔔</Text>
+                </TouchableOpacity>
+            </View>
+        </View>
+    );
+};
+
+/**
+ * SIMPLE BOTTOM NAV (Recreated Locally)
+ */
+const SimpleBottomNav = ({ onNavigate, currentParams }: { onNavigate: (screen: keyof RootStackParamList) => void, currentParams?: any }) => {
+    const insets = useSafeAreaInsets();
+
+    const tabs = [
+        { key: 'MainHome', label: '홈', icon: 'home' },
+        { key: 'DiagTab', label: '진단', icon: 'car-crash' },
+        { key: 'HistoryTab', label: '기록', icon: 'history' },
+        { key: 'SettingTab', label: '설정', icon: 'settings' },
+    ];
+
+    const activeTab = 'DiagTab'; // Always active since we are in Diag
+
+    return (
+        <View style={[styles.navContainer, { paddingBottom: insets.bottom }]}>
+            <View style={styles.navContent}>
+                {tabs.map((tab) => {
+                    const isActive = tab.key === activeTab;
+                    return (
+                        <TouchableOpacity
+                            key={tab.key}
+                            style={styles.navItem}
+                            onPress={() => onNavigate(tab.key as keyof RootStackParamList)}
+                            activeOpacity={0.7}
+                        >
+                            <MaterialIcons
+                                name={tab.icon as any}
+                                size={24}
+                                color={isActive ? '#0d7ff2' : '#6b7280'}
+                            />
+                            <Text style={[styles.navLabel, isActive ? styles.navLabelActive : styles.navLabelInactive]}>
+                                {tab.label}
+                            </Text>
+                            {isActive && <View style={styles.navIndicator} />}
+                        </TouchableOpacity>
+                    );
+                })}
+            </View>
+        </View>
+    );
+};
+
+
+/**
+ * DOT PULSE ANIMATION
+ */
 const DotPulse = () => {
     const dot1 = useRef(new Animated.Value(0.3)).current;
     const dot2 = useRef(new Animated.Value(0.3)).current;
@@ -31,242 +153,692 @@ const DotPulse = () => {
     }, []);
 
     return (
-        <View className="flex-row ml-1">
-            <Animated.Text style={{ opacity: dot1, color: '#9cabba' }} className="text-[15px] font-bold">.</Animated.Text>
-            <Animated.Text style={{ opacity: dot2, color: '#9cabba' }} className="text-[15px] font-bold">.</Animated.Text>
-            <Animated.Text style={{ opacity: dot3, color: '#9cabba' }} className="text-[15px] font-bold">.</Animated.Text>
+        <View style={styles.dotContainer}>
+            <Animated.Text style={[styles.dot, { opacity: dot1 }]}>.</Animated.Text>
+            <Animated.Text style={[styles.dot, { opacity: dot2 }]}>.</Animated.Text>
+            <Animated.Text style={[styles.dot, { opacity: dot3 }]}>.</Animated.Text>
         </View>
     );
 };
 
-// props로 직접 받기
-export default function AiDiagChat({ navigation, route }: any) {
+/**
+ * MAIN COMPONENT: AiDiagChat (Refactored)
+ */
+export default function AiDiagChat() {
+    console.log('[AiDiagChat] Rendered: StyleSheet + UseNavigation + KAV + SimpleBottomNav');
+
+    // Navigation Hooks
+    const navigation = useNavigation<any>();
+    const route = useRoute<RouteProp<RootStackParamList, 'AiDiagChat'>>();
+
+    // Layout Refs
+    const insets = useSafeAreaInsets();
     const scrollRef = useRef<ScrollView>(null);
+
+    // State
     const [userInput, setUserInput] = useState('');
+    const [isMenuOpen, setIsMenuOpen] = useState(false);
+    const [sessionData, setSessionData] = useState<any>(null);
+    const [messages, setMessages] = useState<any[]>([]);
+    const [loading, setLoading] = useState(false);
+    const [isWaitingForAi, setIsWaitingForAi] = useState(false);
+
+    // Stores (UI만 사용)
     const { primaryVehicle } = useVehicleStore();
+    const { isKeyboardVisible, setKeyboardVisible } = useUIStore();
+    const { nickname, loadUser } = useUserStore();
+    const { status: bleStatus } = useBleStore();
 
-    const {
-        status,
-        messages,
-        diagResult,
-        sendReply,
-        updateStatus,
-        currentSessionId,
-        isWaitingForAi,
-        requestedAction,
-        startDiagnosis,
-        reset,
-        loadingMessage
-    } = useAiDiagnosisStore();
+    // sessionId 추출 (route params 우선)
+    const sessionId = route.params?.sessionId || null;
 
-    // Auto-Report Navigation
-    useEffect(() => {
-        if (status === 'REPORT') {
-            console.log("[AiDiagChat] Diagnosis COMPLETED. Navigating to Report Screen.");
-            navigation.replace('DiagnosisReport', {
-                sessionId: currentSessionId,
-                reportData: diagResult
-            });
+    // -- EFFECTS --
+    useEffect(() => { loadUser(); }, []);
+
+    // 세션 데이터 로드 함수
+    const loadSessionData = async (sid: string) => {
+        if (!sid) return;
+        setLoading(true);
+        try {
+            const data = await getDiagnosisSessionStatus(sid);
+            setSessionData(data);
+
+            // 메시지 추출
+            let msgs: any[] = [];
+            if (data.interactiveData?.conversation) {
+                msgs = data.interactiveData.conversation;
+            }
+            // AI의 마지막 메시지 추가
+            if (data.interactiveData?.message) {
+                const lastMsg = msgs[msgs.length - 1];
+                if (!lastMsg || lastMsg.content !== data.interactiveData.message) {
+                    msgs.push({ role: 'ai', content: data.interactiveData.message });
+                }
+            }
+            setMessages(msgs);
+
+            // 대기 상태 업데이트
+            const isProcessing = data.status === 'PROCESSING' || data.status === 'REPLY_PROCESSING';
+            setIsWaitingForAi(isProcessing);
+
+            // 완료 시 리포트 화면으로 이동
+            if (data.status === 'DONE' || data.status === 'COMPLETED' || data.responseMode === 'REPORT') {
+                console.log("[AiDiagChat] Diagnosis COMPLETED. Navigating to Report.");
+                navigation.replace('DiagnosisReport', {
+                    sessionId: sid,
+                    reportData: data
+                });
+            }
+        } catch (error) {
+            console.error('[AiDiagChat] Failed to load session:', error);
+        } finally {
+            setLoading(false);
         }
-    }, [status, currentSessionId, diagResult, navigation]);
+    };
 
-    // Initial checks
+    // sessionId가 있으면 세션 데이터 로드 (초기 진입 & 화면 포커스 시)
+    useFocusEffect(
+        useCallback(() => {
+            // 1. pendingMessage가 있으면 즉시 표시 (Optimistic UI)
+            if (route.params?.pendingMessage) {
+                const pending = route.params.pendingMessage;
+                const newMessage = {
+                    role: 'user',
+                    content: pending.text,
+                    mediaType: pending.type,
+                    mediaUri: pending.uri,
+                    timestamp: pending.timestamp,
+                    isPending: true
+                };
+
+                setMessages(prev => {
+                    // 중복 방지: 같은 timestamp의 메시지가 없으면 추가
+                    const exists = prev.some(m => m.timestamp === pending.timestamp);
+                    if (!exists) {
+                        return [...prev, newMessage];
+                    }
+                    return prev;
+                });
+
+                // params 클리어하여 중복 방지
+                navigation.setParams({ pendingMessage: undefined } as any);
+
+                // 대기 상태 설정
+                setIsWaitingForAi(true);
+            }
+
+            // 2. 세션 데이터 로드
+            if (sessionId) {
+                loadSessionData(sessionId);
+            }
+        }, [sessionId, route.params?.pendingMessage])
+    );
+
+    // 폴링 (진행 중일 때만)
     useEffect(() => {
-        if (!currentSessionId && route.params?.autoStart && route.params?.vehicleId) {
-            startDiagnosis(route.params.vehicleId);
-        }
-    }, [route.params?.autoStart, route.params?.vehicleId]);
+        if (!sessionId || !sessionData) return;
 
+        const shouldPoll = sessionData.status === 'PROCESSING' || sessionData.status === 'REPLY_PROCESSING' || isWaitingForAi;
+        if (!shouldPoll) return;
 
-    // Auto-scroll
-    const scrollToEnd = (animated = false) => {
+        const intervalId = setInterval(() => {
+            loadSessionData(sessionId);
+        }, 3000);
+
+        return () => clearInterval(intervalId);
+    }, [sessionId, sessionData?.status, isWaitingForAi]);
+
+    // Auto-Scroll
+    const scrollToBottom = (animated = true) => {
         scrollRef.current?.scrollToEnd({ animated });
     };
 
     useEffect(() => {
-        const timer = setTimeout(() => {
-            scrollRef.current?.scrollToEnd({ animated: true });
-        }, 100);
+        const timer = setTimeout(() => scrollToBottom(), 100);
         return () => clearTimeout(timer);
     }, [messages, isWaitingForAi]);
 
-    // Polling Effect
+    // Keyboard Listeners (Optional backup if store fails, but store should work)
     useEffect(() => {
-        let intervalId: NodeJS.Timeout;
-        const shouldPoll = (status === 'PROCESSING' || status === 'REPLY_PROCESSING' || isWaitingForAi) && currentSessionId;
-
-        if (shouldPoll) {
-            intervalId = setInterval(() => {
-                updateStatus(currentSessionId);
-            }, 2000);
-        }
+        const showSubscription = Keyboard.addListener('keyboardDidShow', () => setKeyboardVisible(true));
+        const hideSubscription = Keyboard.addListener('keyboardDidHide', () => setKeyboardVisible(false));
         return () => {
-            if (intervalId) clearInterval(intervalId);
+            showSubscription.remove();
+            hideSubscription.remove();
         };
-    }, [status, currentSessionId, isWaitingForAi]);
+    }, []);
 
-    // Debug logging
-    console.log('[AiDiagChat] Rendered via Props. Navigation available:', !!navigation);
 
+    // -- HANDLERS --
     const handleSend = async () => {
-        if (!userInput.trim()) return;
+        if (!userInput.trim() || !sessionId) return;
+
         const msg = userInput;
         setUserInput('');
-        await sendReply(msg);
-    };
 
-    const [isMenuOpen, setIsMenuOpen] = useState(false);
+        // 즉시 UI 반영
+        setMessages(prev => [...prev, { role: 'user', content: msg }]);
+        setIsWaitingForAi(true);
+
+        try {
+            await replyToDiagnosisSession(sessionId, {
+                vehicleId: route.params?.vehicleId || primaryVehicle?.vehicleId || '',
+                userResponse: msg
+            });
+
+            // 답변 후 세션 상태 새로고침
+            await loadSessionData(sessionId);
+        } catch (error) {
+            console.error('[AiDiagChat] Reply failed:', error);
+            setIsWaitingForAi(false);
+        }
+    };
 
     const handleCamera = () => {
         setIsMenuOpen(false);
-        navigation.navigate('Filming', { sessionId: currentSessionId, vehicleId: route.params?.vehicleId });
+        navigation.navigate('ChatCameraScreen', { sessionId, vehicleId: route.params?.vehicleId });
     };
 
     const handleMic = () => {
         setIsMenuOpen(false);
-        navigation.navigate('EngineSoundDiag', { sessionId: currentSessionId, vehicleId: route.params?.vehicleId });
+        navigation.navigate('ChatAudioScreen', { sessionId, vehicleId: route.params?.vehicleId });
     };
 
     const handleGallery = () => {
         setIsMenuOpen(false);
-        navigation.navigate('Filming', { sessionId: currentSessionId, vehicleId: route.params?.vehicleId });
+        navigation.navigate('Filming', { sessionId, vehicleId: route.params?.vehicleId });
     };
 
-    const toggleMenu = () => setIsMenuOpen(!isMenuOpen);
+    const onNavigate = (screen: keyof RootStackParamList) => {
+        navigation.navigate(screen);
+    };
 
+    const onBack = () => {
+        navigation.goBack();
+    };
+
+
+    // -- RENDER --
     return (
-        <BaseScreen
-            header={<Header navigation={navigation} />}
-            footer={
-                <View
-                    className="px-6 py-4 bg-background-dark border-t border-white/5"
-                    style={{ minHeight: 80 }}
-                >
-                    {/* Dynamic Action Buttons (Requested Actions) */}
-                    {requestedAction && !isWaitingForAi && (
-                        <View className="flex-row justify-center gap-3 mb-4 px-6">
-                            {requestedAction === 'CAPTURE_PHOTO' && (
-                                <TouchableOpacity
-                                    onPress={handleCamera}
-                                    className="bg-primary/20 border border-primary px-4 py-2.5 rounded-full flex-row items-center gap-2"
-                                >
-                                    <MaterialIcons name="photo-camera" size={18} color="#0d7ff2" />
-                                    <Text className="text-primary font-bold text-sm">사진 촬영하기</Text>
-                                </TouchableOpacity>
-                            )}
-                            {requestedAction === 'RECORD_AUDIO' && (
-                                <TouchableOpacity
-                                    onPress={handleMic}
-                                    className="bg-secondary/20 border border-secondary px-4 py-2.5 rounded-full flex-row items-center gap-2"
-                                >
-                                    <MaterialIcons name="mic" size={18} color="#a855f7" />
-                                    <Text className="text-secondary font-bold text-sm">소리 녹음하기</Text>
-                                </TouchableOpacity>
-                            )}
-                        </View>
-                    )}
+        <View style={styles.container}>
+            <StatusBar style="light" />
 
-                    {/* Media Attachment Menu (Proactive) */}
-                    {isMenuOpen && (
-                        <View className="flex-row justify-around mb-4 bg-surface-card p-4 rounded-xl border border-white/10 mx-1">
-                            <TouchableOpacity onPress={handleCamera} className="items-center gap-2">
-                                <View className="w-12 h-12 rounded-full bg-blue-500/20 items-center justify-center border border-blue-500/30">
-                                    <MaterialIcons name="camera-alt" size={24} color="#3b82f6" />
-                                </View>
-                                <Text className="text-slate-300 text-xs font-medium">카메라</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity onPress={handleMic} className="items-center gap-2">
-                                <View className="w-12 h-12 rounded-full bg-purple-500/20 items-center justify-center border border-purple-500/30">
-                                    <MaterialIcons name="mic" size={24} color="#a855f7" />
-                                </View>
-                                <Text className="text-slate-300 text-xs font-medium">마이크</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity onPress={handleGallery} className="items-center gap-2">
-                                <View className="w-12 h-12 rounded-full bg-emerald-500/20 items-center justify-center border border-emerald-500/30">
-                                    <MaterialIcons name="photo-library" size={24} color="#10b981" />
-                                </View>
-                                <Text className="text-slate-300 text-xs font-medium">갤러리</Text>
-                            </TouchableOpacity>
-                        </View>
-                    )}
+            {/* Header */}
+            <View style={{ paddingTop: insets.top }}>
+                <InlineHeader
+                    onBack={onBack}
+                    onNavigate={onNavigate}
+                    nickname={nickname}
+                    bleStatus={bleStatus}
+                />
+            </View>
 
-                    <View className="flex-row items-center gap-3">
-                        <TouchableOpacity
-                            onPress={toggleMenu}
-                            className={`w-10 h-10 rounded-full items-center justify-center ${isMenuOpen ? 'bg-white/20 rotate-45' : 'bg-surface-light active:bg-white/10'}`}
-                        >
-                            <MaterialIcons name={isMenuOpen ? "close" : "add"} size={26} color="white" />
-                        </TouchableOpacity>
+            {/* Main Content with Keyboard Handling */}
+            <KeyboardAvoidingView
+                style={{ flex: 1 }}
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            >
 
-                        <View className="flex-1 flex-row items-center bg-surface-card rounded-full px-4 py-1 border border-white/10 shadow-lg">
-                            <TextInput
-                                className="flex-1 text-white py-3 text-[15px]"
-                                placeholder={requestedAction === 'ANSWER_TEXT' ? "질문에 대한 답변을 입력하세요..." : "메시지를 입력하세요..."}
-                                placeholderTextColor="#64748b"
-                                value={userInput}
-                                onChangeText={setUserInput}
-                                multiline={false}
-                                returnKeyType="send"
-                                onFocus={() => useUIStore.getState().setKeyboardVisible(true)}
-                                onSubmitEditing={handleSend}
-                                blurOnSubmit={false}
-                            />
-                            <TouchableOpacity
-                                onPress={handleSend}
-                                className={`w-10 h-10 rounded-full items-center justify-center ${userInput.trim() ? 'bg-primary' : 'bg-surface-highlight'}`}
-                                disabled={!userInput.trim()}
+                <View style={[styles.chatContainer, { paddingBottom: isKeyboardVisible ? 0 : 0 }]}>
+                    <ScrollView
+                        ref={scrollRef}
+                        style={styles.scrollView}
+                        contentContainerStyle={styles.scrollContent}
+                        onContentSizeChange={() => scrollToBottom()}
+                        onLayout={() => scrollToBottom()}
+                        showsVerticalScrollIndicator={false}
+                    >
+                        {messages.map((msg, idx) => (
+                            <View
+                                key={idx}
+                                style={[
+                                    styles.messageWrapper,
+                                    msg.role === 'user' ? styles.messageUser : styles.messageAi
+                                ]}
                             >
-                                <MaterialIcons name="arrow-upward" size={22} color="white" />
+                                <View style={[
+                                    styles.messageBubble,
+                                    msg.role === 'user' ? styles.bubbleUser : styles.bubbleAi
+                                ]}>
+                                    {/* 이미지 미리보기 */}
+                                    {msg.mediaType === 'image' && msg.mediaUri && (
+                                        <Image
+                                            source={{ uri: msg.mediaUri }}
+                                            style={styles.mediaPreview}
+                                            resizeMode="cover"
+                                        />
+                                    )}
+
+                                    {/* 오디오 파일 표시 */}
+                                    {msg.mediaType === 'audio' && msg.mediaUri && (
+                                        <View style={styles.audioPreview}>
+                                            <MaterialIcons name="audiotrack" size={20} color="#0d7ff2" />
+                                            <Text style={styles.audioFileName}>오디오 녹음.m4a</Text>
+                                        </View>
+                                    )}
+
+                                    <Text style={styles.messageText}>{msg.content}</Text>
+
+                                    {/* pending 표시 */}
+                                    {msg.isPending && (
+                                        <Text style={styles.pendingIndicator}>전송 중...</Text>
+                                    )}
+                                </View>
+                                <Text style={styles.messageMeta}>
+                                    {msg.role === 'user' ? '전송한 답변' : 'AI 분석가'}
+                                </Text>
+                            </View>
+                        ))}
+
+                        {/* Loading State */}
+                        {isWaitingForAi && (
+                            <View style={[styles.messageWrapper, styles.messageAi]}>
+                                <View style={[styles.messageBubble, styles.bubbleAi, styles.loadingBubble]}>
+                                    <ActivityIndicator size="small" color="#0d7ff2" />
+                                    <View style={styles.loadingTextWrapper}>
+                                        <Text style={styles.loadingText}>AI가 답변을 준비 중입니다</Text>
+                                        <DotPulse />
+                                    </View>
+                                </View>
+                            </View>
+                        )}
+                    </ScrollView>
+
+                    {/* Input Area */}
+                    <View style={[styles.inputArea, { paddingBottom: !isKeyboardVisible ? 16 : 16 }]}>
+
+                        {/* Dynamic Action Buttons */}
+                        {sessionData?.requestedAction && !isWaitingForAi && (
+                            <View style={styles.actionButtonsContainer}>
+                                {sessionData.requestedAction === 'CAPTURE_PHOTO' && (
+                                    <TouchableOpacity onPress={handleCamera} style={[styles.actionButton, styles.actionButtonPrimary]}>
+                                        <MaterialIcons name="photo-camera" size={18} color="#0d7ff2" />
+                                        <Text style={styles.actionButtonTextPrimary}>사진 촬영하기</Text>
+                                    </TouchableOpacity>
+                                )}
+                                {sessionData.requestedAction === 'RECORD_AUDIO' && (
+                                    <TouchableOpacity onPress={handleMic} style={[styles.actionButton, styles.actionButtonSecondary]}>
+                                        <MaterialIcons name="mic" size={18} color="#a855f7" />
+                                        <Text style={styles.actionButtonTextSecondary}>소리 녹음하기</Text>
+                                    </TouchableOpacity>
+                                )}
+                            </View>
+                        )}
+
+                        {/* Menu */}
+                        {isMenuOpen && (
+                            <View style={styles.menuArea}>
+                                <TouchableOpacity onPress={handleCamera} style={styles.menuItem}>
+                                    <View style={[styles.menuIconCircle, styles.menuIconBlue]}>
+                                        <MaterialIcons name="camera-alt" size={24} color="#3b82f6" />
+                                    </View>
+                                    <Text style={styles.menuText}>카메라</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity onPress={handleMic} style={styles.menuItem}>
+                                    <View style={[styles.menuIconCircle, styles.menuIconPurple]}>
+                                        <MaterialIcons name="mic" size={24} color="#a855f7" />
+                                    </View>
+                                    <Text style={styles.menuText}>마이크</Text>
+                                </TouchableOpacity>
+                                {/*<TouchableOpacity onPress={handleGallery} style={styles.menuItem}>
+                                    <View style={[styles.menuIconCircle, styles.menuIconEmerald]}>
+                                        <MaterialIcons name="photo-library" size={24} color="#10b981" />
+                                    </View>
+                                    <Text style={styles.menuText}>갤러리</Text>
+                                </TouchableOpacity>*/}
+                            </View>
+                        )}
+
+                        {/* Input Bar */}
+                        <View style={styles.inputRow}>
+                            <TouchableOpacity
+                                onPress={() => setIsMenuOpen(!isMenuOpen)}
+                                style={[styles.plusButton, isMenuOpen ? styles.plusButtonActive : styles.plusButtonInactive]}
+                            >
+                                <MaterialIcons name={isMenuOpen ? "close" : "add"} size={26} color="white" />
                             </TouchableOpacity>
+
+                            <View style={styles.inputWrapper}>
+                                <TextInput
+                                    style={styles.textInput}
+                                    placeholder={sessionData?.requestedAction === 'ANSWER_TEXT' ? "질문에 대한 답변을 입력하세요..." : "메시지를 입력하세요..."}
+                                    placeholderTextColor="#64748b"
+                                    value={userInput}
+                                    onChangeText={setUserInput}
+                                    onFocus={() => setKeyboardVisible(true)}
+                                    // onBlur is removed to prevent flickering if user taps outside
+                                    onSubmitEditing={handleSend}
+                                    blurOnSubmit={false}
+                                    returnKeyType="send"
+                                />
+                                <TouchableOpacity
+                                    onPress={handleSend}
+                                    style={[styles.sendButton, userInput.trim() ? styles.sendButtonActive : styles.sendButtonInactive]}
+                                    disabled={!userInput.trim()}
+                                >
+                                    <MaterialIcons name="arrow-upward" size={22} color="white" />
+                                </TouchableOpacity>
+                            </View>
                         </View>
                     </View>
                 </View>
-            }
-            padding={false}
-            scrollable={false}
-            androidKeyboardBehavior="height"
-            useBottomNav={true}
-        >
-            <View className="flex-1 bg-background-dark">
-                <ScrollView
-                    ref={scrollRef}
-                    className="flex-1 px-6 pt-4"
-                    contentContainerStyle={{ paddingBottom: 20 }}
-                    onContentSizeChange={() => scrollToEnd()}
-                    onLayout={() => scrollToEnd()}
-                    showsVerticalScrollIndicator={false}
-                >
-                    {messages.map((msg, idx) => (
-                        <View
-                            key={idx}
-                            className={`mb-6 max-w-[85%] ${msg.role === 'user' ? 'self-end' : 'self-start'}`}
-                        >
-                            <View className={`p-4 rounded-2xl ${msg.role === 'user'
-                                ? 'bg-primary rounded-tr-none'
-                                : 'bg-surface-card border border-white/10 rounded-tl-none'
-                                }`}>
-                                <Text className="text-white text-[15px] leading-6">{msg.content}</Text>
-                            </View>
-                            <Text className="text-text-dim text-[10px] mt-1.5 px-1 font-medium italic">
-                                {msg.role === 'user' ? '전송한 답변' : 'AI 분석가'}
-                            </Text>
-                        </View>
-                    ))}
+            </KeyboardAvoidingView>
 
-                    {/* Loading Indicator */}
-                    {isWaitingForAi && (
-                        <View className="mb-6 max-w-[85%] self-start">
-                            <View className="p-4 rounded-2xl bg-surface-card border border-white/10 rounded-tl-none flex-row items-center gap-3 shadow-sm">
-                                <ActivityIndicator size="small" color="#0d7ff2" />
-                                <View className="flex-row items-center">
-                                    <Text className="text-text-muted text-[15px] font-medium">AI가 답변을 준비 중입니다</Text>
-                                    <DotPulse />
-                                </View>
-                            </View>
-                        </View>
-                    )}
-                </ScrollView>
-            </View>
-        </BaseScreen>
+            {/* Bottom Nav - Hidden when keyboard is open */}
+            {!isKeyboardVisible && (
+                <SimpleBottomNav onNavigate={onNavigate} />
+            )}
+        </View>
     );
 }
+
+const styles = StyleSheet.create({
+    container: {
+        flex: 1,
+        backgroundColor: '#111827', // bg-background-dark
+    },
+    chatContainer: {
+        flex: 1,
+    },
+    scrollView: {
+        flex: 1,
+        paddingHorizontal: 24, // px-6
+    },
+    scrollContent: {
+        paddingTop: 16,
+        paddingBottom: 20
+    },
+    // Header
+    headerContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 24,
+        paddingVertical: 16,
+        paddingBottom: 8,
+        backgroundColor: 'transparent',
+    },
+    headerTitle: {
+        fontSize: 24,
+        fontWeight: 'bold',
+        color: 'white',
+        letterSpacing: -0.5,
+    },
+    headerStatus: {
+        fontSize: 12,
+        marginTop: 4,
+        fontWeight: '500',
+    },
+    headerIcons: {
+        flexDirection: 'row',
+        gap: 16,
+    },
+    iconButton: {
+        width: 40,
+        height: 40,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: 20,
+        backgroundColor: '#1b2127',
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.1)',
+    },
+    iconText: {
+        color: 'white',
+        fontSize: 12,
+    },
+    // Msg
+    messageWrapper: {
+        marginBottom: 24, // mb-6
+        maxWidth: '85%',
+    },
+    messageUser: {
+        alignSelf: 'flex-end',
+    },
+    messageAi: {
+        alignSelf: 'flex-start',
+    },
+    messageBubble: {
+        padding: 16,
+        borderRadius: 16,
+    },
+    bubbleUser: {
+        backgroundColor: '#3b82f6', // primary
+        borderTopRightRadius: 0,
+    },
+    bubbleAi: {
+        backgroundColor: '#1e293b', // surface-card
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.1)',
+        borderTopLeftRadius: 0,
+    },
+    messageText: {
+        color: 'white',
+        fontSize: 15,
+        lineHeight: 24,
+    },
+    messageMeta: {
+        color: '#94a3b8', // text-dim
+        fontSize: 10,
+        marginTop: 6,
+        paddingHorizontal: 4,
+        fontWeight: '500',
+        fontStyle: 'italic',
+    },
+    // Loading
+    loadingBubble: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    loadingTextWrapper: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    loadingText: {
+        color: '#94a3b8',
+        fontSize: 15,
+        fontWeight: '500',
+    },
+    dotContainer: {
+        flexDirection: 'row',
+        marginLeft: 4,
+    },
+    dot: {
+        color: '#9cabba',
+        fontSize: 15,
+        fontWeight: 'bold',
+    },
+    // Input
+    inputArea: {
+        paddingHorizontal: 24,
+        paddingVertical: 16,
+        backgroundColor: '#111827',
+        borderTopWidth: 1,
+        borderTopColor: 'rgba(255,255,255,0.05)',
+        minHeight: 80,
+    },
+    actionButtonsContainer: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        gap: 12,
+        marginBottom: 16,
+        paddingHorizontal: 24,
+    },
+    actionButton: {
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        borderRadius: 9999,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        borderWidth: 1,
+    },
+    actionButtonPrimary: {
+        backgroundColor: 'rgba(59,130,246,0.2)', // primary/20
+        borderColor: '#3b82f6',
+    },
+    actionButtonSecondary: {
+        backgroundColor: 'rgba(168,85,247,0.2)', // secondary/20
+        borderColor: '#a855f7',
+    },
+    actionButtonTextPrimary: {
+        color: '#3b82f6',
+        fontWeight: 'bold',
+        fontSize: 14,
+    },
+    actionButtonTextSecondary: {
+        color: '#a855f7',
+        fontWeight: 'bold',
+        fontSize: 14,
+    },
+    menuArea: {
+        flexDirection: 'row',
+        justifyContent: 'space-around',
+        marginBottom: 16,
+        backgroundColor: '#1e293b',
+        padding: 16,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.1)',
+        marginHorizontal: 4,
+    },
+    menuItem: {
+        alignItems: 'center',
+        gap: 8,
+    },
+    menuIconCircle: {
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+    },
+    menuIconBlue: { backgroundColor: 'rgba(59,130,246,0.2)', borderColor: 'rgba(59,130,246,0.3)' },
+    menuIconPurple: { backgroundColor: 'rgba(168,85,247,0.2)', borderColor: 'rgba(168,85,247,0.3)' },
+    menuIconEmerald: { backgroundColor: 'rgba(16,185,129,0.2)', borderColor: 'rgba(16,185,129,0.3)' },
+    menuText: {
+        color: '#cbd5e1', // slate-300
+        fontSize: 12,
+        fontWeight: '500',
+    },
+    inputRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    plusButton: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    plusButtonActive: {
+        backgroundColor: 'rgba(255,255,255,0.2)',
+        transform: [{ rotate: '45deg' }]
+    },
+    plusButtonInactive: {
+        backgroundColor: '#334155', // surface-light
+    },
+    inputWrapper: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#1e293b',
+        borderRadius: 9999,
+        paddingHorizontal: 16,
+        paddingVertical: 4,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.1)',
+        elevation: 5,
+    },
+    textInput: {
+        flex: 1,
+        color: 'white',
+        paddingVertical: 12,
+        fontSize: 15,
+    },
+    sendButton: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    sendButtonActive: {
+        backgroundColor: '#3b82f6', // primary
+    },
+    sendButtonInactive: {
+        backgroundColor: '#334155', // surface-highlight
+    },
+    // SimpleBottomNav
+    navContainer: {
+        backgroundColor: 'rgba(30, 41, 59, 0.95)', // surface-dark/95
+        borderTopWidth: 1,
+        borderTopColor: 'rgba(255,255,255,0.1)',
+    },
+    navContent: {
+        flexDirection: 'row',
+        justifyContent: 'space-around',
+        alignItems: 'center',
+        height: 64,
+        paddingHorizontal: 8,
+    },
+    navItem: {
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 4,
+        height: '100%',
+    },
+    navLabel: {
+        fontSize: 10,
+        fontWeight: '500',
+    },
+    navLabelActive: {
+        color: '#3b82f6', // primary
+        fontWeight: 'bold',
+    },
+    navLabelInactive: {
+        color: '#6b7280', // gray-500
+    },
+    navIndicator: {
+        position: 'absolute',
+        bottom: 4,
+        width: 4,
+        height: 4,
+        borderRadius: 2,
+        backgroundColor: '#3b82f6',
+    },
+    // Media Preview Styles
+    mediaPreview: {
+        width: 200,
+        height: 150,
+        borderRadius: 12,
+        marginBottom: 8,
+        backgroundColor: '#1a2430',
+    },
+    audioPreview: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(13, 127, 242, 0.1)',
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 8,
+        marginBottom: 8,
+        gap: 8,
+    },
+    audioFileName: {
+        color: '#0d7ff2',
+        fontSize: 13,
+        fontWeight: '500',
+    },
+    pendingIndicator: {
+        fontSize: 11,
+        color: '#94a3b8',
+        fontStyle: 'italic',
+        marginTop: 4,
+    }
+});

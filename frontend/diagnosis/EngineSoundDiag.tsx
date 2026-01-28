@@ -305,8 +305,19 @@ export default function EngineSoundDiag() {
     }, [status, currentSessionId]);
 
     // Status Watcher: 상태 변화에 따른 네비게이션
+    // Status Watcher: 상태 변화에 따른 네비게이션
+    const isInitialMount = useRef(true);
+
     useEffect(() => {
         if (!currentSessionId) return;
+
+        // Skip the first check if status is already INTERACTIVE/ACTION_REQUIRED
+        if (isInitialMount.current) {
+            isInitialMount.current = false;
+            if (status === 'INTERACTIVE' || status === 'ACTION_REQUIRED') {
+                return;
+            }
+        }
 
         if (status === 'INTERACTIVE' || status === 'ACTION_REQUIRED') {
             navigation.navigate('AiDiagChat', {
