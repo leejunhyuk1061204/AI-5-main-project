@@ -75,7 +75,8 @@ class PartAnalysisResult:
     description: str
     severity: str
     recommended_action: str
-    heatmap_base64: Optional[str] = None
+    recommended_action: str
+    # heatmap_base64 removed for optimization
 
 
 # =============================================================================
@@ -263,6 +264,7 @@ class EngineAnomalyPipeline:
         async with SEMAPHORE:
             # Anomaly Detection
             anomaly_result = await self.anomaly_detector.detect(crop_img, part_name)
+            final_is_anomaly = anomaly_result.is_anomaly  # [Fix] Track final decision
             
             heatmap_b64 = None
             
@@ -292,12 +294,15 @@ class EngineAnomalyPipeline:
 
                 # [수정] Dual-Check: Anomaly Detector가 이상을 감지했더라도, 
                 # LLM이 정밀 분석 후 "정상(NORMAL)"이라고 판단하면 이를 존중합니다. (False Positive 방지)
-                if llm_res.get("defect_category") == "NORMAL" or llm_res.get("severity") == "NORMAL":
+                # PatchCore는 민감하게 반응할 수 있으므로, LLM의 의미론적 판단을 최종 결과로 사용합니다.
+                # 단, LLM이 연결되지 않아 "Local/Mock" 모드로 동작 중일 때는 PatchCore 결과를 유지해야 합니다.
+                is_mock_analysis = "분석 모드)" in llm_res.get("description_ko", "")
+                
+                if (llm_res.get("defect_category") == "NORMAL" or llm_res.get("severity") == "NORMAL") and not is_mock_analysis:
                      print(f"[Engine] Anomaly Detector flagged issue, but LLM classified as NORMAL. Trusting LLM.")
-                     # LLM 결과 그대로 유지 (NORMAL)
-                     pass
+                     final_is_anomaly = False  # [중요] LLM이 정상이라고 판단하면, 최종 결과도 "정상(False)"으로 덮어씁니다.
                 else:
-                     # LLM도 이상 동의 시
+                     # LLM도 이상 동의 시, 또는 LLM이 Mock 모드일 때는 PatchCore의 감지 결과(True)를 그대로 유지합니다.
                      pass
                 
                 # [Active Learning] 엔진룸 이상탐지 정답(Oracle) S3 저장
@@ -365,15 +370,14 @@ class EngineAnomalyPipeline:
                 part_name=part_name,
                 bbox=bbox,
                 confidence=confidence,
-                is_anomaly=anomaly_result.is_anomaly,
+                is_anomaly=final_is_anomaly,  # [Fix] Use final decision
                 anomaly_score=anomaly_result.score,
                 threshold=anomaly_result.threshold,
                 defect_label=llm_res.get("defect_label", "Unknown"),
                 defect_category=llm_res.get("defect_category", "UNKNOWN"),
                 description=llm_res.get("description_ko", ""),
                 severity=llm_res.get("severity", "WARNING"),
-                recommended_action=llm_res.get("recommended_action", ""),
-                heatmap_base64=heatmap_b64
+                recommended_action=llm_res.get("recommended_action", "")
             )
 
     # _load_image_async 제거 (visual_service 피쳐 활용)
