@@ -125,6 +125,18 @@ public class VehicleDto {
         private String obdDeviceId;
         private Boolean cloudLinked; // 추가: 클라우드 연동 여부
 
+        // 상세 제원 정보 (VehicleSpec 연동용)
+        private Double length;
+        private Double width;
+        private Double height;
+        private Integer displacement;
+        private String engineType;
+        private Double maxPower;
+        private Double maxTorque;
+        private String tireSizeFront;
+        private String tireSizeRear;
+        private Double officialFuelEconomy;
+
         public static Response from(Vehicle vehicle) {
             Response response = new Response();
             response.setVehicleId(vehicle.getVehicleId());

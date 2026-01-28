@@ -146,6 +146,8 @@ CREATE TABLE IF NOT EXISTS cloud_telemetry (
 odometer FLOAT, -- 주행거리 (km)
 fuel_level FLOAT, -- 연료 잔량 (%)
 battery_soc FLOAT, -- 배터리 잔량 (%)
+battery_capacity FLOAT, -- EV 배터리 전체 용량 (kWh)
+charge_limit FLOAT, -- EV 충전 제한 (%)
 engine_oil_life FLOAT, -- 엔진오일 수명 (%)
 tire_pressure_fl FLOAT, -- 타이어 공기압 (앞왼쪽)
 tire_pressure_fr FLOAT, -- 타이어 공기압 (앞오른쪽)
