@@ -108,7 +108,7 @@ class AudioService:
         # (이번 태스크에서는 audio_buffer를 이미 확보했다고 가정하고 넘기는게 정석)
         # 헤르즈.py를 수정하기보다 여기서 바로 buffer를 만들어 넘깁니다.
         from ai.app.services.hertz import convert_bytes_to_16khz
-        audio_buffer = convert_bytes_to_16khz(audio_bytes)
+        audio_buffer = await convert_bytes_to_16khz(audio_bytes)
         
         if audio_buffer is not None:
              # [Enhancement] 전처리: 소음 제거 (U-Net Denoising)

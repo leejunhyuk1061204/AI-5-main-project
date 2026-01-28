@@ -114,18 +114,23 @@ def load_exterior_yolo_model():
     """외관 분석용 통합 YOLO 모델 로드 (Unified 22 Classes)"""
     print("[Model] Loading Exterior Unified YOLO Model...")
     
-    # 통합 모델 경로
-    model_path = os.path.join("ai", "weights", "exterior", "unified_v1", "train", "weights", "best.pt")
+    # 1. 표준화된 경로 (사용자가 옮긴 위치)
+    model_path = os.path.join("ai", "weights", "exterior", "best.pt")
     
-    # Fallback: 학습 직후 runs 폴더에 있는 경우
+    # 2. 하위 호환: 학습 직후의 깊은 경로
     if not os.path.exists(model_path):
-        fallback_path = os.path.join("runs", "detect", "ai", "weights", "exterior", "unified_v1", "train", "weights", "best.pt")
-        if os.path.exists(fallback_path):
-            print(f"[Info] Default path missing. Using fallback: {fallback_path}")
-            model_path = fallback_path
+        deep_path = os.path.join("ai", "weights", "exterior", "unified_v1", "train", "weights", "best.pt")
+        if os.path.exists(deep_path):
+            model_path = deep_path
         else:
-            print(f"[Warning] Unified Exterior YOLO 가중치 없음: {model_path}")
-            return None
+            # 3. Fallback: 학습 직후 runs 폴더에 있는 경우
+            fallback_path = os.path.join("runs", "detect", "ai", "weights", "exterior", "unified_v1", "train", "weights", "best.pt")
+            if os.path.exists(fallback_path):
+                print(f"[Info] Default path missing. Using fallback: {fallback_path}")
+                model_path = fallback_path
+            else:
+                print(f"[Warning] Unified Exterior YOLO 가중치 없음: {model_path}")
+                return None
 
     print(f"[Model] Exterior Unified YOLO 로드: {model_path}")
     return YOLO(model_path)
