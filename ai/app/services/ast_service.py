@@ -100,8 +100,10 @@ def get_category_from_label(label_name: str) -> str:
 # 추론 함수
 # =============================================================================
 async def run_ast_inference(processed_audio_buffer, ast_model_payload=None) -> AudioResponse:
-    """16kHz WAV 버퍼를 받아 AST 모델로 소리 분류"""
-    
+    """16kHz WAV 버퍼를 받아 AST 모델로 소리 분류 (Async Wrapper)"""
+    import asyncio
+    loop = asyncio.get_running_loop()
+
     # 모델 미로드 시 Mock 응답
     if ast_model_payload is None:
         print("[AST Service] Model payload is None! Returning Mock Response.")
@@ -128,79 +130,79 @@ async def run_ast_inference(processed_audio_buffer, ast_model_payload=None) -> A
         return AudioResponse(status="ERROR", analysis_type="AST", category="ERROR", detail=AudioDetail(diagnosed_label="Error", description="Model not loaded"), confidence=0, is_critical=False)
 
     # =========================================================================
-    # 실제 추론 로직
+    # 실제 추론 로직 (동기 함수)
     # =========================================================================
-    try:
-        # 1. BytesIO 버퍼에서 오디오 데이터 로드 (이미 16kHz로 변환됨)
-        processed_audio_buffer.seek(0)  # 버퍼 처음으로 이동
-        audio_array, sr = librosa.load(processed_audio_buffer, sr=16000)
-        
-        # 2. Feature Extractor로 전처리
-        inputs = feature_extractor(
-            audio_array, 
-            sampling_rate=16000, 
-            return_tensors="pt", 
-            padding="max_length"
-        )
-        
-        # 3. 모델 추론
-        with torch.no_grad():
-            outputs = model(**inputs)
-            logits = outputs.logits
+    def _sync_inference(audio_buffer):
+        try:
+            # 1. BytesIO 버퍼에서 오디오 데이터 로드 (이미 16kHz로 변환됨)
+            audio_buffer.seek(0)
+            audio_array, sr = librosa.load(audio_buffer, sr=16000)
             
-            # Softmax로 신뢰도(확률) 계산
-            probs = F.softmax(logits, dim=-1)
-            confidence = probs.max().item()
-            predicted_id = logits.argmax(-1).item()
-        
-        # 4. 라벨 이름 변환
-        label_name = model.config.id2label[predicted_id]
-        category = get_category_from_label(label_name)
-        
-        # 5. 상태 결정
-        label_lower = label_name.lower()
-        
-        # 5-1. 신뢰도가 너무 낮으면 분류 불가 (차량 소리가 아닐 수 있음)
-        if confidence < 0.5:
-            status = "UNKNOWN"
-            is_critical = False
-            category = "UNKNOWN_AUDIO"
-            label_name = "unknown"  # 라벨도 unknown으로 변경
-            description = "분류할 수 없는 소리입니다. 차량 관련 소리인지 확인해주세요."
-        # 5-2. 정상 라벨이면 NORMAL
-        elif label_lower in NORMAL_LABELS or "normal" in label_lower:
-            status = "NORMAL"
-            is_critical = False
-            description = "정상적인 소리입니다."
-        # 5-3. 그 외는 FAULTY
-        else:
-            status = "FAULTY"
-            is_critical = True
-            description = f"{label_name} 소음이 감지되었습니다. 점검이 필요합니다."
-        
-        return AudioResponse(
-            status=status,
-            analysis_type="AST",
-            category=category,
-            detail=AudioDetail(
-                diagnosed_label=label_name,
-                description=description
-            ),
-            confidence=round(confidence, 4),
-            is_critical=is_critical
-        )
-        
-    except Exception as e:
-        print(f"[AST Inference Error] {e}")
-        # 추론 실패 시 UNKNOWN 반환
-        return AudioResponse(
-            status="UNKNOWN",
-            analysis_type="AST",
-            category="UNKNOWN_AUDIO",
-            detail=AudioDetail(
-                diagnosed_label="Error",
-                description=f"추론 중 오류 발생: {str(e)}"
-            ),
-            confidence=0.0,
-            is_critical=False
-        )
+            # 2. Feature Extractor로 전처리
+            inputs = feature_extractor(
+                audio_array, 
+                sampling_rate=16000, 
+                return_tensors="pt", 
+                padding="max_length"
+            )
+            
+            # 3. 모델 추론
+            with torch.no_grad():
+                outputs = model(**inputs)
+                logits = outputs.logits
+                
+                # Softmax로 신뢰도(확률) 계산
+                probs = F.softmax(logits, dim=-1)
+                confidence = probs.max().item()
+                predicted_id = logits.argmax(-1).item()
+            
+            # 4. 라벨 이름 변환
+            label_name = model.config.id2label[predicted_id]
+            category = get_category_from_label(label_name)
+            
+            # 5. 상태 결정
+            label_lower = label_name.lower()
+            
+            if confidence < 0.5:
+                status = "UNKNOWN"
+                is_critical = False
+                category = "UNKNOWN_AUDIO"
+                label_name = "unknown"
+                description = "분류할 수 없는 소리입니다. 차량 관련 소리인지 확인해주세요."
+            elif label_lower in NORMAL_LABELS or "normal" in label_lower:
+                status = "NORMAL"
+                is_critical = False
+                description = "정상적인 소리입니다."
+            else:
+                status = "FAULTY"
+                is_critical = True
+                description = f"{label_name} 소음이 감지되었습니다. 점검이 필요합니다."
+            
+            return AudioResponse(
+                status=status,
+                analysis_type="AST",
+                category=category,
+                detail=AudioDetail(
+                    diagnosed_label=label_name,
+                    description=description
+                ),
+                confidence=round(confidence, 4),
+                is_critical=is_critical
+            )
+            
+        except Exception as e:
+            print(f"[AST Inference Error] {e}")
+            return AudioResponse(
+                status="UNKNOWN",
+                analysis_type="AST",
+                category="UNKNOWN_AUDIO",
+                detail=AudioDetail(
+                    diagnosed_label="Error",
+                    description=f"추론 중 오류 발생: {str(e)}"
+                ),
+                confidence=0.0,
+                is_critical=False
+            )
+
+    # 별도 스레드에서 실행
+    return await loop.run_in_executor(None, _sync_inference, processed_audio_buffer)

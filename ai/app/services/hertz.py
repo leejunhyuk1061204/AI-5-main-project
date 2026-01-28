@@ -4,53 +4,60 @@ import soundfile as sf
 import io
 import requests
 
-def process_to_16khz(audio_input):
+async def process_to_16khz(audio_input):
     """
-    모든 음성 데이터를 16,000Hz(16kHz) 모노(Mono) 파일로 변환합니다.
-    YAMNet, AST 모델 및 대부분의 Audio LLM이 요구하는 표준 규격입니다.
+    모든 음성 데이터를 16,000Hz(16kHz) 모노(Mono) 파일로 변환합니다. (Async Wrapper)
     """
-    try:
-        # [추가됨] 만약 입력값이 "http"로 시작하는 URL이라면? -> 먼저 다운로드!
-        if isinstance(audio_input, str) and audio_input.startswith("http"):
-            print(f"[hertz.py] S3 URL 감지: 다운로드 시작... ({audio_input})")
-            response = requests.get(audio_input)
-            response.raise_for_status() # 다운로드 실패 시 에러 발생
+    import asyncio
+    loop = asyncio.get_running_loop()
+    
+    # 내부 동기 함수 정의
+    def _sync_process(inp):
+        try:
+            # URL일 경우 다운로드 (requests는 동기이므로 여기서 처리 ok)
+            if isinstance(inp, str) and inp.startswith("http"):
+                print(f"[hertz.py] S3 URL 감지: 다운로드 시작... ({inp})")
+                response = requests.get(inp)
+                response.raise_for_status()
+                inp = io.BytesIO(response.content)
+
+            # 1. Librosa 로드 (Blocking)
+            y, sr = librosa.load(inp, sr=16000)
+
+            # 2. WAV 저장
+            buffer = io.BytesIO()
+            sf.write(buffer, y, 16000, format='WAV')
+            buffer.seek(0)
             
-            # 다운로드 받은 데이터를 메모리(BytesIO)에 담음
-            audio_input = io.BytesIO(response.content)
-        # 1. 파일 로드 (이제 URL이 아니라 메모리에 있는 파일 데이터를 읽음)
-        y, sr = librosa.load(audio_input, sr=16000)
+            print(f"[hertz.py] 리샘플링 완료: 16,000Hz (WAV)")
+            return buffer
+        except Exception as e:
+            print(f"[hertz.py] 리샘플링 중 오류 발생: {e}")
+            return None
 
-        # 2. 결과물을 메모리 버퍼(BytesIO)에 저장
-        # 서버 용량을 아끼기 위해 물리적 파일을 만들지 않고 메모리에서 처리합니다.
-        buffer = io.BytesIO()
-        sf.write(buffer, y, 16000, format='WAV')
-        buffer.seek(0)
-        
-        print(f"[hertz.py] 리샘플링 완료: 16,000Hz (WAV)")
-        return buffer
+    # 별도 스레드에서 실행
+    return await loop.run_in_executor(None, _sync_process, audio_input)
 
-    except Exception as e:
-        print(f"[hertz.py] 리샘플링 중 오류 발생: {e}")
-        return None
-
-def convert_bytes_to_16khz(audio_bytes: bytes):
+async def convert_bytes_to_16khz(audio_bytes: bytes):
     """
-    오디오 바이트 데이터를 16,000Hz(16kHz) 모노 WAV로 변환합니다.
-    (이미 메모리에 로드된 데이터를 처리)
+    오디오 바이트 데이터를 16,000Hz(16kHz) 모노 WAV로 변환합니다. (Async Wrapper)
     """
-    try:
-        # 바이트 데이터를 BytesIO로 감싸서 librosa로 로드
-        audio_stream = io.BytesIO(audio_bytes)
-        y, sr = librosa.load(audio_stream, sr=16000)
+    import asyncio
+    loop = asyncio.get_running_loop()
 
-        buffer = io.BytesIO()
-        sf.write(buffer, y, 16000, format='WAV')
-        buffer.seek(0)
-        
-        print(f"[hertz.py] 바이트 데이터 리샘플링 완료")
-        return buffer
+    def _sync_convert(data):
+        try:
+            audio_stream = io.BytesIO(data)
+            y, sr = librosa.load(audio_stream, sr=16000)
 
-    except Exception as e:
-        print(f"[hertz.py] 바이트 변환 중 오류: {e}")
-        return None
+            buffer = io.BytesIO()
+            sf.write(buffer, y, 16000, format='WAV')
+            buffer.seek(0)
+            
+            print(f"[hertz.py] 바이트 데이터 리샘플링 완료")
+            return buffer
+        except Exception as e:
+            print(f"[hertz.py] 바이트 변환 중 오류: {e}")
+            return None
+
+    return await loop.run_in_executor(None, _sync_convert, audio_bytes)
