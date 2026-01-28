@@ -99,11 +99,11 @@ async def suggest_anomaly_label(
         reason = "MOCK" if os.getenv("MOCK_LLM", "false").lower() == "true" else "Local"
         print(f"[LLM {reason}] suggest_anomaly_label (URL): {part_name}")
         return {
-            "defect_category": "NORMAL",
-            "defect_label": "Normal",
-            "description_ko": f"{part_name} 부품의 상태를 분석한 결과 정상으로 판단됩니다. ({reason} 분석 모드)",
-            "severity": "NORMAL",
-            "recommended_action": "정기 점검 가이드를 따르십시오."
+            "defect_category": "UNKNOWN",
+            "defect_label": "Analysis_Unavailable",
+            "description_ko": f"{part_name} 부품의 AI 정밀 분석이 불가능합니다. ({reason} 모드 - 실제 LLM 연결 필요)",
+            "severity": "WARNING",
+            "recommended_action": "AI 서버 설정을 확인하거나 육안으로 점검하십시오."
         }
     
     try:
@@ -189,11 +189,11 @@ async def suggest_anomaly_label_with_base64(
         reason = "MOCK" if os.getenv("MOCK_LLM", "false").lower() == "true" else "Local"
         print(f"[LLM {reason}] suggest_anomaly_label: {part_name}")
         return {
-            "defect_category": "NORMAL",
-            "defect_label": "Normal",
-            "description_ko": f"{part_name} 부품은 육안상 특별한 이상이 발견되지 않았습니다. ({reason} 분석 모드)",
-            "severity": "NORMAL",
-            "recommended_action": "정기 점검 시 상태를 다시 확인하십시오."
+            "defect_category": "UNKNOWN",
+            "defect_label": "Analysis_Unavailable",
+            "description_ko": f"{part_name} 부품의 AI 정밀 분석이 불가능합니다. ({reason} 모드 - 실제 LLM 연결 필요)",
+            "severity": "WARNING",
+            "recommended_action": "AI 서버 설정을 확인하거나 육안으로 점검하십시오."
         }
 
     try:
