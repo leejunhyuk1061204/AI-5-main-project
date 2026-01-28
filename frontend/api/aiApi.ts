@@ -118,7 +118,6 @@ export const diagnoseEngineSound = async (audioUri: string, vehicleId?: string):
 };
 
 /**
-<<<<<<< Updated upstream
  * AI OBD 단독 진단 요청
  * @param vehicleId 차량 ID
  */

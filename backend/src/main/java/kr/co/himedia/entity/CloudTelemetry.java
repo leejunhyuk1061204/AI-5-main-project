@@ -65,6 +65,18 @@ public class CloudTelemetry {
     @Column(name = "window_open_status", length = 20)
     private String windowOpenStatus;
 
+    @Column(name = "trunk_open_status", length = 20)
+    private String trunkOpenStatus;
+
+    @Column(name = "hood_open_status", length = 20)
+    private String hoodOpenStatus;
+
+    @Column(name = "battery_capacity")
+    private Double batteryCapacity;
+
+    @Column(name = "charge_limit")
+    private Double chargeLimit;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "charging_status")
     private ChargingStatus chargingStatus;

@@ -1,0 +1,358 @@
+INFO  2026-01-27 19:13:42.116 [background-preinit] o.h.validator.internal.util.Version - HV000001: Hibernate Validator 8.0.3.Final
+INFO  2026-01-27 19:13:42.214 [main] kr.co.himedia.HimediaApplication - Starting HimediaApplication using Java 17.0.17 with PID 20544 (C:\Users\301\Desktop\AI-5-main-project\backend\bin\main started by 301 in C:\Users\301\Desktop\AI-5-main-project)
+INFO  2026-01-27 19:13:42.217 [main] kr.co.himedia.HimediaApplication - No active profile set, falling back to 1 default profile: "default"
+INFO  2026-01-27 19:13:43.683 [main] o.s.d.r.c.RepositoryConfigurationDelegate - Multiple Spring Data modules found, entering strict repository configuration mode
+INFO  2026-01-27 19:13:43.686 [main] o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+INFO  2026-01-27 19:13:43.941 [main] o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 241 ms. Found 18 JPA repository interfaces.
+INFO  2026-01-27 19:13:43.970 [main] o.s.d.r.c.RepositoryConfigurationDelegate - Multiple Spring Data modules found, entering strict repository configuration mode
+INFO  2026-01-27 19:13:43.971 [main] o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data Redis repositories in DEFAULT mode.
+INFO  2026-01-27 19:13:44.003 [main] o.s.d.r.c.RepositoryConfigurationExtensionSupport - Spring Data Redis - Could not safely identify store assignment for repository candidate interface kr.co.himedia.repository.AiEvidenceRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+INFO  2026-01-27 19:13:44.004 [main] o.s.d.r.c.RepositoryConfigurationExtensionSupport - Spring Data Redis - Could not safely identify store assignment for repository candidate interface kr.co.himedia.repository.CarModelMasterRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+INFO  2026-01-27 19:13:44.006 [main] o.s.d.r.c.RepositoryConfigurationExtensionSupport - Spring Data Redis - Could not safely identify store assignment for repository candidate interface kr.co.himedia.repository.CloudAccountRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+INFO  2026-01-27 19:13:44.006 [main] o.s.d.r.c.RepositoryConfigurationExtensionSupport - Spring Data Redis - Could not safely identify store assignment for repository candidate interface kr.co.himedia.repository.CloudTelemetryRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+INFO  2026-01-27 19:13:44.007 [main] o.s.d.r.c.RepositoryConfigurationExtensionSupport - Spring Data Redis - Could not safely identify store assignment for repository candidate interface kr.co.himedia.repository.ConsumableItemRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+INFO  2026-01-27 19:13:44.007 [main] o.s.d.r.c.RepositoryConfigurationExtensionSupport - Spring Data Redis - Could not safely identify store assignment for repository candidate interface kr.co.himedia.repository.DiagResultRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+INFO  2026-01-27 19:13:44.008 [main] o.s.d.r.c.RepositoryConfigurationExtensionSupport - Spring Data Redis - Could not safely identify store assignment for repository candidate interface kr.co.himedia.repository.DiagSessionRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+INFO  2026-01-27 19:13:44.009 [main] o.s.d.r.c.RepositoryConfigurationExtensionSupport - Spring Data Redis - Could not safely identify store assignment for repository candidate interface kr.co.himedia.repository.DtcHistoryRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+INFO  2026-01-27 19:13:44.009 [main] o.s.d.r.c.RepositoryConfigurationExtensionSupport - Spring Data Redis - Could not safely identify store assignment for repository candidate interface kr.co.himedia.repository.KnowledgeRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+INFO  2026-01-27 19:13:44.010 [main] o.s.d.r.c.RepositoryConfigurationExtensionSupport - Spring Data Redis - Could not safely identify store assignment for repository candidate interface kr.co.himedia.repository.MaintenanceHistoryRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+INFO  2026-01-27 19:13:44.010 [main] o.s.d.r.c.RepositoryConfigurationExtensionSupport - Spring Data Redis - Could not safely identify store assignment for repository candidate interface kr.co.himedia.repository.NotificationRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+INFO  2026-01-27 19:13:44.011 [main] o.s.d.r.c.RepositoryConfigurationExtensionSupport - Spring Data Redis - Could not safely identify store assignment for repository candidate interface kr.co.himedia.repository.ObdLogRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+INFO  2026-01-27 19:13:44.013 [main] o.s.d.r.c.RepositoryConfigurationExtensionSupport - Spring Data Redis - Could not safely identify store assignment for repository candidate interface kr.co.himedia.repository.RefreshTokenRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+INFO  2026-01-27 19:13:44.014 [main] o.s.d.r.c.RepositoryConfigurationExtensionSupport - Spring Data Redis - Could not safely identify store assignment for repository candidate interface kr.co.himedia.repository.TripSummaryRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+INFO  2026-01-27 19:13:44.015 [main] o.s.d.r.c.RepositoryConfigurationExtensionSupport - Spring Data Redis - Could not safely identify store assignment for repository candidate interface kr.co.himedia.repository.UserRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+INFO  2026-01-27 19:13:44.017 [main] o.s.d.r.c.RepositoryConfigurationExtensionSupport - Spring Data Redis - Could not safely identify store assignment for repository candidate interface kr.co.himedia.repository.VehicleConsumableRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+INFO  2026-01-27 19:13:44.018 [main] o.s.d.r.c.RepositoryConfigurationExtensionSupport - Spring Data Redis - Could not safely identify store assignment for repository candidate interface kr.co.himedia.repository.VehicleRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+INFO  2026-01-27 19:13:44.019 [main] o.s.d.r.c.RepositoryConfigurationExtensionSupport - Spring Data Redis - Could not safely identify store assignment for repository candidate interface kr.co.himedia.repository.VehicleSpecRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+INFO  2026-01-27 19:13:44.020 [main] o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 33 ms. Found 0 Redis repository interfaces.
+INFO  2026-01-27 19:13:45.086 [main] o.s.b.w.e.tomcat.TomcatWebServer - Tomcat initialized with port 8080 (http)
+INFO  2026-01-27 19:13:45.102 [main] o.a.coyote.http11.Http11NioProtocol - Initializing ProtocolHandler ["http-nio-8080"]
+INFO  2026-01-27 19:13:45.105 [main] o.a.catalina.core.StandardService - Starting service [Tomcat]
+INFO  2026-01-27 19:13:45.105 [main] o.a.catalina.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.50]
+INFO  2026-01-27 19:13:45.216 [main] o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring embedded WebApplicationContext
+INFO  2026-01-27 19:13:45.216 [main] o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 2912 ms
+INFO  2026-01-27 19:13:45.347 [main] com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Starting...
+INFO  2026-01-27 19:13:45.592 [main] com.zaxxer.hikari.pool.HikariPool - HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@8549c5f
+INFO  2026-01-27 19:13:45.594 [main] com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Start completed.
+INFO  2026-01-27 19:13:46.697 [main] o.h.jpa.internal.util.LogHelper - HHH000204: Processing PersistenceUnitInfo [name: default]
+INFO  2026-01-27 19:13:46.814 [main] org.hibernate.Version - HHH000412: Hibernate ORM core version 6.6.39.Final
+INFO  2026-01-27 19:13:46.878 [main] o.h.c.i.RegionFactoryInitiator - HHH000026: Second-level cache disabled
+INFO  2026-01-27 19:13:47.357 [main] o.s.o.j.p.SpringPersistenceUnitInfo - No LoadTimeWeaver setup: ignoring JPA class transformer
+INFO  2026-01-27 19:13:47.464 [main] o.hibernate.orm.connections.pooling - HHH10001005: Database info:
+	Database JDBC URL [Connecting through datasource 'HikariDataSource (HikariPool-1)']
+	Database driver: undefined/unknown
+	Database version: 15.15
+	Autocommit mode: undefined/unknown
+	Isolation level: undefined/unknown
+	Minimum pool size: undefined/unknown
+	Maximum pool size: undefined/unknown
+INFO  2026-01-27 19:13:49.085 [main] o.h.e.t.j.p.i.JtaPlatformInitiator - HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+INFO  2026-01-27 19:13:49.283 [main] o.s.o.j.LocalContainerEntityManagerFactoryBean - Initialized JPA EntityManagerFactory for persistence unit 'default'
+INFO  2026-01-27 19:13:49.327 [main] kr.co.himedia.config.FirebaseConfig - Loaded Firebase config from ClassPath: firebase-service-account.json
+INFO  2026-01-27 19:13:49.401 [main] kr.co.himedia.config.FirebaseConfig - Firebase application has been initialized
+INFO  2026-01-27 19:13:50.105 [main] o.s.d.j.r.query.QueryEnhancerFactory - Hibernate is in classpath; If applicable, HQL parser will be used.
+WARN  2026-01-27 19:13:51.209 [main] o.s.b.a.o.j.JpaBaseConfiguration$JpaWebConfiguration - spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to disable this warning
+DEBUG 2026-01-27 19:13:51.355 [main] o.s.w.s.m.m.a.RequestMappingHandlerMapping - 54 mappings in 'requestMappingHandlerMapping'
+DEBUG 2026-01-27 19:13:51.391 [main] o.s.w.s.h.SimpleUrlHandlerMapping - Patterns [/webjars/**, /**] in 'resourceHandlerMapping'
+INFO  2026-01-27 19:13:51.423 [main] o.s.s.c.a.a.c.InitializeUserDetailsBeanManagerConfigurer$InitializeUserDetailsManagerConfigurer - Global AuthenticationManager configured with UserDetailsService bean with name customUserDetailsService
+DEBUG 2026-01-27 19:13:51.645 [main] o.s.w.s.m.m.a.RequestMappingHandlerAdapter - ControllerAdvice beans: 0 @ModelAttribute, 0 @InitBinder, 1 RequestBodyAdvice, 1 ResponseBodyAdvice
+DEBUG 2026-01-27 19:13:51.700 [main] o.s.w.s.m.m.a.ExceptionHandlerExceptionResolver - ControllerAdvice beans: 1 @ExceptionHandler, 1 ResponseBodyAdvice
+INFO  2026-01-27 19:13:52.435 [main] o.a.coyote.http11.Http11NioProtocol - Starting ProtocolHandler ["http-nio-8080"]
+INFO  2026-01-27 19:13:52.448 [main] o.s.b.w.e.tomcat.TomcatWebServer - Tomcat started on port 8080 (http) with context path '/'
+INFO  2026-01-27 19:13:52.451 [main] o.s.a.r.c.CachingConnectionFactory - Attempting to connect to: [localhost:5672]
+INFO  2026-01-27 19:13:52.524 [main] o.s.a.r.c.CachingConnectionFactory - Created new connection: rabbitConnectionFactory#5337a5ae:0/SimpleConnection@7d131ef1 [delegate=amqp://guest@127.0.0.1:5672/, localPort=51776]
+INFO  2026-01-27 19:13:52.631 [main] kr.co.himedia.HimediaApplication - Started HimediaApplication in 11.318 seconds (process running for 11.913)
+INFO  2026-01-27 19:20:00.486 [http-nio-8080-exec-4] o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring DispatcherServlet 'dispatcherServlet'
+INFO  2026-01-27 19:20:00.488 [http-nio-8080-exec-4] o.s.web.servlet.DispatcherServlet - Initializing Servlet 'dispatcherServlet'
+DEBUG 2026-01-27 19:20:00.488 [http-nio-8080-exec-4] o.s.web.servlet.DispatcherServlet - Detected StandardServletMultipartResolver
+DEBUG 2026-01-27 19:20:00.489 [http-nio-8080-exec-4] o.s.web.servlet.DispatcherServlet - Detected AcceptHeaderLocaleResolver
+DEBUG 2026-01-27 19:20:00.489 [http-nio-8080-exec-4] o.s.web.servlet.DispatcherServlet - Detected FixedThemeResolver
+DEBUG 2026-01-27 19:20:00.491 [http-nio-8080-exec-4] o.s.web.servlet.DispatcherServlet - Detected org.springframework.web.servlet.view.DefaultRequestToViewNameTranslator@663b31a
+DEBUG 2026-01-27 19:20:00.492 [http-nio-8080-exec-4] o.s.web.servlet.DispatcherServlet - Detected org.springframework.web.servlet.support.SessionFlashMapManager@1b3b95e8
+DEBUG 2026-01-27 19:20:00.492 [http-nio-8080-exec-4] o.s.web.servlet.DispatcherServlet - enableLoggingRequestDetails='false': request parameters and headers will be masked to prevent unsafe logging of potentially sensitive data
+INFO  2026-01-27 19:20:00.493 [http-nio-8080-exec-4] o.s.web.servlet.DispatcherServlet - Completed initialization in 5 ms
+DEBUG 2026-01-27 19:20:00.744 [http-nio-8080-exec-4] org.hibernate.SQL - 
+    select
+        u1_0.user_id,
+        u1_0.created_at,
+        u1_0.deleted_at,
+        u1_0.email,
+        u1_0.fcm_token,
+        u1_0.last_login_at,
+        u1_0.membership_expiry,
+        u1_0.nickname,
+        u1_0.password_hash,
+        u1_0.profile_image,
+        u1_0.updated_at,
+        u1_0.user_level 
+    from
+        users u1_0 
+    where
+        u1_0.user_id=?
+DEBUG 2026-01-27 19:20:00.744 [http-nio-8080-exec-1] org.hibernate.SQL - 
+    select
+        u1_0.user_id,
+        u1_0.created_at,
+        u1_0.deleted_at,
+        u1_0.email,
+        u1_0.fcm_token,
+        u1_0.last_login_at,
+        u1_0.membership_expiry,
+        u1_0.nickname,
+        u1_0.password_hash,
+        u1_0.profile_image,
+        u1_0.updated_at,
+        u1_0.user_level 
+    from
+        users u1_0 
+    where
+        u1_0.user_id=?
+INFO  2026-01-27 19:20:00.791 [http-nio-8080-exec-1] k.c.h.s.JwtAuthenticationFilter - Successfully authenticated user from JWT token
+INFO  2026-01-27 19:20:00.791 [http-nio-8080-exec-4] k.c.h.s.JwtAuthenticationFilter - Successfully authenticated user from JWT token
+DEBUG 2026-01-27 19:20:00.797 [http-nio-8080-exec-1] o.s.web.servlet.DispatcherServlet - GET "/api/v1/vehicles", parameters={}
+DEBUG 2026-01-27 19:20:00.797 [http-nio-8080-exec-4] o.s.web.servlet.DispatcherServlet - GET "/api/v1/vehicles", parameters={}
+DEBUG 2026-01-27 19:20:00.799 [http-nio-8080-exec-4] o.s.w.s.m.m.a.RequestMappingHandlerMapping - Mapped to kr.co.himedia.controller.VehicleController#getVehicleList(CustomUserDetails)
+DEBUG 2026-01-27 19:20:00.799 [http-nio-8080-exec-1] o.s.w.s.m.m.a.RequestMappingHandlerMapping - Mapped to kr.co.himedia.controller.VehicleController#getVehicleList(CustomUserDetails)
+DEBUG 2026-01-27 19:20:00.895 [http-nio-8080-exec-4] org.hibernate.SQL - 
+    select
+        v1_0.vehicles_id,
+        v1_0.car_number,
+        v1_0.cloud_linked,
+        v1_0.created_at,
+        v1_0.deleted_at,
+        v1_0.fuel_type,
+        v1_0.is_primary,
+        v1_0.manufacturer,
+        v1_0.memo,
+        v1_0.model_name,
+        v1_0.model_year,
+        v1_0.nickname,
+        v1_0.obd_device_id,
+        v1_0.registration_source,
+        v1_0.total_mileage,
+        v1_0.user_id,
+        v1_0.vin 
+    from
+        vehicles v1_0 
+    where
+        v1_0.user_id=? 
+        and v1_0.deleted_at is null 
+    order by
+        v1_0.created_at
+DEBUG 2026-01-27 19:20:00.895 [http-nio-8080-exec-1] org.hibernate.SQL - 
+    select
+        v1_0.vehicles_id,
+        v1_0.car_number,
+        v1_0.cloud_linked,
+        v1_0.created_at,
+        v1_0.deleted_at,
+        v1_0.fuel_type,
+        v1_0.is_primary,
+        v1_0.manufacturer,
+        v1_0.memo,
+        v1_0.model_name,
+        v1_0.model_year,
+        v1_0.nickname,
+        v1_0.obd_device_id,
+        v1_0.registration_source,
+        v1_0.total_mileage,
+        v1_0.user_id,
+        v1_0.vin 
+    from
+        vehicles v1_0 
+    where
+        v1_0.user_id=? 
+        and v1_0.deleted_at is null 
+    order by
+        v1_0.created_at
+DEBUG 2026-01-27 19:20:00.954 [http-nio-8080-exec-4] o.s.w.s.m.m.a.HttpEntityMethodProcessor - Using 'application/json', given [application/json, text/plain, */*] and supported [application/json, application/*+json]
+DEBUG 2026-01-27 19:20:00.954 [http-nio-8080-exec-1] o.s.w.s.m.m.a.HttpEntityMethodProcessor - Using 'application/json', given [application/json, text/plain, */*] and supported [application/json, application/*+json]
+DEBUG 2026-01-27 19:20:00.956 [http-nio-8080-exec-1] o.s.w.s.m.m.a.HttpEntityMethodProcessor - Writing [kr.co.himedia.common.ApiResponse@677a7c2e]
+DEBUG 2026-01-27 19:20:00.956 [http-nio-8080-exec-4] o.s.w.s.m.m.a.HttpEntityMethodProcessor - Writing [kr.co.himedia.common.ApiResponse@5f0063c5]
+DEBUG 2026-01-27 19:20:00.977 [http-nio-8080-exec-4] o.s.web.servlet.DispatcherServlet - Completed 200 OK
+DEBUG 2026-01-27 19:20:00.977 [http-nio-8080-exec-1] o.s.web.servlet.DispatcherServlet - Completed 200 OK
+DEBUG 2026-01-27 19:20:01.216 [http-nio-8080-exec-2] org.hibernate.SQL - 
+    select
+        u1_0.user_id,
+        u1_0.created_at,
+        u1_0.deleted_at,
+        u1_0.email,
+        u1_0.fcm_token,
+        u1_0.last_login_at,
+        u1_0.membership_expiry,
+        u1_0.nickname,
+        u1_0.password_hash,
+        u1_0.profile_image,
+        u1_0.updated_at,
+        u1_0.user_level 
+    from
+        users u1_0 
+    where
+        u1_0.user_id=?
+INFO  2026-01-27 19:20:01.220 [http-nio-8080-exec-2] k.c.h.s.JwtAuthenticationFilter - Successfully authenticated user from JWT token
+DEBUG 2026-01-27 19:20:01.222 [http-nio-8080-exec-2] o.s.web.servlet.DispatcherServlet - GET "/api/v1/trips?vehicleId=82db7f24-5ebb-439e-a0e7-0402276cd8e6", parameters={masked}
+DEBUG 2026-01-27 19:20:01.222 [http-nio-8080-exec-2] o.s.w.s.m.m.a.RequestMappingHandlerMapping - Mapped to kr.co.himedia.controller.TripController#getTrips(UUID)
+DEBUG 2026-01-27 19:20:01.241 [http-nio-8080-exec-2] org.hibernate.SQL - 
+    select
+        ts1_0.start_time,
+        ts1_0.vehicles_id,
+        ts1_0.average_speed,
+        ts1_0.distance,
+        ts1_0.drive_score,
+        ts1_0.end_time,
+        ts1_0.fuel_consumed,
+        ts1_0.top_speed,
+        ts1_0.trip_id 
+    from
+        trip_summaries ts1_0 
+    where
+        ts1_0.vehicles_id=? 
+        and ts1_0.distance>=? 
+    order by
+        ts1_0.start_time desc
+DEBUG 2026-01-27 19:20:01.252 [http-nio-8080-exec-2] o.s.w.s.m.m.a.HttpEntityMethodProcessor - Using 'application/json', given [application/json, text/plain, */*] and supported [application/json, application/*+json]
+DEBUG 2026-01-27 19:20:01.252 [http-nio-8080-exec-2] o.s.w.s.m.m.a.HttpEntityMethodProcessor - Writing [kr.co.himedia.common.ApiResponse@57533b8]
+DEBUG 2026-01-27 19:20:01.254 [http-nio-8080-exec-2] o.s.web.servlet.DispatcherServlet - Completed 200 OK
+DEBUG 2026-01-27 19:20:01.292 [http-nio-8080-exec-3] org.hibernate.SQL - 
+    select
+        u1_0.user_id,
+        u1_0.created_at,
+        u1_0.deleted_at,
+        u1_0.email,
+        u1_0.fcm_token,
+        u1_0.last_login_at,
+        u1_0.membership_expiry,
+        u1_0.nickname,
+        u1_0.password_hash,
+        u1_0.profile_image,
+        u1_0.updated_at,
+        u1_0.user_level 
+    from
+        users u1_0 
+    where
+        u1_0.user_id=?
+INFO  2026-01-27 19:20:01.296 [http-nio-8080-exec-3] k.c.h.s.JwtAuthenticationFilter - Successfully authenticated user from JWT token
+DEBUG 2026-01-27 19:20:01.297 [http-nio-8080-exec-3] o.s.web.servlet.DispatcherServlet - GET "/api/v1/trips?vehicleId=82db7f24-5ebb-439e-a0e7-0402276cd8e6", parameters={masked}
+DEBUG 2026-01-27 19:20:01.297 [http-nio-8080-exec-3] o.s.w.s.m.m.a.RequestMappingHandlerMapping - Mapped to kr.co.himedia.controller.TripController#getTrips(UUID)
+DEBUG 2026-01-27 19:20:01.298 [http-nio-8080-exec-3] org.hibernate.SQL - 
+    select
+        ts1_0.start_time,
+        ts1_0.vehicles_id,
+        ts1_0.average_speed,
+        ts1_0.distance,
+        ts1_0.drive_score,
+        ts1_0.end_time,
+        ts1_0.fuel_consumed,
+        ts1_0.top_speed,
+        ts1_0.trip_id 
+    from
+        trip_summaries ts1_0 
+    where
+        ts1_0.vehicles_id=? 
+        and ts1_0.distance>=? 
+    order by
+        ts1_0.start_time desc
+DEBUG 2026-01-27 19:20:01.303 [http-nio-8080-exec-3] o.s.w.s.m.m.a.HttpEntityMethodProcessor - Using 'application/json', given [application/json, text/plain, */*] and supported [application/json, application/*+json]
+DEBUG 2026-01-27 19:20:01.303 [http-nio-8080-exec-3] o.s.w.s.m.m.a.HttpEntityMethodProcessor - Writing [kr.co.himedia.common.ApiResponse@2743b68d]
+DEBUG 2026-01-27 19:20:01.304 [http-nio-8080-exec-3] o.s.web.servlet.DispatcherServlet - Completed 200 OK
+DEBUG 2026-01-27 19:20:05.558 [http-nio-8080-exec-8] org.hibernate.SQL - 
+    select
+        u1_0.user_id,
+        u1_0.created_at,
+        u1_0.deleted_at,
+        u1_0.email,
+        u1_0.fcm_token,
+        u1_0.last_login_at,
+        u1_0.membership_expiry,
+        u1_0.nickname,
+        u1_0.password_hash,
+        u1_0.profile_image,
+        u1_0.updated_at,
+        u1_0.user_level 
+    from
+        users u1_0 
+    where
+        u1_0.user_id=?
+INFO  2026-01-27 19:20:05.563 [http-nio-8080-exec-8] k.c.h.s.JwtAuthenticationFilter - Successfully authenticated user from JWT token
+DEBUG 2026-01-27 19:20:05.564 [http-nio-8080-exec-8] o.s.web.servlet.DispatcherServlet - GET "/api/v1/vehicles", parameters={}
+DEBUG 2026-01-27 19:20:05.564 [http-nio-8080-exec-8] o.s.w.s.m.m.a.RequestMappingHandlerMapping - Mapped to kr.co.himedia.controller.VehicleController#getVehicleList(CustomUserDetails)
+DEBUG 2026-01-27 19:20:05.567 [http-nio-8080-exec-8] org.hibernate.SQL - 
+    select
+        v1_0.vehicles_id,
+        v1_0.car_number,
+        v1_0.cloud_linked,
+        v1_0.created_at,
+        v1_0.deleted_at,
+        v1_0.fuel_type,
+        v1_0.is_primary,
+        v1_0.manufacturer,
+        v1_0.memo,
+        v1_0.model_name,
+        v1_0.model_year,
+        v1_0.nickname,
+        v1_0.obd_device_id,
+        v1_0.registration_source,
+        v1_0.total_mileage,
+        v1_0.user_id,
+        v1_0.vin 
+    from
+        vehicles v1_0 
+    where
+        v1_0.user_id=? 
+        and v1_0.deleted_at is null 
+    order by
+        v1_0.created_at
+DEBUG 2026-01-27 19:20:05.574 [http-nio-8080-exec-8] o.s.w.s.m.m.a.HttpEntityMethodProcessor - Using 'application/json', given [application/json, text/plain, */*] and supported [application/json, application/*+json]
+DEBUG 2026-01-27 19:20:05.574 [http-nio-8080-exec-8] o.s.w.s.m.m.a.HttpEntityMethodProcessor - Writing [kr.co.himedia.common.ApiResponse@59cfe560]
+DEBUG 2026-01-27 19:20:05.576 [http-nio-8080-exec-8] o.s.web.servlet.DispatcherServlet - Completed 200 OK
+DEBUG 2026-01-27 19:20:05.920 [http-nio-8080-exec-6] org.hibernate.SQL - 
+    select
+        u1_0.user_id,
+        u1_0.created_at,
+        u1_0.deleted_at,
+        u1_0.email,
+        u1_0.fcm_token,
+        u1_0.last_login_at,
+        u1_0.membership_expiry,
+        u1_0.nickname,
+        u1_0.password_hash,
+        u1_0.profile_image,
+        u1_0.updated_at,
+        u1_0.user_level 
+    from
+        users u1_0 
+    where
+        u1_0.user_id=?
+INFO  2026-01-27 19:20:05.924 [http-nio-8080-exec-6] k.c.h.s.JwtAuthenticationFilter - Successfully authenticated user from JWT token
+DEBUG 2026-01-27 19:20:05.925 [http-nio-8080-exec-6] o.s.web.servlet.DispatcherServlet - GET "/api/v1/trips?vehicleId=82db7f24-5ebb-439e-a0e7-0402276cd8e6", parameters={masked}
+DEBUG 2026-01-27 19:20:05.926 [http-nio-8080-exec-6] o.s.w.s.m.m.a.RequestMappingHandlerMapping - Mapped to kr.co.himedia.controller.TripController#getTrips(UUID)
+DEBUG 2026-01-27 19:20:05.927 [http-nio-8080-exec-6] org.hibernate.SQL - 
+    select
+        ts1_0.start_time,
+        ts1_0.vehicles_id,
+        ts1_0.average_speed,
+        ts1_0.distance,
+        ts1_0.drive_score,
+        ts1_0.end_time,
+        ts1_0.fuel_consumed,
+        ts1_0.top_speed,
+        ts1_0.trip_id 
+    from
+        trip_summaries ts1_0 
+    where
+        ts1_0.vehicles_id=? 
+        and ts1_0.distance>=? 
+    order by
+        ts1_0.start_time desc
+DEBUG 2026-01-27 19:20:05.933 [http-nio-8080-exec-6] o.s.w.s.m.m.a.HttpEntityMethodProcessor - Using 'application/json', given [application/json, text/plain, */*] and supported [application/json, application/*+json]
+DEBUG 2026-01-27 19:20:05.934 [http-nio-8080-exec-6] o.s.w.s.m.m.a.HttpEntityMethodProcessor - Writing [kr.co.himedia.common.ApiResponse@60497676]
+DEBUG 2026-01-27 19:20:05.935 [http-nio-8080-exec-6] o.s.web.servlet.DispatcherServlet - Completed 200 OK
+DEBUG 2026-01-27 19:20:16.876 [http-nio-8080-exec-7] o.s.web.servlet.DispatcherServlet - GET "/api/smartcar/login", parameters={}
+DEBUG 2026-01-27 19:20:16.877 [http-nio-8080-exec-7] o.s.w.s.m.m.a.RequestMappingHandlerMapping - Mapped to kr.co.himedia.smartcar.controller.SmartcarController#getLoginUrl()
+DEBUG 2026-01-27 19:20:16.961 [http-nio-8080-exec-7] o.s.w.s.m.m.a.HttpEntityMethodProcessor - Using 'text/html', given [text/html, application/xhtml+xml, image/avif, image/webp, image/apng, application/xml;q=0.9, */*;q=0.8, application/signed-exchange;v=b3;q=0.7] and supported [*/*]
+DEBUG 2026-01-27 19:20:16.961 [http-nio-8080-exec-7] o.s.web.servlet.DispatcherServlet - Completed 302 FOUND
+DEBUG 2026-01-27 19:20:28.237 [http-nio-8080-exec-10] o.s.web.servlet.DispatcherServlet - GET "/api/smartcar/callback?code=a05b5057-682d-4308-99bb-495de5c6d8a5&user_id=be04b615-817b-4759-8277-f3c1eb25a2b5", parameters={masked}
+DEBUG 2026-01-27 19:20:28.238 [http-nio-8080-exec-10] o.s.w.s.m.m.a.RequestMappingHandlerMapping - Mapped to kr.co.himedia.smartcar.controller.SmartcarController#handleCallback(String)
+DEBUG 2026-01-27 19:20:29.084 [http-nio-8080-exec-10] o.s.w.s.m.m.a.HttpEntityMethodProcessor - Using 'text/html', given [text/html, application/xhtml+xml, image/avif, image/webp, image/apng, application/xml;q=0.9, */*;q=0.8, application/signed-exchange;v=b3;q=0.7] and supported [text/plain, */*, application/json, application/*+json]
+DEBUG 2026-01-27 19:20:29.085 [http-nio-8080-exec-10] o.s.w.s.m.m.a.HttpEntityMethodProcessor - Writing ["SmartCar Callback Error: invalid_client:null - Invalid or incorrect client credentials."]
+DEBUG 2026-01-27 19:20:29.086 [http-nio-8080-exec-10] o.s.web.servlet.DispatcherServlet - Completed 500 INTERNAL_SERVER_ERROR
