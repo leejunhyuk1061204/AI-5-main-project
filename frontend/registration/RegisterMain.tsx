@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, ScrollView, Platform, Linking, Alert } fr
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import BaseScreen from '../components/layout/BaseScreen';
 
 import { useUserStore } from '../store/useUserStore';
@@ -44,15 +45,39 @@ export default function RegisterMain() {
 
                 if (accessToken) {
                     try {
-                        // Fetch vehicles
-                        const backendUrl = Platform.OS === 'android' ? 'http://10.0.2.2:8080' : 'http://localhost:8080';
-                        const response = await fetch(`${backendUrl}/api/smartcar/vehicles?accessToken=${accessToken}`);
-                        const data = await response.json();
+                        const jwtToken = await AsyncStorage.getItem('accessToken');
+                        const backendUrl = 'http://localhost:8080';
 
-                        Alert.alert("Smartcar 연결 성공", `차량 정보를 가져왔습니다:\n${JSON.stringify(data, null, 2)}`);
+                        // 단순 조회가 아닌 백엔드 sync API 호출 (POST)
+                        const response = await fetch(`${backendUrl}/api/smartcar/sync?accessToken=${accessToken}`, {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': `Bearer ${jwtToken}`
+                            }
+                        });
+
+                        if (response.ok) {
+                            const syncData = await response.json();
+                            const results = syncData.results || [];
+
+                            let detailMessage = `총 ${syncData.totalCount}대의 차량 정보가 성공적으로 최신화되었습니다.\n\n`;
+                            results.forEach((res: any) => {
+                                const statusText = res.status === 'CONNECTED' ? '기존 차량 연결' : '신규 차량 등록';
+                                detailMessage += `• ${res.manufacturer} ${res.modelName}: ${statusText}\n`;
+                            });
+
+                            Alert.alert(
+                                "연동 완료",
+                                detailMessage,
+                                [{ text: "확인", onPress: () => navigation.navigate('MainPage') }]
+                            );
+                        } else {
+                            const errorData = await response.text();
+                            throw new Error(errorData || "동기화 실패");
+                        }
                     } catch (error) {
-                        Alert.alert("오류", "차량 정보를 가져오는 중 오류가 발생했습니다.");
-                        console.error(error);
+                        Alert.alert("연동 오류", "차량 정보를 동기화하는 중 오류가 발생했습니다.");
+                        console.error("[Smartcar Sync Error]", error);
                     }
                 }
             }
@@ -165,7 +190,7 @@ export default function RegisterMain() {
                         className="group relative flex flex-col items-start gap-4 rounded-2xl border border-white/10 bg-white/5 p-6 active:bg-white/10 active:scale-[0.98]"
                         activeOpacity={0.9}
                         onPress={() => {
-                            const backendUrl = Platform.OS === 'android' ? 'http://10.0.2.2:8080' : 'http://localhost:8080';
+                            const backendUrl = 'http://localhost:8080';
                             Linking.openURL(`${backendUrl}/api/smartcar/login`);
                         }}
                     >
