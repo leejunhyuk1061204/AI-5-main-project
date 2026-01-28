@@ -19,34 +19,30 @@ TARGETS = [
     ("Porsche", "2010", "911%20Carrera%20%28997%29%20F6-3.6L"),
     ("Porsche", "2011", "Cayenne%20%2892A%29%20V6-3.6L"),
     ("Porsche", "2012", "911%20Carrera%20%28991%29%20F6-3.4L"),
-    ("Porsche", "2013", "Cayenne%20%2892A%29%20V6-3.6L"),
-
-    # === Jeep ===
-    ("Jeep", "2011", "Grand%20Cherokee%204WD%20V6-3.6L"),
-    ("Jeep", "2012", "Grand%20Cherokee%204WD%20V6-3.6L"),
-    ("Jeep", "2013", "Grand%20Cherokee%204WD%20V6-3.6L"),
-
-    # === Land Rover ===
-    ("Land%20Rover", "2012", "Range%20Rover%20Evoque%20%28L538%29%20L4-2.0L%20Turbo"),
-    ("Land%20Rover", "2013", "Range%20Rover%20Sport%20%28L320%29%20V8-5.0L%20SC"),
-
-    # === Lexus ===
-    ("Lexus", "2010", "RX%20350%20AWD%20V6-3.5L%20%282GR-FE%29"),
-    ("Lexus", "2011", "ES%20350%20V6-3.5L%20%282GR-FE%29"),
-    ("Lexus", "2012", "CT%20200h%20L4-1.8L%20%282ZR-FXE%29%20Hybrid"),
-
-    # === BMW (Failed ones) ===
-    ("BMW", "2011", "528i%20%28F10%29%20L6-3.0L"),
-    ("BMW", "2012", "528i%20Sedan%20%28F10%29%20L4-2.0L%20Turbo%20%28N20%29"),
-    ("BMW", "2013", "328i%20Sedan%20%28F30%29%20L4-2.0L%20Turbo%20%28N20%29"),
-
-    # === Mercedes Benz (Failed ones) ===
-    ("Mercedes%20Benz", "2011", "E%20350%20%28212.056%29%20V6-3.5L"),
-    ("Mercedes%20Benz", "2012", "E%20350%20Sedan%20%28212.059%29%20V6-3.5L%20%28276.952%29"),
-    ("Mercedes%20Benz", "2013", "C%20250%20Sedan%20%28204.047%29%20L4-1.8L%20Turbo%20%28271.860%29"),
-
-    # === Hyundai ===
-    ("Hyundai", "2012", "Sonata%20L4-2.4L"),
+    # Ford (2013 Popular)
+    ("Ford", "2013", "Explorer%204WD%20V6-3.5L"),
+    ("Ford", "2013", "Fusion%20AWD%20L4-2.0L%20Turbo"),
+    ("Ford", "2013", "Escape%204WD%20L4-2.0L%20Turbo"),
+    ("Ford", "2013", "Focus%20L4-2.0L"),
+    
+    # Lincoln (2013)
+    ("Lincoln", "2013", "MKZ%20AWD%20V6-3.7L"),
+    ("Lincoln", "2013", "MKX%20AWD%20V6-3.7L"),
+    
+    # Jaguar (2010-2013 Flagships)
+    ("Jaguar", "2013", "XJ%20RWD%20%28X351%29%20V8-5.0L%20SC"),
+    ("Jaguar", "2012", "XF%20%28X250%29%20V8-5.0L"),
+    ("Jaguar", "2013", "XF%20RWD%20%28X250%29%20L4-2.0L%20Turbo"),
+    
+    # Volkswagen (2012-2013 Popular)
+    ("Volkswagen", "2012", "Touareg%20%287P5%29%20V6-3.0L%20DSL%20Turbo%20%28CATA%29"),
+    ("Volkswagen", "2013", "Beetle%20%285C1%29%20L4-2.0L%20Turbo%20%28CCTA%29"),
+    ("Volkswagen", "2013", "CC%204Motion%20%28358%29%20V6-3.6L%20%28CNNA%29"),
+    
+    # Mini (Popular Trims)
+    ("Mini", "2011", "Cooper%20S%20Countryman%20ALL4%20%28R60%29%20L4-1.6L%20Turbo%20%28N18%29"),
+    ("Mini", "2012", "Cooper%20S%20Convertible%20%28R57%29%20L4-1.6L%20Turbo%20%28N18%29"),
+    ("Mini", "2013", "Cooper%20JCW%20%28R56%29%20L4-1.6L%20Turbo%20%28N18%29"),
 ]
 
 def download_zip(brand, year, model):

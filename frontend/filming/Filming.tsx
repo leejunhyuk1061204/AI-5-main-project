@@ -166,8 +166,20 @@ export default function Filming({ navigation, route }: { navigation?: any; route
     }, [status, currentSessionId]);
 
     // 2. Navigation
+    // 2. Navigation
+    const isInitialMount = useRef(true);
+
     useEffect(() => {
         if (!currentSessionId) return;
+
+        // Skip the first check if status is already INTERACTIVE/ACTION_REQUIRED
+        // This prevents immediate kickback when opening Camera from the menu
+        if (isInitialMount.current) {
+            isInitialMount.current = false;
+            if (status === 'INTERACTIVE' || status === 'ACTION_REQUIRED') {
+                return;
+            }
+        }
 
         if (status === 'INTERACTIVE' || status === 'ACTION_REQUIRED') {
             setIsAnalyzing(false);

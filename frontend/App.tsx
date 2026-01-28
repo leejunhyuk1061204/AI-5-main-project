@@ -56,6 +56,8 @@ import DiagnosisReport from './diagnosis/DiagnosisReport';
 import DiagnosisHistory from './diagnosis/DiagnosisHistory';
 import Cloud from './setting/Cloud';
 import Membership from './setting/Membership';
+import ChatCameraScreen from './diagnosis/ChatCameraScreen';
+import ChatAudioScreen from './diagnosis/ChatAudioScreen';
 
 // Keep the splash screen visible while we fetch resources
 ExpoSplashScreen.preventAutoHideAsync();
@@ -240,6 +242,8 @@ export default function App() {
                 <Stack.Screen name="DiagnosisHistory" component={DiagnosisHistory} />
                 <Stack.Screen name="VisualDiagnosis" component={VisualDiagnosis} />
                 <Stack.Screen name="Filming" component={Filming} />
+                <Stack.Screen name="ChatCameraScreen" component={ChatCameraScreen} />
+                <Stack.Screen name="ChatAudioScreen" component={ChatAudioScreen} />
                 <Stack.Screen name="DrivingHis" component={DrivingHis} />
                 <Stack.Screen name="RecallHis" component={RecallHis} />
                 <Stack.Screen name="SupManage" component={SupManage} />
