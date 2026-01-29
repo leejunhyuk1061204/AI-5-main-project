@@ -41,7 +41,16 @@ export default function MaintenanceReg() {
     }, []);
 
     // Helper: Handle Registration
-    const handleComplete = async () => {
+    const handleComplete = async (isSkip: boolean = false) => {
+        if (!isSkip) {
+            // Check if at least one record has either date or mileage
+            const hasValidRecord = store.maintenanceRecords.some(r => r.lastReplacementDate || r.lastReplacementMileage);
+            if (!hasValidRecord) {
+                useAlertStore.getState().showAlert('알림', '등록된 소모품 정비 내역이 없습니다.', 'ERROR');
+                return;
+            }
+        }
+
         const result = await store.registerAll();
         if (result.success) {
             useAlertStore.getState().showAlert('등록 완료', '차량과 정비 이력이 성공적으로 등록되었습니다.', 'SUCCESS', () => {
@@ -157,7 +166,7 @@ export default function MaintenanceReg() {
             {/* Bottom Actions */}
             <View style={[styles.bottomActions, { paddingBottom: insets.bottom + 16 }]}>
                 <TouchableOpacity
-                    onPress={handleComplete}
+                    onPress={() => handleComplete(false)}
                     style={styles.registerButton}
                 >
                     <Text style={styles.registerButtonText}>등록</Text>
@@ -167,7 +176,7 @@ export default function MaintenanceReg() {
                 <TouchableOpacity
                     onPress={() => {
                         store.clearMaintenanceRecords();
-                        handleComplete();
+                        handleComplete(true);
                     }}
                     style={styles.skipButton}
                 >

@@ -48,6 +48,11 @@ export interface ManualRegistrationRequest {
     nickname?: string;
     memo?: string;
     obdDeviceId?: string;
+    consumables?: {
+        code: string;
+        maintenanceDate?: string;
+        lastReplacedMileage?: number;
+    }[];
 }
 
 // 차량 정보 수정 요청

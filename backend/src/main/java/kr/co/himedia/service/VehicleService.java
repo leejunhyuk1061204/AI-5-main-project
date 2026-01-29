@@ -6,7 +6,6 @@ import kr.co.himedia.dto.vehicle.VehicleDto;
 import kr.co.himedia.entity.Vehicle;
 import kr.co.himedia.entity.ConsumableItem;
 import kr.co.himedia.entity.VehicleConsumable;
-import kr.co.himedia.entity.VehicleSpec;
 import kr.co.himedia.repository.ConsumableItemRepository;
 import kr.co.himedia.repository.VehicleConsumableRepository;
 import kr.co.himedia.repository.VehicleRepository;
@@ -17,7 +16,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -184,6 +182,8 @@ public class VehicleService {
         vehicle.delete();
     }
 
+    private final MaintenanceService maintenanceService;
+
     /**
      * 소모품 일괄 등록 및 추론 로직
      */
@@ -207,38 +207,31 @@ public class VehicleService {
         for (ConsumableItem item : allMasterItems) {
             String itemCode = item.getCode().trim().toUpperCase();
             VehicleDto.ConsumableRegistrationRequest req = requestMap.get(itemCode);
+
+            // 1. 명시적 입력 데이터가 있는 경우 (날짜 또는 주행거리)
+            if (req != null && (req.getMaintenanceDate() != null || req.getLastReplacedMileage() != null)) {
+                maintenanceService.registerHistory(
+                        vehicle,
+                        item,
+                        req.getMaintenanceDate(),
+                        req.getLastReplacedMileage());
+                continue; // 명시적 등록 후 다음 소모품으로
+            }
+
+            // 2. 입력 데이터가 없거나 '건너뛰기'인 경우 (추론 로직 실행)
             VehicleConsumable vc = new VehicleConsumable();
             vc.setVehicle(vehicle);
             vc.setConsumableItem(item);
             vc.setWearFactor(1.0);
 
-            LocalDateTime lastAt;
-            Double lastMileage;
-
-            if (req != null) {
-                lastAt = req.getLastReplacedAt();
-                lastMileage = req.getLastReplacedMileage();
-
-                if (lastAt == null && lastMileage != null) {
-                    long daysDiff = Math.abs(Math.round((currentMileage - lastMileage) / dailyMileage));
-                    lastAt = now.minusDays(daysDiff);
-                } else if (lastAt != null && lastMileage == null) {
-                    long daysDiff = Math.abs(ChronoUnit.DAYS.between(lastAt, now));
-                    lastMileage = Math.max(0, currentMileage - (daysDiff * dailyMileage));
-                } else if (lastAt == null && lastMileage == null) {
-                    lastMileage = currentMileage - (currentMileage % item.getDefaultIntervalMileage());
-                    long daysDiff = Math.abs(Math.round((currentMileage - lastMileage) / dailyMileage));
-                    lastAt = now.minusDays(daysDiff);
-                }
-            } else {
-                lastMileage = currentMileage - (currentMileage % item.getDefaultIntervalMileage());
-                long daysDiff = Math.abs(Math.round((currentMileage - lastMileage) / dailyMileage));
-                lastAt = now.minusDays(daysDiff);
-            }
+            // 추론 기반 마지막 정비 정보 계산
+            Double lastMileage = currentMileage - (currentMileage % item.getDefaultIntervalMileage());
+            long daysDiff = Math.abs(Math.round((currentMileage - lastMileage) / dailyMileage));
+            LocalDateTime lastAt = now.minusDays(daysDiff);
 
             vc.setLastReplacedAt(lastAt);
             vc.setLastReplacedMileage(lastMileage);
-            vc.setIsInferred(req == null);
+            vc.setIsInferred(true);
 
             double distanceDriven = currentMileage - lastMileage;
             double lifePercentage = 100.0 - (distanceDriven / item.getDefaultIntervalMileage() * 100.0);
