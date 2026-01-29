@@ -36,6 +36,7 @@ from ai.app.api.v1.routes.health import router as health_router
 from ai.app.api.v1.routes.router import router as predict_router
 from ai.app.api.v1.routes.visual_router import router as visual_router
 from ai.app.api.v1.routes.audio_router import router as audio_router
+from ai.app.api.v1.routes.obd_engine_anomaly_router import router as obd_engine_anomaly_router
 
 # =============================================================================
 # Model Loading Functions
