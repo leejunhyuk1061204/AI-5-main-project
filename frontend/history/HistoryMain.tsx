@@ -151,7 +151,7 @@ export default function HistoryMain() {
                     </View>
                 </TouchableOpacity>
 
-                {/* Card 3: Vehicle Detailed Specs */}
+                {/* Card 3: Vehicle Detailed Specs (Temporarily Disabled)
                 <TouchableOpacity
                     onPress={() => navigation.navigate('Spec' as never)}
                     className="w-full bg-white/5 border border-white/10 rounded-2xl p-6 active:bg-white/10"
@@ -168,8 +168,9 @@ export default function HistoryMain() {
                         <MaterialIcons name="arrow-forward-ios" size={16} color="text-dim" />
                     </View>
                 </TouchableOpacity>
+                */}
 
-                {/* Card 4: Regular Inspection */}
+                {/* Card 4: Regular Inspection (Temporarily Disabled)
                 <TouchableOpacity
                     onPress={() => navigation.navigate('RecallHis' as never)}
                     className="w-full bg-white/5 border border-white/10 rounded-2xl p-6 flex-row items-center justify-between active:bg-white/10"
@@ -187,6 +188,7 @@ export default function HistoryMain() {
                         <Text className="text-sm font-bold text-primary uppercase tracking-wider mt-1">Days left</Text>
                     </View>
                 </TouchableOpacity>
+                */}
             </View>
         </BaseScreen>
     );
