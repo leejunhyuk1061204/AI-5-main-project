@@ -44,7 +44,7 @@ api.interceptors.request.use(
             const token = await AsyncStorage.getItem('accessToken');
             if (token && !config.headers.Authorization && !config.url?.includes('/auth/')) {
                 config.headers.Authorization = `Bearer ${token}`;
-                console.log('Added Authorization header:', config.headers.Authorization);
+                // console.log('Added Authorization header:', config.headers.Authorization);
             }
         } catch (error) {
             console.error('Error fetching token:', error);
@@ -87,8 +87,18 @@ api.interceptors.response.use(
                 console.log('Refresh already in progress, queuing request...');
                 return new Promise((resolve) => {
                     subscribeTokenRefresh((token) => {
-                        originalRequest.headers.Authorization = `Bearer ${token}`;
-                        resolve(api(originalRequest));
+                        // 안전한 재요청을 위해 새 객체 생성
+                        const retryConfig = {
+                            method: originalRequest.method,
+                            url: originalRequest.url,
+                            params: originalRequest.params,
+                            data: originalRequest.data,
+                            headers: {
+                                ...originalRequest.headers,
+                                Authorization: `Bearer ${token}`
+                            }
+                        };
+                        resolve(api(retryConfig));
                     });
                 });
             }
@@ -131,12 +141,21 @@ api.interceptors.response.use(
                     isRefreshing = false;
                     onRefreshed(newAccessToken);
 
-                    if (!originalRequest.headers) {
-                        originalRequest.headers = {};
-                    }
-                    originalRequest.headers['Authorization'] = `Bearer ${newAccessToken}`;
+                    // 중요: originalRequest 객체를 그대로 쓰지 않고 필요한 속성만 추출하여 재요청
+                    // (Axios 내부 객체 오염 방지)
+                    const retryConfig = {
+                        method: originalRequest.method,
+                        url: originalRequest.url,
+                        params: originalRequest.params,
+                        data: originalRequest.data,
+                        headers: {
+                            ...originalRequest.headers,
+                            Authorization: `Bearer ${newAccessToken}`
+                        }
+                    };
 
-                    return api(originalRequest);
+                    const retryResponse = await api(retryConfig);
+                    return retryResponse;
                 }
             } catch (refreshError) {
                 console.error('Token refresh failed:', refreshError);
