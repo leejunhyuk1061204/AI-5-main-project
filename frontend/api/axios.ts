@@ -8,12 +8,12 @@ const getBaseUrl = () => {
     if (process.env.EXPO_PUBLIC_API_URL) {
         return process.env.EXPO_PUBLIC_API_URL;
     }
-    
+
     // 2. Android Emulator default
     if (Platform.OS === 'android') {
         return 'http://10.0.2.2:8080';
     }
-    
+
     // 3. iOS Simulator and Web default
     return 'http://localhost:8080';
 };
@@ -127,11 +127,15 @@ api.interceptors.response.use(
                         await AsyncStorage.setItem('refreshToken', newRefreshToken);
                     }
 
-                    console.log('Token refreshed successfully');
+                    console.log('Token refreshed successfully. Retrying original request...');
                     isRefreshing = false;
                     onRefreshed(newAccessToken);
 
-                    originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+                    if (!originalRequest.headers) {
+                        originalRequest.headers = {};
+                    }
+                    originalRequest.headers['Authorization'] = `Bearer ${newAccessToken}`;
+
                     return api(originalRequest);
                 }
             } catch (refreshError) {
