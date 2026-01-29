@@ -18,8 +18,8 @@ from ai.app.schemas.visual_schema import (
     EngineAnalysisRequest, 
     EngineAnalysisResponse
 )
-from ai.app.services.visual_service import get_smart_visual_diagnosis
-from ai.app.services.engine_anomaly_service import EngineAnomalyPipeline
+from ai.app.services.visual.visual_service import get_smart_visual_diagnosis
+from ai.app.services.visual.domains.engine.engine_anomaly_service import EngineAnomalyPipeline
 
 router = APIRouter(prefix="/predict", tags=["Visual Analysis"])
 

@@ -40,7 +40,7 @@
 import os
 from typing import List, Union, Dict, Any
 from PIL import Image
-from ai.app.services.router_service import CONFIDENCE_THRESHOLD
+from ai.app.services.visual.router_service import CONFIDENCE_THRESHOLD
 
 # =============================================================================
 # Reliability Thresholds
@@ -142,7 +142,7 @@ async def get_tire_analysis_from_llm(s3_url: str) -> Dict[str, Any]:
     }
     """
     try:
-        from ai.app.services.llm_service import call_openai_vision
+        from ai.app.services.common.llm_service import call_openai_vision
         
         # =================================================================
         # LLM 프롬프트: 타이어 전문가 역할
@@ -403,7 +403,7 @@ async def _save_tire_analysis_data(
         print(f"[Active Learning Tire] 분석 데이터 저장 완료: {label_key}")
         
         # Manifest에도 기록
-        from ai.app.services.manifest_service import add_visual_entry
+        from ai.app.services.common.manifest_service import add_visual_entry
         add_visual_entry(
             original_url=s3_url,
             category="TIRE",
