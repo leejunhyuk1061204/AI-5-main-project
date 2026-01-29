@@ -38,6 +38,11 @@ ALLOWED_DOMAINS = [
 MAX_AUDIO_SIZE = 10 * 1024 * 1024  # 10MB
 
 class AudioService:
+    def __init__(self):
+        # [Optimization] boto3 client는 Thread-safe하므로 초기화 시 한 번만 생성하여 재사용
+        import boto3
+        self.s3 = boto3.client('s3')
+
     async def _safe_load_audio(self, url: str) -> bytes:
         """
         오디오 파일을 안전하게 로드 (SSRF 방지 및 크기 제한)
@@ -62,9 +67,11 @@ class AudioService:
                     is_allowed = True
                     break
             
-            if not is_allowed and hostname:
-                 # S3 외 도메인은 경고 로깅 후 진행 (필요시 엄격하게 block)
-                 print(f"[Safe Audio Load] Warning: External domain {hostname}")
+            if not is_allowed:
+                # [Security] 정책 통일: Visual Service와 동일하게 Block
+                if not hostname:
+                     raise ValueError("Host not found in URL")
+                raise ValueError(f"Blocked URL domain: {hostname}")
 
         except Exception as e:
             raise ValueError(f"Audio URL Validation Error: {e}")
@@ -89,6 +96,9 @@ class AudioService:
         2. 16kHz 전처리
         3. AST/LLM 추론
         """
+        # Threshold 상수 적용
+        FAST_PATH_AUDIO_CONF = 0.85
+        
         # 1. 중앙화된 오디오 로드
         try:
             audio_bytes = await self._safe_load_audio(s3_url)
@@ -103,48 +113,15 @@ class AudioService:
             )
 
         # 2. 전처리: 16kHz 변환
-        # 기존 process_to_16khz는 URL을 받으므로, 바이트를 넘기거나 URL을 그대로 쓰되 다운로드는 안하게 내부 수정 필요
-        # 일단은 기존 구조 유지를 위해 URL을 넘기되, 내부에서 다운로드 중복 체크를 하게 하거나 
-        # (이번 태스크에서는 audio_buffer를 이미 확보했다고 가정하고 넘기는게 정석)
-        # 헤르즈.py를 수정하기보다 여기서 바로 buffer를 만들어 넘깁니다.
         from ai.app.services.hertz import convert_bytes_to_16khz
         audio_buffer = await convert_bytes_to_16khz(audio_bytes)
         
-        if audio_buffer is not None:
-             # [Enhancement] 전처리: 소음 제거 (U-Net Denoising)
-             # [Debug] 서버 충돌 의심으로 Denoising 일시 비활성화
-             # try:
-             #     import librosa
-             #     import soundfile as sf
-             #     
-             #     # BytesIO -> np.ndarray
-             #     audio_buffer.seek(0)
-             #     y, _ = librosa.load(audio_buffer, sr=16000)
-             #     
-             #     # Denoising
-             #     y_denoised = await denoise_audio(y)
-             #     
-             #     # np.ndarray -> BytesIO (WAV)
-             #     new_buffer = io.BytesIO()
-             #     sf.write(new_buffer, y_denoised, 16000, format='WAV')
-             #     new_buffer.seek(0)
-             #     
-             #     audio_buffer = new_buffer # 교체
-             #     # print("[Audio Service] 소음 제거 적용 완료")
-             #     
-             # except Exception as e:
-             #     print(f"[Audio Service] Denoising 실패 (Pass-through): {e}")
-             #     # 실패 시 원본 audio_buffer 유지 (seek(0) 필수)
-             #     audio_buffer.seek(0)
-             pass
-
-        # 2. 1차 진단: AST 모델
+        # 3. 1차 진단: AST 모델
         try:
             ast_result = await run_ast_inference(audio_buffer, ast_model_payload=ast_model)
         except Exception as e:
             print(f"[Audio Service] AST Inference Error: {e}")
             from ai.app.schemas.audio_schema import AudioResponse, AudioDetail
-            # AST 실패 시 LLM으로 넘기기 위해 Low Confidence & UNKNOWN 설정
             ast_result = AudioResponse(
                 status="UNKNOWN",
                 analysis_type="AST_FAILED",
@@ -154,122 +131,53 @@ class AudioService:
                 is_critical=False
             )
         
-        # 3. 2차 진단 판단
-        if ast_result.confidence < 0.85 or ast_result.status == "UNKNOWN":
+        # 4. 2차 진단 판단 (Threshold 적용)
+        if ast_result.confidence < FAST_PATH_AUDIO_CONF or ast_result.status == "UNKNOWN":
             print(f"[Audio Service] AST 결과 미흡 (또는 에러). LLM으로 전환.")
-            # [Fix] LLM은 WAV 포맷을 선호하므로, 전처리된(16kHz WAV) 버퍼를 전달
             wav_bytes = audio_buffer.getvalue() if audio_buffer else audio_bytes
             final_result = await analyze_audio_with_llm(s3_url, audio_bytes=wav_bytes)
         else:
             final_result = ast_result
 
         # =================================================================
-        # [Active Learning] 모델 재학습을 위한 오디오 데이터 수집
+        # [Active Learning] 공통 서비스 활용
         # =================================================================
-        # 왜 저신뢰 데이터만 수집하는가?
-        # → 고신뢰(≥0.9): AST 모델이 이미 잘 분류함 → 재학습 효과 없음
-        # → 저신뢰(<0.9): 모델이 헷갈려하는 소리 → 이걸 학습해야 실력이 늘음
-        #
-        # [저장 조건] - 두 가지 모두 충족해야 저장
-        # 1. 신뢰도 < 0.9 (모델이 불확실한 데이터)
-        # 2. 품질 통과 (정상적인 오디오, 분석 가능한 상태)
-        #
-        # [배제 조건] - 재학습해도 도움 안 되는 데이터
-        # - status == "RE_RECORD_REQUIRED": 소음 과다 (바람소리, 지하철 등)
-        # - status == "UNKNOWN": 차량 소리인지 구분 불가
-        # - status == "ERROR": LLM 분석 자체가 실패
-        #
-        # [S3 저장 경로]
-        # - dataset/audio/llm_confirmed/{file_id}.json
-        # - 예: dataset/audio/llm_confirmed/engine_sound_001.json
-        # =================================================================
-        if final_result.confidence < 0.9:
+        if final_result.confidence < 0.85:
             try:
-                # 필요한 모듈 임포트 (함수 내부에서 하여 순환 참조 방지)
-                from ai.app.services.manifest_service import add_audio_entry
                 from ai.app.services.llm_service import generate_audio_labels
-                import boto3
-                import json
+                from ai.app.services.active_learning_service import get_active_learning_service
 
-                print(f"[Active Learning] 저신뢰 오디오 감지 ({final_result.confidence:.2f} < 0.9). LLM 오디오 라벨링 시작...")
+                print(f"[Active Learning] 저신뢰 오디오 감지 ({final_result.confidence:.2f}). LLM 라벨링 시작...")
                 
-                # =================================================================
-                # Step 1: LLM에게 정답 라벨 생성 요청 (Oracle)
-                # =================================================================
-                # LLM(GPT-4o Audio)이 소리를 듣고 어떤 종류의 소리인지 분류
-                # 반환값 예시:
-                # {
-                #   "label": "Engine_Knock",
-                #   "category": "ENGINE",
-                #   "status": "FAULTY",
-                #   "confidence": 0.85
-                # }
+                # Step 1: LLM Oracle
                 oracle_labels = await generate_audio_labels(s3_url, audio_bytes=audio_bytes)
-                
-                # =================================================================
-                # Step 2: 품질 필터링 - 재학습 가치 없는 데이터 배제
-                # =================================================================
                 status = oracle_labels.get("status", "")
                 
-                # [배제 1] 소음 과다 - 재녹음 필요
-                # 예: 바람소리, 지하철 소음 등으로 엔진 소리가 안 들림
-                if status == "RE_RECORD_REQUIRED":
-                    print(f"[Active Learning] 배제: 소음 과다 (재녹음 필요)")
-                    return final_result  # 저장하지 않고 결과만 반환
-                
-                # [배제 2] 분석 불가 상태
-                # 예: 너무 짧거나, 무음이거나, 차량 소리인지 구분 불가
-                if status in ["UNKNOWN", "ERROR"]:
-                    print(f"[Active Learning] 배제: 분석 불가 상태 ({status})")
-                    return final_result  # 저장하지 않고 결과만 반환
-                
-                # [배제 3] 라벨이 없는 경우
-                # 예: LLM도 어떤 소리인지 분류 못함
-                if not oracle_labels.get("label"):
-                    print(f"[Active Learning] 배제: 라벨 없음")
-                    return final_result  # 저장하지 않고 결과만 반환
-                
-                # =================================================================
-                # Step 3: 품질 통과 → S3에 라벨 JSON 저장
-                # =================================================================
-                # AWS S3 클라이언트 생성 (환경변수에서 자격증명 자동 로드)
-                s3 = boto3.client('s3')
-                
-                # 버킷 이름: 환경변수에 없으면 기본값 사용
-                bucket = os.getenv("S3_BUCKET_NAME", "car-sentry-data")
-                
-                # 파일 ID 추출: "engine_sound_001.wav" → "engine_sound_001"
-                file_id = os.path.basename(s3_url).split('.')[0]
-                
-                # 저장 경로: dataset/llm_confirmed/audio/{file_id}.json
-                retraining_label_key = f"dataset/llm_confirmed/audio/{file_id}.json"
-                
-                # S3에 JSON 파일 업로드
-                s3.put_object(
-                    Bucket=bucket,
-                    Key=retraining_label_key,
-                    Body=json.dumps(oracle_labels, ensure_ascii=False, indent=2),
-                    ContentType='application/json'
-                )
-                print(f"[Active Learning] 오디오 고품질 정답지 저장 완료: {retraining_label_key}")
+                # Step 2: Quality Check
+                if status == "RE_RECORD_REQUIRED" or status in ["UNKNOWN", "ERROR"] or not oracle_labels.get("label"):
+                    print(f"[Active Learning] 배제: 품질 미달 ({status})")
+                    return final_result
 
-                # =================================================================
-                # Step 4: Manifest에 기록 (데이터 목록 관리용)
-                # =================================================================
-                # Manifest = 어떤 데이터가 수집되었는지 목록을 관리하는 JSON 파일
-                # 나중에 재학습 시 이 목록을 보고 데이터를 불러옴
-                add_audio_entry(
-                    original_url=s3_url,                  # 원본 오디오 S3 위치
-                    category=final_result.category,       # ENGINE, BRAKES 등
-                    diagnosed_label=oracle_labels.get("label"),  # LLM이 분류한 라벨
-                    status=status,                        # NORMAL, FAULTY 등
-                    analysis_type="LLM_ORACLE",           # LLM이 생성한 정답임을 표시
-                    confidence=final_result.confidence    # 원래 AST 모델의 신뢰도
+                # Step 3: Save & Manifest (via Common Service)
+                al_service = get_active_learning_service()
+                label_key = al_service.save_oracle_label(
+                    s3_url=s3_url, 
+                    label_data=oracle_labels, 
+                    domain="audio"
                 )
-                print(f"[Manifest] 오디오 분석 이력 기록 완료: {s3_url}")
+                
+                if label_key:
+                    al_service.record_manifest(
+                        s3_url=s3_url,
+                        category=final_result.category,
+                        label_key=label_key,
+                        status=status,
+                        confidence=final_result.confidence,
+                        analysis_type=oracle_labels.get("label", "Unknown_Audio"), # 실제 라벨 전달
+                        domain="audio"
+                    )
 
             except Exception as e:
-                # Active Learning 실패해도 메인 분석에는 영향 없음
                 print(f"[Active Learning Audio] 기록 실패 (무시): {e}")
             
         return final_result

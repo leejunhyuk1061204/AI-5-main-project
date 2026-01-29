@@ -181,7 +181,8 @@ async def suggest_anomaly_label_with_base64(
         "defect_label": "구체적_라벨명",
         "description_ko": "한글 설명",
         "severity": "MINOR|WARNING|CRITICAL",
-        "recommended_action": "권장 조치"
+        "recommended_action": "권장 조치",
+        "is_mock": false
     }}
     """
     
@@ -193,7 +194,8 @@ async def suggest_anomaly_label_with_base64(
             "defect_label": "Analysis_Unavailable",
             "description_ko": f"{part_name} 부품의 AI 정밀 분석이 불가능합니다. ({reason} 모드 - 실제 LLM 연결 필요)",
             "severity": "WARNING",
-            "recommended_action": "AI 서버 설정을 확인하거나 육안으로 점검하십시오."
+            "recommended_action": "AI 서버 설정을 확인하거나 육안으로 점검하십시오.",
+            "is_mock": True
         }
 
     try:
