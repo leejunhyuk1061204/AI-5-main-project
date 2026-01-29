@@ -673,7 +673,7 @@ class ObdService {
                     // 현재 createClassicDevice 로직이 없음. 
                     // ClassicBtService.connect(...) 호출 후 성공하면 setClassicDevice 호출.
                     console.log(`[ObdService] Retrying Classic connection to ${this.classicDevice.address}...`);
-                    const isConnected = await ClassicBtService.connect(this.classicDevice.address);
+                    const isConnected = await ClassicBtService.connect(this.classicDevice);
                     if (isConnected) {
                         await this.setClassicDevice(this.classicDevice);
                     } else {
@@ -686,6 +686,82 @@ class ObdService {
                 this.attemptReconnect();
             }
         }, delayMs);
+    }
+
+    // --- Auto Connect Logic ---
+
+    /**
+     * 마지막 연결 장치 정보 저장
+     */
+    private async saveLastDevice(type: 'classic' | 'ble', id: string, name: string) {
+        try {
+            const info = {
+                type,
+                id,
+                name: name || 'Unknown Device',
+                address: id, // Classic의 경우 id가 address임
+            };
+            await AsyncStorage.setItem(STORAGE_KEY_LAST_DEVICE, JSON.stringify(info));
+            console.log('[ObdService] Saved last device:', info);
+        } catch (e) {
+            console.error('[ObdService] Failed to save device:', e);
+        }
+    }
+
+    /**
+     * 마지막 연결 장치 정보 로드
+     */
+    private async loadLastDevice() {
+        try {
+            const json = await AsyncStorage.getItem(STORAGE_KEY_LAST_DEVICE);
+            if (!json) return null;
+            return JSON.parse(json);
+        } catch (e) {
+            console.error('[ObdService] Failed to load last device:', e);
+            return null;
+        }
+    }
+
+    /**
+     * 앱 시작 시 자동 연결 시도
+     */
+    public async tryAutoConnect() {
+        console.log('[ObdService] tryAutoConnect initiated');
+        const lastDevice = await this.loadLastDevice();
+        if (!lastDevice) {
+            console.log('[ObdService] No last device found, skipping auto connect');
+            return;
+        }
+
+        console.log(`[ObdService] Found last device: ${lastDevice.name} (${lastDevice.id}) [${lastDevice.type}]`);
+
+        // 이미 연결됨?
+        if (this.isConnected()) {
+            console.log('[ObdService] Already connected');
+            return;
+        }
+
+        try {
+            if (lastDevice.type === 'ble') {
+                console.log('[ObdService] Auto-connecting to BLE device...');
+                await this.setTargetDevice(lastDevice.id);
+            } else {
+                console.log('[ObdService] Auto-connecting to Classic BT device...');
+                // setClassicDevice는 BluetoothDevice 객체를 요구하므로 가짜 객체 생성
+                const deviceToConnect: BluetoothDevice = {
+                    id: lastDevice.id,
+                    name: lastDevice.name,
+                    address: lastDevice.address || lastDevice.id,
+                    bonded: true,
+                    deviceClass: '',
+                    rssi: 0,
+                    extra: new Map<string, Object>(),
+                } as unknown as BluetoothDevice;
+                await this.setClassicDevice(deviceToConnect);
+            }
+        } catch (e) {
+            console.error('[ObdService] Auto connect failed:', e);
+        }
     }
 }
 
