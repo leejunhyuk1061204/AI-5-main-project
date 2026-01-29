@@ -158,7 +158,6 @@ async def analyze_exterior_image(
     detections = await run_exterior_yolo(image, exterior_model)
     
     # Step 1-1: 파손이 감지되지 않으면, LLM으로 '진짜 외관인지' + '미세 파손은 없는지' 2차 확인 (Safety Net)
-    # Step 1-1: 파손이 감지되지 않으면, LLM으로 '진짜 외관인지' + '미세 파손은 없는지' 2차 확인 (Safety Net)
     if len(detections) == 0:
         print("[Exterior] 감지된 파손 없음. LLM Safety Check 진행.")
         llm_result = await analyze_general_image(s3_url)
