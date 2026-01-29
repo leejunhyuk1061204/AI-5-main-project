@@ -18,7 +18,7 @@ spring:
   jpa:
     hibernate:
       ddl-auto: update
-    show-sql: true
+    show-sql: false
     properties:
       hibernate:
         format_sql: true
@@ -68,8 +68,8 @@ logging:
   file:
     name: logs/backend.log
   level:
-    org.hibernate.SQL: DEBUG
-    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+    org.hibernate.SQL: INFO
+    org.hibernate.type.descriptor.sql.BasicBinder: INFO
     org.springframework.web: DEBUG # 404 디버깅용 로그 추가
 
 # 암호화 키(코드는 가짜를 들고 있고, 서버가 진짜를 넣어주는 방식"이므로 보안상 안전함)

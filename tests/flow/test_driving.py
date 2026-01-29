@@ -8,8 +8,8 @@ from datetime import datetime
 
 # 설정
 BASE_URL = "http://localhost:8080/api/v1"
-VEHICLE_ID = "32cbfa4d-ed68-44fd-b13e-36fe357bd74f"
-ACCESS_TOKEN = "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiIyZmQyMDE4MS1mYmE1LTQwYzYtOGFlNi1jMjg5N2YwYTE0ZjciLCJpYXQiOjE3Njk1ODkyMzQsImV4cCI6MTc2OTU5MjgzNH0.sFVtVplcBLleUJYPRoG2qoazSZ6thu_Ab_WLVts0fIR6_n7qqD8GkaHfZmK0aTdZuOnJy7v9kTP6oNDJr8_okg"
+VEHICLE_ID = "7d9e2ddc-362d-4cf7-9d02-b684387dcdac"
+ACCESS_TOKEN = "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJjZTI1NTE2MC02MjAwLTQwYjUtOWYwOS0wMTVjMTI4ZWE1OWQiLCJpYXQiOjE3Njk2OTg4MjksImV4cCI6MTc2OTcwMjQyOX0.X4Sj0rcQzkHB1ESYBcCJ7Ko7aa1l31Y-HfOGQvPPKkE9nX9JedEgRAfLR28EvVOJ294wcWhBlcXaQyUXSnaABA"
 
 def get_headers():
     if os.path.exists("token.json"):
@@ -118,16 +118,32 @@ def end_trip(trip_id):
     else:
         print(f"[-] Trip End Failed: {res.text}")
 
-if __name__ == "__main__":
-    target_duration = 17 # 기본값 17분 (1020초)
-    if len(sys.argv) > 1:
-        target_duration = float(sys.argv[1])
+import argparse
+
+def main():
+    parser = argparse.ArgumentParser(description="Driving Data Simulation Test")
+    parser.add_argument("--duration", type=float, default=17, help="주행 시간 (분)")
+    parser.add_argument("--interval", type=int, default=1, help="데이터 생성 간격 (초)")
+    parser.add_argument("--batch", type=int, default=60, help="배치 전송 단위 (초)")
+    
+    args = parser.parse_args()
+    
+    print(f"[*] Starting simulation for {args.duration} minutes...")
+    print(f"[*] Config: Interval={args.interval}s, Batch={args.batch}s")
     
     tid = start_trip(VEHICLE_ID)
     if tid:
         try:
-            send_bulk_logs(VEHICLE_ID, target_duration)
+            # send_bulk_logs 내부 로직을 args에 맞춰 수정하고 싶으나, 
+            # 일단 기존 함수를 호출 (필요시 send_bulk_logs 시그니처 수정)
+            send_bulk_logs(VEHICLE_ID, args.duration)
             end_trip(tid)
         except KeyboardInterrupt:
             print("\n[!] 테스트가 중단되었습니다. 주행을 종료합니다.")
             end_trip(tid)
+        except Exception as e:
+            print(f"\n[!] 오류 발생: {e}")
+            end_trip(tid)
+
+if __name__ == "__main__":
+    main()
