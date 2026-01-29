@@ -55,27 +55,33 @@ public class AiClient {
     }
 
     @Retryable(retryFor = Exception.class, maxAttempts = 3, backoff = @Backoff(delay = 2000))
-    public Map<String, Object> callVisualAnalysis(String filename) {
-        log.info("[Retryable] Requesting Visual Analysis: {}", filename);
+    public Map<String, Object> callVisualAnalysis(String filename, java.util.UUID vehicleId, java.util.UUID sessionId) {
+        log.info("[Retryable] Requesting Visual Analysis - Vehicle: {}, Session: {}, File: {}", vehicleId, sessionId,
+                filename);
         try {
             @SuppressWarnings("unchecked")
-            Map<String, Object> result = (Map<String, Object>) callMultipartApi(aiServerVisualUrl, filename);
+            Map<String, Object> result = (Map<String, Object>) callMultipartApi(aiServerVisualUrl, filename, vehicleId,
+                    sessionId);
             return result;
         } catch (Exception e) {
-            log.error("[AiClient] Visual Analysis Failed. URL: {}, Error: {}", aiServerVisualUrl, e.getMessage());
+            log.error("[AiClient] Visual Analysis Failed [Vehicle: {}, Session: {}]. URL: {}, Error: {}",
+                    vehicleId, sessionId, aiServerVisualUrl, e.getMessage());
             throw e;
         }
     }
 
     @Retryable(retryFor = Exception.class, maxAttempts = 3, backoff = @Backoff(delay = 2000))
-    public Map<String, Object> callAudioAnalysis(String filename) {
-        log.info("[Retryable] Requesting Audio Analysis: {}", filename);
+    public Map<String, Object> callAudioAnalysis(String filename, java.util.UUID vehicleId, java.util.UUID sessionId) {
+        log.info("[Retryable] Requesting Audio Analysis - Vehicle: {}, Session: {}, File: {}", vehicleId, sessionId,
+                filename);
         try {
             @SuppressWarnings("unchecked")
-            Map<String, Object> result = (Map<String, Object>) callMultipartApi(aiServerAudioUrl, filename);
+            Map<String, Object> result = (Map<String, Object>) callMultipartApi(aiServerAudioUrl, filename, vehicleId,
+                    sessionId);
             return result;
         } catch (Exception e) {
-            log.error("[AiClient] Audio Analysis Failed. URL: {}, Error: {}", aiServerAudioUrl, e.getMessage());
+            log.error("[AiClient] Audio Analysis Failed [Vehicle: {}, Session: {}]. URL: {}, Error: {}",
+                    vehicleId, sessionId, aiServerAudioUrl, e.getMessage());
             throw e;
         }
     }
@@ -104,7 +110,7 @@ public class AiClient {
         }
     }
 
-    private Object callMultipartApi(String url, String filename) {
+    private Object callMultipartApi(String url, String filename, java.util.UUID vehicleId, java.util.UUID sessionId) {
         Path filePath = Paths.get("uploads").toAbsolutePath().resolve(filename);
         if (!filePath.toFile().exists()) {
             throw new BaseException(ErrorCode.ENTITY_NOT_FOUND, "파일을 찾을 수 없습니다: " + filename);
@@ -115,6 +121,12 @@ public class AiClient {
 
         MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
         body.add("file", new FileSystemResource(filePath.toFile()));
+
+        // Echo 식별자 추가
+        if (vehicleId != null)
+            body.add("vehicle_id", vehicleId.toString());
+        if (sessionId != null)
+            body.add("session_id", sessionId.toString());
 
         HttpEntity<MultiValueMap<String, Object>> requestEntity = new HttpEntity<>(body, headers);
 

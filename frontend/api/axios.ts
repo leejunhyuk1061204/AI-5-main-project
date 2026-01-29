@@ -132,8 +132,10 @@ api.interceptors.response.use(
                     const newAccessToken = data.data.accessToken;
                     const newRefreshToken = data.data.refreshToken;
 
+                    console.log('[Auth] New Access Token Issued (Refresh):', newAccessToken);
                     await AsyncStorage.setItem('accessToken', newAccessToken);
                     if (newRefreshToken) {
+                        console.log('[Auth] New Refresh Token Issued (Refresh):', newRefreshToken);
                         await AsyncStorage.setItem('refreshToken', newRefreshToken);
                     }
 
