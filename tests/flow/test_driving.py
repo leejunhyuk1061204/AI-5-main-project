@@ -37,20 +37,19 @@ def start_trip(vehicle_id):
         print(f"[-] Trip Start Failed (Status: {res.status_code}): {res.text}")
         return None
 
-def send_bulk_logs(vehicle_id, target_km):
+def send_bulk_logs(vehicle_id, target_duration_min):
     headers = get_headers()
     if not headers: return
     
-    # 1 log = 약 1초 주행 거리 (평균 100km/h 가정 시 1km = 36 logs)
-    # 3000km = 약 108,000 logs
-    log_count = int(target_km * 34) # 약간의 오차를 위해 34 사용
-    # 자연스러움을 위해 목표값에 +- 5% 랜덤 추가
-    log_count = int(log_count * random.uniform(0.95, 1.05))
+    # 1 log = 1 sec
+    log_count = int(target_duration_min * 60)
     
-    print(f"[*] Sending Bulk Logs ({log_count} EA / Targeting ~{target_km}km)...")
+    print(f"[*] Sending Bulk Logs ({log_count} EA / Duration ~{target_duration_min}min)...")
     
     logs = []
     base_time = time.time()
+    # 과거 시간부터 시작해서 현재에 끝나도록 (Backend가 미래 데이터를 거부할 수 있으므로) -> 아니면 그냥 현재부터 미래로? 
+    # 보통 DB 저장시 문제 없으므로 현재 시간(base_time)부터 +i 초로 생성
     
     current_speed = 0.0
     current_rpm = 800.0
@@ -93,13 +92,13 @@ def send_bulk_logs(vehicle_id, target_km):
         chunk = logs[i:i + chunk_size]
         res = requests.post(f"{BASE_URL}/telemetry/batch", json=chunk, headers=headers)
         if res.status_code == 200:
-             if (i // chunk_size) % 50 == 0: # 로그 너무 많이 찍히지 않게 조절
-                print(f"   [+] Sent {i}/{log_count} logs...")
+             if (i // chunk_size) % 10 == 0: 
+                print(f"   [+] Sent {min(i+chunk_size, log_count)}/{log_count} logs...")
         else:
              print(f"   [-] Batch failed: {res.text}")
         
-        # 고속 전송을 위해 sleep 최소화 (장거리인 경우 더 빠르게)
-        time.sleep(0.01 if target_km > 500 else 0.05)
+        # 고속 전송을 위해 sleep 최소화
+        time.sleep(0.01)
 
 def end_trip(trip_id):
     headers = get_headers()
@@ -120,14 +119,14 @@ def end_trip(trip_id):
         print(f"[-] Trip End Failed: {res.text}")
 
 if __name__ == "__main__":
-    target_distance = 70 # 기본값
+    target_duration = 17 # 기본값 17분 (1020초)
     if len(sys.argv) > 1:
-        target_distance = float(sys.argv[1])
+        target_duration = float(sys.argv[1])
     
     tid = start_trip(VEHICLE_ID)
     if tid:
         try:
-            send_bulk_logs(VEHICLE_ID, target_distance)
+            send_bulk_logs(VEHICLE_ID, target_duration)
             end_trip(tid)
         except KeyboardInterrupt:
             print("\n[!] 테스트가 중단되었습니다. 주행을 종료합니다.")

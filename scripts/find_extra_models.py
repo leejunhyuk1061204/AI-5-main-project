@@ -7,6 +7,7 @@ import time
 search_queries = []
 years = ["2010", "2011", "2012", "2013"]
 brands = [
+    "Hyundai", "Kia", "BMW", "Mercedes-Benz", "Audi", "Volvo", "Porsche",
     "Nissan", "Toyota", "Honda", "Ford", "Chrysler", 
     "Jeep", "Lincoln", "Jaguar", "Peugeot", "Mini", "Lexus", "Volkswagen"
 ]
@@ -17,6 +18,16 @@ for b in brands:
 
 # Keywords for popular models in Korea
 keywords = [
+    # Hyundai
+    "Santa%20Fe", "Sonata", "Elantra", "Tucson", "Genesis", "Accent", "Azera", "Veracruz", "Veloster",
+    # Kia
+    "Sportage", "Sorento", "Optima", "Rio", "Forte", "Soul", "Sedona", "Cadenza", "Borrego",
+    # BMW
+    "328i", "335i", "528i", "535i", "X3", "X5", "740i", "750i",
+    # Mercedes
+    "C300", "E350", "S550", "GLK", "ML350",
+    # Audi
+    "A4", "A6", "A8", "Q5", "Q7", "A5",
     # Nissan
     "Altima", "Maxima", "Murano", "Rogue", "Sentra",
     # Toyota
@@ -28,7 +39,7 @@ keywords = [
     # Chrysler
     "300", "Town", "Sebring", "200",
     # Jeep
-    "Wrangler", "Compass", 
+    "Wrangler", "Compass", "Grand%20Cherokee",
     # Lincoln
     "MKZ", "MKS", "MKX",
     # Jaguar
@@ -38,7 +49,7 @@ keywords = [
     # Mini
     "Cooper", "Countryman",
     # Lexus
-    "IS 250", "IS250", "GS 350", "GS350", "LS 460", "LS460",
+    "IS 250", "IS250", "GS 350", "GS350", "LS 460", "LS460", "RX350", "RX%20350",
     # VW
     "CC", "Phaeton", "Beetle", "Passat", "Golf", "Jetta", "Tiguan", "Touareg"
 ]

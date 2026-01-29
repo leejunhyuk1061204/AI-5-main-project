@@ -151,8 +151,9 @@ public class TripService {
                                     "time", log.getTime().toString(),
                                     "rpm", log.getRpm(),
                                     "speed", log.getSpeed(),
-                                    "coolantTemp", log.getCoolantTemp() != null ? log.getCoolantTemp() : 0.0,
-                                    "engineLoad", log.getEngineLoad() != null ? log.getEngineLoad() : 0.0))
+                                    "coolant", log.getCoolantTemp() != null ? log.getCoolantTemp() : 0.0,
+                                    "load", log.getEngineLoad() != null ? log.getEngineLoad() : 0.0,
+                                    "voltage", log.getVoltage() != null ? log.getVoltage() : 0.0))
                                     .collect(Collectors.toList()));
 
                     kr.co.himedia.dto.ai.UnifiedDiagnosisRequestDto requestDto = kr.co.himedia.dto.ai.UnifiedDiagnosisRequestDto
@@ -162,7 +163,8 @@ public class TripService {
                             .lstmAnalysis(lstmInput)
                             .build();
 
-                    aiDiagnosisService.requestUnifiedDiagnosisAsync(requestDto);
+                    aiDiagnosisService.requestUnifiedDiagnosis(requestDto, null, null,
+                            kr.co.himedia.entity.DiagSession.DiagTriggerType.AUTO);
                     log.info("Successfully triggered auto diagnosis for trip: {}", tripId);
                 } catch (Exception e) {
                     log.error("Auto diagnosis trigger failed for trip: {}", tripId, e);
