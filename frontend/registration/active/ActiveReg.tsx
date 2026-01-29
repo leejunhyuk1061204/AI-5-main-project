@@ -97,8 +97,7 @@ export default function ActiveReg({ navigation }: any) {
                 {/* Main Visual Section */}
                 <View className="flex-col w-full py-6 items-center justify-center relative overflow-hidden">
                     <View className="relative w-full max-w-[340px] aspect-[4/3] rounded-2xl bg-surface-dark/50 border border-white/10 flex items-center justify-center overflow-hidden shadow-2xl">
-                        {/* Tech Grid Background (Simplified with CSS-like overlay) */}
-                        <View className="absolute inset-0 opacity-[0.1] bg-primary/5" />
+
 
                         {/* Background Image */}
                         <ImageBackground
