@@ -5,6 +5,7 @@ import api from './axios';
  */
 export const getManufacturers = async (): Promise<string[]> => {
     const response = await api.get('/api/v1/master/manufacturers');
+    console.log('[MasterApi] getManufacturers response:', response.data);
     return response.data.data;
 };
 

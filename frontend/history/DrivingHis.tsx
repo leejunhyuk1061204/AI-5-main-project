@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Platform, Dimensions, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -23,15 +23,58 @@ export default function DrivingHis() {
     const navigation = useNavigation();
     const [trips, setTrips] = useState<TripSummary[]>([]);
     const [loading, setLoading] = useState(true);
-    const [stats, setStats] = useState({
-        totalDistance: 0,
-        avgScore: 0,
-        avgFuelEff: 0,
-        safetyRate: 0 // Simply using avgScore as safety rate for now
-    });
 
-    // Weekly Graph Data (Mon-Sun)
-    const [weeklyData, setWeeklyData] = useState<number[]>(Array(7).fill(0));
+    // Derived State using useMemo
+    const stats = useMemo(() => {
+        if (trips.length === 0) {
+            return { totalDistance: 0, avgScore: 0, avgFuelEff: 0, safetyRate: 0 };
+        }
+
+        const totalDist = trips.reduce((acc, cur) => acc + (cur.distance || 0), 0);
+        const totalScore = trips.reduce((acc, cur) => acc + (cur.driveScore || 0), 0);
+        const totalFuel = trips.reduce((acc, cur) => acc + (cur.fuelConsumed || 0), 0);
+
+        const avgScore = totalScore / trips.length;
+        const avgFuelEff = totalFuel > 0 ? (totalDist / totalFuel) : 0;
+
+        return {
+            totalDistance: totalDist,
+            avgScore: Math.round(avgScore),
+            avgFuelEff: parseFloat(avgFuelEff.toFixed(1)),
+            safetyRate: Math.round(avgScore)
+        };
+    }, [trips]);
+
+    const weeklyData = useMemo(() => {
+        if (trips.length === 0) return Array(7).fill(0);
+
+        const today = new Date();
+        const startOfWeek = new Date(today);
+        const day = startOfWeek.getDay();
+        const diff = startOfWeek.getDate() - day + (day === 0 ? -6 : 1);
+        startOfWeek.setDate(diff);
+        startOfWeek.setHours(0, 0, 0, 0);
+
+        const endOfWeek = new Date(startOfWeek);
+        endOfWeek.setDate(startOfWeek.getDate() + 6);
+        endOfWeek.setHours(23, 59, 59, 999);
+
+        const dailyScores = Array(7).fill({ sum: 0, count: 0 });
+
+        trips.forEach(trip => {
+            const tripDate = new Date(trip.startTime);
+            if (tripDate >= startOfWeek && tripDate <= endOfWeek) {
+                let dayIdx = tripDate.getDay() - 1;
+                if (dayIdx === -1) dayIdx = 6;
+                dailyScores[dayIdx] = {
+                    sum: dailyScores[dayIdx].sum + trip.driveScore,
+                    count: dailyScores[dayIdx].count + 1
+                };
+            }
+        });
+
+        return dailyScores.map(d => d.count > 0 ? d.sum / d.count : 0);
+    }, [trips]);
 
     useEffect(() => {
         loadTrips();
@@ -45,7 +88,9 @@ export default function DrivingHis() {
                 // Fetch trips for ONLY the primary vehicle
                 const response = await tripApi.getTrips(vehicle.vehicleId);
                 if (response.success && response.data) {
-                    processTrips(response.data);
+                    // Sort by date desc
+                    const sorted = [...response.data].sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
+                    setTrips(sorted);
                 }
             } else {
                 // Handle no primary vehicle
@@ -57,57 +102,8 @@ export default function DrivingHis() {
         }
     };
 
-    const processTrips = (data: TripSummary[]) => {
-        if (data.length === 0) {
-            setTrips([]);
-            return;
-        }
+    // Removed processTrips, logic moved to useMemo
 
-        // Sort by date desc
-        const sorted = [...data].sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
-        setTrips(sorted);
-
-        // Calculate Totals
-        const totalDist = data.reduce((acc, cur) => acc + (cur.distance || 0), 0);
-        const totalScore = data.reduce((acc, cur) => acc + (cur.driveScore || 0), 0);
-        const totalFuel = data.reduce((acc, cur) => acc + (cur.fuelConsumed || 0), 0);
-
-        const avgScore = totalScore / data.length;
-        const avgFuelEff = totalFuel > 0 ? (totalDist / totalFuel) : 0;
-
-        setStats({
-            totalDistance: totalDist,
-            avgScore: Math.round(avgScore),
-            avgFuelEff: parseFloat(avgFuelEff.toFixed(1)),
-            safetyRate: Math.round(avgScore) // Using score as safety percentage
-        });
-
-        // Process Weekly Data
-        const today = new Date();
-        const monday = new Date(today);
-        monday.setDate(today.getDate() - today.getDay() + 1); // Get Monday
-        monday.setHours(0, 0, 0, 0);
-
-        const dailyScores = Array(7).fill({ sum: 0, count: 0 });
-
-        data.forEach(trip => {
-            const tripDate = new Date(trip.startTime);
-            // Check if trip is within this week (roughly)
-            // Ideally should check correctly against week start
-            // For simplicity, mapping day of week (0=Sun, 1=Mon...)
-            let dayIdx = tripDate.getDay() - 1;
-            if (dayIdx === -1) dayIdx = 6; // Sun is 6
-
-            // Accumulate
-            dailyScores[dayIdx] = {
-                sum: dailyScores[dayIdx].sum + trip.driveScore,
-                count: dailyScores[dayIdx].count + 1
-            };
-        });
-
-        const chartData = dailyScores.map(d => d.count > 0 ? d.sum / d.count : 0); // Default to 0 if no data
-        setWeeklyData(chartData);
-    };
 
     // Calculate score color
     const getScoreColor = (score: number) => {
@@ -118,18 +114,18 @@ export default function DrivingHis() {
 
     if (loading) {
         return (
-            <SafeAreaView className="flex-1 bg-[#10151A] items-center justify-center">
+            <SafeAreaView className="flex-1 bg-background-dark items-center justify-center">
                 <ActivityIndicator size="large" color="#0d7ff2" />
             </SafeAreaView>
         );
     }
 
     return (
-        <SafeAreaView className="flex-1 bg-[#10151A]">
+        <SafeAreaView className="flex-1 bg-background-dark">
             <StatusBar style="light" />
 
             {/* Header */}
-            <View className="flex-row items-center justify-between px-4 py-3 border-b border-gray-800 bg-[#10151A]/95">
+            <View className="flex-row items-center justify-between px-4 py-3 border-b border-gray-800 bg-background-dark/95">
                 <TouchableOpacity
                     onPress={() => navigation.goBack()}
                     className="w-10 h-10 items-center justify-center rounded-full active:bg-gray-800"
@@ -217,11 +213,11 @@ export default function DrivingHis() {
 
                             {/* Chart Section - Simplified for MVP without full graph library */}
                             {/* Visual representation of weekly safety trend */}
-                            <View className="bg-[#161F29] border border-gray-800 rounded-xl p-5 overflow-hidden">
+                            <View className="bg-surface-dark border border-gray-800 rounded-xl p-5 overflow-hidden">
                                 <View className="flex-row justify-between items-center mb-6">
                                     <Text className="text-white text-base font-bold">주간 안전 지수 변화</Text>
-                                    <View className="bg-[#0d7ff2]/20 border border-[#0d7ff2]/30 px-2 py-1 rounded">
-                                        <Text className="text-xs text-[#0d7ff2]">이번주</Text>
+                                    <View className="bg-primary/20 border border-primary/30 px-2 py-1 rounded">
+                                        <Text className="text-xs text-primary">이번주</Text>
                                     </View>
                                 </View>
 
@@ -256,26 +252,26 @@ export default function DrivingHis() {
                                 {/* List Mapping */}
                                 <View className="gap-3">
                                     {trips.slice(0, 5).map((trip, index) => (
-                                        <View key={index} className="bg-[#161F29] rounded-xl border border-[#0d7ff2]/30 p-4 relative overflow-hidden">
+                                        <View key={index} className="bg-surface-dark rounded-xl border border-primary/30 p-4 relative overflow-hidden">
                                             <View className="flex-row justify-between items-center mb-4">
                                                 <View className="flex-row items-center gap-3">
-                                                    <View className="bg-[#0d7ff2]/10 p-2 rounded-full border border-[#0d7ff2]/20">
+                                                    <View className="bg-primary/10 p-2 rounded-full border border-primary/20">
                                                         <MaterialIcons name="commute" size={24} color="#0d7ff2" />
                                                     </View>
                                                     <Text className="text-white font-bold text-lg">{formatDate(trip.startTime)}</Text>
                                                 </View>
-                                                <View className="flex-row items-center gap-1 bg-gray-800/50 px-2 py-1 rounded border border-gray-700">
-                                                    <View className="w-2 h-2 rounded-full bg-[#0bda5b]" style={{ shadowColor: '#0bda5b', shadowOpacity: 0.5, shadowRadius: 5 }} />
+                                                <View className="flex-row items-center gap-1 bg-surface-highlight/50 px-2 py-1 rounded border border-gray-700">
+                                                    <View className="w-2 h-2 rounded-full bg-success" style={{ shadowColor: '#0bda5b', shadowOpacity: 0.5, shadowRadius: 5 }} />
                                                     <Text className="text-xs font-medium text-gray-300">{trip.driveScore}점</Text>
                                                 </View>
                                             </View>
 
                                             <View className="flex-row flex-wrap gap-3">
-                                                <View className="flex-1 min-w-[45%] bg-[#10151A]/50 p-3 rounded-lg border border-gray-800">
+                                                <View className="flex-1 min-w-[45%] bg-background-dark/50 p-3 rounded-lg border border-gray-800">
                                                     <Text className="text-[10px] text-gray-500 uppercase tracking-wide mb-1">주행 거리</Text>
                                                     <Text className="text-white font-medium text-base">{trip.distance.toFixed(1)} <Text className="text-xs text-gray-400">km</Text></Text>
                                                 </View>
-                                                <View className="flex-1 min-w-[45%] bg-[#10151A]/50 p-3 rounded-lg border border-gray-800">
+                                                <View className="flex-1 min-w-[45%] bg-background-dark/50 p-3 rounded-lg border border-gray-800">
                                                     <Text className="text-[10px] text-gray-500 uppercase tracking-wide mb-1">평균 속도</Text>
                                                     <Text className="text-white font-medium text-base">{trip.averageSpeed.toFixed(0)} <Text className="text-xs text-gray-400">km/h</Text></Text>
                                                 </View>
