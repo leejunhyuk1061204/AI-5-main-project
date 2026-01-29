@@ -1,18 +1,11 @@
-# --- Java & Spring Boot ---
+# ==================================================
+# Java & Spring Boot
+# ==================================================
 HELP.md
 .gradle/
 build/
-!gradle/wrapper/gradle-wrapper.jar
-!**/src/main/resources/ant-static-assets/
-!**/src/test/resources/ant-static-assets/
-!**/src/main/**/build/
-!**/src/test/**/build/
 bin/
-!**/src/main/**/bin/
-!**/src/test/**/bin/
 out/
-!**/src/main/**/out/
-!**/src/test/**/out/
 .settings/
 .classpath
 .project
@@ -24,56 +17,80 @@ out/
 *.ipr
 *.iws
 
-# --- NetBeans ---
+!gradle/wrapper/gradle-wrapper.jar
+!**/src/main/resources/ant-static-assets/
+!**/src/test/resources/ant-static-assets/
+!**/src/main/**/build/
+!**/src/test/**/build/
+!**/src/main/**/bin/
+!**/src/test/**/bin/
+!**/src/main/**/out/
+!**/src/test/**/out/
+
+# ==================================================
+# NetBeans
+# ==================================================
 /nbproject/private/
 /nbbuild/
 /dist/
 /nbdist/
 /.nb-gradle/
 
-# --- Python (FastAPI/AI) ---
+# ==================================================
+# Python (FastAPI / AI)
+# ==================================================
 __pycache__/
 *.py[cod]
 *$py.class
+
 .venv/
 venv/
 ENV/
 env/
 ai_env/
+
 .env
+.env*.local
+
 .pytest_cache/
 
-# --- IDE (IntelliJ, VSCode) ---
+# ==================================================
+# IDE (IntelliJ, VSCode)
+# ==================================================
 .idea/
 .vscode/
 *.swp
 *.swo
 
-# --- Docker ---
+# ==================================================
+# Docker / Logs
+# ==================================================
 .docker/
 logs/
 *.log
 backend/logs/
 
-# --- RAG Data (ZIP/DB ???, JSON ???) ---
+# ==================================================
+# RAG / Data (Large or Generated)
+# ==================================================
 data/postgres/
 data/manuals/zips/
 data/manuals/Sonata_2012/
+data/manuals/parsed/
 data/dtc/*.db
-*.zip
 data/sync_tracker.db
 data/logs/
-data/manuals/parsed/
+*.zip
 
-# --- OS ---
+# ==================================================
+# OS
+# ==================================================
 .DS_Store
 Thumbs.db
 
-# --- Logs ---
-logs/
-*.log
-
-# --- Frontend (React Native/Expo) ---
+# ==================================================
+# Frontend (React Native / Expo)
+# ==================================================
 node_modules/
 .expo/
 dist/
@@ -89,41 +106,44 @@ expo-env.d.ts
 *.key
 *.mobileprovision
 
-# Metro
+# Metro / Debug
 .metro-health-check*
-
-# debug
 npm-debug.*
 yarn-debug.*
 yarn-error.*
 
-# local env files
-.env*.local
-
-# typescript
+# TypeScript
 *.tsbuildinfo
 
-# generated native folders
+# Generated native folders
 frontend/ios/
 frontend/android/
 
-# AI-Agent
+# ==================================================
+# AI-Agent / Docs
+# ==================================================
 GEMINI.md
 brain/
 
+# ==================================================
 # Security & Firebase
+# ==================================================
 **/firebase-service-account.json
 backend/google-services.json
 frontend/google-services.json
 
-# --- AI Large Files (Model, Dataset, Results) ---
+# ==================================================
+# AI Large Files (Models / Weights / Runs / Data)
+# ==================================================
 *.pt
 *.pth
 *.onnx
 *.safetensors
 *.pkl
+
 runs/
 ai/data/
 ai/weights/
 ai/runs/
+
 yolo*.pt
