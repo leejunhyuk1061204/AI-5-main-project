@@ -160,7 +160,7 @@ async def get_smart_visual_diagnosis(
         print(f"[Visual Service] Router 분류: {scene_type.value} (신뢰도: {confidence:.2f})")
         
         # 신뢰도가 낮으면 LLM에게 직접 판단 요청 (Fallback)
-        if confidence < 0.85:
+        if confidence < 0.4:
             print(f"[Visual Service] Router 신뢰도 낮음, LLM Fallback 실행")
             # [Fix] llm_result 먼저 생성 (NameError 방지)
             llm_result = await analyze_general_image(s3_url)
@@ -199,17 +199,33 @@ async def get_smart_visual_diagnosis(
                             lbl = sanitize_confidence(lbl)
                             
                             # BBox Conversion: Ratio (0..1) -> Pixel (w, h)
-                            bbox = lbl.get("bbox", [0, 0, 0, 0])
-                        if image:
-                            width, height = image.size
-                            pixel_bbox = [
-                                int(bbox[0] * width),
-                                int(bbox[1] * height),
-                                int(bbox[2] * width),
-                                int(bbox[3] * height)
-                            ]
-                        else:
-                            pixel_bbox = [0, 0, 0, 0]
+                            # BBox Conversion: Ratio (cx, cy, w, h) -> Pixel (x1, y1, x2, y2)
+                            # LLM은 [cx, cy, w, h] 정규화 좌표를 반환함 (프롬프트 규칙)
+                            raw_bbox = lbl.get("bbox", [0, 0, 0, 0])
+                            
+                            if image and len(raw_bbox) == 4:
+                                width, height = image.size
+                                # 1. Denormalize (Ratio -> Pixel Center/WH)
+                                cx = raw_bbox[0] * width
+                                cy = raw_bbox[1] * height
+                                w = raw_bbox[2] * width
+                                h = raw_bbox[3] * height
+                                
+                                # 2. Center-WH -> Corner-XY
+                                x1 = int(cx - w / 2)
+                                y1 = int(cy - h / 2)
+                                x2 = int(cx + w / 2)
+                                y2 = int(cy + h / 2)
+                                
+                                # 3. Boundary Check
+                                x1 = max(0, x1)
+                                y1 = max(0, y1)
+                                x2 = min(width, x2)
+                                y2 = min(height, y2)
+                                
+                                pixel_bbox = [x1, y1, x2, y2]
+                            else:
+                                pixel_bbox = [0, 0, 0, 0]
 
                         # Schema에 맞는 Dict 생성
                         if sub_type == "ENGINE":
@@ -384,7 +400,7 @@ async def _record_for_active_learning(
     """
     try:
         from ai.app.services.common.active_learning_service import get_active_learning_service
-        from ai.app.services.llm_service import generate_training_labels
+        from ai.app.services.common.llm_service import generate_training_labels
 
         if scene_type == SceneType.SCENE_DASHBOARD:
              # Dashboard는 자체 서비스 내에서 Active Learning을 수행하므로 중복 수집 방지
@@ -405,26 +421,28 @@ async def _record_for_active_learning(
         print(f"[Active Learning] 저신뢰 데이터 감지 ({confidence:.2f} < 0.85). LLM 라벨링 시작...")
         
         # Step 1: Oracle
+        # Step 1: Oracle
         oracle_labels = await generate_training_labels(s3_url, domain)
         status = oracle_labels.get("status")
+
+        # [Rule] Status 기반 필터링 제거 (UX용이므로 학습데이터 선정 기준 아님)
+        # 오직 '라벨이 존재하는가' + '난이도가 적절한가'만 판단
+        
+        labels = oracle_labels.get("labels", [])
+        if not labels:
+            print(f"[Active Learning] 배제: 라벨 없음")
+            return
+
+        # [Rule] 너무 쉬운 데이터(High Confidence)는 이미 잘하므로 수집 제외
+        if confidence > 0.85:
+            return
 
         if status in ["IRRELEVANT", "ERROR"]:
             return
 
-        if status not in ["WARNING", "CRITICAL"]:
-            return
-
-        if not oracle_labels.get("labels"):
-            return
-        
-        # Step 2: Quality Filter
-        if status == "IRRELEVANT" or status == "ERROR" or not oracle_labels.get("labels"):
-            print(f"[Active Learning] 배제: 품질 미달 ({status})")
-            return
-
         # Step 3: Save & Manifest
         al_service = get_active_learning_service()
-        label_key = al_service.save_oracle_label(s3_url, oracle_labels, domain)
+        label_key = al_service.save_oracle_label(s3_url, oracle_labels, domain, confidence=confidence)
         
         if label_key:
             al_service.record_manifest(

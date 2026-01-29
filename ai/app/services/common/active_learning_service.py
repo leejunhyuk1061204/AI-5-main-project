@@ -15,7 +15,7 @@ import os
 import json
 import boto3
 import time
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 class ActiveLearningService:
     _instance = None
@@ -28,7 +28,7 @@ class ActiveLearningService:
             cls._instance.bucket = os.getenv("S3_BUCKET_NAME", "car-sentry-data")
         return cls._instance
 
-    def save_oracle_label(self, s3_url: str, label_data: Dict[str, Any], domain: str, file_suffix: str = "") -> str:
+    def save_oracle_label(self, s3_url: str, label_data: Dict[str, Any], domain: str, file_suffix: str = "", confidence: float = 0.0) -> str:
         """
         LLM이 생성한 정답 라벨(Oracle)을 S3에 저장
         
@@ -57,15 +57,25 @@ class ActiveLearningService:
             key = f"dataset/llm_confirmed/{prefix}/{file_id}{suffix}.json"
             
             # 메타데이터 추가
-            if "source_url" not in label_data:
-                label_data["source_url"] = s3_url
-            label_data["labeled_by"] = "LLM_ORACLE"
+            # [New] 정규화된 학습용 JSON 생성
+            # Policy가 데이터 구조(Schema)를 결정함
+            # [New] 정규화된 학습용 JSON 생성
+            # Policy가 데이터 구조(Schema)를 결정함
+            normalized_data = ActiveLearningPolicy.normalize_for_training(s3_url, label_data, domain, confidence)
+            
+            # [Guard] 필터링 후 유효한 라벨이 하나도 없으면 저장 포기
+            if not normalized_data["labels"]:
+                print(f"[Active Learning] 저장 취소: 유효한 라벨 없음 (Policy Filtered)")
+                return None
+
+            normalized_data["labeled_by"] = "LLM_ORACLE" # 내부 추적용
+
             
             # S3 업로드
             self.s3.put_object(
                 Bucket=self.bucket,
                 Key=key,
-                Body=json.dumps(label_data, ensure_ascii=False, indent=2),
+                Body=json.dumps(normalized_data, ensure_ascii=False, indent=2),
                 ContentType='application/json'
             )
             print(f"[Active Learning] 정답지 저장 완료: {key}")
@@ -106,12 +116,12 @@ class ActiveLearningService:
             else:
                 add_visual_entry(
                     original_url=s3_url,
-                    category=category,
+                    domain=domain if domain else category.lower(), # category가 domain 역할 (engine 등)
                     label_key=label_key,
-                    status=status,
-                    analysis_type=analysis_type,
-                    detections=detections,
-                    confidence=confidence
+                    collector="LLM_ORACLE" if analysis_type == "LLM_ORACLE" else "YOLO_HIGH_CONF",
+                    confidence=confidence,
+                    label_grade="SILVER",
+                    requires_human_review=True
                 )
             print(f"[Manifest] 기록 완료 ({domain}): {s3_url}")
             
@@ -168,6 +178,75 @@ class ActiveLearningPolicy:
                 return True
                 
         return False
+
+    @staticmethod
+    def estimate_quality(bbox: list) -> float:
+        """
+        [Heuristic] BBox 품질 추정 (Confidence Score)
+        - 너무 작으면 불확실(0.4), 적당하면 보통(0.6), 크면 확실(0.7)
+        - LLM Oracle 상한선은 0.7로 제한 (Human=1.0)
+        """
+        if not bbox or len(bbox) != 4:
+            return 0.0
+        
+        w, h = bbox[2], bbox[3]
+        area = w * h
+        
+        if area < 0.01: # 1% 미만 (매우 작음)
+            return 0.4
+        if area < 0.1:  # 10% 미만 (보통)
+            return 0.6
+        return 0.7     # 큼 (확실)
+
+    @staticmethod
+    def normalize_for_training(s3_url: str, llm_labels: dict, domain: str, confidence: float = 0.0) -> dict:
+        """
+        [Policy] LLM 출력 결과 → Rich Label Schema (Weak Label v2)
+        """
+        annotations = []
+        raw_labels = llm_labels.get("labels", [])
+        
+        for lbl in raw_labels:
+            bbox = lbl.get("bbox", [0, 0, 0, 0])
+             
+            # [Safety Net] Hard Rule Filter
+            if len(bbox) != 4: continue
+            area = bbox[2] * bbox[3]
+            if area > 0.7 or area < 0.001: continue
+            if not (0.0 <= bbox[0] <= 1.0): continue
+
+            # Quality 추정
+            quality_score = ActiveLearningPolicy.estimate_quality(bbox)
+
+            annotations.append({
+                "class": lbl.get("class", "Unknown"),
+                "bbox": bbox,
+                "label_source": "LLM_ORACLE",
+                "label_quality": quality_score,
+                "verification": {
+                    "status": "UNVERIFIED",
+                    "verified_by": None,
+                    "verified_at": None
+                }
+            })
+            
+        return {
+            "schema_version": "al_v2",
+            "asset": {
+                "type": "image",
+                "url": s3_url
+            },
+            "domain": domain,
+            "labels": annotations,
+            "collection_context": {
+                "trigger": "LOW_CONFIDENCE",
+                "analysis_type": "LLM_FALLBACK",
+                "model_confidence": confidence
+            },
+            "timestamps": {
+                "collected_at": time.strftime("%Y-%m-%dT%H:%M:%SZ")
+            }
+        }
 
 
 # 전역 인스턴스 접근 함수
