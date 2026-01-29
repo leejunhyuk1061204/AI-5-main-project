@@ -22,8 +22,8 @@ YOLO로 10종 경고등을 감지하고, LLM으로 의미와 조치 사항을 �
 """
 from typing import List, Optional, Union, Dict, Any
 from PIL import Image
-from ai.app.services.llm_service import analyze_general_image, interpret_dashboard_warnings
-from ai.app.services.router_service import CONFIDENCE_THRESHOLD
+from ai.app.services.common.llm_service import analyze_general_image, interpret_dashboard_warnings
+from ai.app.services.visual.router_service import CONFIDENCE_THRESHOLD
 
 FAST_PATH_YOLO_CONF = 0.85  # 이 값 이상이면서 NORMAL이면 LLM 건너뜀
 
@@ -43,7 +43,7 @@ DASHBOARD_CLASSES = {
     "SRS-Airbag": {"severity": "CRITICAL", "color": "RED", "category": "SAFETY", "description": "에어백 시스템 이상"},
 }
 
-from ai.app.services.yolo_utils import normalize_bbox
+from ai.app.services.visual.yolo_utils import normalize_bbox
 
 
 async def run_dashboard_yolo(
@@ -68,11 +68,7 @@ async def run_dashboard_yolo(
                 bbox = box.xywh[0].tolist()
                 label_info = DASHBOARD_CLASSES.get(label_name, {})
 
-                cx, cy, w, h = box.xywh[0].tolist()
-                x1 = int(cx - w / 2)
-                y1 = int(cy - h / 2)
-                x2 = int(cx + w / 2)
-                y2 = int(cy + h / 2)
+                x1, y1, x2, y2 = [int(v) for v in box.xyxy[0].tolist()]
                 
                 detections.append({
                     "label": label_name,
@@ -146,7 +142,7 @@ async def analyze_dashboard_image(
         fallback_detections = []
         if status in ["WARNING", "CRITICAL"]:
             print(f"[Dashboard] YOLO Miss detected (Status: {status}). Requesting LLM Labeling...")
-            from ai.app.services.llm_service import generate_training_labels
+            from ai.app.services.common.llm_service import generate_training_labels
             label_result = await generate_training_labels(s3_url, "dashboard")
             
             for lbl in label_result.get("labels", []):
@@ -158,7 +154,7 @@ async def analyze_dashboard_image(
 
                 # [Active Learning] YOLO는 놓쳤지만 LLM이 찾은 경우 -> 매우 귀중한 '학습 데이터'로 기록
                 try:
-                    from ai.app.services.active_learning_service import get_active_learning_service
+                    from ai.app.services.common.active_learning_service import get_active_learning_service
                     al_service = get_active_learning_service()
                     
                     # 이미 위에서 generate_training_labels 결과를 label_result로 가지고 있음
@@ -276,8 +272,8 @@ async def analyze_dashboard_image(
     # max_confidence가 0.85 미만이고, 0보다는 큰 경우 (완전 실패는 아님)
     if detections and max_confidence < FAST_PATH_YOLO_CONF: 
          try:
-             from ai.app.services.active_learning_service import get_active_learning_service
-             from ai.app.services.llm_service import generate_training_labels
+             from ai.app.services.common.active_learning_service import get_active_learning_service
+             from ai.app.services.common.llm_service import generate_training_labels
              
              al_service = get_active_learning_service()
              print(f"[Dashboard] Active Learning 대상 감지 (Conf: {max_confidence})")

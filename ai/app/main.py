@@ -66,7 +66,7 @@ def load_ast_model():
 def load_router_model():
     """MobileNetV3-Small 라우터 모델 로드"""
     print("[Model] Loading Router Model (MobileNetV3-Small)...")
-    from ai.app.services.router_service import RouterService
+    from ai.app.services.visual.router_service import RouterService
     
     model_path = os.path.join("ai", "weights", "router", "best.pt")
     router = RouterService(model_path)
@@ -154,7 +154,7 @@ def load_tire_yolo_model():
 def load_anomaly_detector():
     """PatchCore 엔진룸 이상 탐지 모델 로드"""
     print("[Model] Loading Anomaly Detector (PatchCore)...")
-    from ai.app.services.anomaly_service import AnomalyDetector
+    from ai.app.services.visual.domains.engine.engine_anomaly_service import AnomalyDetector
     return AnomalyDetector()
 
 

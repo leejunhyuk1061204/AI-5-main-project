@@ -24,11 +24,13 @@ import base64
 from PIL import Image
 from urllib.parse import urlparse
 
-from ai.app.services.router_service import RouterService, SceneType, get_router_service
-from ai.app.services.llm_service import analyze_general_image
-from ai.app.services.dashboard_service import analyze_dashboard_image
-from ai.app.services.exterior_service import analyze_exterior_image
-from ai.app.services.tire_service import analyze_tire_image
+from ai.app.services.visual.router_service import RouterService, SceneType, get_router_service
+from ai.app.services.visual.router_service import RouterService, SceneType, get_router_service
+from ai.app.services.common.llm_service import analyze_general_image, generate_training_labels
+from ai.app.services.common.llm_guard import validate_llm_label_result, sanitize_confidence
+from ai.app.services.visual.domains.dashboard_service import analyze_dashboard_image
+from ai.app.services.visual.domains.exterior_service import analyze_exterior_image
+from ai.app.services.visual.domains.tire_service import analyze_tire_image
 
 # =============================================================================
 # SSRF 방지: 허용된 도메인 (Allow-list)
@@ -174,18 +176,139 @@ async def get_smart_visual_diagnosis(
                 }
 
             # Mapping sub_type (category) to SceneType string
-            # llm_service에서 이미 ETC로 분류했겠지만 안전장치
             sub_type = llm_result.category
-            if sub_type in ["DASHBOARD", "EXTERIOR", "TIRE", "ENGINE"]:
-                mapped_type = f"SCENE_{sub_type}"
-            else:
-                mapped_type = "SCENE_ETC"
+            mapped_type = f"SCENE_{sub_type}" if sub_type in ["DASHBOARD", "EXTERIOR", "TIRE", "ENGINE"] else "SCENE_ETC"
+            
+            # [Fix] Standardize Response Format (Schema Mapping)
+            standardized_data = llm_result.data
+            
+            # Additional: Generate BBoxes if domain allows
+            llm_detections = []
+            if sub_type in ["ENGINE", "DASHBOARD", "EXTERIOR", "TIRE"]:
+                try:
+                    print(f"[Visual Service] LLM Fallback: Requesting BBox for {sub_type}...")
+                    label_result = await generate_training_labels(s3_url, sub_type.lower())
+                    
+                    # [Guard] Validate LLM Result
+                    if not validate_llm_label_result(label_result):
+                        print(f"[Visual Service] LLM Label Generation Failed or Invalid: {label_result.get('status')}")
+                        # Skip processing, llm_detections remains []
+                    else:
+                        for lbl in label_result.get("labels", []):
+                            # [Sanitize] Add source check
+                            lbl = sanitize_confidence(lbl)
+                            
+                            # BBox Conversion: Ratio (0..1) -> Pixel (w, h)
+                            bbox = lbl.get("bbox", [0, 0, 0, 0])
+                        if image:
+                            width, height = image.size
+                            pixel_bbox = [
+                                int(bbox[0] * width),
+                                int(bbox[1] * height),
+                                int(bbox[2] * width),
+                                int(bbox[3] * height)
+                            ]
+                        else:
+                            pixel_bbox = [0, 0, 0, 0]
+
+                        # Schema에 맞는 Dict 생성
+                        if sub_type == "ENGINE":
+                            llm_detections.append({
+                                "part_name": lbl.get("class", "Unknown"),
+                                "bbox": pixel_bbox,
+                                "is_anomaly": True, # LLM이 찾은건 보통 문제있는 것일 확률 높음 (가정)
+                                "anomaly_score": 0.5,
+                                "threshold": 0.5,
+                                "defect_label": "LLM_Detected",
+                                "severity": "WARNING",
+                                "description": "AI 정밀 분석으로 식별된 부품입니다."
+                            })
+                        elif sub_type == "DASHBOARD":
+                            llm_detections.append({
+                                "label": lbl.get("class", "Unknown"),
+                                "color_severity": "YELLOW",
+                                "confidence": 0.9,
+                                "bbox": pixel_bbox,
+                                "is_blinking": None,
+                                "meaning": "LLM 감지"
+                            })
+                        elif sub_type == "EXTERIOR":
+                            llm_detections.append({
+                                "part": "차체", 
+                                "damage_type": lbl.get("class", "Destruction"),
+                                "severity": "WARNING",
+                                "confidence": 0.9,
+                                "bbox": pixel_bbox
+                            })
+                        elif sub_type == "TIRE":
+                            # Note: TireData schema uses flat fields, but if there's a list for issues:
+                            # TireData usually doesn't output a list of bboxes in 'data' root.
+                            # But we can try to fit it if Schema allows.
+                            pass
+                            
+                except Exception as e:
+                    print(f"[Visual Service] LLM BBox Gen Error: {e}")
+
+            # [Logic] analysis_status 결정
+            # - 기본적으로 LLM Fallback은 'PARTIAL' (YOLO 미사용)로 볼 수도 있으나, 
+            # - BBox를 성공적으로 찾았거나(detections > 0), 
+            # - 애초에 문제가 없다고 판단된 경우(damage_found=False / normal)는 'SUCCESS'로 표기 가능.
+            # - "손상 있음(damage=True)인데 박스 없음(detections=0)"인 경우만 'PARTIAL' (사용자 요청 사항)
+            
+            status_val = "SUCCESS"
+            has_damage = (llm_result.status != "NORMAL")
+            has_detections = (len(llm_detections) > 0)
+            
+            if has_damage and not has_detections:
+                status_val = "PARTIAL"
+
+            if sub_type == "ENGINE":
+                standardized_data = {
+                    "analysis_status": status_val,
+                    "vehicle_type": "UNKNOWN",
+                    "parts_detected": len(llm_detections),
+                    "anomalies_found": len(llm_detections),
+                    "results": llm_detections 
+                }
+            elif sub_type == "DASHBOARD":
+                standardized_data = {
+                    "analysis_status": status_val,
+                    "vehicle_context": {"inferred_model": None, "dashboard_type": None},
+                    "detected_count": len(llm_detections),
+                    "detections": llm_detections,
+                    "integrated_analysis": {
+                        "severity_score": 5 if llm_detections else 0,
+                        "description": llm_result.data.get("description", "분석 불가"),
+                        "short_term_risk": None
+                    },
+                    "recommendation": {
+                        "primary_action": llm_result.data.get("recommendation", "점검 권장")
+                    }
+                }
+            elif sub_type == "EXTERIOR":
+                standardized_data = {
+                    "analysis_status": status_val,
+                    "damage_found": (llm_result.status != "NORMAL") or (len(llm_detections) > 0),
+                    "detections": llm_detections,
+                    "description": llm_result.data.get("description", ""),
+                    "repair_estimate": llm_result.data.get("recommendation", "")
+                }
+            elif sub_type == "TIRE":
+                standardized_data = {
+                    "analysis_status": status_val,
+                    "wear_status": "UNKNOWN",
+                    "wear_level_pct": None,
+                    "critical_issues": [],
+                    "description": llm_result.data.get("description", ""),
+                    "recommendation": llm_result.data.get("recommendation", ""),
+                    "is_replacement_needed": False
+                }
 
             return {
                 "status": llm_result.status,
                 "analysis_type": mapped_type,
                 "category": sub_type,
-                "data": llm_result.data
+                "data": standardized_data
             }
             
     except Exception as e:
@@ -198,7 +321,7 @@ async def get_smart_visual_diagnosis(
     try:
         if scene_type == SceneType.SCENE_ENGINE:
             # ENGINE: 기존 EngineAnomalyPipeline 사용
-            from ai.app.services.engine_anomaly_service import EngineAnomalyPipeline
+            from ai.app.services.visual.domains.engine.engine_anomaly_service import EngineAnomalyPipeline
             
             pipeline = EngineAnomalyPipeline(anomaly_detector=models.get("anomaly_detector"))
             engine_yolo = models.get("engine_yolo")
@@ -260,7 +383,7 @@ async def _record_for_active_learning(
     [Active Learning] 중앙 집중식 서비스 사용
     """
     try:
-        from ai.app.services.active_learning_service import get_active_learning_service
+        from ai.app.services.common.active_learning_service import get_active_learning_service
         from ai.app.services.llm_service import generate_training_labels
 
         if scene_type == SceneType.SCENE_DASHBOARD:

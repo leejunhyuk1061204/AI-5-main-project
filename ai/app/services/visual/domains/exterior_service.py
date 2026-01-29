@@ -21,9 +21,9 @@
 """
 from typing import List, Optional, Dict, Tuple, Union, Any
 from PIL import Image
-from ai.app.services.llm_service import analyze_general_image, generate_exterior_report
-from ai.app.services.router_service import CONFIDENCE_THRESHOLD
-from ai.app.services.yolo_utils import normalize_bbox
+from ai.app.services.common.llm_service import analyze_general_image, generate_exterior_report
+from ai.app.services.visual.router_service import CONFIDENCE_THRESHOLD
+from ai.app.services.visual.yolo_utils import normalize_bbox
 
 # =============================================================================
 # Reliability Thresholds
@@ -117,7 +117,7 @@ async def run_exterior_yolo(
                     "damage_type": info["damage"],
                     "severity": info["severity"],
                     "confidence": round(float(box.conf[0]), 2),
-                    "bbox": [int(v) for v in box.xywh[0].tolist()]
+                    "bbox": [int(v) for v in box.xyxy[0].tolist()]
                 })
 
     except Exception as e:
@@ -176,7 +176,7 @@ async def analyze_exterior_image(
         fallback_detections = []
         if status in ["WARNING", "CRITICAL"]:
             print(f"[Exterior] YOLO Miss detected (Status: {status}). Requesting LLM Labeling...")
-            from ai.app.services.llm_service import generate_training_labels
+            from ai.app.services.common.llm_service import generate_training_labels
             label_result = await generate_training_labels(s3_url, "exterior")
             
             for lbl in label_result.get("labels", []):
