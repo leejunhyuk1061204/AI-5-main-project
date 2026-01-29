@@ -559,7 +559,9 @@ public class AiDiagnosisService {
                             return aiClient.callAnomalyDetection(Map.of("time_series", chunk));
                         } catch (InterruptedException e) {
                             Thread.currentThread().interrupt();
-                            return Map.of("error", "Interrupted");
+                            Map<String, Object> errorMap = new HashMap<>();
+                            errorMap.put("error", "Interrupted");
+                            return errorMap;
                         } finally {
                             globalAnomalySemaphore.release(); // 완료 후 해제
                         }
