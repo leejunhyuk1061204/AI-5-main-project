@@ -35,8 +35,10 @@ from ai.app.services.visual.yolo_utils import convert_xywh_to_xyxy
 from ai.app.services.visual.utils.crop_service import crop_detected_parts
 from ai.app.services.visual.domains.engine.anomaly_service import AnomalyDetector
 from ai.app.services.visual.utils.heatmap_service import generate_heatmap_overlay
+from ai.app.services.visual.utils.heatmap_service import generate_heatmap_overlay
 from ai.app.services.common.llm_service import suggest_anomaly_label_with_base64, analyze_general_image
 from ai.app.schemas.visual_schema import VisualResponse
+from ai.app.services.common.active_learning_service import get_active_learning_policy
 
 # =============================================================================
 # Configuration
@@ -306,40 +308,51 @@ class EngineAnomalyPipeline:
                      # LLM도 이상 동의 시, 또는 LLM이 Mock 모드일 때는 PatchCore의 감지 결과(True)를 그대로 유지합니다.
                      pass
                 
-                # [Active Learning] 엔진룸 이상탐지 정답(Oracle) S3 저장
-                try:
-                    import boto3
-                    s3 = boto3.client('s3')
-                    bucket = os.getenv("S3_BUCKET_NAME", "car-sentry-data")
-                    # 부품별 고유 ID 생성 (이미지ID + 부품명)
-                    # 파일 ID 추출: s3_url이 base64인 경우 처리
-                    if s3_url.startswith("data:"):
-                        import hashlib
-                        file_id = hashlib.md5(s3_url.encode()).hexdigest()[:10]
-                    else:
-                        file_id = os.path.basename(s3_url).split('.')[0]
+                # [Active Learning] 엔진룸 이상탐지 정답(Oracle) S3 저장 (Filter Applied)
+                policy = get_active_learning_policy()
+                should_save = policy.should_collect(
+                    status=llm_res.get("severity", "WARNING"),
+                    confidence=confidence, # YOLO Confidence
+                    labels=[llm_res.get("defect_label")],
+                    is_llm_fallback=True
+                )
+
+                if should_save:
+                    try:
+                        import boto3
+                        s3 = boto3.client('s3')
+                        bucket = os.getenv("S3_BUCKET_NAME", "car-sentry-data")
+                        # 부품별 고유 ID 생성 (이미지ID + 부품명)
+                        # 파일 ID 추출: s3_url이 base64인 경우 처리
+                        if s3_url.startswith("data:"):
+                            import hashlib
+                            file_id = hashlib.md5(s3_url.encode()).hexdigest()[:10]
+                        else:
+                            file_id = os.path.basename(s3_url).split('.')[0]
+                            
+                        label_key = f"dataset/engine/llm_confirmed/{file_id}_{part_name}.json"
                         
-                    label_key = f"dataset/engine/llm_confirmed/{file_id}_{part_name}.json"
-                    
-                    oracle_data = {
-                        "domain": "engine",
-                        "source_url": s3_url,
-                        "part_name": part_name,
-                        "bbox": bbox,
-                        "labels": [{"class": part_name, "bbox": bbox}], # YOLO 재학습용
-                        "anomaly_label": llm_res.get("defect_label"),   # Anomaly 분류 재학습용
-                        "status": llm_res.get("severity")
-                    }
-                    
-                    s3.put_object(
-                        Bucket=bucket,
-                        Key=label_key,
-                        Body=json.dumps(oracle_data, ensure_ascii=False, indent=2),
-                        ContentType='application/json'
-                    )
-                    print(f"[Active Learning] 엔진 부품 정답지 저장 완료: {label_key}")
-                except Exception as e:
-                    print(f"[Active Learning Engine] 저장 실패: {e}")
+                        oracle_data = {
+                            "domain": "engine",
+                            "source_url": s3_url,
+                            "part_name": part_name,
+                            "bbox": bbox,
+                            "labels": [{"class": part_name, "bbox": bbox}], # YOLO 재학습용
+                            "anomaly_label": llm_res.get("defect_label"),   # Anomaly 분류 재학습용
+                            "status": llm_res.get("severity")
+                        }
+                        
+                        s3.put_object(
+                            Bucket=bucket,
+                            Key=label_key,
+                            Body=json.dumps(oracle_data, ensure_ascii=False, indent=2),
+                            ContentType='application/json'
+                        )
+                        print(f"[Active Learning] 엔진 부품 정답지 저장 완료: {label_key}")
+                    except Exception as e:
+                        print(f"[Active Learning Engine] 저장 실패: {e}")
+                else:
+                    print(f"[Active Learning] Skip saving {part_name} - Policy Rejected (Normal or Low Quality)")
 
             else:
                 # [Fast Path] 정상이고 확신도가 높으면(Score가 매우 낮으면) LLM 스킵
@@ -366,6 +379,13 @@ class EngineAnomalyPipeline:
                         part_name=part_name,
                         anomaly_score=anomaly_result.score
                     )
+
+            # [Consistency Enforce] 최종 판정이 정상이면, LLM이 뭐라고 했든 결함 필드는 '정상'으로 통일
+            if not final_is_anomaly:
+                llm_res["defect_category"] = "NORMAL"
+                llm_res["defect_label"] = "NORMAL"
+                llm_res["severity"] = "NORMAL"
+                # description/recommendation은 LLM의 것을 유지 (상세 설명 용도)
 
             return PartAnalysisResult(
                 part_name=part_name,

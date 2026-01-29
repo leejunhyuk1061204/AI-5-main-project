@@ -186,6 +186,18 @@ async def get_tire_analysis_from_llm(s3_url: str) -> Dict[str, Any]:
         # LLM 호출
         result = await call_openai_vision(s3_url, PROMPT)
         
+        # [Domain Validation] LLM이 타이어가 아니라고 판단한 경우
+        if result.get("status") == "IRRELEVANT":
+            print(f"[Tire LLM] 이미지 도메인 불일치 (Not a Tire)")
+            return {
+                "wear_level_pct": None,
+                "wear_status": "IRRELEVANT",
+                "critical_issues": None,
+                "description": "타이어/휠 이미지가 아닙니다.",
+                "recommendation": "타이어가 잘 보이는 정면 사진을 업로드해주세요.",
+                "is_replacement_needed": False
+            }
+
         # critical_issues가 빈 배열이면 null로 변환
         if result.get("critical_issues") == []:
             result["critical_issues"] = None
