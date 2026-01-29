@@ -13,10 +13,10 @@
 - AST 및 LLM 기반 복합 분석 수행
 """
 import os
-from ai.app.services.hertz import process_to_16khz
-from ai.app.services.ast_service import run_ast_inference
-from ai.app.services.llm_service import analyze_audio_with_llm
-from ai.app.services.audio_enhancement import denoise_audio
+from ai.app.services.audio.hertz import process_to_16khz
+from ai.app.services.audio.ast_service import run_ast_inference
+from ai.app.services.common.llm_service import analyze_audio_with_llm
+from ai.app.services.audio.audio_enhancement import denoise_audio
 from ai.app.schemas.audio_schema import AudioResponse, AudioDetail
 import httpx
 import io
@@ -113,7 +113,7 @@ class AudioService:
             )
 
         # 2. 전처리: 16kHz 변환
-        from ai.app.services.hertz import convert_bytes_to_16khz
+        from ai.app.services.audio.hertz import convert_bytes_to_16khz
         audio_buffer = await convert_bytes_to_16khz(audio_bytes)
         
         # 3. 1차 진단: AST 모델
@@ -144,8 +144,8 @@ class AudioService:
         # =================================================================
         if final_result.confidence < 0.85:
             try:
-                from ai.app.services.llm_service import generate_audio_labels
-                from ai.app.services.active_learning_service import get_active_learning_service
+                from ai.app.services.common.llm_service import generate_audio_labels
+                from ai.app.services.common.active_learning_service import get_active_learning_service
 
                 print(f"[Active Learning] 저신뢰 오디오 감지 ({final_result.confidence:.2f}). LLM 라벨링 시작...")
                 
