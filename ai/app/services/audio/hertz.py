@@ -1,8 +1,7 @@
-# app/services/hertz.py
 import librosa
 import soundfile as sf
 import io
-import requests
+import httpx
 
 async def process_to_16khz(audio_input):
     """
@@ -14,13 +13,6 @@ async def process_to_16khz(audio_input):
     # 내부 동기 함수 정의
     def _sync_process(inp):
         try:
-            # URL일 경우 다운로드 (requests는 동기이므로 여기서 처리 ok)
-            if isinstance(inp, str) and inp.startswith("http"):
-                print(f"[hertz.py] S3 URL 감지: 다운로드 시작... ({inp})")
-                response = requests.get(inp)
-                response.raise_for_status()
-                inp = io.BytesIO(response.content)
-
             # 1. Librosa 로드 (Blocking)
             y, sr = librosa.load(inp, sr=16000)
 
@@ -34,6 +26,18 @@ async def process_to_16khz(audio_input):
         except Exception as e:
             print(f"[hertz.py] 리샘플링 중 오류 발생: {e}")
             return None
+
+    # URL일 경우 비동기로 미리 다운로드
+    if isinstance(audio_input, str) and audio_input.startswith("http"):
+        print(f"[hertz.py] S3 URL 감지: 다운로드 시작... ({audio_input})")
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            try:
+                response = await client.get(audio_input)
+                response.raise_for_status()
+                audio_input = io.BytesIO(response.content)
+            except Exception as e:
+                print(f"[hertz.py] 다운로드 실패: {e}")
+                return None
 
     # 별도 스레드에서 실행
     return await loop.run_in_executor(None, _sync_process, audio_input)

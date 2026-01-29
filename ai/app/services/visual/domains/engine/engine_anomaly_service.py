@@ -30,11 +30,12 @@ from dataclasses import dataclass, asdict
 import json
 import os
 
-from ai.app.services.engine_yolo_service import run_yolo_inference
-from ai.app.services.crop_service import crop_detected_parts
-from ai.app.services.anomaly_service import AnomalyDetector
-from ai.app.services.heatmap_service import generate_heatmap_overlay
-from ai.app.services.llm_service import suggest_anomaly_label_with_base64, analyze_general_image
+from ai.app.services.visual.domains.engine.engine_yolo_service import run_yolo_inference
+from ai.app.services.visual.yolo_utils import convert_xywh_to_xyxy
+from ai.app.services.visual.utils.crop_service import crop_detected_parts
+from ai.app.services.visual.domains.engine.anomaly_service import AnomalyDetector
+from ai.app.services.visual.utils.heatmap_service import generate_heatmap_overlay
+from ai.app.services.common.llm_service import suggest_anomaly_label_with_base64, analyze_general_image
 from ai.app.schemas.visual_schema import VisualResponse
 
 # =============================================================================
@@ -74,7 +75,6 @@ class PartAnalysisResult:
     defect_category: str
     description: str
     severity: str
-    recommended_action: str
     recommended_action: str
     # heatmap_base64 removed for optimization
 
@@ -123,7 +123,7 @@ class EngineAnomalyPipeline:
         # 1. 이미지 로드 (전달받은 이미지가 없으면 오류 - visual_service에서 미리 로드되어야 함)
         if image is None or image_bytes is None:
              # 하위 호환성 위해 로드 시도하되, 가급적 visual_service 사용 권장
-             from ai.app.services.visual_service import _safe_load_image
+             from ai.app.services.visual.visual_service import _safe_load_image
              try:
                  image, image_bytes = await _safe_load_image(s3_url)
              except Exception as e:
@@ -143,7 +143,7 @@ class EngineAnomalyPipeline:
             # [보정 로직] Router가 엔진룸으로 잘못 분류했지만 LLM이 계기판으로 판단한 경우
             if hasattr(llm_result, "category") and llm_result.category == "DASHBOARD":
                 print("[Engine Pipeline] 💡 Router Miss detected! Redirecting to Dashboard analysis...")
-                from ai.app.services.dashboard_service import analyze_dashboard_image
+                from ai.app.services.visual.domains.dashboard_service import analyze_dashboard_image
                 return await analyze_dashboard_image(image, s3_url, yolo_model=None)
             
             # [NEW] 만약 상태가 WARNING/CRITICAL인데 results가 비어있다면, LLM에게 강제로 라벨링을 요청
@@ -152,7 +152,7 @@ class EngineAnomalyPipeline:
             
             if status in ["WARNING", "CRITICAL"]:
                 print(f"[Engine] YOLO Miss detected (Status: {status}). Requesting LLM Labeling...")
-                from ai.app.services.llm_service import generate_training_labels
+                from ai.app.services.common.llm_service import generate_training_labels
                 label_result = await generate_training_labels(s3_url, "engine")
                 
                 for lbl in label_result.get("labels", []):
@@ -296,7 +296,8 @@ class EngineAnomalyPipeline:
                 # LLM이 정밀 분석 후 "정상(NORMAL)"이라고 판단하면 이를 존중합니다. (False Positive 방지)
                 # PatchCore는 민감하게 반응할 수 있으므로, LLM의 의미론적 판단을 최종 결과로 사용합니다.
                 # 단, LLM이 연결되지 않아 "Local/Mock" 모드로 동작 중일 때는 PatchCore 결과를 유지해야 합니다.
-                is_mock_analysis = "분석 모드)" in llm_res.get("description_ko", "")
+                # [Fix] 명시적인 'is_mock' 필드 우선 사용, 없으면 문자열 체크 (하위 호환)
+                is_mock_analysis = llm_res.get("is_mock", "분석 모드)" in llm_res.get("description_ko", ""))
                 
                 if (llm_res.get("defect_category") == "NORMAL" or llm_res.get("severity") == "NORMAL") and not is_mock_analysis:
                      print(f"[Engine] Anomaly Detector flagged issue, but LLM classified as NORMAL. Trusting LLM.")
@@ -368,7 +369,7 @@ class EngineAnomalyPipeline:
 
             return PartAnalysisResult(
                 part_name=part_name,
-                bbox=bbox,
+                bbox=convert_xywh_to_xyxy(bbox),
                 confidence=confidence,
                 is_anomaly=final_is_anomaly,  # [Fix] Use final decision
                 anomaly_score=anomaly_result.score,

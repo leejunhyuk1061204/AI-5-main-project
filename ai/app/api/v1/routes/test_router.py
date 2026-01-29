@@ -12,8 +12,8 @@
 """
 from fastapi import APIRouter, UploadFile, File, HTTPException, Request
 from fastapi.responses import JSONResponse
-from ai.app.services.local_service import process_visual_mock, process_audio_mock
-from ai.app.services.router_service import SceneType
+from ai.app.services.common.local_service import process_visual_mock, process_audio_mock
+from ai.app.services.visual.router_service import SceneType
 from ai.app.schemas.visual_schema import VisualResponse, DetectionItem
 from ai.app.schemas.audio_schema import AudioResponse
 from ai.app.schemas.wear_factor import VehicleMetadata, DrivingHabits # 공통 메타데이터는 재사용
@@ -26,7 +26,7 @@ import base64
 import json
 
 # Singleton AnomalyDetector (한 번만 로드)
-from ai.app.services.anomaly_service import AnomalyDetector
+from ai.app.services.visual.domains.engine.engine_anomaly_service import AnomalyDetector
 _anomaly_detector = None
 
 def get_anomaly_detector():
@@ -520,7 +520,7 @@ async def analyze_yolo_local(category: str = "auto", force: Optional[str] = None
         
         try:
             if category == "engine":
-                from ai.app.services.engine_anomaly_service import EngineAnomalyPipeline
+                from ai.app.services.visual.domains.engine.engine_anomaly_service import EngineAnomalyPipeline
                 pipeline = EngineAnomalyPipeline(anomaly_detector=request.app.state.get_anomaly_detector())
                 try:
                     result = await pipeline.analyze(s3_url_mock, image=image, image_bytes=content, yolo_model=model)
@@ -534,17 +534,17 @@ async def analyze_yolo_local(category: str = "auto", force: Optional[str] = None
                     await pipeline.close()
             
             elif category == "dashboard":
-                from ai.app.services.dashboard_service import analyze_dashboard_image
+                from ai.app.services.visual.domains.dashboard_service import analyze_dashboard_image
                 result = await analyze_dashboard_image(image, s3_url_mock, model)
                 return JSONResponse(content=result)
             
             elif category == "tire":
-                from ai.app.services.tire_service import analyze_tire_image
+                from ai.app.services.visual.domains.tire_service import analyze_tire_image
                 result = await analyze_tire_image(image, s3_url_mock, model)
                 return JSONResponse(content=result)
             
             elif category == "exterior":
-                from ai.app.services.exterior_service import analyze_exterior_image
+                from ai.app.services.visual.domains.exterior_service import analyze_exterior_image
                 # 외관은 Unified YOLO 모델 하나만 사용
                 # 위에서 이미 model 변수에 로드됨 (state or local fallback)
                 result = await analyze_exterior_image(image, s3_url_mock, model)

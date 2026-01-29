@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from ai.app.schemas.audio_schema import AudioResponse, AudioRequest
-from ai.app.services.audio_service import AudioService
+from ai.app.services.audio.audio_service import AudioService
 
 # 1. URL: /predict/audio 설정
 router = APIRouter(prefix="/predict", tags=["Audio Analysis"])
