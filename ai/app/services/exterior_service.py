@@ -23,6 +23,7 @@ from typing import List, Optional, Dict, Tuple, Union, Any
 from PIL import Image
 from ai.app.services.llm_service import analyze_general_image, generate_exterior_report
 from ai.app.services.router_service import CONFIDENCE_THRESHOLD
+from ai.app.services.yolo_utils import normalize_bbox
 
 # =============================================================================
 # Reliability Thresholds
@@ -180,12 +181,27 @@ async def analyze_exterior_image(
             
             for lbl in label_result.get("labels", []):
                 # LLM 라벨을 API detection 포맷으로 변환
+                # [Fix] Ratio / Pixel 명시적 구분
+                bbox = lbl.get("bbox", [0,0,0,0])
+                if all(isinstance(v, float) and 0.0 <= v <= 1.0 for v in bbox):
+                    # Ratio -> Pixel 변환
+                    w, h = image.width, image.height
+                    bbox = [
+                        int(bbox[0] * w),
+                        int(bbox[1] * h),
+                        int(bbox[2] * w),
+                        int(bbox[3] * h)
+                    ]
+                else:
+                    # 이미 Pixel 또는 잘못된 값 -> 정수 변환
+                    bbox = [int(v) for v in bbox]
+
                 fallback_detections.append({
                     "part": lbl.get("class", "Unknown"),
                     "damage_type": "파손(LLM감지)",
                     "severity": status,
                     "confidence": 0.9, # LLM 판단 신뢰도
-                    "bbox": lbl.get("bbox", [0,0,0,0]) # [x,y,w,h] (0~1 scale or pixel based depending on prompt)
+                    "bbox": normalize_bbox(lbl["bbox"], image.width, image.height)
                 })
 
         return {

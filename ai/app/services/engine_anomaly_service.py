@@ -75,7 +75,6 @@ class PartAnalysisResult:
     description: str
     severity: str
     recommended_action: str
-    recommended_action: str
     # heatmap_base64 removed for optimization
 
 
@@ -296,7 +295,8 @@ class EngineAnomalyPipeline:
                 # LLM이 정밀 분석 후 "정상(NORMAL)"이라고 판단하면 이를 존중합니다. (False Positive 방지)
                 # PatchCore는 민감하게 반응할 수 있으므로, LLM의 의미론적 판단을 최종 결과로 사용합니다.
                 # 단, LLM이 연결되지 않아 "Local/Mock" 모드로 동작 중일 때는 PatchCore 결과를 유지해야 합니다.
-                is_mock_analysis = "분석 모드)" in llm_res.get("description_ko", "")
+                # [Fix] 명시적인 'is_mock' 필드 우선 사용, 없으면 문자열 체크 (하위 호환)
+                is_mock_analysis = llm_res.get("is_mock", "분석 모드)" in llm_res.get("description_ko", ""))
                 
                 if (llm_res.get("defect_category") == "NORMAL" or llm_res.get("severity") == "NORMAL") and not is_mock_analysis:
                      print(f"[Engine] Anomaly Detector flagged issue, but LLM classified as NORMAL. Trusting LLM.")

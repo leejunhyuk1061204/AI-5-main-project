@@ -25,10 +25,7 @@ from PIL import Image
 from ai.app.services.llm_service import analyze_general_image, interpret_dashboard_warnings
 from ai.app.services.router_service import CONFIDENCE_THRESHOLD
 
-# =============================================================================
-# Reliability Thresholds
-# =============================================================================
-FAST_PATH_THRESHOLD = 0.9  # 이 값 이상이면서 NORMAL이면 LLM 건너뜀
+FAST_PATH_YOLO_CONF = 0.85  # 이 값 이상이면서 NORMAL이면 LLM 건너뜀
 
 # =============================================================================
 # Dashboard 경고등 클래스 정의 (10종)
@@ -45,6 +42,8 @@ DASHBOARD_CLASSES = {
     "Master warning light": {"severity": "WARNING", "color": "YELLOW", "category": "GENERAL", "description": "통합 경고 확인 필요"},
     "SRS-Airbag": {"severity": "CRITICAL", "color": "RED", "category": "SAFETY", "description": "에어백 시스템 이상"},
 }
+
+from ai.app.services.yolo_utils import normalize_bbox
 
 
 async def run_dashboard_yolo(
@@ -68,6 +67,12 @@ async def run_dashboard_yolo(
                 confidence = float(box.conf[0])
                 bbox = box.xywh[0].tolist()
                 label_info = DASHBOARD_CLASSES.get(label_name, {})
+
+                cx, cy, w, h = box.xywh[0].tolist()
+                x1 = int(cx - w / 2)
+                y1 = int(cy - h / 2)
+                x2 = int(cx + w / 2)
+                y2 = int(cy + h / 2)
                 
                 detections.append({
                     "label": label_name,
@@ -75,7 +80,7 @@ async def run_dashboard_yolo(
                     "confidence": round(confidence, 2),
                     "is_blinking": None,  # 이미지로는 점멸 감지 불가
                     "meaning": label_info.get("description", "알 수 없는 경고등"),
-                    "bbox": [int(v) for v in bbox]
+                    "bbox": [x1, y1, x2, y2]
                 })
         
         return detections
@@ -146,13 +151,40 @@ async def analyze_dashboard_image(
             
             for lbl in label_result.get("labels", []):
                 # LLM 라벨을 API detection 포맷으로 변환
+                # [Fix] Ratio / Pixel 명시적 구분
+                bbox = lbl.get("bbox", [0,0,0,0])
+                # normalize_bbox 내부에서 ratio/pixel 판단하여 변환
+                pixel_bbox = normalize_bbox(bbox, image.width, image.height)
+
+                # [Active Learning] YOLO는 놓쳤지만 LLM이 찾은 경우 -> 매우 귀중한 '학습 데이터'로 기록
+                try:
+                    from ai.app.services.active_learning_service import get_active_learning_service
+                    al_service = get_active_learning_service()
+                    
+                    # 이미 위에서 generate_training_labels 결과를 label_result로 가지고 있음
+                    # label_result 구조: {"status":..., "labels": [...]}
+                    
+                    label_key = al_service.save_oracle_label(s3_url, label_result, "dashboard")
+                    if label_key:
+                        al_service.record_manifest(
+                            s3_url=s3_url,
+                            category="DASHBOARD",
+                            label_key=label_key,
+                            status=status,
+                            confidence=0.1, # YOLO는 못 찾았으므로 낮은 신뢰도 부여 (우선순위 상향)
+                            analysis_type="LLM_ORACLE_d_MISS", # YOLO Miss 특수 마킹
+                            domain="visual"
+                        )
+                except Exception as e:
+                    print(f"[Dashboard AL] Miss-detection 기록 실패: {e}")
+
                 fallback_detections.append({
                     "label": lbl.get("class", "Unknown"),
                     "color_severity": "RED" if status == "CRITICAL" else "YELLOW",
-                    "confidence": 0.9,
+                    "confidence": 0.85,
                     "is_blinking": None,
                     "meaning": "AI 정밀 분석으로 감지된 경고등",
-                    "bbox": [int(v * 100) for v in lbl.get("bbox", [0,0,0,0])] if all(isinstance(x, float) and x <= 1.0 for x in lbl.get("bbox", [])) else lbl.get("bbox", [0,0,0,0]) # 0~1 비율이면 픽셀 변환 필요하지만 여기선 단순 예시
+                    "bbox": pixel_bbox # [Fix] 이미 변환된 좌표 사용
                 })
 
         return {
@@ -209,7 +241,7 @@ async def analyze_dashboard_image(
             severity_score = max(severity_score, 5)
     
     # Step 3: LLM 해석 (Fast Path 적용: NORMAL이고 신뢰도 높으면 스킵)
-    if max_severity == "NORMAL" and max_confidence >= FAST_PATH_THRESHOLD:
+    if max_severity == "NORMAL" and max_confidence >= FAST_PATH_YOLO_CONF:
         print(f"[Dashboard] Fast Path 적용 (신뢰도: {max_confidence:.2f}). LLM 스킵.")
         integrated_analysis = {
             "severity_score": 0,
@@ -240,6 +272,36 @@ async def analyze_dashboard_image(
             "primary_action": llm_result.get("recommendation", None)
         }
     
+    # [Active Learning] 공통 서비스 활용
+    # max_confidence가 0.85 미만이고, 0보다는 큰 경우 (완전 실패는 아님)
+    if detections and max_confidence < FAST_PATH_YOLO_CONF: 
+         try:
+             from ai.app.services.active_learning_service import get_active_learning_service
+             from ai.app.services.llm_service import generate_training_labels
+             
+             al_service = get_active_learning_service()
+             print(f"[Dashboard] Active Learning 대상 감지 (Conf: {max_confidence})")
+             
+             oracle_labels = await generate_training_labels(s3_url, "dashboard")
+             
+             if not oracle_labels or not oracle_labels.get("labels"):
+                 return
+             
+             # [Fix] 안전한 Key 사용 (추정이 아닌 반환값 사용)
+             label_key = al_service.save_oracle_label(s3_url, oracle_labels, "dashboard")
+             if label_key:
+                 al_service.record_manifest(
+                     s3_url=s3_url,
+                     category="DASHBOARD",
+                     label_key=label_key,
+                     status=oracle_labels.get("status", "UNKNOWN"),
+                     confidence=max_confidence,
+                     analysis_type="LLM_ORACLE_DASHBOARD",
+                     domain="visual"
+                     )
+         except Exception as e:
+             print(f"AL Fail: {e}")
+
     # API 명세서 형식에 맞춤
     return {
         "status": max_severity,

@@ -147,7 +147,11 @@ async def get_smart_visual_diagnosis(
         }
 
     # Step 1: Router로 장면 분류
-    router = models.get("router") or get_router_service()
+    # [Optimization] 이미 로드된 모델 우선 재사용
+    router = models.get("router")
+    if not router:
+        # models에 없으면 싱글톤/캐시된 인스턴스 가져오기 시도
+        router = get_router_service()
     
     try:
         scene_type, confidence = await router.classify(image)
@@ -156,6 +160,9 @@ async def get_smart_visual_diagnosis(
         # 신뢰도가 낮으면 LLM에게 직접 판단 요청 (Fallback)
         if confidence < 0.85:
             print(f"[Visual Service] Router 신뢰도 낮음, LLM Fallback 실행")
+            # [Fix] llm_result 먼저 생성 (NameError 방지)
+            llm_result = await analyze_general_image(s3_url)
+            
             # Map LLM result to VisualResponse (llm_result is VisualResponse object)
             # IRRELEVANT 처리 -> SCENE_ETC로 통합하되 Status로 구분
             if llm_result.category == "IRRELEVANT":
@@ -239,11 +246,8 @@ async def get_smart_visual_diagnosis(
         # =================================================================
         # [Active Learning] 모델 재학습을 위한 데이터 수집
         # =================================================================
-        # 왜 저신뢰 데이터만 수집하는가?
-        # → 고신뢰(≥0.9): 모델이 이미 잘 맞추니까 재학습 효과 없음
-        # → 저신뢰(<0.9): 모델이 헷갈려하는 데이터 → 이걸 학습해야 실력이 늘음
-        # =================================================================
-        if confidence < 0.9:
+        # [Fix] confidence 변수가 정의되지 않았을 경우(예외 발생 시) 방지
+        if 'confidence' in locals() and confidence < 0.85:
             await _record_for_active_learning(s3_url, scene_type, confidence)
 
 
@@ -253,122 +257,62 @@ async def _record_for_active_learning(
     confidence: float
 ):
     """
-    [Active Learning] 저신뢰 데이터의 정답 라벨을 LLM으로 생성하여 S3에 저장
-    
-    ┌─────────────────────────────────────────────────────────────┐
-    │ Active Learning이란?                                        │
-    │ - 모델이 틀리거나 불확실한 데이터를 수집                      │
-    │ - LLM(GPT)이 정답(Oracle)을 생성                             │
-    │ - 이 정답으로 모델을 재학습시켜 성능 향상                     │
-    └─────────────────────────────────────────────────────────────┘
-    
-    [저장 조건] - 두 가지 모두 충족해야 저장
-    1. 신뢰도 < 0.9 (모델이 불확실한 데이터)
-    2. 품질 통과 (차량 관련 이미지, 분석 가능한 상태)
-    
-    [배제 조건] - 재학습해도 도움 안 되는 데이터
-    - status == "IRRELEVANT": 차량 관련 없는 이미지 (고양이 사진 등)
-    - status == "ERROR": 분석 불가 (너무 어둡거나 흐림)
-    - labels가 비어있음: LLM도 객체를 못 찾음 (의미 없는 이미지)
-    
-    [S3 저장 경로]
-    - dataset/{domain}/llm_confirmed/{file_id}.json
-    - 예: dataset/engine/llm_confirmed/abc123.json
+    [Active Learning] 중앙 집중식 서비스 사용
     """
     try:
-        # 필요한 모듈 임포트 (함수 내부에서 하여 순환 참조 방지)
-        from ai.app.services.manifest_service import add_visual_entry
+        from ai.app.services.active_learning_service import get_active_learning_service
         from ai.app.services.llm_service import generate_training_labels
-        import boto3
-        import json
+
+        if scene_type == SceneType.SCENE_DASHBOARD:
+             # Dashboard는 자체 서비스 내에서 Active Learning을 수행하므로 중복 수집 방지
+             return
 
         # 장면 타입 → 도메인 이름 변환
-        # 예: SceneType.SCENE_ENGINE → "engine"
         domain_map = {
             SceneType.SCENE_ENGINE: "engine",
             SceneType.SCENE_DASHBOARD: "dashboard",
             SceneType.SCENE_TIRE: "tire",
             SceneType.SCENE_EXTERIOR: "exterior"
         }
-        domain = domain_map.get(scene_type, "engine")
+        domain = domain_map.get(scene_type)
+        if not domain:
+            # 매핑되지 않는 도메인(ETC 등)은 수집하지 않음
+            return
         
-        print(f"[Active Learning] 저신뢰 데이터 감지 ({confidence:.2f} < 0.9). LLM 라벨링 시작...")
+        print(f"[Active Learning] 저신뢰 데이터 감지 ({confidence:.2f} < 0.85). LLM 라벨링 시작...")
         
-        # =================================================================
-        # Step 1: LLM에게 정답 라벨 생성 요청 (Oracle)
-        # =================================================================
-        # LLM(GPT-4o)이 이미지를 보고 객체의 위치와 종류를 알려줌
-        # 반환값 예시:
-        # {
-        #   "labels": [{"class": "Battery", "bbox": [0.5, 0.3, 0.1, 0.1]}],
-        #   "status": "NORMAL"
-        # }
+        # Step 1: Oracle
         oracle_labels = await generate_training_labels(s3_url, domain)
-        
-        # =================================================================
-        # Step 2: 품질 필터링 - 재학습 가치 없는 데이터 배제
-        # =================================================================
-        # LLM이 반환한 상태값으로 품질 판단
-        status = oracle_labels.get("status", "")
-        
-        # [배제 1] 차량 관련 없는 이미지
-        # 예: 음식 사진, 풍경 사진 등 → 차량 모델 학습에 쓸모없음
-        if status == "IRRELEVANT":
-            print(f"[Active Learning] 배제: 차량 관련 없는 이미지")
-            return  # 저장하지 않고 종료
-        
-        # [배제 2] 분석 불가 상태
-        # 예: 너무 어둡거나, 흐릿하거나, 일부만 보이는 경우
-        if status == "ERROR":
-            print(f"[Active Learning] 배제: 분석 불가 상태")
-            return  # 저장하지 않고 종료
-        
-        # [배제 3] LLM도 객체를 못 찾은 경우
-        # 예: 빈 배경만 있는 이미지 → 라벨이 없으면 학습 불가
+        status = oracle_labels.get("status")
+
+        if status in ["IRRELEVANT", "ERROR"]:
+            return
+
+        if status not in ["WARNING", "CRITICAL"]:
+            return
+
         if not oracle_labels.get("labels"):
-            print(f"[Active Learning] 배제: 라벨 없음 (객체 미감지)")
-            return  # 저장하지 않고 종료
+            return
         
-        # =================================================================
-        # Step 3: 품질 통과 → S3에 라벨 JSON 저장
-        # =================================================================
-        # AWS S3 클라이언트 생성 (환경변수에서 자격증명 자동 로드)
-        s3 = boto3.client('s3')
+        # Step 2: Quality Filter
+        if status == "IRRELEVANT" or status == "ERROR" or not oracle_labels.get("labels"):
+            print(f"[Active Learning] 배제: 품질 미달 ({status})")
+            return
+
+        # Step 3: Save & Manifest
+        al_service = get_active_learning_service()
+        label_key = al_service.save_oracle_label(s3_url, oracle_labels, domain)
         
-        # 버킷 이름: 환경변수에 없으면 기본값 사용
-        bucket = os.getenv("S3_BUCKET_NAME", "car-sentry-data")
-        
-        # 파일 ID 추출: "abc123.jpg" → "abc123"
-        file_id = os.path.basename(s3_url).split('.')[0]
-        
-        # 저장 경로: dataset/llm_confirmed/visual/{domain}/{file_id}.json
-        label_key = f"dataset/llm_confirmed/visual/{domain}/{file_id}.json"
-        
-        # S3에 JSON 파일 업로드
-        s3.put_object(
-            Bucket=bucket,
-            Key=label_key,
-            Body=json.dumps(oracle_labels, ensure_ascii=False, indent=2),
-            ContentType='application/json'
-        )
-        print(f"[Active Learning] 고품질 정답지 저장 완료: {label_key}")
-        
-        # =================================================================
-        # Step 4: Manifest에 기록 (데이터 목록 관리용)
-        # =================================================================
-        # Manifest = 어떤 데이터가 수집되었는지 목록을 관리하는 JSON 파일
-        # 나중에 재학습 시 이 목록을 보고 데이터를 불러옴
-        add_visual_entry(
-            original_url=s3_url,       # 원본 이미지 S3 위치
-            category=scene_type.value, # ENGINE, DASHBOARD 등
-            label_key=label_key,       # 라벨 JSON S3 위치
-            status=status,             # NORMAL, WARNING 등
-            analysis_type=scene_type.value,
-            detections=None,
-            confidence=confidence      # 원래 모델의 신뢰도
-        )
-        print(f"[Active Learning] Manifest 기록 완료: {scene_type.value} ({confidence:.2f})")
+        if label_key:
+            al_service.record_manifest(
+                s3_url=s3_url,
+                category=scene_type.name.replace("SCENE_", ""), # SCENE_ENGINE -> ENGINE
+                label_key=label_key,
+                status=status,
+                confidence=confidence,
+                analysis_type="LLM_ORACLE_VISUAL",
+                domain="visual"
+            )
         
     except Exception as e:
-        # Active Learning 실패해도 메인 분석에는 영향 없음
         print(f"[Active Learning] 기록 실패 (무시): {e}")
