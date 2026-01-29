@@ -152,8 +152,7 @@ export default function ActiveLoading({ navigation }: any) {
                 {/* Central Visual: Holographic Car Scanner */}
                 <View className="relative w-full aspect-square max-h-[360px] mb-8 items-center justify-center">
 
-                    {/* Background Glow Effect (Simulated with View and shadow) */}
-                    <View className="absolute w-[80%] h-[80%] bg-primary/20 rounded-full blur-3xl opacity-30" />
+
 
                     {/* Rotating Hexagon Pattern (Decorative Ring) */}
                     <Animated.View

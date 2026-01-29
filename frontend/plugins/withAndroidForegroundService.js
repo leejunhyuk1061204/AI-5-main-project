@@ -19,6 +19,7 @@ const withAndroidForegroundService = (config) => {
             mainApplication.service.push({
                 $: {
                     'android:name': serviceName,
+                    'android:foregroundServiceType': 'connectedDevice',
                 },
             });
         }

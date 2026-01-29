@@ -8,11 +8,24 @@ import tripApi from '../api/tripApi';
 import Header from '../header/Header';
 import BaseScreen from '../components/layout/BaseScreen';
 import { useVehicleStore } from '../store/useVehicleStore';
+import ObdService from '../services/ObdService';
 
 export default function MainPage() {
     const navigation = useNavigation<any>();
     const { primaryVehicle, fetchVehicles } = useVehicleStore();
     const [safetyScore, setSafetyScore] = useState(95);
+
+    // Auto-connect OBD on mount
+    // Auto-connect OBD on mount
+    useEffect(() => {
+        const initObd = async () => {
+            // 잠시 지연 후 시도하여 네비게이션 트랜지션 부하 분산
+            setTimeout(() => {
+                ObdService.tryAutoConnect();
+            }, 1000);
+        };
+        initObd();
+    }, []);
 
     useEffect(() => {
         fetchVehicles();
@@ -96,17 +109,7 @@ export default function MainPage() {
                             strokeWidth="6"
                             fill="transparent"
                         />
-                        <Circle
-                            cx="50"
-                            cy="50"
-                            r="42"
-                            stroke="url(#blueGradient)"
-                            strokeWidth="6"
-                            fill="transparent"
-                            strokeDasharray="264"
-                            strokeDashoffset="13"
-                            strokeLinecap="round"
-                        />
+
                     </Svg>
                     <View className="absolute inset-0 items-center justify-center z-10">
                         <Text className="text-text-muted text-sm font-medium tracking-wide mb-1">종합 점수</Text>

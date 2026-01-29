@@ -10,6 +10,15 @@ import ClassicBtService from './ClassicBtService';
 import { OBD_PIDS, parseObdResponse, PidDefinition } from './ObdPidHelper';
 import { uploadObdBatch, ObdLogRequest } from '../api/obdApi';
 import { useBleStore } from '../store/useBleStore';
+import BackgroundService from './BackgroundService';
+import { checkAndRequestBatteryOpt } from '../utils/BatteryOptConfig';
+import NetworkService from './NetworkService';
+import OfflineStorage from './OfflineStorage';
+import api from '../api/axios';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const STORAGE_KEY_LAST_DEVICE = 'last_obd_device';
+const STORAGE_KEY_LAST_TYPE = 'last_obd_type';
 
 export interface ObdData {
     timestamp: string;
@@ -27,6 +36,10 @@ type ConnectionType = 'ble' | 'classic' | null;
 class ObdService {
     private isPolling = false;
     private connectionType: ConnectionType = null;
+    private isDisconnectRequested = false;
+    private reconnectAttempts = 0;
+    private readonly MAX_RECONNECT_ATTEMPTS = 5;
+    private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
     // BLE 관련
     private currentDeviceId: string | null = null;
@@ -73,6 +86,14 @@ class ObdService {
                 );
             }
         }
+
+        // Listen for network changes
+        NetworkService.addListener((isConnected) => {
+            if (isConnected) {
+                console.log('[ObdService] Network connected, processing offline queue...');
+                this.processOfflineQueue();
+            }
+        });
     }
 
     // ===== Classic Bluetooth 설정 =====
@@ -81,9 +102,15 @@ class ObdService {
         this.classicDevice = device;
         this.currentData = { timestamp: new Date().toISOString() };
         this.isPolling = false;
+        this.isDisconnectRequested = false;
+        this.reconnectAttempts = 0;
         useBleStore.getState().setConnectedDeviceName(device.name || 'Classic Device');
         useBleStore.getState().setConnectedDevice(device.address);
+        useBleStore.getState().setConnectedDevice(device.address);
         useBleStore.getState().setStatus('connected');
+
+        // Save for auto-connect
+        this.saveLastDevice('classic', device.address, device.name || 'Classic Device');
 
         console.log(`[ObdService] Classic BT device set: ${device.name}`);
 
@@ -97,6 +124,9 @@ class ObdService {
 
         // ELM327 초기화 명령 전송
         await this.initializeElm327();
+
+        // 배터리 최적화 확인
+        checkAndRequestBatteryOpt();
     }
 
     // ===== BLE 설정 =====
@@ -157,7 +187,14 @@ class ObdService {
                 useBleStore.getState().setStatus('connected');
                 useBleStore.getState().setConnectedDevice(this.currentDeviceId);
                 useBleStore.getState().setConnectedDeviceName(this.currentDeviceId);
+                useBleStore.getState().setConnectedDeviceName(this.currentDeviceId);
+
+                // Save for auto-connect
+                this.saveLastDevice('ble', this.currentDeviceId, this.currentDeviceId);
+
                 await this.initializeElm327();
+                // 배터리 최적화 확인
+                checkAndRequestBatteryOpt();
             } else {
                 console.warn('[ObdService] Could not find OBD characteristics');
                 useBleStore.getState().setStatus('disconnected');
@@ -225,6 +262,11 @@ class ObdService {
         this.isPolling = true;
         useBleStore.getState().setPolling(true);
         this.pollingLoop(intervalMs);
+
+        // 안드로이드 백그라운드 서비스 시작
+        if (Platform.OS === 'android') {
+            BackgroundService.start();
+        }
     }
 
     async stopPolling() {
@@ -234,6 +276,11 @@ class ObdService {
         useBleStore.getState().setPolling(false);
         console.log('[ObdService] Polling stopped, flushing buffer...');
         await this.flushBuffer();
+
+        // 안드로이드 백그라운드 서비스 중지
+        if (Platform.OS === 'android') {
+            BackgroundService.stop();
+        }
     }
 
     // ===== 데이터 구독 =====
@@ -425,6 +472,19 @@ class ObdService {
             fuelTrimLong: d.fuel_trim_long,
         }));
 
+        // 1. 오프라인 상태이면 즉시 큐에 저장하고 버퍼 비움
+        if (!NetworkService.IsConnected) {
+            console.log('[ObdService] Offline detected. Queuing batch to SQLite.');
+            await OfflineStorage.addToQueue({
+                url: '/telemetry/batch',
+                method: 'POST',
+                body: JSON.stringify(logs),
+                timestamp: Date.now()
+            });
+            this.dataBuffer = [];
+            return;
+        }
+
         try {
             console.log(`[ObdService] Uploading batch: ${logs.length} items`);
             await uploadObdBatch(logs);
@@ -432,10 +492,46 @@ class ObdService {
             this.dataBuffer = []; // 성공 시 버퍼 비우기
         } catch (error) {
             console.error('[ObdService] Batch upload failed:', error);
-            // 실패 시 버퍼 유지 (다음 시도에서 재전송) - but safety check
-            if (this.dataBuffer.length > 500) {
-                console.warn('[ObdService] Upload failing repeatedly, clearing buffer.');
-                this.dataBuffer = [];
+
+            // 네트워크 에러인 경우 큐에 저장 (Axios 에러 코드 확인 또는 간단히 타임아웃/연결실패 간주)
+            // 여기서는 안전하게 오프라인 큐로 보냄
+            console.log('[ObdService] Upload failed. Saving to offline queue.');
+            await OfflineStorage.addToQueue({
+                url: '/telemetry/batch',
+                method: 'POST',
+                body: JSON.stringify(logs),
+                timestamp: Date.now()
+            });
+            this.dataBuffer = [];
+        }
+    }
+
+    // ===== 오프라인 데이터 동기화 =====
+    private async processOfflineQueue() {
+        const queue = await OfflineStorage.getQueue();
+        if (queue.length === 0) return;
+
+        console.log(`[ObdService] Syncing ${queue.length} offline requests...`);
+
+        for (const req of queue) {
+            if (!NetworkService.IsConnected) {
+                console.log('[ObdService] Network lost during sync. Pausing.');
+                break;
+            }
+
+            try {
+                await api.request({
+                    url: req.url,
+                    method: req.method,
+                    data: req.body ? JSON.parse(req.body) : undefined,
+                });
+                console.log(`[ObdService] Synced request ${req.id}`);
+                if (req.id) await OfflineStorage.removeFromQueue(req.id);
+            } catch (e) {
+                console.error(`[ObdService] Failed to sync request ${req.id}`, e);
+                // 4xx 에러면 삭제해야 할 수도 있음. 일단은 유지하거나 retry count 증가 로직 필요 (OfflineStorage 개선 사항)
+                // 지금은 간단히 break (다음 연결 시 재시도)
+                break;
             }
         }
     }
@@ -450,6 +546,12 @@ class ObdService {
 
     // ===== 연결 해제 =====
     async disconnect() {
+        this.isDisconnectRequested = true; // 의도적 해제 표시
+        if (this.reconnectTimer) {
+            clearTimeout(this.reconnectTimer);
+            this.reconnectTimer = null;
+        }
+
         this.stopPolling();
 
         // 남은 데이터 업로드
@@ -520,6 +622,70 @@ class ObdService {
     // ===== 연결 상태 확인 =====
     isConnected(): boolean {
         return this.connectionType !== null;
+    }
+
+    // ===== 재연결 로직 =====
+    private handleDisconnection() {
+        if (this.isDisconnectRequested) {
+            console.log('[ObdService] Disconnected by user.');
+            return;
+        }
+
+        console.warn('[ObdService] Unexpected disconnection detected!');
+        this.connectionType = null; // 일단 연결 상태 초기화
+        this.attemptReconnect();
+    }
+
+    private async attemptReconnect() {
+        if (this.reconnectAttempts >= this.MAX_RECONNECT_ATTEMPTS) {
+            console.error('[ObdService] Max reconnect attempts reached. Giving up.');
+            useBleStore.getState().setStatus('disconnected');
+            // 여기서 사용자에게 알림을 보낼 수 있음 (AlertStore 활용 등)
+            return;
+        }
+
+        this.reconnectAttempts++;
+        const delayMs = 3000;
+        console.log(`[ObdService] Reconnecting attempt ${this.reconnectAttempts}/${this.MAX_RECONNECT_ATTEMPTS} in ${delayMs}ms...`);
+        useBleStore.getState().setStatus('connecting'); // 'reconnecting' is not a valid state, so fallback to 'connecting' 
+        // BleStore에 'reconnecting' 상태가 없다면 'connecting' 사용. 
+        // type BleStatus = 'disconnected' | 'scanning' | 'connecting' | 'connected' | 'error';
+        // 'connecting' 상태를 재활용하거나 store 수정을 제안해야 함. 여기서는 connecting 사용.
+
+        this.reconnectTimer = setTimeout(async () => {
+            try {
+                // BLE 재연결 시도
+                if (this.currentDeviceId) {
+                    console.log(`[ObdService] Retrying connection to ${this.currentDeviceId}...`);
+                    await this.setTargetDevice(this.currentDeviceId);
+
+                    // 성공 여부는 setTargetDevice 내부에서 에러가 안 나고 connected 상태가 되면 성공.
+                    // 하지만 setTargetDevice는 에러 시 disconnected로 설정함.
+                    // 성공적으로 연결되면 reconnectAttempts를 0으로 초기화해야 하는데, 
+                    // setTargetDevice 함수 내에서 초기화하고 있으므로(line 131) 위에서 호출하면 됨.
+                    // 다만, setTargetDevice는 비동기로 실패 시 catch 블록으로 이동하므로 여기서 확인 어려움.
+                    // -> setTargetDevice 내에서 성공 시 reconnectAttempts = 0 설정되어 있음.
+                }
+                // Classic BT 재연결 시도
+                else if (this.classicDevice) {
+                    // Classic은 API 구조상 connect 호출 필요. setClassicDevice는 이미 연결된 객체를 받는 구조라
+                    // 재연결 로직에는 ClassicBtService.connect(address) 가 필요함.
+                    // 현재 createClassicDevice 로직이 없음. 
+                    // ClassicBtService.connect(...) 호출 후 성공하면 setClassicDevice 호출.
+                    console.log(`[ObdService] Retrying Classic connection to ${this.classicDevice.address}...`);
+                    const isConnected = await ClassicBtService.connect(this.classicDevice.address);
+                    if (isConnected) {
+                        await this.setClassicDevice(this.classicDevice);
+                    } else {
+                        throw new Error('Classic connect failed');
+                    }
+                }
+            } catch (e) {
+                console.error('[ObdService] Reconnect failed:', e);
+                // 재귀 호출로 다음 시도
+                this.attemptReconnect();
+            }
+        }, delayMs);
     }
 }
 

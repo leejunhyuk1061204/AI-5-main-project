@@ -3,10 +3,11 @@ import { View, Text, ScrollView, TouchableOpacity, RefreshControl, Platform } fr
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { getMyNotifications, markAsRead, Notification } from '../api/notificationApi';
 
 export default function AlertMain() {
+    const navigation = useNavigation();
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [refreshing, setRefreshing] = useState(false);
 
@@ -66,7 +67,12 @@ export default function AlertMain() {
             <View className="flex-1 z-10">
                 {/* Header */}
                 <View className="px-6 py-5 flex-row items-center justify-between border-b border-white/5 bg-[#0c0e12]/80 backdrop-blur-md">
-                    <Text className="text-white text-2xl font-bold tracking-tight">알림 센터</Text>
+                    <View className="flex-row items-center gap-3">
+                        <TouchableOpacity onPress={() => navigation.goBack()} className="active:opacity-70">
+                            <MaterialIcons name="arrow-back-ios" size={22} color="white" />
+                        </TouchableOpacity>
+                        <Text className="text-white text-2xl font-bold tracking-tight">알림 센터</Text>
+                    </View>
                     <TouchableOpacity
                         onPress={handleMarkAllAsRead}
                         className="flex-row items-center justify-center rounded-full px-3 py-1.5 active:bg-primary/10"
