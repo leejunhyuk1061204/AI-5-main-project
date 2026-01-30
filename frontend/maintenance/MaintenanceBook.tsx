@@ -291,9 +291,12 @@ export default function MaintenanceBook() {
 
                                                         let match;
                                                         while ((match = pricePattern.exec(rawText)) !== null) {
-                                                            const name = match[1].trim();
+                                                            let name = match[1].trim();
                                                             const price = match[2];
                                                             const isTotal = name.includes('합계') || name.includes('총') || name.includes('소계');
+
+                                                            // 품목명에서 날짜 패턴 제거 (YYYY-MM-DD 또는 YYYY.MM.DD 등)
+                                                            name = name.replace(/^\d{4}[-./]\d{2}[-./]\d{2}\s*/, '').trim();
 
                                                             // 빈 이름 제외
                                                             if (name.length > 0) {
