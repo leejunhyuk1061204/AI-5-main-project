@@ -5,6 +5,7 @@ import kr.co.himedia.common.exception.ErrorCode;
 import kr.co.himedia.dto.maintenance.MaintenanceHistoryRequest;
 import kr.co.himedia.dto.maintenance.MaintenanceHistoryResponse;
 import kr.co.himedia.dto.maintenance.ConsumableStatusResponse;
+import kr.co.himedia.dto.maintenance.OcrAnalysisResponse;
 
 import kr.co.himedia.entity.MaintenanceHistory;
 import kr.co.himedia.entity.MaintenanceItem; // Enum은 API 응답용으로 사용 or 삭제 고려
@@ -19,6 +20,7 @@ import kr.co.himedia.repository.ConsumableItemRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -34,6 +36,7 @@ public class MaintenanceService {
         private final VehicleRepository vehicleRepository;
         private final ConsumableItemRepository consumableItemRepository;
         private final OcrService ocrService;
+        private final ReceiptAnalyzerService receiptAnalyzerService;
 
         /**
          * 정비 이력 다중 등록 (리스트 처리)
@@ -107,6 +110,22 @@ public class MaintenanceService {
                                 });
 
                 return new MaintenanceHistoryResponse(savedHistory);
+        }
+
+        /**
+         * 정비 이력 조회
+         */
+        @Transactional(readOnly = true)
+        public List<MaintenanceHistoryResponse> getMaintenanceHistory(UUID vehicleId) {
+                Vehicle vehicle = vehicleRepository.findById(vehicleId)
+                                .orElseThrow(() -> new IllegalArgumentException("해당 차량을 찾을 수 없습니다. ID: " + vehicleId));
+
+                List<MaintenanceHistory> histories = maintenanceHistoryRepository
+                                .findByVehicleOrderByMaintenanceDateDesc(vehicle);
+
+                return histories.stream()
+                                .map(MaintenanceHistoryResponse::new)
+                                .collect(Collectors.toList());
         }
 
         /**
@@ -203,5 +222,37 @@ public class MaintenanceService {
                         org.springframework.web.multipart.MultipartFile file) {
                 String ocrText = ocrService.extractTextFromImage(file);
                 return ocrService.parseReceiptData(ocrText);
+        }
+
+        /**
+         * [BE-OCR-002] OCR 분석 + 정비 이력 저장 + 소모품 상태 갱신 (원스톱)
+         * 영수증 이미지를 분석하여 정비 이력을 저장하고, 소모품 상태를 자동으로 갱신합니다.
+         */
+        @Transactional
+        public MaintenanceHistoryResponse analyzeAndSave(UUID vehicleId, MultipartFile file) {
+                // 1. 차량 존재 확인
+                Vehicle vehicle = vehicleRepository.findById(vehicleId)
+                                .orElseThrow(() -> new BaseException(ErrorCode.VEHICLE_NOT_FOUND));
+
+                // 2. OCR 분석 (Naver OCR + OpenAI 파싱)
+                OcrAnalysisResponse ocrResult = receiptAnalyzerService.analyze(file);
+
+                // 3. OCR 결과 → MaintenanceHistoryRequest로 변환
+                MaintenanceHistoryRequest request = new MaintenanceHistoryRequest();
+                request.setMaintenanceDate(ocrResult.getMaintenanceDate() != null
+                                ? ocrResult.getMaintenanceDate()
+                                : LocalDate.now());
+                // 주행거리가 null이면 차량의 현재 주행거리로 대체
+                request.setMileageAtMaintenance(ocrResult.getMileageAtMaintenance() != null
+                                ? ocrResult.getMileageAtMaintenance()
+                                : vehicle.getTotalMileage());
+                request.setShopName(ocrResult.getShopName());
+                request.setCost(ocrResult.getCost());
+                request.setConsumableItemCode(ocrResult.getConsumableItemCode());
+                request.setOcrData(ocrResult.getOcrData());
+                request.setIsStandardized(true);
+
+                // 4. 기존 registerMaintenance 호출 (소모품 상태 갱신 자동 수행)
+                return registerMaintenance(vehicleId, request);
         }
 }
