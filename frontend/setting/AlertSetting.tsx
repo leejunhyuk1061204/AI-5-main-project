@@ -62,7 +62,7 @@ export default function AlertSetting() {
                 <MaterialIcons name="arrow-back-ios" size={20} color="white" />
             </TouchableOpacity>
             <Text className="flex-1 text-lg font-bold text-center text-white mr-8">
-                푸시 알림 수신 설정
+                알림 수신 설정
             </Text>
         </View>
     );
