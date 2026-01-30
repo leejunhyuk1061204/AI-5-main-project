@@ -22,7 +22,7 @@ public class AiTestController {
      * query 파라미터를 받아 벡터 변환 후 DB 유사도 검색 결과를 반환합니다.
      */
     @GetMapping("/knowledge/search")
-    public ApiResponse<List<String>> testSearch(@RequestParam String query) {
+    public ApiResponse<List<String>> testSearch(@RequestParam("query") String query) {
         List<String> results = knowledgeService.searchKnowledge(query, 3);
         return ApiResponse.success(results);
     }
