@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.UUID;
 
 /**
@@ -27,18 +28,20 @@ public class S3FileStorageService implements FileStorageService {
     private String bucketName;
 
     @Override
-    public String uploadFile(MultipartFile file) throws IOException {
-        String fileName = "uploads/" + UUID.randomUUID().toString() + "_" + file.getOriginalFilename();
+    public String uploadFile(MultipartFile file, String folder) throws IOException {
+        String fileName = folder + "/" + UUID.randomUUID().toString() + "_" + file.getOriginalFilename();
 
         try {
             // S3Template simplifies the upload process
-            var resource = s3Template.upload(bucketName, fileName, file.getInputStream());
-            String fileUrl = resource.getURL().toString();
+            s3Template.upload(bucketName, fileName, file.getInputStream());
 
-            log.info("File uploaded to S3: {}", fileUrl);
+            // Generate a pre-signed URL valid for 1 hour
+            String fileUrl = s3Template.createSignedGetURL(bucketName, fileName, Duration.ofHours(1)).toString();
+
+            log.info("File uploaded to S3 and signed URL generated: {}", fileUrl);
             return fileUrl;
         } catch (Exception ex) {
-            log.error("Error uploading to S3", ex);
+            log.error("Error uploading to S3 or signing URL", ex);
             throw new IOException("Could not upload file to S3", ex);
         }
     }

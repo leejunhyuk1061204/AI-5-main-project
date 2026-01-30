@@ -44,6 +44,8 @@ public class Notification {
     public enum NotificationType {
         MAINTENANCE_ALERT, // 정비 알림
         COMMUNITY_ALERT, // 커뮤니티 알림
-        SYSTEM_ALERT // 시스템 공지
+        SYSTEM_ALERT, // 시스템 공지
+        DTC_ALERT, // DTC 고장 알림
+        DIAG_ALERT // AI 진단 결과 알림
     }
 }
