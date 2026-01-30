@@ -21,7 +21,7 @@ import java.util.Arrays;
 import java.util.List;
 
 @Configuration
-@EnableWebSecurity
+@EnableWebSecurity(debug = true)
 @RequiredArgsConstructor
 public class SecurityConfig {
 
@@ -42,6 +42,7 @@ public class SecurityConfig {
                         .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/api/v1/auth/**", "/api/v1/telemetry/**", "/api/smartcar/login",
                                 "/api/smartcar/callback", "/api/v1/ocr/**")
+                                "/api/smartcar/callback", "/api/v1/master/**", "/error")
                         .permitAll()
                         .anyRequest().authenticated())
                 .addFilterBefore(new JwtAuthenticationFilter(jwtTokenProvider),

@@ -103,8 +103,10 @@ export const useUserStore = create<UserState>((set) => ({
 const handleLoginSuccess = async (data: any, set: any) => {
     try {
         // 1. Store Token
+        console.log('[Auth] Access Token Issued:', data.accessToken);
         await AsyncStorage.setItem('accessToken', data.accessToken);
         if (data.refreshToken) {
+            console.log('[Auth] Refresh Token Issued:', data.refreshToken);
             await AsyncStorage.setItem('refreshToken', data.refreshToken);
         }
 

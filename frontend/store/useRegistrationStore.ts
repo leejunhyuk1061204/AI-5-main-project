@@ -184,37 +184,27 @@ export const useRegistrationStore = create<RegistrationState>((set, get) => ({
         set({ isLoading: true });
 
         try {
-            // 1. Register Vehicle
+            // 1. Prepare Consumables Data
+            const validConsumables = s.maintenanceRecords
+                .filter(r => r.lastReplacementDate || r.lastReplacementMileage)
+                .map(r => ({
+                    code: r.itemCode,
+                    maintenanceDate: r.lastReplacementDate || undefined,
+                    lastReplacedMileage: r.lastReplacementMileage ? parseInt(r.lastReplacementMileage) : undefined
+                }));
+
+            // 2. Register Vehicle & Consumables together
             const vehicleRes = await registerVehicle({
                 manufacturer: s.manufacturer,
                 modelName: s.modelName,
                 modelYear: parseInt(s.modelYear),
-                fuelType: s.fuelType as any, // Type assertion for now
+                fuelType: s.fuelType as any,
                 carNumber: s.vehicleNumber,
-                totalMileage: s.totalMileage ? parseInt(s.totalMileage.replace(/,/g, '')) : 0, // Send totalMileage
+                totalMileage: s.totalMileage ? parseInt(s.totalMileage.replace(/,/g, '')) : 0,
                 memo: s.vin ? `VIN: ${s.vin}` : undefined,
                 nickname: `${s.manufacturer} ${s.modelName}`,
+                consumables: validConsumables.length > 0 ? validConsumables : undefined
             });
-
-            // Assuming vehicleRes returns the created vehicle object or ID directly
-            // If it returns { success: true, data: { vehicleId: ... } }
-            // Let's assume standard API response wrapper or check `registerVehicle` return type.
-            // vehicleApi says: returns Promise<VehicleResponse> directly on success or throws?
-            // Checking vehicleApi.ts again... `const response = await api.post... return response.data.data;`
-            // So it returns the Vehicle object.
-
-            const newVehicleId = vehicleRes.vehicleId;
-
-            // 2. Register Maintenance Records (if any)
-            if (s.maintenanceRecords.length > 0) {
-                const maintenancePayload = s.maintenanceRecords.map(r => ({
-                    itemCode: r.itemCode,
-                    lastReplacementDate: r.lastReplacementDate || undefined,
-                    lastReplacementMileage: r.lastReplacementMileage ? parseInt(r.lastReplacementMileage) : undefined
-                }));
-
-                await maintenanceApi.recordMaintenanceBatch(newVehicleId, maintenancePayload);
-            }
 
             // 3. Refresh Global Vehicle Store
             await useVehicleStore.getState().fetchVehicles();
@@ -225,7 +215,8 @@ export const useRegistrationStore = create<RegistrationState>((set, get) => ({
             return { success: true };
         } catch (e: any) {
             console.error("Registration Failed", e);
-            return { success: false, message: e.message || '등록에 실패했습니다.' };
+            const errorMessage = e.response?.data?.error?.message || e.message || '등록에 실패했습니다.';
+            return { success: false, message: errorMessage };
         } finally {
             set({ isLoading: false });
         }

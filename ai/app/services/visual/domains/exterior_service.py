@@ -21,8 +21,9 @@
 """
 from typing import List, Optional, Dict, Tuple, Union, Any
 from PIL import Image
-from ai.app.services.llm_service import analyze_general_image, generate_exterior_report
-from ai.app.services.router_service import CONFIDENCE_THRESHOLD
+from ai.app.services.common.llm_service import analyze_general_image, generate_exterior_report
+from ai.app.services.visual.router_service import CONFIDENCE_THRESHOLD
+from ai.app.services.visual.yolo_utils import normalize_bbox
 
 # =============================================================================
 # Reliability Thresholds
@@ -116,7 +117,7 @@ async def run_exterior_yolo(
                     "damage_type": info["damage"],
                     "severity": info["severity"],
                     "confidence": round(float(box.conf[0]), 2),
-                    "bbox": [int(v) for v in box.xywh[0].tolist()]
+                    "bbox": [int(v) for v in box.xyxy[0].tolist()]
                 })
 
     except Exception as e:
@@ -157,7 +158,6 @@ async def analyze_exterior_image(
     detections = await run_exterior_yolo(image, exterior_model)
     
     # Step 1-1: 파손이 감지되지 않으면, LLM으로 '진짜 외관인지' + '미세 파손은 없는지' 2차 확인 (Safety Net)
-    # Step 1-1: 파손이 감지되지 않으면, LLM으로 '진짜 외관인지' + '미세 파손은 없는지' 2차 확인 (Safety Net)
     if len(detections) == 0:
         print("[Exterior] 감지된 파손 없음. LLM Safety Check 진행.")
         llm_result = await analyze_general_image(s3_url)
@@ -175,17 +175,32 @@ async def analyze_exterior_image(
         fallback_detections = []
         if status in ["WARNING", "CRITICAL"]:
             print(f"[Exterior] YOLO Miss detected (Status: {status}). Requesting LLM Labeling...")
-            from ai.app.services.llm_service import generate_training_labels
+            from ai.app.services.common.llm_service import generate_training_labels
             label_result = await generate_training_labels(s3_url, "exterior")
             
             for lbl in label_result.get("labels", []):
                 # LLM 라벨을 API detection 포맷으로 변환
+                # [Fix] Ratio / Pixel 명시적 구분
+                bbox = lbl.get("bbox", [0,0,0,0])
+                if all(isinstance(v, float) and 0.0 <= v <= 1.0 for v in bbox):
+                    # Ratio -> Pixel 변환
+                    w, h = image.width, image.height
+                    bbox = [
+                        int(bbox[0] * w),
+                        int(bbox[1] * h),
+                        int(bbox[2] * w),
+                        int(bbox[3] * h)
+                    ]
+                else:
+                    # 이미 Pixel 또는 잘못된 값 -> 정수 변환
+                    bbox = [int(v) for v in bbox]
+
                 fallback_detections.append({
                     "part": lbl.get("class", "Unknown"),
                     "damage_type": "파손(LLM감지)",
                     "severity": status,
                     "confidence": 0.9, # LLM 판단 신뢰도
-                    "bbox": lbl.get("bbox", [0,0,0,0]) # [x,y,w,h] (0~1 scale or pixel based depending on prompt)
+                    "bbox": normalize_bbox(lbl["bbox"], image.width, image.height)
                 })
 
         return {

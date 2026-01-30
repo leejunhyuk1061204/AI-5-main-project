@@ -82,8 +82,11 @@ public class VehicleDto {
         @NotBlank(message = "소모품 코드는 필수입니다.")
         private String code; // 예: ENGINE_OIL
 
-        private java.time.LocalDateTime lastReplacedAt; // 선택 입력
+        private java.time.LocalDate maintenanceDate; // 정비 날짜 (YYYY-MM-DD)
         private Double lastReplacedMileage; // 선택 입력
+
+        // 하위 호환성 위해 유지 (필요 시)
+        private java.time.LocalDateTime lastReplacedAt;
     }
 
     @Getter

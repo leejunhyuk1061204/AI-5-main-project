@@ -40,13 +40,13 @@ const recordMaintenanceBatch = async (vehicleId: string, items: { itemCode: stri
             maintenanceDate: item.lastReplacementDate,
             mileageAtMaintenance: item.lastReplacementMileage,
             consumableItemCode: item.itemCode,
-            isStandardized: true // Default to true for initial registration
+            isStandardized: true
         }));
         await api.post(`/api/v1/vehicles/${vehicleId}/maintenance`, payload);
         return true;
-    } catch (error) {
+    } catch (error: any) {
         console.error('Error recording batch maintenance:', error);
-        return false;
+        throw new Error(error.response?.data?.error?.message || '정비 이력 등록 중 오류가 발생했습니다.');
     }
 };
 

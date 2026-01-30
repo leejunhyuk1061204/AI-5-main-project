@@ -46,7 +46,9 @@ public class AiDiagnosisService {
     private final FcmService fcmService;
     private final UserService userService;
 
-    @Autowired
+    // 글로벌 AI 리소스 통합 제어 (RTX 3090 안정성을 위해 최대 6개 요청 제한)
+    private final java.util.concurrent.Semaphore globalAiSemaphore = new java.util.concurrent.Semaphore(6);
+
     public AiDiagnosisService(DtcHistoryRepository dtcHistoryRepository,
             RabbitTemplate rabbitTemplate,
             KnowledgeService knowledgeService,
@@ -154,17 +156,6 @@ public class AiDiagnosisService {
     }
 
     /**
-     * AI 진단 요청 (AiClient 사용)
-     */
-    public Object requestDiagnosis(DiagnosisRequestDto requestDto) {
-        if ("VISION".equalsIgnoreCase(requestDto.getType())) {
-            return aiClient.callVisualAnalysis(requestDto.getMediaUrl());
-        } else {
-            return aiClient.callAudioAnalysis(requestDto.getMediaUrl());
-        }
-    }
-
-    /**
      * 통합 진단 요청 (Trigger 2: 수동 진단 - RabbitMQ 발행)
      * 기존 PENDING/FAILED 세션이 있으면 UPDATE, 없으면 INSERT
      */
@@ -215,27 +206,6 @@ public class AiDiagnosisService {
                 "status", "ACCEPTED");
     }
 
-    /**
-     * 자동 진단 비동기 요청 (주행 종료 시 트리거)
-     */
-    public void requestUnifiedDiagnosisAsync(UnifiedDiagnosisRequestDto requestDto) {
-        log.info("[자동진단] 비동기 요청 - 차량: {}", requestDto.getVehicleId());
-
-        DiagSession session = diagSessionRepository.save(new DiagSession(
-                requestDto.getVehicleId(),
-                requestDto.getTripId(),
-                DiagTriggerType.AUTO));
-
-        DiagnosisTaskMessage message = DiagnosisTaskMessage.builder()
-                .sessionId(session.getDiagSessionId())
-                .requestDto(requestDto)
-                .messageType(DiagnosisTaskMessage.MessageType.INITIAL)
-                .build();
-
-        rabbitTemplate.convertAndSend(kr.co.himedia.config.RabbitConfig.EXCHANGE_NAME,
-                kr.co.himedia.config.RabbitConfig.ROUTING_KEY, message);
-    }
-
     private String saveMultipartFile(org.springframework.web.multipart.MultipartFile file, String prefix) {
         if (file == null || file.isEmpty())
             return null;
@@ -281,37 +251,110 @@ public class AiDiagnosisService {
         String imageFile = taskMessage.getImageFilename();
         String audioFile = taskMessage.getAudioFilename();
 
+        // 0. 세션별 통합 리소스 관리 (인당 최대 3개 슬롯 공유)
+        java.util.concurrent.Semaphore sessionSemaphore = new java.util.concurrent.Semaphore(3);
+
         // 1. 병렬 분석 태스크 생성
         CompletableFuture<Map<String, Object>> visualTask = CompletableFuture.supplyAsync(() -> {
-            if (imageFile != null) {
-                return aiClient.callVisualAnalysis(imageFile);
+            try {
+                if (imageFile != null) {
+                    log.info("[Visual] [Semaphore-Acquire] 진입 시도 (Global: {}, Session: {})",
+                            globalAiSemaphore.availablePermits(), sessionSemaphore.availablePermits());
+                    sessionSemaphore.acquire();
+                    globalAiSemaphore.acquire();
+                    log.info("[Visual] [Semaphore-Acquire] 진입 성공 (Global: {}, Session: {})",
+                            globalAiSemaphore.availablePermits(),
+                            sessionSemaphore.availablePermits());
+                    try {
+                        Map<String, Object> result = aiClient.callVisualAnalysis(imageFile, requestDto.getVehicleId(),
+                                sessionId);
+                        log.info("[Visual] 분석 완료 (Session: {})", sessionId);
+                        return result;
+                    } finally {
+                        globalAiSemaphore.release();
+                        sessionSemaphore.release();
+                        log.info("[Visual] [Semaphore-Release] 반납 완료 (Global: {}, Session: {})",
+                                globalAiSemaphore.availablePermits(), sessionSemaphore.availablePermits());
+                    }
+                }
+                return requestDto.getVisualAnalysis();
+            } catch (Exception e) {
+                log.error("[Visual] 분석 실패", e);
+                return null;
             }
-            return requestDto.getVisualAnalysis();
         });
 
         CompletableFuture<Map<String, Object>> audioTask = CompletableFuture.supplyAsync(() -> {
-            if (audioFile != null) {
-                return aiClient.callAudioAnalysis(audioFile);
+            try {
+                if (audioFile != null) {
+                    log.info("[Audio] [Semaphore-Acquire] 진입 시도 (Global: {}, Session: {})",
+                            globalAiSemaphore.availablePermits(), sessionSemaphore.availablePermits());
+                    sessionSemaphore.acquire();
+                    globalAiSemaphore.acquire();
+                    log.info("[Audio] [Semaphore-Acquire] 진입 성공 (Global: {}, Session: {})",
+                            globalAiSemaphore.availablePermits(),
+                            sessionSemaphore.availablePermits());
+                    try {
+                        Map<String, Object> result = aiClient.callAudioAnalysis(audioFile, requestDto.getVehicleId(),
+                                sessionId);
+                        log.info("[Audio] 분석 완료 (Session: {})", sessionId);
+                        return result;
+                    } finally {
+                        globalAiSemaphore.release();
+                        sessionSemaphore.release();
+                        log.info("[Audio] [Semaphore-Release] 반납 완료 (Global: {}, Session: {})",
+                                globalAiSemaphore.availablePermits(), sessionSemaphore.availablePermits());
+                    }
+                }
+                return requestDto.getAudioAnalysis();
+            } catch (Exception e) {
+                log.error("[Audio] 분석 실패", e);
+                return null;
             }
-            return requestDto.getAudioAnalysis();
         });
 
         CompletableFuture<Map<String, Object>> anomalyTask = CompletableFuture.supplyAsync(() -> {
-            return performAnomalyDetection(requestDto);
+            return performAnomalyDetection(requestDto, session.getTriggerType(), sessionSemaphore, sessionId);
         });
 
-        // 모든 결과 대기
-        CompletableFuture.allOf(visualTask, audioTask, anomalyTask).get(80, TimeUnit.SECONDS);
+        // 모든 결과 대기 (15분 단위 청크 처리 등 대량 데이터 분석을 고려하여 10분으로 상향)
+        CompletableFuture.allOf(visualTask, audioTask, anomalyTask).get(600, TimeUnit.SECONDS);
 
         Map<String, Object> visualResult = visualTask.join();
         Map<String, Object> audioResult = audioTask.join();
         Map<String, Object> anomalyResult = anomalyTask.join();
 
+        // [Filter Logic] LLM 전송용 데이터 필터링 (토큰 절약)
+        // 1. 이상(Anomaly)이 있는 청크만 우선 수집
+        // 2. 만약 모두 정상(Normal)이라면, 가장 마지막(최신) 청크 하나만 전송
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> detailedResults = (List<Map<String, Object>>) anomalyResult.get("detailed_results");
+        List<Map<String, Object>> filteredTimeline = new ArrayList<>();
+
+        if (detailedResults != null && !detailedResults.isEmpty()) {
+            List<Map<String, Object>> anomalies = detailedResults.stream()
+                    .filter(r -> Boolean.TRUE.equals(r.get("is_anomaly")))
+                    .collect(Collectors.toList());
+
+            if (anomalies.isEmpty()) {
+                // Case: All Normal -> Take last one
+                filteredTimeline.add(detailedResults.get(detailedResults.size() - 1));
+            } else {
+                // Case: Has Anomaly -> Take all anomalies
+                filteredTimeline.addAll(anomalies);
+            }
+        }
+
+        Map<String, Object> llmAnomalyPayload = new HashMap<>();
+        llmAnomalyPayload.put("lstm_timeline", filteredTimeline);
+        llmAnomalyPayload.put("is_anomaly", anomalyResult.get("is_anomaly"));
+        llmAnomalyPayload.put("chunk_count", anomalyResult.get("chunk_count"));
+
         // 2. 통합 요청 객체 구축 및 RAG 검색
         AiUnifiedRequestDto.AiUnifiedRequestDtoBuilder aiRequestBuilder = AiUnifiedRequestDto.builder()
                 .visualAnalysis(visualResult)
                 .audioAnalysis(audioResult)
-                .anomalyAnalysis(anomalyResult);
+                .anomalyAnalysis(llmAnomalyPayload);
 
         populateVehicleAndConsumableInfo(aiRequestBuilder, requestDto.getVehicleId());
 
@@ -373,13 +416,13 @@ public class AiDiagnosisService {
         // 2. 추가 미디어 분석 (YOLO/AST)
         Map<String, Object> visualResult = null;
         if (imageFile != null) {
-            visualResult = aiClient.callVisualAnalysis(imageFile);
+            visualResult = aiClient.callVisualAnalysis(imageFile, session.getVehiclesId(), sessionId);
             saveEvidences(sessionId, imageFile, null, visualResult, null);
         }
 
         Map<String, Object> audioResult = null;
         if (audioFile != null) {
-            audioResult = aiClient.callAudioAnalysis(audioFile);
+            audioResult = aiClient.callAudioAnalysis(audioFile, session.getVehiclesId(), sessionId);
             saveEvidences(sessionId, null, audioFile, null, audioResult);
         }
 
@@ -524,41 +567,153 @@ public class AiDiagnosisService {
         }
     }
 
-    private Map<String, Object> performAnomalyDetection(UnifiedDiagnosisRequestDto requestDto) {
+    private Map<String, Object> performAnomalyDetection(UnifiedDiagnosisRequestDto requestDto,
+            DiagTriggerType triggerType, java.util.concurrent.Semaphore sessionSemaphore, java.util.UUID sessionId) {
         try {
             UUID vehicleId = requestDto.getVehicleId();
-            List<Map<String, Object>> timeSeries;
+            List<List<Map<String, Object>>> chunks = new ArrayList<>();
 
-            if (requestDto.getLstmAnalysis() != null && !requestDto.getLstmAnalysis().isEmpty()) {
+            // 1. 데이터 수집 및 청크 분할
+            if (triggerType == DiagTriggerType.AUTO && requestDto.getLstmAnalysis() != null
+                    && !requestDto.getLstmAnalysis().isEmpty()) {
+                log.info("[Anomaly] AUTO 모드: 현재 주행 데이터 기반 청크화");
                 @SuppressWarnings("unchecked")
                 List<Map<String, Object>> logs = (List<Map<String, Object>>) requestDto.getLstmAnalysis().get("logs");
-                timeSeries = logs != null ? logs : List.of();
+                if (logs != null && !logs.isEmpty()) {
+                    chunks = splitIntoChunks(logs, 900); // 15분(900초) 단위 분할
+                }
             } else {
+                log.info("[Anomaly] {} 모드: 최근 3일 데이터 조회 및 청크화", triggerType);
                 java.time.OffsetDateTime threeDaysAgo = java.time.OffsetDateTime.now(java.time.ZoneOffset.UTC)
                         .minusDays(3);
-                java.time.OffsetDateTime now = java.time.OffsetDateTime.now(java.time.ZoneOffset.UTC);
-                List<ObdLog> logs = obdLogRepository.findByVehicleIdAndTimeBetweenOrderByTimeAsc(vehicleId,
-                        threeDaysAgo, now);
-
-                if (logs.isEmpty()) {
-                    return Map.of("is_anomaly", false, "reason", "no_obd_data");
-                }
-
-                timeSeries = logs.stream().limit(100).map(l -> {
-                    Map<String, Object> point = new HashMap<>();
-                    point.put("rpm", l.getRpm());
-                    point.put("load", l.getEngineLoad());
-                    point.put("coolant", l.getCoolantTemp());
-                    point.put("voltage", l.getVoltage());
-                    return point;
-                }).collect(Collectors.toList());
+                List<ObdLog> allLogs = obdLogRepository.findByVehicleIdAndTimeBetweenOrderByTimeAsc(vehicleId,
+                        threeDaysAgo, java.time.OffsetDateTime.now(java.time.ZoneOffset.UTC));
+                chunks = chunkByTripAndSubdivide(allLogs, 900);
             }
 
-            return aiClient.callAnomalyDetection(Map.of("time_series", timeSeries));
+            if (chunks.isEmpty()) {
+                return Map.of("is_anomaly", false, "reason", "no_obd_data");
+            }
+
+            log.info("[Anomaly] 총 {}개의 청크 분석 시작 (병렬 처리)", chunks.size());
+
+            // 람다 식 내에서 참조하기 위해 effectively final 변수로 복사
+            final List<List<Map<String, Object>>> finalChunks = chunks;
+
+            // 2. 병렬 전송 및 결과 수집 (세션당 병렬도는 CompletableFuture가 처리, 글로벌은 Semaphore가 제한)
+            List<java.util.concurrent.CompletableFuture<Map<String, Object>>> futures = finalChunks.stream()
+                    .map(chunk -> java.util.concurrent.CompletableFuture.supplyAsync(() -> {
+                        try {
+                            int chunkIndex = finalChunks.indexOf(chunk) + 1;
+                            int totalChunks = finalChunks.size();
+                            log.info("[Anomaly-Parallel] [Semaphore-Acquire] 진입 시도 (Global: {}, Session: {})",
+                                    globalAiSemaphore.availablePermits(), sessionSemaphore.availablePermits());
+                            sessionSemaphore.acquire(); // 세션당 최대 3개 제한 (시각/청각과 공유)
+                            globalAiSemaphore.acquire(); // 글로벌 6개 제한 중 하나 획득
+                            log.info("[Anomaly-Parallel] [Semaphore-Acquire] 진입 성공 (Global: {}, Session: {})",
+                                    globalAiSemaphore.availablePermits(), sessionSemaphore.availablePermits());
+
+                            Map<String, Object> payload = new java.util.HashMap<>();
+                            payload.put("time_series", chunk);
+                            payload.put("vehicle_id", requestDto.getVehicleId().toString());
+                            payload.put("session_id", sessionId.toString());
+                            payload.put("chunk_index", chunkIndex);
+                            payload.put("total_chunks", totalChunks);
+
+                            log.info(
+                                    "[Anomaly-Parallel] 청강 전송 시작 ({}/{}) [Vehicle: {}, Session: {}]",
+                                    chunkIndex, totalChunks, requestDto.getVehicleId(), sessionId);
+
+                            return aiClient.callAnomalyDetection(payload);
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                            Map<String, Object> errorMap = new HashMap<>();
+                            errorMap.put("error", "Interrupted");
+                            return errorMap;
+                        } finally {
+                            globalAiSemaphore.release(); // 완료 후 해제
+                            sessionSemaphore.release(); // 세션 리소스 반납
+                            log.info("[Anomaly-Parallel] [Semaphore-Release] 반납 완료 (Global: {}, Session: {})",
+                                    globalAiSemaphore.availablePermits(), sessionSemaphore.availablePermits());
+                        }
+                    })).collect(Collectors.toList());
+
+            // 모든 청크 결과 대기
+            List<Map<String, Object>> results = futures.stream()
+                    .map(java.util.concurrent.CompletableFuture::join)
+                    .collect(Collectors.toList());
+
+            // 3. 결과 취합 (사용자 가이드에 따라 우선 리스트로 반환 - 추후 Aggregation 로직 강화 가능)
+            boolean isAnyAnomaly = results.stream()
+                    .anyMatch(r -> r.get("is_anomaly") != null && (boolean) r.get("is_anomaly"));
+
+            log.info("[Anomaly] 분석 완료. 이상 징후 발견 여부: {}", isAnyAnomaly);
+
+            return Map.of(
+                    "is_anomaly", isAnyAnomaly,
+                    "detailed_results", results,
+                    "chunk_count", chunks.size());
+
         } catch (Exception e) {
-            log.warn("Anomaly detection failed, continuing with partial results", e);
+            log.error("Anomaly detection failed", e);
             return Map.of("is_anomaly", false, "error", e.getMessage());
         }
+    }
+
+    /**
+     * 데이터를 15분(maxSize) 단위로 단순 분할 (자동 진단용)
+     */
+    private List<List<Map<String, Object>>> splitIntoChunks(List<Map<String, Object>> logs, int maxSize) {
+        List<List<Map<String, Object>>> chunks = new ArrayList<>();
+        for (int i = 0; i < logs.size(); i += maxSize) {
+            int end = Math.min(i + maxSize, logs.size());
+            List<Map<String, Object>> chunk = new ArrayList<>(logs.subList(i, end));
+            // 60초(60개) 미만 자투리는 무시 (설계 반영)
+            if (chunk.size() >= 60 || chunks.isEmpty()) {
+                chunks.add(chunk);
+            }
+        }
+        return chunks;
+    }
+
+    /**
+     * 주행(trip_id)별로 1차 그룹화 후, 각 주행을 15분 단위로 2차 분할 (수동 진단용)
+     */
+    private List<List<Map<String, Object>>> chunkByTripAndSubdivide(List<ObdLog> logs, int maxSize) {
+        List<List<Map<String, Object>>> finalChunks = new ArrayList<>();
+
+        // 시간 기반 그룹화 (시간 간격이 5분 이상 벌어지면 다른 주행으로 간주)
+        List<List<ObdLog>> tripGroups = new ArrayList<>();
+        if (logs.isEmpty())
+            return finalChunks;
+
+        List<ObdLog> currentGroup = new ArrayList<>();
+        currentGroup.add(logs.get(0));
+        for (int i = 1; i < logs.size(); i++) {
+            long diffSec = java.time.Duration.between(logs.get(i - 1).getTime(), logs.get(i).getTime()).getSeconds();
+            if (Math.abs(diffSec) > 300) { // 5분Gap
+                tripGroups.add(currentGroup);
+                currentGroup = new ArrayList<>();
+            }
+            currentGroup.add(logs.get(i));
+        }
+        tripGroups.add(currentGroup);
+
+        for (List<ObdLog> group : tripGroups) {
+            List<Map<String, Object>> mappedLogs = group.stream().map(l -> {
+                Map<String, Object> p = new HashMap<>();
+                p.put("rpm", l.getRpm());
+                p.put("speed", l.getSpeed());
+                p.put("load", l.getEngineLoad());
+                p.put("coolant", l.getCoolantTemp());
+                p.put("voltage", l.getVoltage());
+                p.put("time", l.getTime().toString());
+                return p;
+            }).collect(Collectors.toList());
+
+            finalChunks.addAll(splitIntoChunks(mappedLogs, maxSize));
+        }
+        return finalChunks;
     }
 
     private DiagStatus saveDiagnosisResult(UUID sessionId, Map<String, Object> response,
