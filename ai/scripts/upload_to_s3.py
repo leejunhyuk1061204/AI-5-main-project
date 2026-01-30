@@ -25,13 +25,17 @@ def main():
         root_env_path = os.path.dirname(ai_root_dir) # project root
         load_dotenv(os.path.join(root_env_path, ".env"))
 
-    aws_access_key = os.getenv("AWS_ACCESS_KEY_ID")
-    aws_secret_key = os.getenv("AWS_SECRET_ACCESS_KEY")
-    aws_region = os.getenv("AWS_REGION")
+    # Try project-specific S3 names first, then fallback to standard AWS names
+    aws_access_key = os.getenv("S3_ACCESS_KEY") or os.getenv("AWS_ACCESS_KEY_ID")
+    aws_secret_key = os.getenv("S3_SECRET_KEY") or os.getenv("AWS_SECRET_ACCESS_KEY")
+    aws_region = os.getenv("S3_REGION") or os.getenv("AWS_REGION") or "ap-northeast-2"
     bucket_name = os.getenv("S3_BUCKET_NAME")
 
     if not all([aws_access_key, aws_secret_key, bucket_name]):
         print(f"Error: AWS credentials or S3_BUCKET_NAME not found.")
+        print(f"Current values (if any):")
+        print(f" - S3_ACCESS_KEY / AWS_ACCESS_KEY_ID: {aws_access_key[:5] if aws_access_key else 'None'}...")
+        print(f" - S3_BUCKET_NAME: {bucket_name}")
         print(f"Checked .env at: {env_path}")
         return
 
@@ -74,9 +78,12 @@ def main():
             ExpiresIn=3600  # 1 hour
         )
 
+        # Determine JSON key based on content type
+        json_key = "audioUrl" if content_type and content_type.startswith("audio") else "imageUrl"
+
         print("\n--- [Insomnia JSON Body] Copy below ---")
         print("{")
-        print(f'  "imageUrl": "{url}"')
+        print(f'  "{json_key}": "{url}"')
         print("}")
         print("---------------------------------------\n")
 
