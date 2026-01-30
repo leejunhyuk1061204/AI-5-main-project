@@ -56,36 +56,37 @@ def save_manifest(manifest_key: str, manifest_data: Dict[str, Any]) -> bool:
 
 def add_visual_entry(
     original_url: str,
-    category: str,
-    label_key: Optional[str],
-    status: str,
-    analysis_type: str,
-    detections: Optional[list] = None,
-    confidence: float = 0.0
+    domain: str,
+    label_key: str,
+    collector: str,
+    confidence: float,
+    label_grade: str = "SILVER",
+    requires_human_review: bool = True
 ) -> bool:
     """
-    시각 데이터 manifest에 항목 추가
+    시각 데이터 manifest에 항목 추가 (학습용 메타데이터만 기록)
     
     Args:
-        original_url: 원본 이미지 S3 URL (복사 안 함!)
-        category: DASHBOARD, EXTERIOR 등
-        label_key: YOLO 라벨 파일 S3 key (있는 경우)
-        status: NORMAL, WARNING, CRITICAL 등
-        analysis_type: YOLO, LLM_VISION 등
-        detections: 탐지된 객체 목록
-        confidence: 신뢰도
+        original_url: 원본 이미지 S3 URL
+        domain: exterior, dashboard, engine, tire
+        label_key: 정답 라벨 파일 S3 key (필수)
+        collector: "LLM_ORACLE" | "YOLO_HIGH_CONF"
+        confidence: 신뢰도 (난이도 구분용)
+        label_grade: "GOLD"(Human) | "SILVER"(LLM/Auto) | "BRONZE"(Weak)
+        requires_human_review: 검수 필요 여부
     """
     manifest = load_manifest(VISUAL_MANIFEST_KEY)
     
     entry = {
         "id": len(manifest["training_data"]) + 1,
-        "original_image": original_url,  # 원본 위치만 기록!
-        "label": label_key,
-        "category": category,
-        "status": status,
-        "analysis_type": analysis_type,
+        "original_image": original_url,
+        "label_key": label_key,
+        "domain": domain,
+        "collector": collector,
         "confidence": confidence,
-        "detection_count": len(detections) if detections else 0,
+        "label_grade": label_grade,
+        "requires_human_review": requires_human_review,
+        "schema_version": "al_v2",
         "collected_at": datetime.now().isoformat()
     }
     

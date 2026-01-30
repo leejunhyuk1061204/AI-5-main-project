@@ -91,7 +91,9 @@ public class MaintenanceService {
                 vehicleConsumableRepository.findByVehicleAndConsumableItem_Id(vehicle, item.getId())
                                 .ifPresentOrElse(vc -> {
                                         // 기존 데이터가 있으면 업데이트 (Update)
-                                        vc.setLastReplacedAt(request.getMaintenanceDate().atStartOfDay());
+                                        if (request.getMaintenanceDate() != null) {
+                                                vc.setLastReplacedAt(request.getMaintenanceDate().atStartOfDay());
+                                        }
                                         vc.setLastReplacedMileage(request.getMileageAtMaintenance());
                                         vc.updateRemainingLife(100.0); // 교체 직후는 100%
                                         vc.setIsInferred(false); // 직접 정비했으므로 추론 데이터 아님
@@ -102,7 +104,9 @@ public class MaintenanceService {
                                         newVc.setVehicle(vehicle);
                                         newVc.setConsumableItem(item);
                                         newVc.setWearFactor(1.0);
-                                        newVc.setLastReplacedAt(request.getMaintenanceDate().atStartOfDay());
+                                        if (request.getMaintenanceDate() != null) {
+                                                newVc.setLastReplacedAt(request.getMaintenanceDate().atStartOfDay());
+                                        }
                                         newVc.setLastReplacedMileage(request.getMileageAtMaintenance());
                                         newVc.setRemainingLife(100.0);
                                         newVc.setIsInferred(false); // 직접 정비했으므로 추론 데이터 아님
@@ -213,6 +217,44 @@ public class MaintenanceService {
                                                         .compareTo(c2.getPredictedReplacementDate());
                                 })
                                 .collect(Collectors.toList());
+        }
+
+        /**
+         * 정비 이력 및 소모품 상태 업데이트 (통합 등록용 내부 메소드)
+         */
+        @Transactional
+        public void registerHistory(Vehicle vehicle, ConsumableItem item, LocalDate maintenanceDate, Double mileage) {
+                MaintenanceHistory history = MaintenanceHistory.builder()
+                                .vehicle(vehicle)
+                                .maintenanceDate(maintenanceDate)
+                                .mileageAtMaintenance(mileage)
+                                .consumableItem(item)
+                                .isStandardized(true)
+                                .build();
+                maintenanceHistoryRepository.save(history);
+
+                vehicleConsumableRepository.findByVehicleAndConsumableItem_Id(vehicle, item.getId())
+                                .ifPresentOrElse(vc -> {
+                                        if (maintenanceDate != null) {
+                                                vc.setLastReplacedAt(maintenanceDate.atStartOfDay());
+                                        }
+                                        vc.setLastReplacedMileage(mileage);
+                                        vc.updateRemainingLife(100.0);
+                                        vc.setIsInferred(false);
+                                        vehicleConsumableRepository.save(vc);
+                                }, () -> {
+                                        VehicleConsumable newVc = new VehicleConsumable();
+                                        newVc.setVehicle(vehicle);
+                                        newVc.setConsumableItem(item);
+                                        newVc.setWearFactor(1.0);
+                                        if (maintenanceDate != null) {
+                                                newVc.setLastReplacedAt(maintenanceDate.atStartOfDay());
+                                        }
+                                        newVc.setLastReplacedMileage(mileage);
+                                        newVc.setRemainingLife(100.0);
+                                        newVc.setIsInferred(false);
+                                        vehicleConsumableRepository.save(newVc);
+                                });
         }
 
         /**

@@ -203,19 +203,31 @@ export default function AiDiagChat() {
             const data = await getDiagnosisSessionStatus(sid);
             setSessionData(data);
 
-            // 메시지 추출
+            // 1. 메시지 추출
             let msgs: any[] = [];
             if (data.interactiveData?.conversation) {
                 msgs = data.interactiveData.conversation;
             }
-            // AI의 마지막 메시지 추가
+            // AI의 마지막 메시지 추가 (서버 API 응답 구조 준수)
             if (data.interactiveData?.message) {
                 const lastMsg = msgs[msgs.length - 1];
                 if (!lastMsg || lastMsg.content !== data.interactiveData.message) {
                     msgs.push({ role: 'ai', content: data.interactiveData.message });
                 }
             }
-            setMessages(msgs);
+
+            // 2. 서버에서 온 메시지들 (isPending 없음)
+            const serverMsgs = msgs.map((m: any) => ({ ...m, isPending: false }));
+
+            // 3. 현재 로컬 상태에서 아직 서버에 반영 안 된(펜딩 중인) 사용자 메시지 추출
+            // (서버 메시지와 내용이 겹치지 않는 것만 유지)
+            setMessages((prev: any[]) => {
+                const pendingMsgs = prev.filter(m => m.isPending);
+                const filteredPending = pendingMsgs.filter(p =>
+                    !serverMsgs.some((s: any) => s.role === 'user' && s.content === p.content)
+                );
+                return [...serverMsgs, ...filteredPending];
+            });
 
             // 대기 상태 업데이트
             const isProcessing = data.status === 'PROCESSING' || data.status === 'REPLY_PROCESSING';
@@ -316,8 +328,14 @@ export default function AiDiagChat() {
         const msg = userInput;
         setUserInput('');
 
-        // 즉시 UI 반영
-        setMessages(prev => [...prev, { role: 'user', content: msg }]);
+        // 즉시 UI 반영 (timestamp와 isPending 추가)
+        const timestamp = Date.now();
+        setMessages(prev => [...prev, {
+            role: 'user',
+            content: msg,
+            timestamp,
+            isPending: true
+        }]);
         setIsWaitingForAi(true);
 
         try {

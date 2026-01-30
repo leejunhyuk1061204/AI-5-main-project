@@ -6,8 +6,8 @@
         "dev": "npm run dev:front",
         "server": "concurrently --kill-others-on-fail --prefix \"[{name}]\" --names \"BACK,AI\" --prefix-colors \"bgGreen.bold,bgYellow.bold\" \"npm run dev:back\" \"npm run dev:ai\"",
         "dev:front": "cd frontend && npx expo start -c --port 3000",
-        "dev:back": "cd backend && ./gradlew clean build bootRun",
-        "dev:ai": "ai_env/bin/python -m uvicorn app.main:app --app-dir ai --host 0.0.0.0 --port 8000 --reload"
+        "dev:back": "node scripts/runner.js backend",
+        "dev:ai": "node scripts/runner.js ai"
     },
     "proxy": "http://localhost:3000",
     "keywords": [],

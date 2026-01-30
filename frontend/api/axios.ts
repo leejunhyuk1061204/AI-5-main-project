@@ -8,13 +8,21 @@ const getBaseUrl = () => {
     if (process.env.EXPO_PUBLIC_API_URL) {
         return process.env.EXPO_PUBLIC_API_URL;
     }
-    
-    // 2. Android Emulator default
+
+    // 2. Expo 개발 서버에서 호스트 IP 추출 (실제 디바이스 + 에뮬레이터 모두 지원)
+    const debuggerHost = Constants.expoConfig?.hostUri || Constants.manifest2?.extra?.expoGo?.debuggerHost;
+    if (debuggerHost) {
+        const hostIp = debuggerHost.split(':')[0];
+        console.log('[API] Using dynamic host IP:', hostIp);
+        return `http://${hostIp}:8080`;
+    }
+
+    // 3. Android Emulator fallback
     if (Platform.OS === 'android') {
         return 'http://10.0.2.2:8080';
     }
-    
-    // 3. iOS Simulator and Web default
+
+    // 4. iOS Simulator and Web default
     return 'http://localhost:8080';
 };
 
@@ -44,7 +52,7 @@ api.interceptors.request.use(
             const token = await AsyncStorage.getItem('accessToken');
             if (token && !config.headers.Authorization && !config.url?.includes('/auth/')) {
                 config.headers.Authorization = `Bearer ${token}`;
-                console.log('Added Authorization header:', config.headers.Authorization);
+                // console.log('Added Authorization header:', config.headers.Authorization);
             }
         } catch (error) {
             console.error('Error fetching token:', error);
@@ -87,8 +95,18 @@ api.interceptors.response.use(
                 console.log('Refresh already in progress, queuing request...');
                 return new Promise((resolve) => {
                     subscribeTokenRefresh((token) => {
-                        originalRequest.headers.Authorization = `Bearer ${token}`;
-                        resolve(api(originalRequest));
+                        // 안전한 재요청을 위해 새 객체 생성
+                        const retryConfig = {
+                            method: originalRequest.method,
+                            url: originalRequest.url,
+                            params: originalRequest.params,
+                            data: originalRequest.data,
+                            headers: {
+                                ...originalRequest.headers,
+                                Authorization: `Bearer ${token}`
+                            }
+                        };
+                        resolve(api(retryConfig));
                     });
                 });
             }
@@ -122,17 +140,32 @@ api.interceptors.response.use(
                     const newAccessToken = data.data.accessToken;
                     const newRefreshToken = data.data.refreshToken;
 
+                    console.log('[Auth] New Access Token Issued (Refresh):', newAccessToken);
                     await AsyncStorage.setItem('accessToken', newAccessToken);
                     if (newRefreshToken) {
+                        console.log('[Auth] New Refresh Token Issued (Refresh):', newRefreshToken);
                         await AsyncStorage.setItem('refreshToken', newRefreshToken);
                     }
 
-                    console.log('Token refreshed successfully');
+                    console.log('Token refreshed successfully. Retrying original request...');
                     isRefreshing = false;
                     onRefreshed(newAccessToken);
 
-                    originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
-                    return api(originalRequest);
+                    // 중요: originalRequest 객체를 그대로 쓰지 않고 필요한 속성만 추출하여 재요청
+                    // (Axios 내부 객체 오염 방지)
+                    const retryConfig = {
+                        method: originalRequest.method,
+                        url: originalRequest.url,
+                        params: originalRequest.params,
+                        data: originalRequest.data,
+                        headers: {
+                            ...originalRequest.headers,
+                            Authorization: `Bearer ${newAccessToken}`
+                        }
+                    };
+
+                    const retryResponse = await api(retryConfig);
+                    return retryResponse;
                 }
             } catch (refreshError) {
                 console.error('Token refresh failed:', refreshError);

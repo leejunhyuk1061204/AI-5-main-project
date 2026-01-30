@@ -48,6 +48,11 @@ export interface ManualRegistrationRequest {
     nickname?: string;
     memo?: string;
     obdDeviceId?: string;
+    consumables?: {
+        code: string;
+        maintenanceDate?: string;
+        lastReplacedMileage?: number;
+    }[];
 }
 
 // 차량 정보 수정 요청
@@ -64,7 +69,12 @@ export interface VehicleUpdateRequest {
 export const getVehicleList = async (): Promise<VehicleResponse[]> => {
     try {
         const response = await api.get('/api/v1/vehicles');
-        console.log('[vehicleApi] Vehicle list fetched:', response.data);
+
+        if (!response || !response.data) {
+            console.error('[vehicleApi] Invalid response structure:', response);
+            return [];
+        }
+
         return response.data.data || [];
     } catch (error) {
         console.error('[vehicleApi] Failed to fetch vehicle list:', error);

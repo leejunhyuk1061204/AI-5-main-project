@@ -8,8 +8,8 @@ from datetime import datetime
 
 # 설정
 BASE_URL = "http://localhost:8080/api/v1"
-VEHICLE_ID = "32cbfa4d-ed68-44fd-b13e-36fe357bd74f"
-ACCESS_TOKEN = "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiIyZmQyMDE4MS1mYmE1LTQwYzYtOGFlNi1jMjg5N2YwYTE0ZjciLCJpYXQiOjE3Njk1ODkyMzQsImV4cCI6MTc2OTU5MjgzNH0.sFVtVplcBLleUJYPRoG2qoazSZ6thu_Ab_WLVts0fIR6_n7qqD8GkaHfZmK0aTdZuOnJy7v9kTP6oNDJr8_okg"
+VEHICLE_ID = "7d9e2ddc-362d-4cf7-9d02-b684387dcdac"
+ACCESS_TOKEN = "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJjZTI1NTE2MC02MjAwLTQwYjUtOWYwOS0wMTVjMTI4ZWE1OWQiLCJpYXQiOjE3Njk2OTg4MjksImV4cCI6MTc2OTcwMjQyOX0.X4Sj0rcQzkHB1ESYBcCJ7Ko7aa1l31Y-HfOGQvPPKkE9nX9JedEgRAfLR28EvVOJ294wcWhBlcXaQyUXSnaABA"
 
 def get_headers():
     if os.path.exists("token.json"):
@@ -37,20 +37,19 @@ def start_trip(vehicle_id):
         print(f"[-] Trip Start Failed (Status: {res.status_code}): {res.text}")
         return None
 
-def send_bulk_logs(vehicle_id, target_km):
+def send_bulk_logs(vehicle_id, target_duration_min):
     headers = get_headers()
     if not headers: return
     
-    # 1 log = 약 1초 주행 거리 (평균 100km/h 가정 시 1km = 36 logs)
-    # 3000km = 약 108,000 logs
-    log_count = int(target_km * 34) # 약간의 오차를 위해 34 사용
-    # 자연스러움을 위해 목표값에 +- 5% 랜덤 추가
-    log_count = int(log_count * random.uniform(0.95, 1.05))
+    # 1 log = 1 sec
+    log_count = int(target_duration_min * 60)
     
-    print(f"[*] Sending Bulk Logs ({log_count} EA / Targeting ~{target_km}km)...")
+    print(f"[*] Sending Bulk Logs ({log_count} EA / Duration ~{target_duration_min}min)...")
     
     logs = []
     base_time = time.time()
+    # 과거 시간부터 시작해서 현재에 끝나도록 (Backend가 미래 데이터를 거부할 수 있으므로) -> 아니면 그냥 현재부터 미래로? 
+    # 보통 DB 저장시 문제 없으므로 현재 시간(base_time)부터 +i 초로 생성
     
     current_speed = 0.0
     current_rpm = 800.0
@@ -93,13 +92,13 @@ def send_bulk_logs(vehicle_id, target_km):
         chunk = logs[i:i + chunk_size]
         res = requests.post(f"{BASE_URL}/telemetry/batch", json=chunk, headers=headers)
         if res.status_code == 200:
-             if (i // chunk_size) % 50 == 0: # 로그 너무 많이 찍히지 않게 조절
-                print(f"   [+] Sent {i}/{log_count} logs...")
+             if (i // chunk_size) % 10 == 0: 
+                print(f"   [+] Sent {min(i+chunk_size, log_count)}/{log_count} logs...")
         else:
              print(f"   [-] Batch failed: {res.text}")
         
-        # 고속 전송을 위해 sleep 최소화 (장거리인 경우 더 빠르게)
-        time.sleep(0.01 if target_km > 500 else 0.05)
+        # 고속 전송을 위해 sleep 최소화
+        time.sleep(0.01)
 
 def end_trip(trip_id):
     headers = get_headers()
@@ -119,16 +118,32 @@ def end_trip(trip_id):
     else:
         print(f"[-] Trip End Failed: {res.text}")
 
-if __name__ == "__main__":
-    target_distance = 70 # 기본값
-    if len(sys.argv) > 1:
-        target_distance = float(sys.argv[1])
+import argparse
+
+def main():
+    parser = argparse.ArgumentParser(description="Driving Data Simulation Test")
+    parser.add_argument("--duration", type=float, default=17, help="주행 시간 (분)")
+    parser.add_argument("--interval", type=int, default=1, help="데이터 생성 간격 (초)")
+    parser.add_argument("--batch", type=int, default=60, help="배치 전송 단위 (초)")
+    
+    args = parser.parse_args()
+    
+    print(f"[*] Starting simulation for {args.duration} minutes...")
+    print(f"[*] Config: Interval={args.interval}s, Batch={args.batch}s")
     
     tid = start_trip(VEHICLE_ID)
     if tid:
         try:
-            send_bulk_logs(VEHICLE_ID, target_distance)
+            # send_bulk_logs 내부 로직을 args에 맞춰 수정하고 싶으나, 
+            # 일단 기존 함수를 호출 (필요시 send_bulk_logs 시그니처 수정)
+            send_bulk_logs(VEHICLE_ID, args.duration)
             end_trip(tid)
         except KeyboardInterrupt:
             print("\n[!] 테스트가 중단되었습니다. 주행을 종료합니다.")
             end_trip(tid)
+        except Exception as e:
+            print(f"\n[!] 오류 발생: {e}")
+            end_trip(tid)
+
+if __name__ == "__main__":
+    main()

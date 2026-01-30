@@ -5,7 +5,7 @@ AI 분석 결과 해석 및 리포트 생성 서비스 (LLM)
 [역할]
 1. 전문가급 진단: YOLO, PatchCore 등의 수치적 결과를 사람이 이해할 수 있는 자연어로 변환합니다.
 2. 멀티 모달 분석: 시각(Vision)과 청각(Audio) 데이터를 모두 처리하며, 복합적인 상황을 추론합니다.
-3. 범용 분석(Fallback): 전용 AI 모델이 없거나 확신도가 낮을 때 GPT-4o가 직접 사진을 보고 판단합니다.
+3. 범용 분석(Fallback): 전용 AI 모델이 없거나 확신도가 낮을 때 GPT-5가 직접 사진을 보고 판단합니다.
 
 [주요 기능]
 - 엔진룸 이상 분석 (suggest_anomaly_label)
@@ -48,7 +48,7 @@ def should_use_fallback():
     return explicit_mock or not is_llm_ready()
 
 # ---------------------------------------------------------
-# 1. 시각 전문 진단 (GPT-4o Vision)
+# 1. 시각 전문 진단 (GPT-5 Vision)
 # ---------------------------------------------------------
 
 async def suggest_anomaly_label(
@@ -108,7 +108,7 @@ async def suggest_anomaly_label(
     
     try:
         response = await _get_client().chat.completions.create(
-            model="gpt-4o",
+            model="gpt-4o", # [Stability] gpt-5 unstable. Use 4o.
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": [
@@ -118,7 +118,7 @@ async def suggest_anomaly_label(
                 ]}
             ],
             response_format={"type": "json_object"},
-            max_tokens=500,
+            max_completion_tokens=500,
             timeout=30.0 # Circuit Breaker: Timeout
         )
         content = response.choices[0].message.content
@@ -163,25 +163,34 @@ async def suggest_anomaly_label_with_base64(
     {heatmap_desc}
 
     [임무]
-    - Anomaly Detector가 이미 이 부품을 '이상(Anomaly)'으로 판정했습니다.
-    - 당신의 역할은 '어떤 종류의 결함인지' 설명하는 것입니다.
-    - Heatmap 이미지가 제공되면 붉은 영역을 중심으로, 없다면 {bbox_desc} 영역 근처의 시각적 특징을 분석하세요.
+    - Anomaly Detector가 이 부품을 분석했으나, **확신도가 낮거나 정밀 확인이 필요하여** 당신에게 재분석을 요청했습니다.
+    - 당신의 역할은 시각적 특징을 바탕으로 **이상이 있는지, 있다면 어떤 종류인지** 판별하는 것입니다.
+    - Heatmap 이미지가 제공되면 붉은 영역을 참고하되, 전체적인 시각 정보를 우선시하십시오.
 
-    [결함 분류 기준]
-    - LEAK: 누유, 액체 흔적 (오일, 냉각수)
-    - CORROSION: 녹, 산화, 부식 (배터리 단자 등)
+    [판단 기준]
+    1. **NORMAL (정상)**: 먼지나 일반적인 사용감 정도이며, 기능상 문제가 없어 보임.
+    2. **ANOMALY (이상)**: 누유, 파손, 부식 등 명확한 결함이 보임.
+
+    [결함 분류 기준 (이상이 있을 경우에만)]
+    - LEAK: 누유, 액체 흔적
+    - CORROSION: 녹, 산화, 부식
     - PHYSICAL: 균열, 찌그러짐, 탈락, 파손
-    - CONTAMINATION: 먼지 퇴적, 이물질
+    - CONTAMINATION: 먼지 퇴적 (심각한 경우), 이물질
     - WEAR: 벨트 마모, 호스 경화
     - UNKNOWN: 특징이 불명확함
 
+    [절대 규칙]
+    1. 반드시 아래 JSON 형식으로만 응답해야 합니다.
+    2. 정상이라고 판단되면 `defect_category`를 "NORMAL"로 설정하고 `defect_label`도 "NORMAL"로 하십시오.
+    3. `description_ko`에는 "구체적_라벨명" 같은 예시 텍스트를 절대 넣지 말고, 실제 관찰된 내용을 한글로 적으십시오.
+
     [출력 형식 - JSON]
     {{
-        "defect_category": "카테고리명",
-        "defect_label": "구체적_라벨명",
-        "description_ko": "한글 설명",
-        "severity": "MINOR|WARNING|CRITICAL",
-        "recommended_action": "권장 조치"
+        "defect_category": "카테고리명 (NORMAL | LEAK | ...)",
+        "defect_label": "구체적_라벨명 (또는 Normal)",
+        "description_ko": "실제 관찰된 한글 설명",
+        "severity": "NORMAL|MINOR|WARNING|CRITICAL",
+        "recommended_action": "권장 조치 (정상이면 유지보수 권장)"
     }}
     """
     
@@ -193,7 +202,8 @@ async def suggest_anomaly_label_with_base64(
             "defect_label": "Analysis_Unavailable",
             "description_ko": f"{part_name} 부품의 AI 정밀 분석이 불가능합니다. ({reason} 모드 - 실제 LLM 연결 필요)",
             "severity": "WARNING",
-            "recommended_action": "AI 서버 설정을 확인하거나 육안으로 점검하십시오."
+            "recommended_action": "AI 서버 설정을 확인하거나 육안으로 점검하십시오.",
+            "is_mock": True
         }
 
     try:
@@ -214,18 +224,39 @@ async def suggest_anomaly_label_with_base64(
             })
 
         response = await _get_client().chat.completions.create(
-            model="gpt-4o",
+            model="gpt-4o", # [High Reliability] Vision + JSON Complex Task -> 4o 권장
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": user_content}
             ],
             response_format={"type": "json_object"},
-            max_tokens=500,
+            max_completion_tokens=500,
             timeout=30.0
         )
         content = response.choices[0].message.content
+        
+         # [Guard] Empty Check
+        if not content or content.strip() == "":
+            print(f"[LLM Anomaly Base64] Error: Empty response from LLM")
+            return {
+                "defect_category": "UNKNOWN",
+                "defect_label": "Analysis_Failed",
+                "description_ko": "AI 응답을 받을 수 없습니다. (Empty Response)",
+                "severity": "WARNING",
+                "recommended_action": "재시도 또는 육안 점검"
+            }
+
         return json.loads(content)
         
+    except json.JSONDecodeError as e:
+        print(f"[LLM Anomaly Base64] JSON Parsing Failed. Raw: {content}")
+        return {
+            "defect_category": "UNKNOWN",
+            "defect_label": "Analysis_Failed",
+            "description_ko": "AI 분석 결과를 해석할 수 없습니다. (JSON Error)",
+            "severity": "WARNING",
+            "recommended_action": "서버 로그 확인 필요"
+        }
     except Exception as e:
         print(f"[LLM Anomaly Base64 Error] {e}")
         return {
@@ -241,7 +272,7 @@ async def call_openai_vision(s3_url: str, prompt: str) -> Dict[str, Any]:
     """
     [범용 Vision API 호출 함수]
     
-    이미지 URL과 커스텀 프롬프트를 받아 GPT-4o Vision으로 분석합니다.
+    이미지 URL과 커스텀 프롬프트를 받아 GPT-5 Vision으로 분석합니다.
     타이어 마모도 측정, 부품 상태 확인 등 다양한 용도로 사용됩니다.
     
     Args:
@@ -273,7 +304,7 @@ async def call_openai_vision(s3_url: str, prompt: str) -> Dict[str, Any]:
 
     try:
         response = await _get_client().chat.completions.create(
-            model="gpt-4o",
+            model="gpt-4o", # [Stability] gpt-5 unstable. Use 4o.
             messages=[
                 {"role": "system", "content": prompt},
                 {"role": "user", "content": [
@@ -282,7 +313,7 @@ async def call_openai_vision(s3_url: str, prompt: str) -> Dict[str, Any]:
                 ]}
             ],
             response_format={"type": "json_object"},
-            max_tokens=1000,
+            max_completion_tokens=1000,
             timeout=30.0
         )
         
@@ -336,6 +367,10 @@ async def analyze_general_image(s3_url: str) -> VisualResponse:
         "description": "한글 설명 (차량 관련 사진이 아닙니다 or 상태 설명)",
         "recommendation": "조치 사항 (해당 없으면 빈 문자열)"
     }
+    
+    [절대 규칙]
+    1. 반드시 JSON 형식으로만 응답해야 합니다.
+    2. 분석이 모호하거나 어려우면 "type": "VEHICLE", "sub_type": "ETC", "status": "NORMAL"로 응답하십시오.
     """
     if should_use_fallback():
         reason = "MOCK" if os.getenv("MOCK_LLM", "false").lower() == "true" else "Local"
@@ -353,7 +388,7 @@ async def analyze_general_image(s3_url: str) -> VisualResponse:
 
     try:
         response = await _get_client().chat.completions.create(
-            model="gpt-4o-mini",  # [비용 절약] Path B는 단순 분류 → 4o-mini로 충분 (1/20 비용)
+            model="gpt-4o",   # [High Reliability] gpt-5 unstable for JSON fallbacks. Forced to 4o.  
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": [
@@ -362,12 +397,42 @@ async def analyze_general_image(s3_url: str) -> VisualResponse:
                 ]}
             ],
             response_format={"type": "json_object"},
-            max_tokens=800,
+            max_completion_tokens=800,
             timeout=30.0
         )
         
         content = response.choices[0].message.content
-        result = json.loads(content)
+        
+        # [Guard] Empty Response Check
+        if not content or content.strip() == "":
+            print(f"[LLM General] Empty response received.")
+            return VisualResponse(
+                status="ERROR", # User requested ERROR for failure
+                analysis_type="LLM_GENERAL",
+                category="ERROR",
+                data={
+                    "description": "AI 분석 응답이 비어있습니다. (LLM 모델 응답 실패)",
+                    "recommendation": "잠시 후 다시 시도하거나 관리자에게 문의하세요.",
+                    "processed_image_url": s3_url
+                },
+                confidence=0.0
+            )
+
+        try:
+            result = json.loads(content)
+        except json.JSONDecodeError:
+            print(f"[LLM General] JSON Parsing Failed. Raw: {content}")
+            return VisualResponse(
+                status="NORMAL", # Fail-safe
+                analysis_type="LLM_GENERAL",
+                category="ETC",
+                data={
+                    "description": "AI 분석 결과를 해석할 수 없습니다.",
+                    "recommendation": "잠시 후 다시 시도해주세요.",
+                    "processed_image_url": s3_url
+                },
+                confidence=0.5
+            )
 
         # Map LLM result to VisualResponse
         # IRRELEVANT 처리
@@ -414,7 +479,7 @@ async def analyze_general_image(s3_url: str) -> VisualResponse:
         )
 
 # ---------------------------------------------------------
-# 2. 청각 전문 진단 (GPT-4o Audio)
+# 2. 청각 전문 진단 (GPT-5 Audio)
 # ---------------------------------------------------------
 async def analyze_audio_with_llm(s3_url: str, audio_bytes: Optional[bytes] = None) -> AudioResponse:
     SYSTEM_PROMPT = """
@@ -472,7 +537,7 @@ async def analyze_audio_with_llm(s3_url: str, audio_bytes: Optional[bytes] = Non
 
         # [Correct] Audio Input via 'chat.completions.create'
         response = await _get_client().chat.completions.create(
-            model="gpt-4o-audio-preview",
+            model="gpt-5",
             modalities=["text", "audio"],
             audio={"voice": "alloy", "format": "wav"},
             messages=[
@@ -571,10 +636,10 @@ async def interpret_dashboard_warnings(detections: List[Dict]) -> Dict[str, str]
     """
     try:
         response = await _get_client().chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4o", # [Stability] gpt-5 unstable.
             messages=[{"role": "user", "content": PROMPT}],
             response_format={"type": "json_object"},
-            max_tokens=600
+            max_completion_tokens=600
         )
         return json.loads(response.choices[0].message.content)
     except Exception as e:
@@ -600,7 +665,7 @@ async def generate_exterior_report(mappings: List[Dict]) -> Dict[str, str]:
         damage_summary = []
         for m in mappings:
             part = m.get('part', '알 수 없는 부위')
-            dmg = m.get('damage_type', '파손')
+            dmg = m.get('damage', '파손') # [Fix] key mismatch fix
             damage_summary.append(f"{part} {dmg}")
             
         desc = f"차량 외관에서 {', '.join(damage_summary)} 등이 발견되었습니다. ({reason} 분석 모드)"
@@ -623,15 +688,29 @@ async def generate_exterior_report(mappings: List[Dict]) -> Dict[str, str]:
     """
     try:
         response = await _get_client().chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4o", # [Stability] gpt-5 failures causing fallback issues. Use 4o.
             messages=[{"role": "user", "content": PROMPT}],
             response_format={"type": "json_object"},
-            max_tokens=600
+            max_completion_tokens=600
         )
         return json.loads(response.choices[0].message.content)
     except Exception as e:
         print(f"[LLM Exterior Error] {e}")
-        return {"description": "외관 파손 분석 결과를 처리할 수 없습니다.", "recommendation": "가까운 정비소에서 육안 검사를 권장합니다."}
+        # [Fallback] LLM 실패 시에도 YOLO 감지 결과는 전달해야 함
+        try:
+            summary = []
+            for m in mappings:
+                p = m.get('part', '부위')
+                d = m.get('damage', '파손')
+                summary.append(f"{p} {d}")
+            fallback_desc = f"{', '.join(summary)}이(가) 감지되었습니다. (AI 상세 기술 실패)"
+        except:
+            fallback_desc = "파손이 감지되었으나 상세 내용을 불러올 수 없습니다."
+            
+        return {
+            "description": fallback_desc,
+            "recommendation": "가까운 정비소에서 육안 검사를 권장합니다."
+        }
 
 
 async def interpret_tire_status(status_list: List[Dict]) -> Dict[str, str]:
@@ -669,10 +748,10 @@ async def interpret_tire_status(status_list: List[Dict]) -> Dict[str, str]:
     """
     try:
         response = await _get_client().chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-5",
             messages=[{"role": "user", "content": PROMPT}],
             response_format={"type": "json_object"},
-            max_tokens=500
+            max_completion_tokens=500
         )
         return json.loads(response.choices[0].message.content)
     except Exception as e:
@@ -699,43 +778,81 @@ async def generate_training_labels(s3_url: str, domain: str) -> dict:
         "engine": "엔진룸 부품(Battery, Oil_Cap, Radiator 등)을 찾아 바운딩 박스를 제시하세요.",
         "dashboard": "켜진 경고등(Check_Engine, Low_Tire_Pressure 등)을 식별하세요.",
         "tire": "타이어 상태(normal, worn, cracked, flat)를 판단하세요.",
-        "exterior": "차량 파손 부위(scratch, dent, crack)와 위치(Front_Bumper 등)를 찾으세요."
+        "exterior": "차량의 파손 부위(scratch, dent, crack, broken_lamp)를 찾아 바운딩 박스를 그리세요. 좌표는 대략적이어도 됩니다."
     }
     
     PROMPT = f"""
-    이 차량 이미지를 분석하여 AI 학습용 라벨을 생성하세요.
+    당신은 Car-Sentry 학습 데이터 생성기입니다.
+    다음 도메인의 이미지를 분석하여 학습용 정답 라벨(Ground Truth)을 생성하십시오.
+    
     도메인: {domain}
+    상세 지시: {DOMAIN_PROMPTS.get(domain, "차량 관련 객체를 식별하세요.")}
     
-    작업 지시: {DOMAIN_PROMPTS.get(domain, "차량 관련 객체를 식별하세요.")}
+    [중요 가이드]
+    - Exterior(외관) 분석 시, 찌그러짐(dent), 긁힘(scratch), 깨짐(broken) 등이 보이면 반드시 박스를 생성하십시오.
+    - 놓치는 것보다 과감하게 탐지하는(Recall 우선) 것이 학습 데이터 생성에 유리합니다.
+    - 부품명을 정확히 모르겠으면 'Unknown_Part'나 'Damage_Area'로 라벨링하십시오.
+
+    [절대 규칙]
+    1. 반드시 아래 JSON 형식으로만 응답해야 합니다. 설명이나 마크다운(```json 등)을 포함하지 마십시오.
+    2. 식별된 객체가 없거나 분석이 불가능한 경우에도 **반드시** 아래 실패 포맷을 그대로 출력하십시오.
     
-    [출력 형식 - JSON]
+    [분석 불가능 시 출력]
     {{
+        "labels": [],
+        "status": "FAILED"
+    }}
+
+    [정상 출력 형식 - JSON]
+    {
         "labels": [
-            {{"class": "객체명", "bbox": [x_center, y_center, width, height]}}
+            {{"class": "객체명 (예: Dent, Scratch, Headlight_Broken)", "bbox": [x_center, y_center, width, height]}}
         ],
         "status": "NORMAL" | "WARNING" | "CRITICAL"
-    }}
+    }
+
+    [예시 - Exterior]
+    {
+        "labels": [
+             {{"class": "Dent", "bbox": [0.5, 0.5, 0.2, 0.3]}}
+        ],
+        "status": "WARNING"
+    }
     
-    bbox는 이미지 크기 대비 0~1 사이 비율로 표현하세요.
+    bbox는 이미지 크기 대비 0.0 ~ 1.0 사이의 정규화된 좌표(Ratio)입니다.
     """
     
     try:
         response = await _get_client().chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4o", # [Critical] gpt-5 fails to generate coordinates reliably. Use 4o.
             messages=[
+                {"role": "system", "content": PROMPT},
                 {"role": "user", "content": [
-                    {"type": "text", "text": PROMPT},
+                    {"type": "text", "text": "이미지 분석 및 라벨 생성"},
                     {"type": "image_url", "image_url": {"url": s3_url}}
                 ]}
             ],
             response_format={"type": "json_object"},
-            max_tokens=800,
+            max_completion_tokens=1000,
             timeout=30.0
         )
-        return json.loads(response.choices[0].message.content)
+        
+        content = response.choices[0].message.content
+        
+        # [Guard 1] Empty Response Check
+        if not content or content.strip() == "":
+            print(f"[LLM Training Labels] Error: Empty response from LLM (Length: 0)")
+            return {"labels": [], "status": "FAILED", "reason": "LLM_EMPTY_RESPONSE"}
+
+        try:
+            return json.loads(content)
+        except json.JSONDecodeError:
+            print(f"[LLM Training Labels] JSON Parsing Failed. Raw Content: {content}")
+            return {"labels": [], "status": "FAILED", "reason": "JSON_PARSE_ERROR"}
+            
     except Exception as e:
         print(f"[LLM Training Labels Error] {e}")
-        return {"labels": [], "status": "ERROR"}
+        return {"labels": [], "status": "FAILED", "reason": str(e)}
 
 
 async def generate_audio_labels(s3_url: str, audio_bytes: Optional[bytes] = None) -> dict:
@@ -761,8 +878,8 @@ async def generate_audio_labels(s3_url: str, audio_bytes: Optional[bytes] = None
     
     [출력 형식 - JSON]
     {
-        "label": "구체적_진단명 (예: Engine_Knock)",
-        "category": "카테고리명",
+        "label": "실제_진단명 (예: Engine_Knock)",
+        "category": "관찰된 결함 설명",
         "status": "NORMAL" | "FAULTY",
         "confidence": 0.0 ~ 1.0
     }
@@ -779,7 +896,7 @@ async def generate_audio_labels(s3_url: str, audio_bytes: Optional[bytes] = None
             audio_data = base64.b64encode(audio_bytes).decode('utf-8')
         
         response = await _get_client().chat.completions.create(
-            model="gpt-4o-audio-preview",
+            model="gpt-5",
             modalities=["text", "audio"],
             audio={"voice": "alloy", "format": "wav"},
             messages=[
