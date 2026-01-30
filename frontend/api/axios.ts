@@ -9,12 +9,20 @@ const getBaseUrl = () => {
         return process.env.EXPO_PUBLIC_API_URL;
     }
 
-    // 2. Android Emulator default
+    // 2. Expo 개발 서버에서 호스트 IP 추출 (실제 디바이스 + 에뮬레이터 모두 지원)
+    const debuggerHost = Constants.expoConfig?.hostUri || Constants.manifest2?.extra?.expoGo?.debuggerHost;
+    if (debuggerHost) {
+        const hostIp = debuggerHost.split(':')[0];
+        console.log('[API] Using dynamic host IP:', hostIp);
+        return `http://${hostIp}:8080`;
+    }
+
+    // 3. Android Emulator fallback
     if (Platform.OS === 'android') {
         return 'http://10.0.2.2:8080';
     }
 
-    // 3. iOS Simulator and Web default
+    // 4. iOS Simulator and Web default
     return 'http://localhost:8080';
 };
 
