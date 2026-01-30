@@ -67,6 +67,17 @@ export default function ObdConnect({ visible, onClose, onConnected }: ObdConnect
         }
     }, [visible]);
 
+    // 연결 성공 시 자동으로 다음 페이지로 이동
+    useEffect(() => {
+        if (status === 'connected' && visible) {
+            const timer = setTimeout(() => {
+                console.log('[ObdConnect] Auto-closing after connection success');
+                onClose();
+            }, 1500); // 1.5초 후 자동 닫기
+            return () => clearTimeout(timer);
+        }
+    }, [status, visible, onClose]);
+
     // Listeners are now in BleService -> Store
     // Removed local listeners
 

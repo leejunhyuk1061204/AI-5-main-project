@@ -376,21 +376,22 @@ export default function EngineSoundDiag() {
             scrollable={step === 3} // Only result screen might need scrolling
             padding={false}
         >
-            <View className="flex-1 items-center justify-center relative">
-                {/* Progress Indicator */}
-                {step < 3 && (
-                    <View className="w-full pb-8">
-                        <View className="flex-row items-center justify-between mb-2 px-2">
-                            <Text className="text-xs font-medium text-slate-400">{step}단계</Text>
-                            <Text className="text-xs font-medium text-[#0d7ff2]">3단계 중 {step}</Text>
-                        </View>
-                        <View className="flex-row gap-2 h-1.5 w-full">
-                            <View className={`flex-1 rounded-full ${step >= 1 ? 'bg-[#0d7ff2]' : 'bg-[#1a2430]'}`} />
-                            <View className={`flex-1 rounded-full ${step >= 2 ? 'bg-[#0d7ff2]' : 'bg-[#1a2430]'}`} />
-                            <View className={`flex-1 rounded-full ${step >= 3 ? 'bg-[#0d7ff2]' : 'bg-[#1a2430]'}`} />
-                        </View>
+            {/* Progress Indicator - 상단 고정 */}
+            {step < 3 && (
+                <View className="w-full px-5 pb-4">
+                    <View className="flex-row items-center justify-between mb-2 px-2">
+                        <Text className="text-xs font-medium text-slate-400">{step}단계</Text>
+                        <Text className="text-xs font-medium text-[#0d7ff2]">3단계 중 {step}</Text>
                     </View>
-                )}
+                    <View className="flex-row gap-2 h-1.5 w-full">
+                        <View className={`flex-1 rounded-full ${step >= 1 ? 'bg-[#0d7ff2]' : 'bg-[#1a2430]'}`} />
+                        <View className={`flex-1 rounded-full ${step >= 2 ? 'bg-[#0d7ff2]' : 'bg-[#1a2430]'}`} />
+                        <View className={`flex-1 rounded-full ${step >= 3 ? 'bg-[#0d7ff2]' : 'bg-[#1a2430]'}`} />
+                    </View>
+                </View>
+            )}
+
+            <View className="flex-1 items-center justify-center relative">
 
                 {/* Step 1 & 2: Visualization UI */}
                 {step <= 2 && (
