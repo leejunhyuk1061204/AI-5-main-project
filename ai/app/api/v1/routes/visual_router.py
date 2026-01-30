@@ -42,7 +42,9 @@ async def analyze_visual(request_body: VisualRequest, request: Request):
         }
     """
     s3_url = request_body.imageUrl
-    print(f"[Visual API] 요청 수신: {s3_url}")
+    vehicle_id = request_body.vehicleId
+    session_id = request_body.sessionId
+    print(f"[Visual API] 요청 수신 - Vehicle: {vehicle_id}, Session: {session_id}, URL: {s3_url}")
     
     # 모델들을 Getter를 통해 지연 로딩 (필요할 때만 로드)
     models = {
@@ -87,6 +89,10 @@ async def analyze_engine(request_body: EngineAnalysisRequest, request: Request):
     pipeline = EngineAnomalyPipeline()
     
     try:
+        vehicle_id = request_body.vehicleId
+        session_id = request_body.sessionId
+        print(f"[Engine API] 직접 분석 요청 - Vehicle: {vehicle_id}, Session: {session_id}, URL: {request_body.imageUrl}")
+        
         result = await pipeline.analyze(
             s3_url=request_body.imageUrl,
             yolo_model=engine_model

@@ -7,6 +7,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useUserStore } from '../store/useUserStore';
 import { useAlertStore } from '../store/useAlertStore';
 import BaseScreen from '../components/layout/BaseScreen';
+import NotificationService from '../services/NotificationService';
 
 // Kakao Login Import (Platform check)
 let login: () => Promise<any>;
@@ -45,7 +46,10 @@ export default function Login() {
         });
     }, []);
 
-    const handleNavigation = (result: any) => {
+    const handleNavigation = async (result: any) => {
+        // FCM 토큰 등록/갱신
+        await NotificationService.registerFcmToken();
+
         if (route.params?.fromSignup) {
             navigation.navigate('RegisterMain');
         } else if (result.hasVehicle) {

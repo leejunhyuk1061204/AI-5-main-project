@@ -1,14 +1,4 @@
-import os
-import time
-import requests
-
-# --- 설정 ---
-OUTPUT_DIR = "data/manuals/zips"
-PARSED_DIR = "data/manuals/parsed"
-DELAY = 15
-
-# 2010-2013 한국 및 글로벌 인기 모델 대규모 리스트
-TARGETS = [
+﻿EXTRA_TARGETS = [
     ("Hyundai", "2010", "Accent%20L4-1.6L"), # Accent L4-1.6L
     ("Hyundai", "2010", "Azera%20V6-3.3L"), # Azera V6-3.3L
     ("Hyundai", "2010", "Azera%20V6-3.8L"), # Azera V6-3.8L
@@ -896,56 +886,3 @@ TARGETS = [
     ("Volkswagen", "2013", "Touareg%20%287P5%29%20V6-3.0L%20SC%20%28CGFA%29%20Hybrid"), # Touareg (7P5) V6-3.0L SC (CGFA) Hybrid
     ("Volkswagen", "2013", "Touareg%20%287P5%29%20V6-3.6L%20%28CGRA%29"), # Touareg (7P5) V6-3.6L (CGRA)
 ]
-
-def download_zip(brand, year, model):
-    filename = f"{brand}_{year}_{model.replace('%20', '_')}.zip"
-    filepath = os.path.join(OUTPUT_DIR, filename)
-    parsed_filename = filename.replace('.zip', '_full.json')
-    parsed_filepath = os.path.join(PARSED_DIR, parsed_filename)
-
-    # 1. 이미 파싱된 경우 건너뛰기
-    if os.path.exists(parsed_filepath):
-        print(f"  [SKIP] Already parsed: {parsed_filename}")
-        return True
-
-    # 2. 이미 다운로드된 ZIP이 있는 경우 (중단된 경우 대비)
-    if os.path.exists(filepath):
-        if os.path.getsize(filepath) > 1024 * 1024:
-            print(f"  [READY] ZIP exists: {filename}")
-            return True
-        else:
-            os.remove(filepath)
-
-    url = f"https://charm.li/bundle/{brand}/{year}/{model}/"
-    headers = {'User-Agent': 'Mozilla/5.0'}
-    
-    print(f"  Downloading {brand} {year} {model.replace('%20', ' ')}...")
-    try:
-        # 타임아웃 900초로 상향 (15분)
-        response = requests.get(url, headers=headers, stream=True, timeout=900)
-        if response.status_code == 200:
-            with open(filepath, 'wb') as f:
-                for chunk in response.iter_content(chunk_size=8192):
-                    f.write(chunk)
-            print(f"    [OK] Saved: {filename}")
-            return True
-        else:
-            print(f"    [FAIL] Status: {response.status_code}")
-    except Exception as e:
-        print(f"    [ERROR] {e}")
-    return False
-
-def main():
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
-    os.makedirs(PARSED_DIR, exist_ok=True)
-    
-    print("="*60)
-    print("Manual Downloader (600s Timeout)")
-    print("="*60)
-    
-    for brand, year, model in TARGETS:
-        download_zip(brand, year, model)
-        time.sleep(DELAY)
-
-if __name__ == "__main__":
-    main()

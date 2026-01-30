@@ -16,6 +16,7 @@ import lombok.Setter;
 @Builder
 public class DtcDto {
     private String vehicleId;
+    private String vin; // VIN 추가
     private String dtcCode;
     private String description;
     private String severity; // CRITICAL, WARNING, INFO

@@ -108,7 +108,7 @@ class AudioService:
                 status="ERROR",
                 analysis_type="IO",
                 category="UNKNOWN_AUDIO",
-                detail=AudioDetail(diagnosed_label="Load Error", description=str(e)),
+                data=AudioDetail(diagnosed_label="Load Error", description=str(e)),
                 confidence=0.0
             )
 
@@ -126,7 +126,7 @@ class AudioService:
                 status="UNKNOWN",
                 analysis_type="AST_FAILED",
                 category="UNKNOWN_AUDIO",
-                detail=AudioDetail(diagnosed_label="Error", description="AST Model Failed"),
+                data=AudioDetail(diagnosed_label="Error", description="AST Model Failed"),
                 confidence=0.0,
                 is_critical=False
             )
@@ -188,7 +188,7 @@ class AudioService:
             status="NORMAL",
             analysis_type="AST",
             category="ENGINE",
-            detail=AudioDetail(diagnosed_label="NORMAL", description="정상입니다."),
+            data=AudioDetail(diagnosed_label="NORMAL", description="정상입니다."),
             confidence=0.99,
             is_critical=False
         )

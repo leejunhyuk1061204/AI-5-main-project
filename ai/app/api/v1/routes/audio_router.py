@@ -19,6 +19,10 @@ async def analyze_audio(
     3. **LLM (2차)**: 미세 소음 정밀 진단 및 정비 권고
     """
     s3_url = request_body.audioUrl
+    vehicle_id = request_body.vehicleId
+    session_id = request_body.sessionId
+    
+    print(f"[Audio API] 요청 수신 - Vehicle: {vehicle_id}, Session: {session_id}, URL: {s3_url}")
 
     if not s3_url.startswith("http"):
         raise HTTPException(status_code=400, detail="유효한 S3 URL이 아닙니다.")
