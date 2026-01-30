@@ -42,7 +42,7 @@ export default function Login() {
 
     useEffect(() => {
         GoogleSignin.configure({
-            webClientId: '415824813180-to8ea5houck16m7as32t9cavi7aq87e5.apps.googleusercontent.com',
+            webClientId: '540652803257-cl4t2p9tsvd0lbffrck17rq2sjs7i0k1.apps.googleusercontent.com',
         });
     }, []);
 

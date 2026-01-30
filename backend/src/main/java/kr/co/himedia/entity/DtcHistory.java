@@ -71,6 +71,6 @@ public class DtcHistory {
     }
 
     public enum DtcStatus {
-        ACTIVE, RESOLVED, CLEARED
+        ACTIVE, RESOLVED, CLEARED, PENDING, STORED
     }
 }
