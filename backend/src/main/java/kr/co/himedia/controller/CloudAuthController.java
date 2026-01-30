@@ -41,7 +41,7 @@ public class CloudAuthController {
      */
     @PostMapping("/register")
     public ResponseEntity<ApiResponse<Vehicle>> registerCloudVehicle(
-            @RequestParam UUID userId,
+            @RequestParam("userId") UUID userId,
             @Valid @RequestBody CloudVehicleRegisterRequest request) {
 
         log.info("[Phase 3] 차량 등록 API 호출 - userId: {}, vehicleId: {}", userId, request.getProviderVehicleId());
@@ -57,7 +57,7 @@ public class CloudAuthController {
      */
     @PostMapping("/sync")
     public ResponseEntity<ApiResponse<Void>> syncVehicleData(
-            @RequestParam UUID vehicleId) {
+            @RequestParam("vehicleId") UUID vehicleId) {
 
         log.info("[CloudAuth] 차량 데이터 동기화 요청 - vehicleId: {}", vehicleId);
         cloudAuthService.syncVehicleData(vehicleId, true); // 수동 동기화 시에도 테이블 반영
@@ -69,7 +69,7 @@ public class CloudAuthController {
      */
     @PostMapping("/revoke")
     public ResponseEntity<ApiResponse<Void>> revokeCloudVehicle(
-            @RequestParam UUID userId,
+            @RequestParam("userId") UUID userId,
             @RequestBody CloudVehicleRegisterRequest request) {
 
         log.info("[CloudAuth] 차량 연동 해제 요청 - userId: {}, vehicleId: {}", userId, request.getProviderVehicleId());

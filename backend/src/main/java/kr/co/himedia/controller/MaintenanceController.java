@@ -23,16 +23,27 @@ public class MaintenanceController {
      */
     @PostMapping("/{vehicleId}/maintenance")
     public ApiResponse<List<MaintenanceHistoryResponse>> registerMaintenance(
-            @PathVariable UUID vehicleId,
+            @PathVariable("vehicleId") UUID vehicleId,
             @jakarta.validation.Valid @RequestBody List<MaintenanceHistoryRequest> requests) {
 
         List<MaintenanceHistoryResponse> responses = maintenanceService.registerMaintenanceList(vehicleId, requests);
         return ApiResponse.success(responses);
     }
 
+    /**
+     * 정비 이력 조회
+     */
+    @GetMapping("/{vehicleId}/maintenance")
+    public ApiResponse<List<MaintenanceHistoryResponse>> getMaintenanceHistory(
+            @PathVariable("vehicleId") UUID vehicleId) {
+
+        List<MaintenanceHistoryResponse> responses = maintenanceService.getMaintenanceHistory(vehicleId);
+        return ApiResponse.success(responses);
+    }
+
     @GetMapping("/{vehicleId}/consumables")
     public ApiResponse<List<ConsumableStatusResponse>> getConsumables(
-            @PathVariable UUID vehicleId) {
+            @PathVariable("vehicleId") UUID vehicleId) {
 
         List<ConsumableStatusResponse> response = maintenanceService.getConsumableStatus(vehicleId);
         return ApiResponse.success(response);
