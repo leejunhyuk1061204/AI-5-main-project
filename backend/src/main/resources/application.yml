@@ -62,7 +62,7 @@ app:
   storage:
     type: ${STORAGE_TYPE:local} # local or s3
   firebase:
-    config-path: ${FIREBASE_CONFIG_PATH:firebase-service-account.json}
+    config-path: ${FIREBASE_CONFIG_PATH}
 
 logging:
   file:
@@ -73,11 +73,12 @@ logging:
     org.springframework.web: DEBUG # 404 디버깅용 로그 추가
 
 # 암호화 키(코드는 가짜를 들고 있고, 서버가 진짜를 넣어주는 방식"이므로 보안상 안전함)
+# 암호화 키 (환경변수 관리)
 encryption:
-  key: ${ENCRYPTION_KEY:car-sentry-default-key-32bytes-!!} # 32바이트 권장
+  key: ${ENCRYPTION_KEY}
 
 jwt:
-  secret: ${JWT_SECRET:vmb70atp-bd59-400a-9450-523a253d0a90-this-is-a-long-secret-key-for-development}
+  secret: ${JWT_SECRET}
   access-expiration: 3600000 # 1시간 (테스트 완료 후 원복)
   refresh-expiration: 604800000 # 7일
 

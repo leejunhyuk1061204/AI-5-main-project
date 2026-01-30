@@ -10,7 +10,7 @@ public class UserSettingResponse {
 
     private boolean notiMaintenance;
     private boolean notiAnomaly;
-    private boolean notiRecall;
+    private boolean notiDtcTts;
     private boolean notiMarketing;
     private boolean nightPushAllowed;
 
@@ -18,7 +18,7 @@ public class UserSettingResponse {
         return UserSettingResponse.builder()
                 .notiMaintenance(setting.getNotiMaintenance())
                 .notiAnomaly(setting.getNotiAnomaly())
-                .notiRecall(setting.getNotiRecall())
+                .notiDtcTts(setting.getNotiDtcTts())
                 .notiMarketing(setting.getNotiMarketing())
                 .nightPushAllowed(setting.getNightPushAllowed())
                 .build();

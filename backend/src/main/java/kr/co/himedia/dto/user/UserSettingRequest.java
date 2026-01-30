@@ -9,7 +9,7 @@ public class UserSettingRequest {
 
     private Boolean notiMaintenance;
     private Boolean notiAnomaly;
-    private Boolean notiRecall;
+    private Boolean notiDtcTts;
     private Boolean notiMarketing;
     private Boolean nightPushAllowed;
 }

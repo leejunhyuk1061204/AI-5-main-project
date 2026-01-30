@@ -31,9 +31,9 @@ public class UserSetting {
     @Builder.Default
     private Boolean notiAnomaly = true;
 
-    @Column(name = "noti_recall", nullable = false)
+    @Column(name = "noti_dtc_tts", nullable = false)
     @Builder.Default
-    private Boolean notiRecall = true;
+    private Boolean notiDtcTts = true;
 
     @Column(name = "noti_marketing", nullable = false)
     @Builder.Default

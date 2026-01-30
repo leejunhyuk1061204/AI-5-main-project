@@ -65,7 +65,7 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS user_settings (
     user_id UUID PRIMARY KEY REFERENCES users (user_id),
     noti_maintenance BOOLEAN DEFAULT TRUE,
-    noti_anomaly BOOLEAN DEFAULT TRUE,
+    noti_anomaly BOOLEAN DEFAULT TRUE, -- AI 진단 리포트 알림 (Post-Trip report) 수신 여부
     noti_recall BOOLEAN DEFAULT TRUE,
     noti_marketing BOOLEAN DEFAULT FALSE,
     night_push_allowed BOOLEAN DEFAULT FALSE

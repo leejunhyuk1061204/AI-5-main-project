@@ -1,17 +1,55 @@
-import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, Switch } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, TouchableOpacity, Switch, Modal, ActivityIndicator, Alert } from 'react-native';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import BaseScreen from '../components/layout/BaseScreen';
+import { getUserSettings, updateUserSettings, UserSetting } from '../api/userSettingApi';
 
 export default function AlertSetting() {
     const navigation = useNavigation<any>();
+    const [loading, setLoading] = useState(true);
 
-    // Mock state for switches
-    const [maintenanceAlert, setMaintenanceAlert] = useState(true);
-    const [aiAlert, setAiAlert] = useState(true);
-    const [recallAlert, setRecallAlert] = useState(true);
-    const [marketingAlert, setMarketingAlert] = useState(false);
+    // Default state
+    const [settings, setSettings] = useState<UserSetting>({
+        notiMaintenance: true,
+        notiAnomaly: true,
+        notiDtcTts: true,
+        notiMarketing: false,
+        nightPushAllowed: false
+    });
+
+    // Fetch settings on mount
+    useEffect(() => {
+        loadSettings();
+    }, []);
+
+    const loadSettings = async () => {
+        try {
+            setLoading(true);
+            const data = await getUserSettings();
+            setSettings(data);
+        } catch (error) {
+            console.error('Failed to load settings:', error);
+            Alert.alert('오류', '설정 정보를 불러오는데 실패했습니다.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleToggle = async (key: keyof UserSetting, value: boolean) => {
+        // Optimistic update
+        const previousSettings = { ...settings };
+        setSettings(prev => ({ ...prev, [key]: value }));
+
+        try {
+            await updateUserSettings({ [key]: value });
+        } catch (error) {
+            console.error('Failed to update setting:', error);
+            // Revert on failure
+            setSettings(previousSettings);
+            Alert.alert('오류', '설정 변경에 실패했습니다.');
+        }
+    };
 
     const NotificationItem = ({
         icon,
@@ -43,7 +81,7 @@ export default function AlertSetting() {
                 </View>
             </View>
             <Switch
-                trackColor={{ false: '#3f3f46', true: '#007AFF' }}
+                trackColor={{ false: '#3f3f46', true: '#0d7ff2' }}
                 thumbColor={'#ffffff'}
                 ios_backgroundColor="#3f3f46"
                 onValueChange={onValueChange}
@@ -67,6 +105,16 @@ export default function AlertSetting() {
         </View>
     );
 
+    if (loading) {
+        return (
+            <BaseScreen header={HeaderCustom} padding={false}>
+                <View className="flex-1 items-center justify-center">
+                    <ActivityIndicator size="large" color="#0d7ff2" />
+                </View>
+            </BaseScreen>
+        );
+    }
+
     return (
         <BaseScreen
             header={HeaderCustom}
@@ -84,25 +132,32 @@ export default function AlertSetting() {
                         icon="build"
                         title="정비 및 소모품 알림"
                         subtitle="교체 주기 및 정비 예약 알림"
-                        value={maintenanceAlert}
-                        onValueChange={setMaintenanceAlert}
+                        value={settings.notiMaintenance}
+                        onValueChange={(val) => handleToggle('notiMaintenance', val)}
                     />
 
                     <NotificationItem
-                        icon="robot"
-                        iconType="community"
-                        title="AI 실시간 이상감지"
-                        subtitle="엔진 분석 실시간 상태 이상 알림"
-                        value={aiAlert}
-                        onValueChange={setAiAlert}
+                        icon="analytics"
+                        title="AI 진단 리포트 알림"
+                        subtitle="매 주행 후 AI 분석 리포트 발송"
+                        value={settings.notiAnomaly}
+                        onValueChange={(val) => handleToggle('notiAnomaly', val)}
                     />
 
                     <NotificationItem
-                        icon="error-outline"
-                        title="리콜 및 정기검사 정보"
-                        subtitle="국토부 리콜 및 정기검사 일정"
-                        value={recallAlert}
-                        onValueChange={setRecallAlert}
+                        icon="record-voice-over"
+                        title="고장 발생 시 음성 안내"
+                        subtitle="주행 중 문제 감지 시 즉시 음성 경고"
+                        value={settings.notiDtcTts}
+                        onValueChange={(val) => handleToggle('notiDtcTts', val)}
+                    />
+
+                    <NotificationItem
+                        icon="nights-stay"
+                        title="야간 푸시 알림"
+                        subtitle="21:00 ~ 08:00 알림 수신 허용"
+                        value={settings.nightPushAllowed}
+                        onValueChange={(val) => handleToggle('nightPushAllowed', val)}
                     />
                 </View>
 
@@ -116,8 +171,8 @@ export default function AlertSetting() {
                         icon="campaign"
                         title="마케팅 정보 수신"
                         subtitle="이벤트, 쿠폰 및 서비스 혜택 안내"
-                        value={marketingAlert}
-                        onValueChange={setMarketingAlert}
+                        value={settings.notiMarketing}
+                        onValueChange={(val) => handleToggle('notiMarketing', val)}
                     />
                 </View>
 
@@ -126,7 +181,7 @@ export default function AlertSetting() {
                     <View className="flex-row items-start gap-3">
                         <MaterialIcons name="info-outline" size={20} color="#0d7ff2" />
                         <Text className="flex-1 text-xs leading-relaxed font-normal text-white/50">
-                            차량 안전과 직결된 긴급 경보 및 시스템 필수 공지사항은 설정과 관계없이 발송될 수 있습니다. AI 이상감지 알림은 데이터 연결 상태에 따라 실제 차량 상태와 다를 수 있습니다.
+                            차량 안전과 직결된 긴급 경보 및 시스템 필수 공지사항은 설정과 관계없이 발송될 수 있습니다.
                         </Text>
                     </View>
                 </View>
