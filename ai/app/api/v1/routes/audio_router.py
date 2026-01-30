@@ -3,7 +3,7 @@ from ai.app.schemas.audio_schema import AudioResponse, AudioRequest
 from ai.app.services.audio.audio_service import AudioService
 
 # 1. URL: /predict/audio 설정
-router = APIRouter(prefix="/predict", tags=["Audio Analysis"])
+router = APIRouter(tags=["Audio Analysis"])
 
 @router.post("/audio", response_model=AudioResponse)
 async def analyze_audio(
@@ -30,7 +30,9 @@ async def analyze_audio(
     # Safe Access (Lazy Loading)
     ast_model = request.app.state.get_ast_model()
         
-    return await service.predict_audio_smart(s3_url, ast_model=ast_model)
+    result = await service.predict_audio_smart(s3_url, ast_model=ast_model)
+    print(f"[Audio API Response] 분석 완료 - Result: {result}")
+    return result
 
 
 

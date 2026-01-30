@@ -21,7 +21,7 @@ from ai.app.schemas.visual_schema import (
 from ai.app.services.visual.visual_service import get_smart_visual_diagnosis
 from ai.app.services.visual.domains.engine.engine_anomaly_service import EngineAnomalyPipeline
 
-router = APIRouter(prefix="/predict", tags=["Visual Analysis"])
+router = APIRouter(tags=["Visual Analysis"])
 
 
 @router.post("/visual")
@@ -70,6 +70,7 @@ async def analyze_visual(request_body: VisualRequest, request: Request):
         # 기존의 {"type": ..., "content": ...} 래핑을 제거하고 바로 반환
         # 반환 형식: { "status", "analysis_type", "category", "data": {...} }
         # =================================================================
+        print(f"[Visual API Response] 분석 완료 - Result: {result}")
         return result
             
     except Exception as e:
@@ -98,12 +99,14 @@ async def analyze_engine(request_body: EngineAnalysisRequest, request: Request):
             yolo_model=engine_model
         )
         
-        return EngineAnalysisResponse(
+        response = EngineAnalysisResponse(
             status=result.get("status", "NORMAL"),
             analysis_type=result.get("analysis_type", "SCENE_ENGINE"),
             category=result.get("category", "ENGINE_ROOM"),
             data=result["data"]
         )
+        print(f"[Engine API Response] 직접 분석 완료 - Result: {response.model_dump()}")
+        return response
         
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

@@ -32,10 +32,10 @@ public class AiClient {
 
     private final RestTemplate restTemplate;
 
-    @Value("${ai.server.url.visual:http://localhost:8001/api/v1/connect/predict/visual}")
+    @Value("${ai.server.url.visual:http://localhost:8001/api/v1/visual}")
     private String aiServerVisualUrl;
 
-    @Value("${ai.server.url.audio:http://localhost:8001/api/v1/connect/predict/audio}")
+    @Value("${ai.server.url.audio:http://localhost:8001/api/v1/audio}")
     private String aiServerAudioUrl;
 
     @Value("${ai.server.url.comprehensive:http://localhost:8001/api/v1/connect/predict/comprehensive}")
