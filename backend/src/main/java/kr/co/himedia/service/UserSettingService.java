@@ -46,8 +46,8 @@ public class UserSettingService {
             setting.setNotiMaintenance(request.getNotiMaintenance());
         if (request.getNotiAnomaly() != null)
             setting.setNotiAnomaly(request.getNotiAnomaly());
-        if (request.getNotiRecall() != null)
-            setting.setNotiRecall(request.getNotiRecall());
+        if (request.getNotiDtcTts() != null)
+            setting.setNotiDtcTts(request.getNotiDtcTts());
         if (request.getNotiMarketing() != null)
             setting.setNotiMarketing(request.getNotiMarketing());
         if (request.getNightPushAllowed() != null)
