@@ -55,17 +55,15 @@ class EnginePartResult(BaseModel):
     is_anomaly: bool = Field(..., description="이상 여부")
     anomaly_score: float = Field(..., description="이상 점수 (0.0~1.0)")
     threshold: float = Field(..., description="이상 판정 임계값")
-    defect_label: Optional[str] = Field(None, description="결함 명칭 (LLM)")
-    severity: str = Field("NORMAL", description="심각도 (NORMAL/WARNING/CRITICAL)")
-    description: Optional[str] = Field(None, description="상세 설명 (LLM)")
-    recommended_action: Optional[str] = Field(None, description="권장 조치 (LLM)")
+    defect_label: Optional[str] = Field(None, description="결함 명칭")
+    defect_category: Optional[str] = Field(None, description="결함 분류 (LEAK/CORROSION/PHYSICAL/WEAR/UNKNOWN)")
+    severity: str = Field("NORMAL", description="부품별 심각도 (NORMAL/WARNING/CRITICAL)")
 
 
 class EngineData(BaseModel):
     """엔진룸 분석 data 객체"""
-    analysis_status: str = Field("SUCCESS", description="분석 성공 여부 (SUCCESS/PARTIAL/FAILED)")
-    vehicle_type: str = Field(..., description="차량 유형 (ICE: 내연기관 / EV: 전기차)")
-    parts_detected: int = Field(..., description="감지된 부품 수")
+    vehicle_type: Optional[str] = Field(None, description="차량 유형 (ICE: 내연기관 / EV: 전기차)")
+    parts_detected: int = Field(0, description="감지된 부품 수")
     anomalies_found: int = Field(0, description="이상 징후 부품 수")
     results: List[EnginePartResult] = Field(default_factory=list, description="부품별 분석 결과")
 
@@ -78,8 +76,6 @@ class DashboardDetection(BaseModel):
     label: str = Field(..., description="경고등 명칭")
     color_severity: str = Field(..., description="색상 기반 심각도 (RED/YELLOW/GREEN)")
     confidence: float = Field(..., description="모델 확신도")
-    is_blinking: Optional[bool] = Field(None, description="점멸 여부")
-    meaning: Optional[str] = Field(None, description="경고등 의미 (LLM)")
     bbox: List[int] = Field(..., description="바운딩 박스 [x, y, w, h]")
 
 
@@ -105,12 +101,8 @@ class DashboardRecommendation(BaseModel):
 
 class DashboardData(BaseModel):
     """계기판 분석 data 객체"""
-    analysis_status: str = Field("SUCCESS", description="분석 성공 여부 (SUCCESS/PARTIAL/FAILED)")
-    vehicle_context: Optional[VehicleContext] = Field(None, description="차량 정보")
     detected_count: int = Field(0, description="감지된 경고등 수")
     detections: List[DashboardDetection] = Field(default_factory=list, description="경고등 목록")
-    integrated_analysis: Optional[IntegratedAnalysis] = Field(None, description="통합 분석")
-    recommendation: Optional[DashboardRecommendation] = Field(None, description="권장 조치")
 
 
 # =============================================================================
@@ -126,11 +118,8 @@ class ExteriorDetection(BaseModel):
 
 class ExteriorData(BaseModel):
     """외관 분석 data 객체"""
-    analysis_status: str = Field("SUCCESS", description="분석 성공 여부 (SUCCESS/PARTIAL/FAILED)")
-    damage_found: bool = Field(..., description="파손 발견 여부")
+    damage_found: bool = Field(False, description="파손 발견 여부")
     detections: List[ExteriorDetection] = Field(default_factory=list, description="파손 목록")
-    description: Optional[str] = Field(None, description="종합 설명 (LLM)")
-    repair_estimate: Optional[str] = Field(None, description="예상 수리 내용 (LLM)")
 
 
 class DetectionItem(BaseModel):
@@ -145,12 +134,9 @@ class DetectionItem(BaseModel):
 # =============================================================================
 class TireData(BaseModel):
     """타이어 분석 data 객체"""
-    analysis_status: str = Field("SUCCESS", description="분석 성공 여부 (SUCCESS/PARTIAL/FAILED)")
-    wear_status: str = Field(..., description="마모 상태 (GOOD/DANGER)")
+    wear_status: str = Field("GOOD", description="마모 상태 (GOOD/DANGER)")
     wear_level_pct: Optional[int] = Field(None, description="마모 진행도 (%)")
     critical_issues: Optional[List[str]] = Field(None, description="['cracked', 'flat', 'bulge', 'uneven'] 등")
-    description: Optional[str] = Field(None, description="상태 설명 (LLM)")
-    recommendation: Optional[str] = Field(None, description="권장 조치 (LLM)")
     is_replacement_needed: bool = Field(False, description="교체 필요 여부")
 
 

@@ -68,30 +68,18 @@ async def suggest_anomaly_label(
     분석 대상: {part_name}
     이상 점수: {anomaly_score:.2f}
 
-    [입력 이미지 설명]
-    1. 첫 번째 이미지: 부품 원본 Crop
-    2. 두 번째 이미지: 이상 부위가 붉게 표시된 Heatmap Overlay
-
-    [임무]
-    - Anomaly Detector가 이미 이 부품을 '이상(Anomaly)'으로 판정했습니다.
-    - 당신의 역할은 판정 여부를 따지는 것이 아니라, '어떤 종류의 결함인지' 설명하는 것입니다.
-    - 붉은색 Heatmap 영역에 집중하여 시각적 특징을 서술하세요.
-
     [결함 분류 기준]
     - LEAK: 누유, 액체 흔적 (오일, 냉각수)
-    - CORROSION: 녹, 산화, 부식 (배터리 단자 등)
-    - PHYSICAL: 균열, 찌그러짐, 탈락, 파손
-    - CONTAMINATION: 먼지 퇴적, 이물질
+    - CORROSION: 녹, 산화, 부식
+    - PHYSICAL: 균열, 찌그러짐, 파손
     - WEAR: 벨트 마모, 호스 경화
-    - UNKNOWN: 특징이 불명확함
+    - UNKNOWN: 특징 불명확
 
-    [출력 형식 - JSON]
+    [출력 형식 - JSON만]
     {{
-        "defect_category": "카테고리명",
-        "defect_label": "구체적_라벨명 (예: Battery_Acid_Leak)",
-        "description_ko": "한글 설명 (비전문가도 이해하기 쉽게)",
-        "severity": "MINOR|WARNING|CRITICAL",
-        "recommended_action": "권장 조치"
+        "defect_category": "LEAK|CORROSION|PHYSICAL|WEAR|UNKNOWN",
+        "defect_label": "구체적_라벨명",
+        "severity": "MINOR|WARNING|CRITICAL"
     }}
     """
     
@@ -101,9 +89,7 @@ async def suggest_anomaly_label(
         return {
             "defect_category": "UNKNOWN",
             "defect_label": "Analysis_Unavailable",
-            "description_ko": f"{part_name} 부품의 AI 정밀 분석이 불가능합니다. ({reason} 모드 - 실제 LLM 연결 필요)",
-            "severity": "WARNING",
-            "recommended_action": "AI 서버 설정을 확인하거나 육안으로 점검하십시오."
+            "severity": "WARNING"
         }
     
     try:
@@ -158,39 +144,26 @@ async def suggest_anomaly_label_with_base64(
     이상 점수: {anomaly_score:.2f}
     관심 영역: {bbox_desc}
 
-    [입력 이미지 설명]
-    1. 첫 번째 이미지: 부품 원본 Crop
-    {heatmap_desc}
-
-    [임무]
-    - Anomaly Detector가 이 부품을 분석했으나, **확신도가 낮거나 정밀 확인이 필요하여** 당신에게 재분석을 요청했습니다.
-    - 당신의 역할은 시각적 특징을 바탕으로 **이상이 있는지, 있다면 어떤 종류인지** 판별하는 것입니다.
-    - Heatmap 이미지가 제공되면 붉은 영역을 참고하되, 전체적인 시각 정보를 우선시하십시오.
-
     [판단 기준]
-    1. **NORMAL (정상)**: 먼지나 일반적인 사용감 정도이며, 기능상 문제가 없어 보임.
-    2. **ANOMALY (이상)**: 누유, 파손, 부식 등 명확한 결함이 보임.
+    1. **NORMAL (정상)**: 먼지나 일반적인 사용감 정도.
+    2. **ANOMALY (이상)**: 누유, 파손, 부식 등 명확한 결함.
 
-    [결함 분류 기준 (이상이 있을 경우에만)]
+    [결함 분류 기준]
     - LEAK: 누유, 액체 흔적
     - CORROSION: 녹, 산화, 부식
-    - PHYSICAL: 균열, 찌그러짐, 탈락, 파손
-    - CONTAMINATION: 먼지 퇴적 (심각한 경우), 이물질
+    - PHYSICAL: 균열, 찌그러짐, 파손
     - WEAR: 벨트 마모, 호스 경화
-    - UNKNOWN: 특징이 불명확함
+    - UNKNOWN: 특징 불명확
 
     [절대 규칙]
-    1. 반드시 아래 JSON 형식으로만 응답해야 합니다.
-    2. 정상이라고 판단되면 `defect_category`를 "NORMAL"로 설정하고 `defect_label`도 "NORMAL"로 하십시오.
-    3. `description_ko`에는 "구체적_라벨명" 같은 예시 텍스트를 절대 넣지 말고, 실제 관찰된 내용을 한글로 적으십시오.
+    1. 정상이면 defect_category를 "NORMAL"로 설정.
+    2. 반드시 아래 JSON 형식으로만 응답.
 
-    [출력 형식 - JSON]
+    [출력 형식 - JSON만]
     {{
-        "defect_category": "카테고리명 (NORMAL | LEAK | ...)",
-        "defect_label": "구체적_라벨명 (또는 Normal)",
-        "description_ko": "실제 관찰된 한글 설명",
-        "severity": "NORMAL|MINOR|WARNING|CRITICAL",
-        "recommended_action": "권장 조치 (정상이면 유지보수 권장)"
+        "defect_category": "NORMAL|LEAK|CORROSION|PHYSICAL|WEAR|UNKNOWN",
+        "defect_label": "구체적_라벨명",
+        "severity": "NORMAL|MINOR|WARNING|CRITICAL"
     }}
     """
     
@@ -200,9 +173,7 @@ async def suggest_anomaly_label_with_base64(
         return {
             "defect_category": "UNKNOWN",
             "defect_label": "Analysis_Unavailable",
-            "description_ko": f"{part_name} 부품의 AI 정밀 분석이 불가능합니다. ({reason} 모드 - 실제 LLM 연결 필요)",
             "severity": "WARNING",
-            "recommended_action": "AI 서버 설정을 확인하거나 육안으로 점검하십시오.",
             "is_mock": True
         }
 
@@ -241,9 +212,7 @@ async def suggest_anomaly_label_with_base64(
             return {
                 "defect_category": "UNKNOWN",
                 "defect_label": "Analysis_Failed",
-                "description_ko": "AI 응답을 받을 수 없습니다. (Empty Response)",
-                "severity": "WARNING",
-                "recommended_action": "재시도 또는 육안 점검"
+                "severity": "WARNING"
             }
 
         return json.loads(content)
@@ -253,18 +222,14 @@ async def suggest_anomaly_label_with_base64(
         return {
             "defect_category": "UNKNOWN",
             "defect_label": "Analysis_Failed",
-            "description_ko": "AI 분석 결과를 해석할 수 없습니다. (JSON Error)",
-            "severity": "WARNING",
-            "recommended_action": "서버 로그 확인 필요"
+            "severity": "WARNING"
         }
     except Exception as e:
         print(f"[LLM Anomaly Base64 Error] {e}")
         return {
             "defect_category": "UNKNOWN",
             "defect_label": "Analysis_Failed",
-            "description_ko": "AI 정밀 분석 중 오류가 발생했습니다.",
-            "severity": "WARNING",
-            "recommended_action": "육안 점검 권장"
+            "severity": "WARNING"
         }
 
 
@@ -336,41 +301,23 @@ async def analyze_general_image(s3_url: str) -> VisualResponse:
     - ENGINE 포함: Hard Mining용
     """
     SYSTEM_PROMPT = """
-    당신은 'Car-Sentry 시각 분석 팀'의 수석 검수관입니다. 
-    제공된 이미지를 분석하여 "차량 관련성"을 최우선으로 판단하고, 차량의 모든 부위(실내외)에 대해 진단을 수행하십시오.
+    당신은 'Car-Sentry 시각 분석 팀'입니다. 제공된 이미지를 분류하십시오.
 
-    [분석 단계 1: 차량 관련성 판단 (Strict Filter)]
-    - 이 이미지가 자동차(Vehicle)와 관련된 이미지입니까?
-    - 판단 기준: 자동차의 외관, 내관, 부품, 타이어, 계기판, 자동차 키, 정비 도구 등 차량과 관련된 맥락이 조금이라도 있으면 YES.
-    - 음식, 동물, 풍경, 사람 얼굴, 일반 가전제품 등 차량과 전혀 무관하면 NO.
-    
-    - YES -> [분석 단계 2]로 이동
-    - NO -> JSON 출력의 "type"을 "IRRELEVANT"로 설정하고, description에 "차량 관련 사진이 아닙니다."라고 명시하고 종료.
+    [분류 기준]
+    1. VEHICLE 관련: DASHBOARD, EXTERIOR, TIRE, ENGINE, ETC
+    2. IRRELEVANT: 차량과 무관한 이미지
 
-    [분석 단계 2: 상세 분류 및 진단]
-    다음 카테고리 중 하나로 분류하고 상태를 진단하십시오:
-    1. DASHBOARD: 계기판 경고등
-    2. EXTERIOR: 차량 외관 (파손 여부 확인)
-    3. TIRE_WHEEL: 타이어 및 휠
-    4. ENGINE: 엔진룸 내부
-    5. ETC: 그 외 모든 차량 관련 요소 (실내 시트, 핸들, 네비게이션, 트렁크, 하부, 자동차 키 등)
+    [상태 판단]
+    - NORMAL: 정상
+    - WARNING: 주의 필요
+    - CRITICAL: 즉시 조치 필요
 
-    [진단 가이드]
-    - ETC(실내 등)인 경우: "차량 실내(시트/핸들) 사진입니다. 특별한 파손은 보이지 않습니다." 처럼 설명.
-    - 상태(status): 특별한 이상이 없으면 NORMAL, 파손이나 오염이 심하면 WARNING.
-
-    [출력 형식 - JSON]
+    [출력 형식 - JSON만]
     {
         "type": "VEHICLE" | "IRRELEVANT",
         "sub_type": "DASHBOARD" | "EXTERIOR" | "TIRE" | "ENGINE" | "ETC",
-        "status": "NORMAL" | "WARNING" | "CRITICAL",
-        "description": "한글 설명 (차량 관련 사진이 아닙니다 or 상태 설명)",
-        "recommendation": "조치 사항 (해당 없으면 빈 문자열)"
+        "status": "NORMAL" | "WARNING" | "CRITICAL"
     }
-    
-    [절대 규칙]
-    1. 반드시 JSON 형식으로만 응답해야 합니다.
-    2. 분석이 모호하거나 어려우면 "type": "VEHICLE", "sub_type": "ETC", "status": "NORMAL"로 응답하십시오.
     """
     if should_use_fallback():
         reason = "MOCK" if os.getenv("MOCK_LLM", "false").lower() == "true" else "Local"
@@ -379,11 +326,7 @@ async def analyze_general_image(s3_url: str) -> VisualResponse:
             status="NORMAL",
             analysis_type="LLM_FALLBACK",
             category="GENERAL",
-            data={
-                "description": f"이미지 데이터가 양호합니다. ({reason} 분석 모드)", 
-                "recommendation": "차량 관리 가이드에 따라 정기 점검을 권장합니다."
-            },
-            confidence=0.9
+            data={}
         )
 
     try:
@@ -407,15 +350,10 @@ async def analyze_general_image(s3_url: str) -> VisualResponse:
         if not content or content.strip() == "":
             print(f"[LLM General] Empty response received.")
             return VisualResponse(
-                status="ERROR", # User requested ERROR for failure
+                status="ERROR",
                 analysis_type="LLM_GENERAL",
                 category="ERROR",
-                data={
-                    "description": "AI 분석 응답이 비어있습니다. (LLM 모델 응답 실패)",
-                    "recommendation": "잠시 후 다시 시도하거나 관리자에게 문의하세요.",
-                    "processed_image_url": s3_url
-                },
-                confidence=0.0
+                data={}
             )
 
         try:
@@ -423,15 +361,10 @@ async def analyze_general_image(s3_url: str) -> VisualResponse:
         except json.JSONDecodeError:
             print(f"[LLM General] JSON Parsing Failed. Raw: {content}")
             return VisualResponse(
-                status="NORMAL", # Fail-safe
+                status="NORMAL",
                 analysis_type="LLM_GENERAL",
                 category="ETC",
-                data={
-                    "description": "AI 분석 결과를 해석할 수 없습니다.",
-                    "recommendation": "잠시 후 다시 시도해주세요.",
-                    "processed_image_url": s3_url
-                },
-                confidence=0.5
+                data={}
             )
 
         # Map LLM result to VisualResponse
@@ -441,22 +374,14 @@ async def analyze_general_image(s3_url: str) -> VisualResponse:
                 status="ERROR",
                 analysis_type="LLM_GENERAL",
                 category="IRRELEVANT",
-                data={
-                    "description": "차량과 관련 없는 이미지입니다.",
-                    "recommendation": "차량 사진을 업로드해주세요.",
-                    "processed_image_url": s3_url
-                }
+                data={}
             )
 
         return VisualResponse(
             status=result.get("status", "WARNING"),
             analysis_type="LLM_GENERAL",
             category=result.get("sub_type", "ETC"),
-            data={
-                "description": result.get("description", ""),
-                "recommendation": result.get("recommendation", ""),
-                "processed_image_url": s3_url if not s3_url.startswith("data:") else "data:image/jpeg;base64,...(truncated)"
-            }
+            data={}
         )
         
     except Exception as e:
@@ -471,11 +396,7 @@ async def analyze_general_image(s3_url: str) -> VisualResponse:
             status="ERROR", 
             analysis_type="LLM_GENERAL", 
             category="ERROR", 
-            data={
-                "description": detailed_desc, 
-                "recommendation": "관리자에게 OpenAI API 설정을 확인해달라고 요청하세요.",
-                "processed_image_url": s3_url
-            }
+            data={}
         )
 
 # ---------------------------------------------------------
@@ -486,29 +407,24 @@ async def analyze_audio_with_llm(s3_url: str, audio_bytes: Optional[bytes] = Non
     당신은 'Car-Sentry 소음·진동(NVH) 분석 팀'의 수석 엔지니어입니다. 
     오디오 데이터에서 기계적인 이상 징후를 소리만으로 찾아내십시오.
 
-    [분석 가이드라인]
-    1. 분류(Category): 소리의 근원지가 되는 핵심 부품을 분류하십시오.
-       - ENGINE (엔진: 노킹, 밸브 소리)
-       - SUSPENSION (서스펜션: 찌그덕, 덜컹거림)
-       - BRAKES (브레이크: 스끼, 쇠 갈리는 소리)
-       - EXHAUST (배기: 머플러 터진 소리, 배기음)
-       - TIRES_WHEELS_AUDIO (타이어/휠: 주행 소음, 베어링)
-       - BODY (차체: 풍절음, 잡소리)
-       - UNKNOWN_AUDIO (확신없음)
-    2. 음향적 특징: 리듬, 피치, 질감 분석.
-    3. 기계적 연결: 소리와 부품 마찰의 상관관계 추론.
+    [분류 Category]
+    - ENGINE: 엔진 소리 (노킹, 밸브)
+    - SUSPENSION: 서스펜션 (찌그덕, 덜컡)
+    - BRAKES: 브레이크 (스끌, 갈림)
+    - EXHAUST: 배기 (머플러)
+    - TIRES_WHEELS_AUDIO: 타이어/휠 (주행 소음, 베어링)
+    - BODY: 차체 (풍절음, 잡소리)
+    - UNKNOWN_AUDIO: 확신없음
     
     [데이터 품질 대응]
-    - 소음 과다 시 status를 "RE_RECORD_REQUIRED"로 설정하십시오.
+    - 소음 과다 시 status를 "RE_RECORD_REQUIRED"로 설정.
 
-    [출력 형식]
+    [출력 형식 - JSON만]
     {
         "diagnosed_label": "진단명",
-        "category": "분류명(위 리스트 중 택1)",
-        "description": "상세 분석 및 조언",
-        "status": "NORMAL" | "FAULTY" | "RE_RECORD_REQUIRED",
-        "confidence": 0.0 ~ 1.0,
-        "analysis_summary": "주요 근거 요약"
+        "category": "분류명",
+        "status": "NORMAL" | "WARNING" | "CRITICAL" | "RE_RECORD_REQUIRED",
+        "confidence": 0.0 ~ 1.0
     }
     """
     if should_use_fallback():
@@ -519,8 +435,7 @@ async def analyze_audio_with_llm(s3_url: str, audio_bytes: Optional[bytes] = Non
             analysis_type="LLM_AUDIO",
             category="ENGINE",
             detail=AudioDetail(
-                diagnosed_label="정상 구동음", 
-                description=f"엔진 구동음이 규칙적이고 정상입니다. ({reason} 분석 모드)"
+                diagnosed_label="정상 구동음"
             ),
             confidence=0.9,
             is_critical=False
@@ -560,25 +475,23 @@ async def analyze_audio_with_llm(s3_url: str, audio_bytes: Optional[bytes] = Non
         content = response.choices[0].message.audio.transcript
 
         
-        # [Robust] Regex를 이용한 강력한 JSON 추출
         match = re.search(r'\{.*\}', content, re.DOTALL)
         if match:
             try:
                 result = json.loads(match.group())
             except json.JSONDecodeError:
-                result = {"status": "FAULTY", "description": content, "diagnosed_label": "Unknown"}
+                result = {"status": "FAULTY", "diagnosed_label": "Unknown"}
         else:
-            result = {"status": "FAULTY", "description": content, "diagnosed_label": "Unknown"}
+            result = {"status": "FAULTY", "diagnosed_label": "Unknown"}
 
         current_status = result.get("status", "FAULTY")
 
         return AudioResponse(
             status=current_status,
             analysis_type="LLM_AUDIO",
-            category=result.get("category", "ENGINE"), # 카테고리 추가 (기본값 ENGINE)
+            category=result.get("category", "ENGINE"),
             detail=AudioDetail(
-                diagnosed_label=result.get("diagnosed_label", "LLM 진단"),
-                description=result.get("description", "분석 완료")
+                diagnosed_label=result.get("diagnosed_label", "LLM 진단")
             ),
             confidence=float(result.get("confidence", 0.8)),
             is_critical=(current_status == "FAULTY")
@@ -589,7 +502,7 @@ async def analyze_audio_with_llm(s3_url: str, audio_bytes: Optional[bytes] = Non
             status="ERROR",
             analysis_type="LLM_AUDIO",
             category="UNKNOWN_AUDIO",
-            detail=AudioDetail(diagnosed_label="Error", description="오디오 분석 실패"),
+            detail=AudioDetail(diagnosed_label="Error"),
             confidence=0.0,
             is_critical=False
         )
@@ -796,6 +709,7 @@ async def generate_training_labels(s3_url: str, domain: str) -> dict:
     [절대 규칙]
     1. 반드시 아래 JSON 형식으로만 응답해야 합니다. 설명이나 마크다운(```json 등)을 포함하지 마십시오.
     2. 식별된 객체가 없거나 분석이 불가능한 경우에도 **반드시** 아래 실패 포맷을 그대로 출력하십시오.
+    3. 모든 `class`명은 반드시 **영문 언더바 형식(English_With_Underscore)**으로 작성하십시오. (한글 및 공백 금지)
     
     [분석 불가능 시 출력]
     {{
@@ -804,22 +718,30 @@ async def generate_training_labels(s3_url: str, domain: str) -> dict:
     }}
 
     [정상 출력 형식 - JSON]
-    {
+    {{
         "labels": [
-            {{"class": "객체명 (예: Dent, Scratch, Headlight_Broken)", "bbox": [x_center, y_center, width, height]}}
+             {{ "part": "English_Part_Name", "damage": "English_Damage_Name", "bbox": [x1, y1, x2, y2] }}
         ],
         "status": "NORMAL" | "WARNING" | "CRITICAL"
-    }
+    }}
 
     [예시 - Exterior]
-    {
+    {{
         "labels": [
-             {{"class": "Dent", "bbox": [0.5, 0.5, 0.2, 0.3]}}
+             {{ "part": "Front_Bumper", "damage": "Scratch", "bbox": [0.1, 0.2, 0.4, 0.5] }}
         ],
         "status": "WARNING"
-    }
+    }}
     
-    bbox는 이미지 크기 대비 0.0 ~ 1.0 사이의 정규화된 좌표(Ratio)입니다.
+    [예시 - Dashboard]
+    {{
+        "labels": [
+             {{ "part": "Check_Engine", "damage": "Indicator_On", "bbox": [0.4, 0.4, 0.6, 0.6] }}
+        ],
+        "status": "WARNING"
+    }}
+    
+    bbox는 이미지 크기 대비 0.0 ~ 1.0 사이의 정규화된 [좌측상단x, 좌측상단y, 우측하단x, 우측하단y] 좌표(Ratio)입니다.
     """
     
     try:
@@ -867,21 +789,27 @@ async def generate_audio_labels(s3_url: str, audio_bytes: Optional[bytes] = None
         {"label": "진단명", "category": "카테고리", "status": "..."}
     """
     PROMPT = """
-    이 차량 소리를 분석하여 AI 학습용 라벨을 생성하세요.
+    Analyze this vehicle sound and generate labels for AI training.
     
-    [분류 카테고리]
-    - ENGINE: 엔진 관련 (노킹, 미스파이어 등)
-    - BRAKES: 브레이크 관련 (스키, 갈리는 소리)
-    - SUSPENSION: 서스펜션 관련 (덜컹, 쿵쿵)
-    - EXHAUST: 배기 관련 (터진 소리, 비정상 배기음)
-    - NORMAL: 정상 구동음
+    [Classification Logic]
+    - Identify if the sound is NORMAL or FAULTY.
+    - Status: "NORMAL" for healthy vehicle sounds, "FAULTY" for any mechanical issues.
     
-    [출력 형식 - JSON]
+    [Categories]
+    - ENGINE, BRAKES, SUSPENSION, EXHAUST, BODY, UNKNOWN
+    
+    [Output Rules]
+    1. Respond ONLY in JSON format.
+    2. Respond with "NORMAL_SOUND" or "FAULTY_SOUND" for the label field.
+    3. Ensure all fields are in English.
+    
+    [Output JSON Format]
     {
-        "label": "실제_진단명 (예: Engine_Knock)",
-        "category": "관찰된 결함 설명",
-        "status": "NORMAL" | "FAULTY",
-        "confidence": 0.0 ~ 1.0
+        "label": "NORMAL_SOUND" | "FAULTY_SOUND",
+        "category": "ENGINE" | "BRAKES" | "SUSPENSION" | "EXHAUST" | "BODY" | "UNKNOWN",
+        "status": "NORMAL" | "WARNING" | "CRITICAL",
+        "confidence": 0.0 ~ 1.0,
+        "reason": "Brief explanation of the sound in English"
     }
     """
     

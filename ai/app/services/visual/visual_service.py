@@ -198,72 +198,52 @@ async def get_smart_visual_diagnosis(
                             # [Sanitize] Add source check
                             lbl = sanitize_confidence(lbl)
                             
-                            # BBox Conversion: Ratio (0..1) -> Pixel (w, h)
-                            # BBox Conversion: Ratio (cx, cy, w, h) -> Pixel (x1, y1, x2, y2)
-                            # LLM은 [cx, cy, w, h] 정규화 좌표를 반환함 (프롬프트 규칙)
+                            # BBox Conversion: Ratio ([x1, y1, x2, y2]) -> Pixel ([x, y, w, h])
                             raw_bbox = lbl.get("bbox", [0, 0, 0, 0])
-                            
+                            pixel_bbox = [0, 0, 0, 0]
                             if image and len(raw_bbox) == 4:
-                                width, height = image.size
-                                # 1. Denormalize (Ratio -> Pixel Center/WH)
-                                cx = raw_bbox[0] * width
-                                cy = raw_bbox[1] * height
-                                w = raw_bbox[2] * width
-                                h = raw_bbox[3] * height
-                                
-                                # 2. Center-WH -> Corner-XY
-                                x1 = int(cx - w / 2)
-                                y1 = int(cy - h / 2)
-                                x2 = int(cx + w / 2)
-                                y2 = int(cy + h / 2)
-                                
-                                # 3. Boundary Check
-                                x1 = max(0, x1)
-                                y1 = max(0, y1)
-                                x2 = min(width, x2)
-                                y2 = min(height, y2)
-                                
-                                pixel_bbox = [x1, y1, x2, y2]
-                            else:
-                                pixel_bbox = [0, 0, 0, 0]
+                                from ai.app.services.visual.yolo_utils import normalize_to_xywh
+                                pixel_bbox = normalize_to_xywh(raw_bbox, image.width, image.height)
 
-                        # Schema에 맞는 Dict 생성
-                        if sub_type == "ENGINE":
-                            llm_detections.append({
-                                "part_name": lbl.get("class", "Unknown"),
-                                "bbox": pixel_bbox,
-                                "is_anomaly": True, # LLM이 찾은건 보통 문제있는 것일 확률 높음 (가정)
-                                "anomaly_score": 0.5,
-                                "threshold": 0.5,
-                                "defect_label": "LLM_Detected",
-                                "severity": "WARNING",
-                                "description": "AI 정밀 분석으로 식별된 부품입니다."
-                            })
-                        elif sub_type == "DASHBOARD":
-                            llm_detections.append({
-                                "label": lbl.get("class", "Unknown"),
-                                "color_severity": "YELLOW",
-                                "confidence": 0.9,
-                                "bbox": pixel_bbox,
-                                "is_blinking": None,
-                                "meaning": "LLM 감지"
-                            })
-                        elif sub_type == "EXTERIOR":
-                            llm_detections.append({
-                                "part": "차체", 
-                                "damage_type": lbl.get("class", "Destruction"),
-                                "severity": "WARNING",
-                                "confidence": 0.9,
-                                "bbox": pixel_bbox
-                            })
-                        elif sub_type == "TIRE":
-                            # Note: TireData schema uses flat fields, but if there's a list for issues:
-                            # TireData usually doesn't output a list of bboxes in 'data' root.
-                            # But we can try to fit it if Schema allows.
-                            pass
-                            
+                            # Domain-specific mapping
+                            if sub_type == "ENGINE":
+                                llm_detections.append({
+                                    "part_name": lbl.get("part", "Unknown").replace(" ", "_"),
+                                    "bbox": pixel_bbox,
+                                    "is_anomaly": True,
+                                    "anomaly_score": 0.5,
+                                    "threshold": 0.5,
+                                    "defect_label": lbl.get("damage", "Anomaly").replace(" ", "_"),
+                                    "severity": "WARNING",
+                                    "description": "AI 정밀 분석으로 식별된 부품입니다."
+                                })
+                            elif sub_type == "DASHBOARD":
+                                llm_detections.append({
+                                    "label": lbl.get("part", "Unknown").replace(" ", "_"),
+                                    "color_severity": "YELLOW",
+                                    "confidence": 0.9,
+                                    "bbox": pixel_bbox,
+                                    "is_blinking": None,
+                                    "meaning": lbl.get("damage", "Warning").replace(" ", "_")
+                                })
+                            elif sub_type == "EXTERIOR":
+                                llm_detections.append({
+                                    "part": lbl.get("part", "Unknown").replace(" ", "_"), 
+                                    "damage_type": lbl.get("damage", "Damage").replace(" ", "_"),
+                                    "severity": "WARNING",
+                                    "confidence": 0.9,
+                                    "bbox": pixel_bbox
+                                })
+                            elif sub_type == "TIRE":
+                                pass
                 except Exception as e:
                     print(f"[Visual Service] LLM BBox Gen Error: {e}")
+
+            # Ensure all labels use underscores
+            for det in llm_detections:
+                for key in ["part_name", "label", "part", "damage_type", "defect_label", "meaning"]:
+                    if key in det and isinstance(det[key], str):
+                        det[key] = det[key].replace(" ", "_").replace("(", "_").replace(")", "")
 
             # [Logic] analysis_status 결정
             # - 기본적으로 LLM Fallback은 'PARTIAL' (YOLO 미사용)로 볼 수도 있으나, 
@@ -291,23 +271,13 @@ async def get_smart_visual_diagnosis(
                     "analysis_status": status_val,
                     "vehicle_context": {"inferred_model": None, "dashboard_type": None},
                     "detected_count": len(llm_detections),
-                    "detections": llm_detections,
-                    "integrated_analysis": {
-                        "severity_score": 5 if llm_detections else 0,
-                        "description": llm_result.data.get("description", "분석 불가"),
-                        "short_term_risk": None
-                    },
-                    "recommendation": {
-                        "primary_action": llm_result.data.get("recommendation", "점검 권장")
-                    }
+                    "detections": llm_detections
                 }
             elif sub_type == "EXTERIOR":
                 standardized_data = {
                     "analysis_status": status_val,
                     "damage_found": (llm_result.status != "NORMAL") or (len(llm_detections) > 0),
-                    "detections": llm_detections,
-                    "description": llm_result.data.get("description", ""),
-                    "repair_estimate": llm_result.data.get("recommendation", "")
+                    "detections": llm_detections
                 }
             elif sub_type == "TIRE":
                 standardized_data = {
@@ -315,8 +285,6 @@ async def get_smart_visual_diagnosis(
                     "wear_status": "UNKNOWN",
                     "wear_level_pct": None,
                     "critical_issues": [],
-                    "description": llm_result.data.get("description", ""),
-                    "recommendation": llm_result.data.get("recommendation", ""),
                     "is_replacement_needed": False
                 }
 
