@@ -46,11 +46,20 @@ export default function ActiveLoading({ navigation }: any) {
         console.log("Starting Background OBD Polling...");
         ObdService.startPolling(1000);
 
-        // 2. Data Listener for Transition
+        // 2. 데이터 수신 여부와 관계없이 5초 후 자동 이동 (더미 결과 화면)
+        const autoNavigateTimer = setTimeout(() => {
+            console.log("[ActiveLoading] Auto-navigating to ObdResult after timeout...");
+            navigation.replace('ObdResult');
+        }, 5000);
+
+        // 3. Data Listener for Early Transition (데이터 받으면 즉시 이동)
         const unsubscribe = ObdService.onData((data) => {
             // Check if we received valid data (any primary field)
             if (data.rpm !== undefined || data.speed !== undefined || data.voltage !== undefined) {
                 console.log("[ActiveLoading] Valid data received! Transitioning to Real-time Dashboard...");
+
+                // Clear the auto-navigate timer since we're navigating early
+                clearTimeout(autoNavigateTimer);
 
                 // Unsubscribe to avoid double triggers
                 unsubscribe();
@@ -60,14 +69,14 @@ export default function ActiveLoading({ navigation }: any) {
             }
         });
 
-        // 3. Scanner Line Animation
+        // 4. Scanner Line Animation
         scanLineY.value = withRepeat(
             withTiming(1, { duration: 3000, easing: Easing.linear }),
             -1,
             true
         );
 
-        // 4. Particle Pulse
+        // 5. Particle Pulse
         particleOpacity.value = withRepeat(
             withSequence(
                 withTiming(1, { duration: 800 }),
@@ -77,22 +86,15 @@ export default function ActiveLoading({ navigation }: any) {
             true
         );
 
-        // 5. Slow rotation
+        // 6. Slow rotation
         rotate.value = withRepeat(
             withTiming(360, { duration: 20000, easing: Easing.linear }),
             -1,
             false
         );
 
-        // Safety Timeout: If no data for 20 seconds, show alert or fallback
-        const safetyTimer = setTimeout(() => {
-            console.warn("[ActiveLoading] No data received within 20s.");
-            // Optional: Alert user or just go to result anyway (as empty)
-            // navigation.replace('ObdResult'); 
-        }, 20000);
-
         return () => {
-            clearTimeout(safetyTimer);
+            clearTimeout(autoNavigateTimer);
             unsubscribe();
             // NOTE: Do NOT call ObdService.stopPolling() here!
             // We want the connection to persist to the next screen.
