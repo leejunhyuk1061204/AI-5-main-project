@@ -33,6 +33,19 @@ public class MasterDataService {
                 .collect(Collectors.toList());
     }
 
+    // 소모품 코드로 조회
+    public ConsumableItemDto getConsumableByCode(String code) {
+        return consumableItemRepository.findByCode(code)
+                .map(item -> new ConsumableItemDto(
+                        item.getId(),
+                        item.getCode(),
+                        item.getName(),
+                        item.getDescription(),
+                        item.getDefaultIntervalMileage(),
+                        item.getDefaultIntervalMonths()))
+                .orElse(null);
+    }
+
     // 제조사 목록 조회 (중복 제거)
     public List<String> getManufacturers() {
         return carModelMasterRepository.findDistinctManufacturers();

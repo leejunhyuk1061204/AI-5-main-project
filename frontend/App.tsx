@@ -59,6 +59,9 @@ import Cloud from './setting/Cloud';
 import Membership from './setting/Membership';
 import ChatCameraScreen from './diagnosis/ChatCameraScreen';
 import ChatAudioScreen from './diagnosis/ChatAudioScreen';
+import MaintenanceBook from './maintenance/MaintenanceBook';
+import ReceiptScan from './maintenance/ReceiptScan';
+import ReceiptResult from './maintenance/ReceiptResult';
 
 // Keep the splash screen visible while we fetch resources
 ExpoSplashScreen.preventAutoHideAsync();
@@ -268,6 +271,9 @@ export default function App() {
                 <Stack.Screen name="CarEdit" component={CarEdit} />
                 <Stack.Screen name="Cloud" component={Cloud} />
                 <Stack.Screen name="Membership" component={Membership} />
+                <Stack.Screen name="MaintenanceBook" component={MaintenanceBook} />
+                <Stack.Screen name="ReceiptScan" component={ReceiptScan} />
+                <Stack.Screen name="ReceiptResult" component={ReceiptResult} />
               </Stack.Navigator>
               <GlobalAlert />
               <GlobalDatePicker />

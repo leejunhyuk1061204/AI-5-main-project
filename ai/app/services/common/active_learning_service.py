@@ -101,7 +101,7 @@ class ActiveLearningService:
         """
         try:
             # 필요한 모듈 지연 로딩 (순환 참조 방지)
-            from ai.app.services.manifest_service import add_visual_entry, add_audio_entry
+            from ai.app.services.common.manifest_service import add_visual_entry, add_audio_entry
             
             # [Fix] 문자열 추측 대신 명시적 domain 파라미터 사용
             if domain == "audio":
