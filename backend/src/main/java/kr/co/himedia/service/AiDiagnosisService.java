@@ -255,8 +255,10 @@ public class AiDiagnosisService {
                             globalAiSemaphore.availablePermits(),
                             sessionSemaphore.availablePermits());
                     try {
+                        log.info("[Backend -> AI] Visual 분석 요청 시작 - URL: {}", imageUrl);
                         Map<String, Object> result = aiClient.callVisualAnalysis(imageUrl, requestDto.getVehicleId(),
                                 sessionId);
+                        log.info("[AI -> Backend] Visual 분석 응답 수신 - 결과: {}", objectMapper.writeValueAsString(result));
                         log.info("[Visual] 분석 완료 (Session: {})", sessionId);
                         return result;
                     } finally {
