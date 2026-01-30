@@ -75,10 +75,8 @@ class PartAnalysisResult:
     threshold: float
     defect_label: str
     defect_category: str
-    description: str
     severity: str
-    recommended_action: str
-    # heatmap_base64 removed for optimization
+    # description, recommended_action 삭제 (API 명세서와 일치)
 
 
 # =============================================================================
@@ -164,13 +162,11 @@ class EngineAnomalyPipeline:
                         "bbox": lbl.get("bbox", [0,0,0,0]),
                         "confidence": 0.9,
                         "is_anomaly": True,
-                        "anomaly_score": 1.0, # LLM이 이상하다고 했으므로 높게 설정
+                        "anomaly_score": 1.0,
                         "threshold": 0.5,
                         "defect_label": "Anomaly(LLM)",
                         "defect_category": "UNKNOWN",
-                        "description": "AI 정밀 분석으로 이상이 감지되었습니다.",
                         "severity": status,
-                        "recommended_action": "정비소 점검 권장",
                         "heatmap_base64": None
                     })
 
@@ -183,9 +179,7 @@ class EngineAnomalyPipeline:
                     "parts_detected": len(fallback_results),
                     "anomalies_found": len([r for r in fallback_results if r["is_anomaly"]]),
                     "results": fallback_results,
-                    "llm_fallback": True,
-                    "description": "이미지에서 의미 있는 엔진룸 부품을 찾을 수 없으며, AI 정밀 분석(GPT) 서버와 연결도 원활하지 않습니다." if status == "ERROR" else (llm_result.data.get("description") if hasattr(llm_result, 'data') else "엔진룸 분석 실패"),
-                    "recommendation": "밝은 곳에서 엔진룸 전체가 잘 보이도록 다시 촬영해 주세요." if status == "ERROR" else (llm_result.data.get("recommendation") if hasattr(llm_result, 'data') else "정비소 점검 권장")
+                    "llm_fallback": True
                 }
             }
 
@@ -364,9 +358,7 @@ class EngineAnomalyPipeline:
                     llm_res = {
                         "defect_category": "NORMAL",
                         "defect_label": "Normal",
-                        "description_ko": f"{part_name} 부품이 정상적인 상태입니다. 특별한 결함 징후가 발견되지 않았습니다.",
-                        "severity": "NORMAL",
-                        "recommended_action": "주기적인 육안 점검을 유지하십시오."
+                        "severity": "NORMAL"
                     }
                 else:
                     # 정상 범위지만 확신도가 낮으면 LLM 확인 (Dual-Check)
@@ -380,12 +372,11 @@ class EngineAnomalyPipeline:
                         anomaly_score=anomaly_result.score
                     )
 
-            # [Consistency Enforce] 최종 판정이 정상이면, LLM이 뭐라고 했든 결함 필드는 '정상'으로 통일
+            # [Consistency Enforce] 최종 판정이 정상이면, 결함 필드는 '정상'으로 통일
             if not final_is_anomaly:
                 llm_res["defect_category"] = "NORMAL"
                 llm_res["defect_label"] = "NORMAL"
                 llm_res["severity"] = "NORMAL"
-                # description/recommendation은 LLM의 것을 유지 (상세 설명 용도)
 
             return PartAnalysisResult(
                 part_name=part_name,
@@ -396,9 +387,8 @@ class EngineAnomalyPipeline:
                 threshold=anomaly_result.threshold,
                 defect_label=llm_res.get("defect_label", "Unknown"),
                 defect_category=llm_res.get("defect_category", "UNKNOWN"),
-                description=llm_res.get("description_ko", ""),
-                severity=llm_res.get("severity", "WARNING"),
-                recommended_action=llm_res.get("recommended_action", "")
+                severity=llm_res.get("severity", "WARNING")
+                # description, recommended_action 삭제 (API 명세서와 일치)
             )
 
     # _load_image_async 제거 (visual_service 피쳐 활용)

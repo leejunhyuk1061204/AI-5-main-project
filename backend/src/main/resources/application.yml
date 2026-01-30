@@ -88,3 +88,11 @@ smartcar:
   client-secret: ${SMARTCAR_CLIENT_SECRET:dummy}
   redirect-uri: ${SMARTCAR_REDIRECT_URI:http://localhost:8080/api/smartcar/callback}
   mode: ${SMARTCAR_MODE:test}
+
+ocr:
+  naver:
+    invoke-url: ${NAVER_OCR_INVOKE_URL:}
+    secret-key: ${NAVER_OCR_SECRET_KEY:}
+  openai:
+    api-key: ${OPENAI_API_KEY:}
+
