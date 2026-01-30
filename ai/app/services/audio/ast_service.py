@@ -166,17 +166,19 @@ async def run_ast_inference(processed_audio_buffer, ast_model_payload=None) -> A
             if confidence < 0.5:
                 status = "UNKNOWN"
                 is_critical = False
-                category = "UNKNOWN_AUDIO"
-                label_name = "unknown"
-                description = "분류할 수 없는 소리입니다. 차량 관련 소리인지 확인해주세요."
+                category = "UNKNOWN_SOUND"
+                label_name = "UNKNOWN"
+                description = "Unidentifiable sound detected."
             elif label_lower in NORMAL_LABELS or "normal" in label_lower:
                 status = "NORMAL"
                 is_critical = False
-                description = "정상적인 소리입니다."
+                label_name = "NORMAL_SOUND"
+                description = "The vehicle sound is normal."
             else:
-                status = "FAULTY"
+                status = "CRITICAL"
                 is_critical = True
-                description = f"{label_name} 소음이 감지되었습니다. 점검이 필요합니다."
+                label_name = "FAULTY_SOUND"
+                description = "Abnormal mechanical noise detected. Urgent inspection required."
             
             return AudioResponse(
                 status=status,

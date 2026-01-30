@@ -617,7 +617,7 @@ async def analyze_audio_local(file: UploadFile = File(...)):
         import io
         import torch
         import torch.nn.functional as F
-        from ai.app.services.ast_service import NORMAL_LABELS, get_category_from_label
+        from ai.app.services.audio.ast_service import NORMAL_LABELS, get_category_from_label
         
         tmp_path = os.path.join(tempfile.gettempdir(), f"audio_test_{os.getpid()}.wav")
         
@@ -672,7 +672,7 @@ async def analyze_audio_local(file: UploadFile = File(...)):
             # [Test Router] Production(AudioService)와 동일한 LLM Fallback 로직 적용
             if confidence < 0.85:
                 print(f"[Test Router] AST Low Confidence ({confidence:.2f}). Fallback to LLM...")
-                from ai.app.services.llm_service import analyze_audio_with_llm
+                from ai.app.services.common.llm_service import analyze_audio_with_llm
                 
                 # [Safe] 라이브러리 충돌 방지를 위해 원본 바이트(content)를 그대로 사용
                 # (librosa/soundfile 변환 과정 제거)

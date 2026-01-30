@@ -22,7 +22,7 @@ YOLO로 10종 경고등을 감지하고, LLM으로 의미와 조치 사항을 �
 """
 from typing import List, Optional, Union, Dict, Any
 from PIL import Image
-from ai.app.services.common.llm_service import analyze_general_image, interpret_dashboard_warnings
+from ai.app.services.common.llm_service import analyze_general_image
 from ai.app.services.visual.router_service import CONFIDENCE_THRESHOLD
 
 FAST_PATH_YOLO_CONF = 0.85  # 이 값 이상이면서 NORMAL이면 LLM 건너뜀
@@ -31,16 +31,16 @@ FAST_PATH_YOLO_CONF = 0.85  # 이 값 이상이면서 NORMAL이면 LLM 건너뜀
 # Dashboard 경고등 클래스 정의 (10종)
 # =============================================================================
 DASHBOARD_CLASSES = {
-    "Anti Lock Braking System": {"severity": "WARNING", "color": "YELLOW", "category": "BRAKES", "description": "ABS 시스템 이상"},
-    "Braking System Issue": {"severity": "CRITICAL", "color": "RED", "category": "BRAKES", "description": "브레이크 시스템 고장"},
-    "Charging System Issue": {"severity": "CRITICAL", "color": "RED", "category": "ELECTRICAL", "description": "배터리/충전 시스템 이상"},
-    "Check Engine": {"severity": "WARNING", "color": "YELLOW", "category": "ENGINE", "description": "엔진 점검 필요"},
-    "Electronic Stability Problem -ESP-": {"severity": "WARNING", "color": "YELLOW", "category": "SAFETY", "description": "전자 안정 제어(ESP) 이상"},
-    "Engine Overheating Warning Light": {"severity": "CRITICAL", "color": "RED", "category": "ENGINE", "description": "엔진 과열 - 즉시 정차 필요"},
-    "Low Engine Oil Warning Light": {"severity": "CRITICAL", "color": "RED", "category": "ENGINE", "description": "엔진 오일 부족 - 즉시 정차 필요"},
-    "Low Tire Pressure Warning Light": {"severity": "WARNING", "color": "YELLOW", "category": "TIRES", "description": "타이어 공기압 부족"},
-    "Master warning light": {"severity": "WARNING", "color": "YELLOW", "category": "GENERAL", "description": "통합 경고 확인 필요"},
-    "SRS-Airbag": {"severity": "CRITICAL", "color": "RED", "category": "SAFETY", "description": "에어백 시스템 이상"},
+    "Anti_Lock_Braking_System": {"severity": "WARNING", "color": "YELLOW", "category": "BRAKES", "description": "ABS System Issue"},
+    "Braking_System_Issue": {"severity": "CRITICAL", "color": "RED", "category": "BRAKES", "description": "Brake System Failure"},
+    "Charging_System_Issue": {"severity": "CRITICAL", "color": "RED", "category": "ELECTRICAL", "description": "Charging System Issue"},
+    "Check_Engine": {"severity": "WARNING", "color": "YELLOW", "category": "ENGINE", "description": "Check Engine Required"},
+    "Electronic_Stability_Problem_-ESP-": {"severity": "WARNING", "color": "YELLOW", "category": "SAFETY", "description": "ESP System Issue"},
+    "Engine_Overheating_Warning_Light": {"severity": "CRITICAL", "color": "RED", "category": "ENGINE", "description": "Engine Overheating"},
+    "Low_Engine_Oil_Warning_Light": {"severity": "CRITICAL", "color": "RED", "category": "ENGINE", "description": "Low Engine Oil Warning"},
+    "Low_Tire_Pressure_Warning_Light": {"severity": "WARNING", "color": "YELLOW", "category": "TIRES", "description": "Low Tire Pressure"},
+    "Master_warning_light": {"severity": "WARNING", "color": "YELLOW", "category": "GENERAL", "description": "Master Warning Active"},
+    "SRS-Airbag": {"severity": "CRITICAL", "color": "RED", "category": "SAFETY", "description": "Airbag System Issue"},
 }
 
 from ai.app.services.visual.yolo_utils import normalize_bbox
@@ -68,15 +68,13 @@ async def run_dashboard_yolo(
                 bbox = box.xywh[0].tolist()
                 label_info = DASHBOARD_CLASSES.get(label_name, {})
 
-                x1, y1, x2, y2 = [int(v) for v in box.xyxy[0].tolist()]
+                x1, y1, w, h = box.xywh[0].tolist()
                 
                 detections.append({
-                    "label": label_name,
+                    "label": label_name.replace(" ", "_"),
                     "color_severity": label_info.get("color", "YELLOW"),
                     "confidence": round(confidence, 2),
-                    "is_blinking": None,  # 이미지로는 점멸 감지 불가
-                    "meaning": label_info.get("description", "알 수 없는 경고등"),
-                    "bbox": [x1, y1, x2, y2]
+                    "bbox": [int(x1 - w/2), int(y1 - h/2), int(w), int(h)]
                 })
         
         return detections
@@ -109,11 +107,7 @@ async def analyze_dashboard_image(
                 "detected_count": 0,
                 "detections": [],
                 "integrated_analysis": {
-                    "severity_score": 0,
-                    "description": llm_result.data.get("description") if hasattr(llm_result, 'data') else "분석 실패"
-                },
-                "recommendation": {
-                     "primary_action": llm_result.data.get("recommendation") if hasattr(llm_result, 'data') else "정비소 방문을 권장합니다."
+                    "severity_score": 0
                 },
                 "llm_fallback": True
             }
@@ -130,13 +124,11 @@ async def analyze_dashboard_image(
         # 기본 상태는 UNKNOWN (YOLO가 아무것도 못 찾았으므로, 정상인지 모델 실패인지 엉뚱한 사진인지 모름)
         # LLM 분석 결과에 따라 상태를 결정함
         status = "UNKNOWN"
-        description = "경고등이 감지되지 않았으나, 명확한 상태 판단을 위해 AI 정밀 분석이 수행되었습니다."
         
         if hasattr(llm_result, "status"):
             status = llm_result.status  # LLM이 NORMAL(정상 계기판) or ERROR(차량 아님) 판별
         
-        if hasattr(llm_result, "data") and llm_result.data:
-            description = llm_result.data.get("description", description)
+
 
         # [NEW] 만약 상태가 WARNING/CRITICAL인데 detections가 비어있다면, LLM에게 강제로 라벨링을 요청
         fallback_detections = []
@@ -147,10 +139,9 @@ async def analyze_dashboard_image(
             
             for lbl in label_result.get("labels", []):
                 # LLM 라벨을 API detection 포맷으로 변환
-                # [Fix] Ratio / Pixel 명시적 구분
-                bbox = lbl.get("bbox", [0,0,0,0])
-                # normalize_bbox 내부에서 ratio/pixel 판단하여 변환
-                pixel_bbox = normalize_bbox(bbox, image.width, image.height)
+                bbox = lbl.get("bbox", [0, 0, 0, 0])
+                from ai.app.services.visual.yolo_utils import normalize_to_xywh
+                pixel_bbox = normalize_to_xywh(bbox, image.width, image.height)
 
                 # [Active Learning] YOLO는 놓쳤지만 LLM이 찾은 경우 -> 매우 귀중한 '학습 데이터'로 기록
                 try:
@@ -175,12 +166,10 @@ async def analyze_dashboard_image(
                     print(f"[Dashboard AL] Miss-detection 기록 실패: {e}")
 
                 fallback_detections.append({
-                    "label": lbl.get("class", "Unknown"),
+                    "label": lbl.get("part", "Unknown").replace(" ", "_"),
                     "color_severity": "RED" if status == "CRITICAL" else "YELLOW",
                     "confidence": 0.85,
-                    "is_blinking": None,
-                    "meaning": "AI 정밀 분석으로 감지된 경고등",
-                    "bbox": pixel_bbox # [Fix] 이미 변환된 좌표 사용
+                    "bbox": pixel_bbox
                 })
 
         return {
@@ -189,14 +178,7 @@ async def analyze_dashboard_image(
             "category": "DASHBOARD",
             "data": {
                 "detected_count": len(fallback_detections),
-                "detections": fallback_detections,
-                "integrated_analysis": {
-                    "severity_score": 5 if status == "WARNING" else 9 if status == "CRITICAL" else 0,
-                    "description": description
-                },
-                "recommendation": {
-                    "primary_action": (llm_result.data or {}).get("recommendation", "재촬영 후 다시 시도해주세요.")
-                }
+                "detections": fallback_detections
             }
         }
     
@@ -211,15 +193,7 @@ async def analyze_dashboard_image(
             "category": "DASHBOARD",
             "data": {
                 "detected_count": len(detections),
-                "detections": detections,
-                "integrated_analysis": {
-                    "severity_score": 5,
-                    "description": llm_result.data.get("description") if hasattr(llm_result, 'data') else "낮은 신뢰도 검출"
-                },
-                "recommendation": {
-                     "primary_action": llm_result.data.get("recommendation") if hasattr(llm_result, 'data') else "정교한 육안 점검 필요"
-                },
-                "llm_fallback": True
+                "detections": detections
             }
         }
     
@@ -236,37 +210,8 @@ async def analyze_dashboard_image(
             max_severity = "WARNING"
             severity_score = max(severity_score, 5)
     
-    # Step 3: LLM 해석 (Fast Path 적용: NORMAL이고 신뢰도 높으면 스킵)
-    if max_severity == "NORMAL" and max_confidence >= FAST_PATH_YOLO_CONF:
-        print(f"[Dashboard] Fast Path 적용 (신뢰도: {max_confidence:.2f}). LLM 스킵.")
-        integrated_analysis = {
-            "severity_score": 0,
-            "description": "계기판에서 경고등이 감지되지 않았습니다."
-        }
-        recommendation = {
-            "primary_action": "안전하게 주행을 계속하셔도 좋습니다."
-        }
-    else:
-        # LLM 전달용 데이터 정제
-        warning_list = []
-        for det in detections:
-            label_info = DASHBOARD_CLASSES.get(det["label"], {})
-            warning_list.append({
-                "name": det["label"],
-                "severity": label_info.get("severity", "WARNING"),
-                "description": label_info.get("description", "알 수 없는 경고등")
-            })
-        
-        llm_result = await interpret_dashboard_warnings(warning_list)
-        
-        integrated_analysis = {
-            "severity_score": severity_score,
-            "description": llm_result.get("description", "")
-        }
-        
-        recommendation = {
-            "primary_action": llm_result.get("recommendation", None)
-        }
+    # Step 3: 경고등 분석 (LLM 호출 제거 - API 응답에 미포함되어 토큰 낭비)
+    # 참고: integrated_analysis, recommendation은 API 응답에 포함되지 않음
     
     # [Active Learning] 공통 서비스 활용
     # max_confidence가 0.85 미만이고, 0보다는 큰 경우 (완전 실패는 아님)
@@ -305,8 +250,6 @@ async def analyze_dashboard_image(
         "category": "DASHBOARD",
         "data": {
             "detected_count": len(detections),
-            "detections": detections,
-            "integrated_analysis": integrated_analysis,
-            "recommendation": recommendation
+            "detections": detections
         }
     }
