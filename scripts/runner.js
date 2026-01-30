@@ -19,7 +19,7 @@ if (task === 'backend') {
     // Windows uses 'Scripts', Unix uses 'bin'
     const pythonExec = isWin ? path.join(venvDir, 'Scripts', 'python') : path.join(venvDir, 'bin', 'python');
 
-    const args = ['-m', 'uvicorn', 'app.main:app', '--app-dir', 'ai', '--host', '0.0.0.0', '--port', '8000', '--reload'];
+    const args = ['-m', 'uvicorn', 'app.main:app', '--app-dir', 'ai', '--host', '0.0.0.0', '--port', '8001', '--reload'];
 
     console.log(`[Runner] Starting AI using ${pythonExec}`);
 
