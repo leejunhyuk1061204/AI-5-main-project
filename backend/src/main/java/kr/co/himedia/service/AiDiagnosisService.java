@@ -9,13 +9,9 @@ import kr.co.himedia.entity.DiagSession.DiagTriggerType;
 import kr.co.himedia.repository.*;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.nio.file.Path;
-import java.nio.file.Paths;
+import org.springframework.beans.factory.annotation.Value;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -107,6 +103,9 @@ public class AiDiagnosisService {
     public void processDtc(DtcDto dtcDto) {
         // 0. 한국어 설명 조회 (DB Lookup)
         String description = dtcDto.getDescription();
+        if (description == null || description.isEmpty()) {
+            description = "상세 설명 없음";
+        }
         String ttsPhrase = dtcDto.getDtcCode(); // Default
 
         try {
@@ -137,9 +136,18 @@ public class AiDiagnosisService {
             sendDtcNotification(dtcDto, ttsPhrase);
         } catch (Exception e) {
             log.error("Failed to send DTC notification", e);
-            // 알림 실패가 Transaction 롤백을 유발하지 않도록 함 (선택 사항)
-            // @Transactional이 걸려있으므로 RuntimeException은 롤백됨.
-            // 알림만 실패하고 저장은 성공하게 하려면 try-catch 필수.
+        }
+
+        // 3. AI 심층 진단 연결 (DTC 발생 시 자동 진단 트리거)
+        try {
+            UnifiedDiagnosisRequestDto diagReq = UnifiedDiagnosisRequestDto.builder()
+                    .vehicleId(UUID.fromString(dtcDto.getVehicleId()))
+                    .build();
+            // [수정] AUTO -> DTC (최근 3일 데이터 분석)
+            requestUnifiedDiagnosis(diagReq, null, null, DiagTriggerType.DTC);
+            log.info("Automatically triggered AI Diagnosis for DTC: {}", dtcDto.getDtcCode());
+        } catch (Exception e) {
+            log.error("Failed to trigger automatic AI diagnosis", e);
         }
     }
 
@@ -523,7 +531,9 @@ public class AiDiagnosisService {
 
     private void sendDtcNotification(DtcDto dtcDto, String ttsPhrase) {
         try {
-            vehicleRepository.findByVin(dtcDto.getVin()).ifPresent(vehicle -> {
+            // [수정] VIN 대신 VehicleId로 조회 (VIN 불일치 문제 해결)
+            UUID vehicleId = UUID.fromString(dtcDto.getVehicleId());
+            vehicleRepository.findById(vehicleId).ifPresent(vehicle -> {
                 User user = userRepository.findById(vehicle.getUserId()).orElse(null);
                 if (user == null)
                     return;
@@ -547,6 +557,7 @@ public class AiDiagnosisService {
         } catch (Exception e) {
             log.error("Failed to send DTC notification", e);
         }
+
     }
 
     private void sendDiagnosisNotification(UUID vehicleId, UUID sessionId, String responseMode) {
