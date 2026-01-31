@@ -40,6 +40,14 @@ export default function SignUp() {
             return;
         }
 
+        // 영문+숫자 포함 검증
+        const hasLetter = /[a-zA-Z]/.test(password);
+        const hasNumber = /[0-9]/.test(password);
+        if (!hasLetter || !hasNumber) {
+            showAlert("비밀번호 오류", "비밀번호는 영문과 숫자를 포함해야 합니다.", "WARNING");
+            return;
+        }
+
         try {
             setLoading(true);
             const response = await authService.signup({
