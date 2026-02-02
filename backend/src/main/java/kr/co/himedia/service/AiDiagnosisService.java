@@ -101,54 +101,71 @@ public class AiDiagnosisService {
      */
     @Transactional
     public void processDtc(DtcDto dtcDto) {
-        // 0. 한국어 설명 조회 (DB Lookup)
-        String description = dtcDto.getDescription();
-        if (description == null || description.isEmpty()) {
-            description = "상세 설명 없음";
+        // 0. 한국어/영어 설명 조회 (DB Lookup)
+        String descriptionKo = dtcDto.getDescriptionKo();
+        String descriptionEn = dtcDto.getDescriptionEn();
+
+        if (descriptionKo == null || descriptionKo.isEmpty()) {
+            descriptionKo = "상세 설명 없음";
         }
         String ttsPhrase = dtcDto.getDtcCode(); // Default
 
         try {
             Optional<DtcCode> codeEntity = dtcCodeRepository.findByCodeGeneric(dtcDto.getDtcCode());
             if (codeEntity.isPresent()) {
-                description = codeEntity.get().getDescriptionKo();
+                descriptionKo = codeEntity.get().getDescriptionKo();
+                descriptionEn = codeEntity.get().getDescriptionEn();
+
                 ttsPhrase = codeEntity.get().getTtsPhrase();
+
                 // DTO 업데이트 (알림 전송 시 활용)
-                dtcDto.setDescription(description);
+                dtcDto.setDescriptionKo(descriptionKo);
+                dtcDto.setDescriptionEn(descriptionEn);
+                dtcDto.setSummaryKo(codeEntity.get().getSummaryKo());
+                dtcDto.setSummaryEn(codeEntity.get().getSummaryEn());
             }
-        } catch (Exception e) {
-            log.warn("Failed to fetch DtcCode details from DB: {}", e.getMessage());
         }
+        }catch(
 
-        // 1. DTC 이력 저장
-        DtcHistory history = DtcHistory.builder()
-                .vehiclesId(UUID.fromString(dtcDto.getVehicleId()))
+    Exception e)
+    {
+        log.warn("Failed to fetch DtcCode details from DB: {}", e.getMessage());
+    }
+
+    // 1. DTC 이력 저장
+    DtcHistory history = DtcHistory.builder()
+            .vehiclesId(UUID.fromString(dtcDto.getVehicleId()))
+            .dtcCode(dtcDto.getDtcCode())
+            .description(descriptionKo) // 한국어 설명 저장 (History는 한국어 유지)
+            .severity(dtcDto.getSeverity())
+            .status(DtcHistory.DtcStatus.valueOf(dtcDto.getStatus()))
+            .build();dtcHistoryRepository.save(history);log.info("Saved DTC History: {} ({})",dtcDto.getDtcCode(),descriptionKo);
+
+    // 2. RAG 및 FCM 알림 발송 (직접 호출)
+    try
+    {
+        sendDtcNotification(dtcDto, ttsPhrase);
+    }catch(
+    Exception e)
+    {
+        log.error("Failed to send DTC notification", e);
+    }
+
+    // 3. AI 심층 진단 연결 (DTC 발생 시 자동 진단 트리거)
+    try
+    {
+        UnifiedDiagnosisRequestDto diagReq = UnifiedDiagnosisRequestDto.builder()
+                .vehicleId(UUID.fromString(dtcDto.getVehicleId()))
                 .dtcCode(dtcDto.getDtcCode())
-                .description(description) // 한국어 설명 저장
-                .severity(dtcDto.getSeverity())
-                .status(DtcHistory.DtcStatus.valueOf(dtcDto.getStatus()))
                 .build();
-        dtcHistoryRepository.save(history);
-        log.info("Saved DTC History: {} ({})", dtcDto.getDtcCode(), description);
-
-        // 2. RAG 및 FCM 알림 발송 (직접 호출)
-        try {
-            sendDtcNotification(dtcDto, ttsPhrase);
-        } catch (Exception e) {
-            log.error("Failed to send DTC notification", e);
-        }
-
-        // 3. AI 심층 진단 연결 (DTC 발생 시 자동 진단 트리거)
-        try {
-            UnifiedDiagnosisRequestDto diagReq = UnifiedDiagnosisRequestDto.builder()
-                    .vehicleId(UUID.fromString(dtcDto.getVehicleId()))
-                    .build();
-            // [수정] AUTO -> DTC (최근 3일 데이터 분석)
-            requestUnifiedDiagnosis(diagReq, null, null, DiagTriggerType.DTC);
-            log.info("Automatically triggered AI Diagnosis for DTC: {}", dtcDto.getDtcCode());
-        } catch (Exception e) {
-            log.error("Failed to trigger automatic AI diagnosis", e);
-        }
+        // [수정] AUTO -> DTC (최근 3일 데이터 분석)
+        requestUnifiedDiagnosis(diagReq, null, null, DiagTriggerType.DTC);
+        log.info("Automatically triggered AI Diagnosis for DTC: {}", dtcDto.getDtcCode());
+    }catch(
+    Exception e)
+    {
+        log.error("Failed to trigger automatic AI diagnosis", e);
+    }
     }
 
     /**
@@ -341,25 +358,63 @@ public class AiDiagnosisService {
         llmAnomalyPayload.put("is_anomaly", anomalyResult.get("is_anomaly"));
         llmAnomalyPayload.put("chunk_count", anomalyResult.get("chunk_count"));
 
+        // [DTC] DTC 정보가 있다면 영문 설명 추가
+        Map<String, Object> dtcInfo = null;
+        if (requestDto.getDtcCode() != null) {
+            dtcInfo = new HashMap<>();
+            dtcInfo.put("code", requestDto.getDtcCode());
+            try {
+                Optional<DtcCode> dtcEntity = dtcCodeRepository.findByCodeGeneric(requestDto.getDtcCode());
+                if (dtcEntity.isPresent()) {
+                    dtcInfo.put("description", dtcEntity.get().getDescriptionEn());
+                    dtcInfo.put("summary", dtcEntity.get().getSummaryEn());
+                } else {
+                    dtcInfo.put("description", "No specific English description available.");
+                }
+            } catch (Exception e) {
+                log.warn("Failed to fetch English DTC info for LLM: {}", e.getMessage());
+            }
+        }
+
         // 2. 통합 요청 객체 구축 및 RAG 검색
         AiUnifiedRequestDto.AiUnifiedRequestDtoBuilder aiRequestBuilder = AiUnifiedRequestDto.builder()
                 .visualAnalysis(visualResult)
                 .audioAnalysis(audioResult)
-                .anomalyAnalysis(llmAnomalyPayload);
+                .anomalyAnalysis(llmAnomalyPayload)
+                .dtcInfo(dtcInfo);
 
         populateVehicleAndConsumableInfo(aiRequestBuilder, requestDto.getVehicleId());
 
         String query = buildSearchQuery(visualResult, audioResult, anomalyResult);
         if (!query.isEmpty()) {
-            List<String> knowledgeResults = knowledgeService.searchKnowledge(query, 3);
+            String manufacturer = null;
+            String model = null;
+            var vehicleOpt = vehicleRepository.findById(requestDto.getVehicleId());
+            if (vehicleOpt.isPresent()) {
+                manufacturer = vehicleOpt.get().getManufacturerEn();
+                model = vehicleOpt.get().getModelNameEn();
+            }
+
+            List<String> knowledgeResults;
+            if (manufacturer != null && model != null) {
+                knowledgeResults = knowledgeService.searchKnowledgeWithFilter(query, manufacturer, model, 3, 0.4);
+            } else {
+                knowledgeResults = knowledgeService.searchKnowledge(query, 3);
+            }
             aiRequestBuilder.knowledgeData(knowledgeResults);
         }
 
-        // 3. 최종 통합 진단 요청 (Phase 1: 6대 항목)
-        AiUnifiedRequestDto aiRequest = aiRequestBuilder.build();
-        @SuppressWarnings("unchecked")
-        Map<String, Object> finalResponse = aiClient
-                .callComprehensiveDiagnosis(objectMapper.convertValue(aiRequest, Map.class));
+        // 3. 최종 통합 진단 요청 (Phase 1: Mock Response)
+        log.info("[Initial] Mocking comprehensive diagnosis response for testing.");
+        Map<String, Object> finalResponse = new HashMap<>();
+        finalResponse.put("response_mode", "REPORT"); // 기본적으로 리포트 모드로 설정
+        finalResponse.put("confidence_level", "HIGH");
+        finalResponse.put("summary", "차량의 상태를 분석한 결과, 엔진 오일 압력 센서 및 배기 시스템에 점검이 필요할 수 있습니다.");
+        
+        Map<String, Object> reportData = new HashMap<>();
+        reportData.put("final_guide", "엔진 오일의 상태를 먼저 점검하시고, 필요 시 전문가의 진단을 받으시기 바랍니다.");
+        reportData.put("suspected_causes", List.of("엔진 오일 부족", "압력 센서 오작동"));
+        finalResponse.put("report_data", reportData);
 
         // 4. 결과 저장 및 상태 결정
         DiagStatus finalStatus = saveDiagnosisResult(sessionId, finalResponse, imageUrl, audioUrl, visualResult,
@@ -435,20 +490,17 @@ public class AiDiagnosisService {
         }
         conversation.add(userTurn);
 
-        // 4. GPT 요청 (Phase 2: 7대 항목)
-        AiUnifiedRequestDto.AiUnifiedRequestDtoBuilder aiRequestBuilder = AiUnifiedRequestDto.builder()
-                .conversationHistory(conversation);
+        // 4. GPT 요청 (Phase 2: Mock Response)
+        log.info("[Reply] Mocking comprehensive diagnosis response for interactive turn.");
+        Map<String, Object> aiResponse = new HashMap<>();
+        aiResponse.put("response_mode", "REPORT");
+        aiResponse.put("confidence_level", "HIGH");
+        aiResponse.put("summary", "사용자 질문에 답변한 최종 리포트입니다.");
 
-        populateVehicleAndConsumableInfo(aiRequestBuilder, session.getVehiclesId());
-        // 필요 시 신규 분석 결과도 최상위에 포함
-        if (visualResult != null)
-            aiRequestBuilder.visualAnalysis(visualResult);
-        if (audioResult != null)
-            aiRequestBuilder.audioAnalysis(audioResult);
-
-        @SuppressWarnings("unchecked")
-        Map<String, Object> aiResponse = aiClient
-                .callComprehensiveDiagnosis(objectMapper.convertValue(aiRequestBuilder.build(), Map.class));
+        Map<String, Object> reportData = new HashMap<>();
+        reportData.put("final_guide", "고객님께서 문의하신 내용에 따르면, 추가적인 기계적 결함보다는 단순 소모품 교체 주기가 도래한 것으로 보입니다.");
+        reportData.put("suspected_causes", List.of("소모품 마모", "정기 점검 필요"));
+        aiResponse.put("report_data", reportData);
 
         // 5. 결과 저장 및 상태 업데이트
         long userTurnCount = conversation.stream().filter(t -> "user".equals(t.get("role"))).count();
@@ -478,7 +530,7 @@ public class AiDiagnosisService {
             @SuppressWarnings("unchecked")
             List<String> factors = (List<String>) anomalyResult.get("contributing_factors");
             if (factors != null && !factors.isEmpty()) {
-                searchQuery.append(String.join(" ", factors)).append(" 이상징후");
+                searchQuery.append(String.join(" ", factors)).append(" anomaly");
             }
         }
         return searchQuery.toString().trim();
@@ -542,7 +594,7 @@ public class AiDiagnosisService {
 
                 String title = "차량 고장 코드 감지";
                 // body에 한국어 설명 포함
-                String body = "[" + dtcDto.getDtcCode() + "] " + dtcDto.getDescription();
+                String body = "[" + dtcDto.getDtcCode() + "] " + dtcDto.getDescriptionKo();
 
                 Map<String, String> data = new HashMap<>();
                 data.put("type", "DTC_ALERT");
@@ -950,8 +1002,8 @@ public class AiDiagnosisService {
             UUID vehicleId) {
         vehicleRepository.findById(vehicleId).ifPresent(vehicle -> {
             Map<String, Object> vehicleInfo = new HashMap<>();
-            vehicleInfo.put("manufacturer", vehicle.getManufacturer());
-            vehicleInfo.put("model", vehicle.getModelName());
+            vehicleInfo.put("manufacturer", vehicle.getManufacturerEn());
+            vehicleInfo.put("model", vehicle.getModelNameEn());
             vehicleInfo.put("year", vehicle.getModelYear());
             vehicleInfo.put("fuel_type", vehicle.getFuelType());
             vehicleInfo.put("total_mileage", vehicle.getTotalMileage());

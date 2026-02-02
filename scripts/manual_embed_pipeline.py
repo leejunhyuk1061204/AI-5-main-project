@@ -67,14 +67,52 @@ def get_ollama_embedding(text):
         log(f"  [ERROR] Unexpected Embedding Error: {e}")
         return None
 
-def format_sql(content, metadata, category, embedding, content_hash):
+def format_sql(content, metadata, embedding, content_hash):
     emb_str = str(embedding)
     meta_str = json.dumps(metadata).replace("'", "''")
-    return f"INSERT INTO knowledge_vectors (category, content, metadata, embedding, content_hash) VALUES ('{category}', '{content}', '{meta_str}', '{emb_str}', '{content_hash}') ON CONFLICT (content_hash) DO NOTHING;\n"
+    return f"INSERT INTO knowledge_vectors (content, metadata, embedding, content_hash) VALUES ('{content}', '{meta_str}', '{emb_str}', '{content_hash}') ON CONFLICT (content_hash) DO NOTHING;\n"
+
+import urllib.parse
+
+def extract_metadata_from_filename(filename):
+    """
+    파일명에서 제조사, 연식, 모델명을 추출합니다.
+    예: Audi_2010_A3_%288PA%29_L4-2.0L_Turbo_%28CCTA%29_full.json
+    """
+    # URL 인코딩 제거 (예: %20 -> space)
+    decoded_name = urllib.parse.unquote(filename)
+    
+    # 확장자 제거 및 _full 접미사 제거
+    base_name = decoded_name.replace(".json", "").replace("_full", "")
+    
+    # 패턴: Manufacturer_Year_Model_Rest
+    # 연식을 기준으로 분리 시도 (4자리 숫자)
+    match = re.search(r'^([^_]+)_(\d{4})_(.+)$', base_name)
+    
+    if match:
+        manufacturer = match.group(1)
+        year = match.group(2)
+        model_part = match.group(3)
+        
+        # 모델명은 보통 연식 이후 첫 번째 또는 두 번째 섹션까지
+        # 너무 길어지지 않게 적절히 자름 (보통 _L4, _V6 등 엔진 정보 전까지)
+        model_name = re.split(r'_(?:[LV]\d|Hybrid|Electric|AWD|FWD|Quattro)', model_part)[0]
+        model_name = model_name.replace("_", " ").strip()
+        
+        return {
+            "manufacturer": manufacturer,
+            "year": year,
+            "model_name": model_name
+        }
+    
+    return {}
 
 def process_file(filepath):
     filename = os.path.basename(filepath)
     log(f"Starting embedding for {filename}...")
+    
+    # 파일명에서 메타데이터 미리 추출
+    file_metadata = extract_metadata_from_filename(filename)
     
     try:
         with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
@@ -103,19 +141,21 @@ def process_file(filepath):
                     embedding = get_ollama_embedding(chunk)
                     
                     if not embedding:
-                        # 300자에서도 실패한다면 기록하고 스킵
                         error_count += 1
                         continue
                     
-                    category = "MANUAL"
                     metadata = {k: v for k, v in item.items() if k not in ["content", "original_context"]}
+                    
+                    # 파일명에서 추출한 메타데이터 병합
+                    metadata.update(file_metadata)
+                    
                     metadata["source_file"] = filename
                     metadata["chunk_index"] = idx
                     metadata["item_index"] = item_idx
                     
                     content_hash = get_hash(f"{chunk}_{item_idx}_{idx}_{filename}")
                     
-                    sql_line = format_sql(chunk, metadata, category, embedding, content_hash)
+                    sql_line = format_sql(chunk, metadata, embedding, content_hash)
                     sql_f.write(sql_line)
                     success_count += 1
                 
@@ -123,7 +163,7 @@ def process_file(filepath):
                     log(f"  Progress: {item_idx}/{len(data_list)} items processed (Current Success: {success_count}, Error: {error_count})")
 
         log(f"  [FINISH] {filename}: Success {success_count} segments, Failed {error_count}")
-        return True # 일부 실패하더라도 파일은 이동 (무한루프 방지)
+        return True 
     except Exception as e:
         log(f"  [FATAL ERROR] Failed to process {filename}: {e}")
         return False

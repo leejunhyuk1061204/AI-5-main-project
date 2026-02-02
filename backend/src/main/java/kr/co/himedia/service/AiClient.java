@@ -118,6 +118,35 @@ public class AiClient {
         }
     }
 
+    @Value("${ai.server.url.embedding:http://localhost:8001/api/v1/connect/predict/embedding}")
+    private String aiServerEmbeddingUrl;
+
+    /**
+     * 텍스트 임베딩 요청 (Ollama)
+     */
+    @SuppressWarnings("unchecked")
+    @Retryable(retryFor = Exception.class, maxAttempts = 3, backoff = @Backoff(delay = 2000))
+    public double[] getEmbedding(String text) {
+        if (text == null || text.isBlank())
+            return null;
+        try {
+            Map<String, String> request = Map.of("text", text);
+            Map<String, Object> response = restTemplate.postForObject(aiServerEmbeddingUrl, request, Map.class);
+
+            if (response != null && response.containsKey("embedding")) {
+                Object embeddingObj = response.get("embedding");
+                if (embeddingObj instanceof java.util.List) {
+                    java.util.List<Double> embeddingList = (java.util.List<Double>) embeddingObj;
+                    return embeddingList.stream().mapToDouble(Double::doubleValue).toArray();
+                }
+            }
+        } catch (Exception e) {
+            log.error("[AiClient] Embedding API call failed: {}", e.getMessage());
+            throw new RuntimeException("임베딩 API 호출 실패", e);
+        }
+        return null;
+    }
+
     /**
      * 소모품 마모율 예측 요청
      */
