@@ -7,9 +7,10 @@ import { useBleStore } from '../store/useBleStore';
 
 interface HeaderProps {
     navigation?: any;
+    title?: string;
 }
 
-export default function Header({ navigation: propNavigation }: HeaderProps) {
+export default function Header({ navigation: propNavigation, ...props }: HeaderProps) {
     const navigation = propNavigation || useNavigation<any>();
     const { nickname, loadUser } = useUserStore();
     const { status } = useBleStore();
@@ -35,7 +36,11 @@ export default function Header({ navigation: propNavigation }: HeaderProps) {
     return (
         <View className="flex-row items-center justify-between px-6 py-4 pb-2 bg-transparent z-10">
             <View>
-                {nickname ? (
+                {props.title ? (
+                    <Text className="text-2xl font-bold text-white tracking-tight">
+                        {props.title}
+                    </Text>
+                ) : nickname ? (
                     <Text className="text-2xl font-bold text-primary tracking-tight">
                         {nickname}님
                     </Text>

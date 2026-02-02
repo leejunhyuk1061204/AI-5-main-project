@@ -33,9 +33,17 @@ export default function MainPage() {
         return unsubscribe;
     }, [navigation]);
 
+    // Vehicle ID Sync
     useEffect(() => {
+        const { setVehicleId } = require('../store/useAiDiagnosisStore').useAiDiagnosisStore.getState();
+
         if (primaryVehicle && primaryVehicle.vehicleId) {
             calculateSafetyScore(primaryVehicle.vehicleId);
+            // Sync with AI Diagnosis Store
+            setVehicleId(primaryVehicle.vehicleId);
+        } else {
+            // Clear stale ID if no primary vehicle
+            setVehicleId(null);
         }
     }, [primaryVehicle]);
 
@@ -68,6 +76,7 @@ export default function MainPage() {
         <BaseScreen
             header={<Header />}
             padding={false}
+            edges={['top', 'left', 'right']}
         >
             {/* Car Info Card */}
             <View className="px-6 py-4">

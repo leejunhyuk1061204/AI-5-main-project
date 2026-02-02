@@ -15,7 +15,7 @@ interface AiDiagnosisState {
     isWaitingForAi: boolean;
 
     // Actions
-    setVehicleId: (id: string) => void;
+    setVehicleId: (id: string | null) => void;
     startDiagnosis: (vehicleId: string) => Promise<string | null>;
     sendReply: (reply: string) => Promise<void>;
     updateStatus: (sessionId: string) => Promise<void>;
