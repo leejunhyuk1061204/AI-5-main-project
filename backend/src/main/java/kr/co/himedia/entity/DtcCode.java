@@ -30,8 +30,14 @@ public class DtcCode {
     @Column(name = "description_ko", columnDefinition = "TEXT")
     private String descriptionKo;
 
+    @Column(name = "description_en", columnDefinition = "TEXT")
+    private String descriptionEn;
+
     @Column(name = "summary_ko", length = 255)
     private String summaryKo;
+
+    @Column(name = "summary_en", length = 255)
+    private String summaryEn;
 
     @Column(name = "tts_phrase", columnDefinition = "TEXT")
     private String ttsPhrase;

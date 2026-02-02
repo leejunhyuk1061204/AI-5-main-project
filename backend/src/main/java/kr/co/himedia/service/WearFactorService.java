@@ -192,7 +192,7 @@ public class WearFactorService {
         }
 
         String itemName = vc.getConsumableItem().getName();
-        String vehicleName = vehicle.getModelName() != null ? vehicle.getModelName() : "차량";
+        String vehicleName = vehicle.getModelNameKo() != null ? vehicle.getModelNameKo() : "차량";
         double remainingLife = vc.getRemainingLife();
 
         String title = "[소모품 교체 알림] " + itemName;

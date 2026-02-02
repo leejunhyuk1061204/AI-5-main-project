@@ -303,7 +303,6 @@ CREATE TABLE IF NOT EXISTS user_notifications (
 -- 지식 베이스 벡터 (2.5.2)
 CREATE TABLE IF NOT EXISTS knowledge_vectors (
     knowledge_id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
-    category VARCHAR(20),
     content TEXT,
     metadata JSONB, -- { manufacturer, model, year, source, page, dtc_code }
     embedding VECTOR (1024), -- 로컬 AI (mxbai-embed-large) 임베딩 벡터
@@ -398,6 +397,5 @@ CREATE TABLE IF NOT EXISTS user_insights (
 -- (Cleaned up duplicate definition)
 
 -- knowledge_vectors 인덱스
-CREATE INDEX IF NOT EXISTS idx_knowledge_category ON knowledge_vectors (category);
 
 CREATE INDEX IF NOT EXISTS idx_knowledge_metadata ON knowledge_vectors USING GIN (metadata);
