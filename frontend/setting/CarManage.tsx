@@ -177,7 +177,7 @@ export default function CarManage() {
                                         <Text className="text-[10px] font-bold text-primary uppercase tracking-wider">대표 차량</Text>
                                     </View>
                                     <Text className="text-2xl font-bold text-white tracking-tight mb-1">
-                                        {selectedVehicle.manufacturer} {selectedVehicle.modelName}
+                                        {selectedVehicle.manufacturerKo} {selectedVehicle.modelNameKo}
                                     </Text>
                                     <Text className="text-text-muted text-sm">
                                         {selectedVehicle.carNumber || '번호판 미등록'}
@@ -228,7 +228,7 @@ export default function CarManage() {
                                     </View>
                                     <View className="flex-1">
                                         <Text className="text-white text-base font-medium mb-0.5">
-                                            {vehicle.manufacturer} {vehicle.modelName}
+                                            {vehicle.manufacturerKo} {vehicle.modelNameKo}
                                         </Text>
                                         <Text className="text-text-dim text-xs">
                                             {vehicle.carNumber || '번호판 미등록'}
@@ -364,7 +364,7 @@ export default function CarManage() {
 
                                         <View className="flex-1">
                                             <Text className={`text-base font-semibold mb-0.5 ${isSelected ? 'text-primary' : 'text-white'}`}>
-                                                {vehicle.manufacturer} {vehicle.modelName}
+                                                {vehicle.manufacturerKo} {vehicle.modelNameKo}
                                             </Text>
                                             <Text className="text-text-dim text-xs">{vehicle.carNumber || '번호판 미등록'}</Text>
                                         </View>
@@ -428,7 +428,7 @@ export default function CarManage() {
                                         </View>
                                         <View className="flex-1">
                                             <Text className="text-base font-semibold text-white">
-                                                {vehicle.manufacturer} {vehicle.modelName}
+                                                {vehicle.manufacturerKo} {vehicle.modelNameKo}
                                             </Text>
                                             <Text className="text-text-dim text-xs">{vehicle.carNumber}</Text>
                                         </View>
@@ -479,7 +479,7 @@ export default function CarManage() {
                                         </View>
                                         <View className="flex-1">
                                             <Text className="text-base font-semibold text-white">
-                                                {vehicle.manufacturer} {vehicle.modelName}
+                                                {vehicle.manufacturerKo} {vehicle.modelNameKo}
                                             </Text>
                                             <Text className="text-text-dim text-xs">{vehicle.carNumber}</Text>
                                         </View>

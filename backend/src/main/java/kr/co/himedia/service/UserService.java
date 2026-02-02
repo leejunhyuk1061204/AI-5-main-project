@@ -300,7 +300,7 @@ public class UserService {
             }
 
             java.io.BufferedReader br = new java.io.BufferedReader(
-                    new java.io.InputStreamReader(conn.getInputStream()));
+                    new java.io.InputStreamReader(conn.getInputStream(), "UTF-8"));
             String line;
             StringBuilder result = new StringBuilder();
             while ((line = br.readLine()) != null) {

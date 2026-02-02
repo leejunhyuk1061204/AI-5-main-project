@@ -105,9 +105,9 @@ export default function Spec() {
                                     <View className="h-6 w-6 rounded-full bg-white items-center justify-center">
                                         <MaterialIcons name="local-taxi" size={16} color="black" />
                                     </View>
-                                    <Text className="text-primary text-sm font-bold tracking-wider uppercase">{vehicle.manufacturer}</Text>
+                                    <Text className="text-primary text-sm font-bold tracking-wider uppercase">{vehicle.manufacturerKo}</Text>
                                 </View>
-                                <Text className="text-white text-3xl font-bold mb-1">{vehicle.modelName}</Text>
+                                <Text className="text-white text-3xl font-bold mb-1">{vehicle.modelNameKo}</Text>
                                 <Text className="text-gray-400 text-sm font-normal">
                                     {vehicle.engineType || vehicle.fuelType || 'Unknown Specification'}
                                 </Text>

@@ -189,8 +189,11 @@ export default function Filming({ navigation, route }: { navigation?: any; route
             });
         } else if (status === 'REPORT') {
             setIsAnalyzing(false);
-            navigation.replace('DiagnosisReport', {
-                reportData: { sessionId: currentSessionId }
+            const { diagResult } = useAiDiagnosisStore.getState();
+            navigation.replace('VisualDiagnosis', {
+                diagnosisResult: diagResult,
+                capturedImage: capturedImage,
+                vehicleId: route?.params?.vehicleId || useAiDiagnosisStore.getState().selectedVehicleId
             });
         }
     }, [status, currentSessionId]);

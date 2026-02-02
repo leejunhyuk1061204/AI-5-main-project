@@ -22,6 +22,7 @@ interface AlertState {
         }
     ) => void;
     hideAlert: () => void;
+    reset: () => void;
 }
 
 export const useAlertStore = create<AlertState>((set) => ({
@@ -51,5 +52,16 @@ export const useAlertStore = create<AlertState>((set) => ({
         confirmText: '확인',
         cancelText: '닫기',
         isDestructive: false
+    }),
+
+    reset: () => set({
+        visible: false,
+        title: '',
+        message: '',
+        type: 'INFO',
+        confirmText: '확인',
+        cancelText: '닫기',
+        isDestructive: false,
+        onConfirm: undefined
     })
 }));

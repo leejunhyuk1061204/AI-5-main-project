@@ -95,7 +95,7 @@ export default function MaintenanceBook() {
                     <Text className="text-white text-lg font-bold">차계부</Text>
                     {selectedVehicle && (
                         <Text className="text-xs text-text-dim">
-                            {selectedVehicle.manufacturer} {selectedVehicle.modelName}
+                            {selectedVehicle.manufacturerKo} {selectedVehicle.modelNameKo}
                         </Text>
                     )}
                 </View>
