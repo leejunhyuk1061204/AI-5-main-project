@@ -76,11 +76,12 @@ export const useUserStore = create<UserState>((set) => ({
             if (response.success && response.data) {
                 return await handleLoginSuccess(response.data, set);
             } else {
+                // 200 OK but success: false
                 return { success: false, errorMessage: response.error?.message || "이메일 또는 비밀번호를 확인해주세요." };
             }
         } catch (error: any) {
-            const errorMsg = error.response?.data?.error?.message || "서버 연결에 실패했습니다.";
-            return { success: false, errorMessage: errorMsg };
+            const friendlyMsg = resolveErrorMessage(error);
+            return { success: false, errorMessage: friendlyMsg };
         }
     },
 
@@ -94,7 +95,8 @@ export const useUserStore = create<UserState>((set) => ({
             }
         } catch (error: any) {
             console.error("Social Login Error", error);
-            return { success: false, errorMessage: "소셜 로그인 중 오류가 발생했습니다." };
+            const friendlyMsg = resolveErrorMessage(error);
+            return { success: false, errorMessage: friendlyMsg };
         }
     }
 }));
@@ -129,5 +131,46 @@ const handleLoginSuccess = async (data: any, set: any) => {
         console.error("Login Post-Process Error", e);
         return { success: true, hasVehicle: false }; // 로그인 자체는 성공으로 처리 (화면 이동 등은 호출 측에서 결정)
     }
+};
+
+/**
+ * 에러 객체를 분석하여 사용자 친화적인 메시지를 반환합니다.
+ */
+const resolveErrorMessage = (error: any): string => {
+    if (!error) return "알 수 없는 오류가 발생했습니다.";
+
+    // 1. Axios Response Error
+    if (error.response) {
+        const status = error.response.status;
+        const serverMsg = error.response.data?.error?.message;
+
+        switch (status) {
+            case 400:
+                // Bad Request - 서버에서 주는 메시지가 있으면 그것을 우선 사용, 없으면 기본 메시지
+                return serverMsg || "입력 정보를 확인해주세요.";
+            case 401:
+                return "이메일 또는 비밀번호가 일치하지 않습니다.";
+            case 403:
+                return "접근 권한이 없습니다.";
+            case 404:
+                return "가입되지 않은 계정입니다. 회원가입을 진행해주세요.";
+            case 409:
+                return "이미 가입된 계정입니다.";
+            case 500:
+            case 502:
+            case 503:
+                return "서버에 일시적인 문제가 발생했습니다. 잠시 후 다시 시도해주세요.";
+            default:
+                return serverMsg || `오류가 발생했습니다. (${status})`;
+        }
+    }
+
+    // 2. Network Error (Timeout, No connection)
+    if (error.code === 'ECONNABORTED' || error.message?.includes('Network Error')) {
+        return "네트워크 연결이 원활하지 않습니다. 인터넷 연결을 확인해주세요.";
+    }
+
+    // 3. Other
+    return error.message || "로그인 중 알 수 없는 오류가 발생했습니다.";
 };
 

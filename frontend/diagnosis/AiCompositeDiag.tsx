@@ -175,7 +175,7 @@ export default function AiCompositeDiag() {
 
     return (
         <BaseScreen
-            header={<Header />}
+            header={<Header title="AI 복합 진단" />}
             scrollable={false}
             androidKeyboardBehavior="height"
             padding={false}

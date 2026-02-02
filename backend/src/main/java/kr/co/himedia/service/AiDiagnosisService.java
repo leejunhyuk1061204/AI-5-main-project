@@ -197,8 +197,15 @@ public class AiDiagnosisService {
                 .audioFilename(audioFile)
                 .build();
 
-        rabbitTemplate.convertAndSend(kr.co.himedia.config.RabbitConfig.EXCHANGE_NAME,
-                kr.co.himedia.config.RabbitConfig.ROUTING_KEY, message);
+        // 2-2. 메시지 발행 (Transaction Commit 후 실행)
+        org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+                new org.springframework.transaction.support.TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        rabbitTemplate.convertAndSend(kr.co.himedia.config.RabbitConfig.EXCHANGE_NAME,
+                                kr.co.himedia.config.RabbitConfig.ROUTING_KEY, message);
+                    }
+                });
 
         return Map.of(
                 "message", "진단 요청이 접수되었습니다. 분석 완료 후 결과가 업데이트됩니다.",
