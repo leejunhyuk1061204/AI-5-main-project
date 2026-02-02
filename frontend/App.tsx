@@ -61,6 +61,19 @@ import ChatAudioScreen from './diagnosis/ChatAudioScreen';
 import MaintenanceBook from './maintenance/MaintenanceBook';
 import ReceiptScan from './maintenance/ReceiptScan';
 import ReceiptResult from './maintenance/ReceiptResult';
+import PaymentSuccess from './payment/PaymentSuccess';
+
+// Deep Linking Configuration
+const linking = {
+  prefixes: ['frontend://', 'exp+frontend://'], // Expo Go용 접두사 포함 (필요시)
+  config: {
+    screens: {
+      PaymentSuccess: 'payment/success',
+      // 다른 화면들도 필요하면 추가
+    },
+  },
+};
+
 
 // Keep the splash screen visible while we fetch resources
 ExpoSplashScreen.preventAutoHideAsync();
@@ -198,7 +211,7 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <KeyboardProvider>
-        <NavigationContainer theme={AppTheme}>
+        <NavigationContainer theme={AppTheme} linking={linking}>
           {showCustomSplash ? (
             // 스플래시 화면 표시
             <View className="flex-1" onLayout={onLayoutRootView}>
@@ -265,6 +278,7 @@ export default function App() {
                 <Stack.Screen name="MaintenanceBook" component={MaintenanceBook} />
                 <Stack.Screen name="ReceiptScan" component={ReceiptScan} />
                 <Stack.Screen name="ReceiptResult" component={ReceiptResult} />
+                <Stack.Screen name="PaymentSuccess" component={PaymentSuccess} />
               </Stack.Navigator>
               <GlobalAlert />
               <GlobalDatePicker />
