@@ -5,7 +5,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import BaseScreen from '../components/layout/BaseScreen';
 
 export default function VisualDiagnosis() {
-    const navigation = useNavigation();
+    const navigation = useNavigation<any>();
     const route = useRoute<any>();
     const { diagnosisResult, capturedImage } = route.params || {};
 
@@ -103,12 +103,20 @@ export default function VisualDiagnosis() {
                     </View>
                 )}
 
-                <TouchableOpacity
-                    onPress={() => navigation.goBack()}
-                    className="w-full bg-primary py-4 rounded-xl items-center active:scale-95 shadow-lg shadow-primary/20 mb-10"
-                >
-                    <Text className="text-white font-bold text-base">확인</Text>
-                </TouchableOpacity>
+                <View className="flex-row items-center gap-3 mb-10">
+                    <TouchableOpacity
+                        onPress={() => navigation.replace('Filming', { vehicleId: route.params?.vehicleId })}
+                        className="flex-1 bg-surface-card border border-white/10 py-4 rounded-xl items-center active:scale-95"
+                    >
+                        <Text className="text-white font-bold text-base">재촬영</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        onPress={() => navigation.navigate('DiagMain')}
+                        className="flex-1 bg-primary py-4 rounded-xl items-center active:scale-95 shadow-lg shadow-primary/20"
+                    >
+                        <Text className="text-white font-bold text-base">확인</Text>
+                    </TouchableOpacity>
+                </View>
             </View>
         </BaseScreen>
     );

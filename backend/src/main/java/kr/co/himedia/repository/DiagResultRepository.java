@@ -9,4 +9,6 @@ import java.util.UUID;
 @Repository
 public interface DiagResultRepository extends JpaRepository<DiagResult, UUID> {
     java.util.Optional<DiagResult> findByDiagSessionId(UUID sessionId);
+
+    java.util.List<DiagResult> findAllByDiagSessionId(UUID sessionId);
 }
