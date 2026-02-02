@@ -16,7 +16,6 @@ import os
 from ai.app.services.audio.hertz import process_to_16khz
 from ai.app.services.audio.ast_service import run_ast_inference
 from ai.app.services.common.llm_service import analyze_audio_with_llm
-from ai.app.services.audio.audio_enhancement import denoise_audio
 from ai.app.schemas.audio_schema import AudioResponse, AudioDetail
 import httpx
 import io
@@ -112,9 +111,17 @@ class AudioService:
                 confidence=0.0
             )
 
-        # 2. 전처리: 16kHz 변환
-        from ai.app.services.audio.hertz import convert_bytes_to_16khz
-        audio_buffer = await convert_bytes_to_16khz(audio_bytes)
+        # 2. 전처리: 노이즈 필터링 파이프라인 (음성/잡음 제거)
+        try:
+            from ai.app.services.audio.audio_preprocessing import preprocess_audio_pipeline
+            preprocessed_bytes = await preprocess_audio_pipeline(audio_bytes)
+            print(f"[Audio Service] 노이즈 필터링 완료 (원본: {len(audio_bytes)}B → 처리: {len(preprocessed_bytes)}B)")
+        except Exception as e:
+            print(f"[Audio Service] 전처리 실패 (Fallback to raw): {e}")
+            preprocessed_bytes = audio_bytes
+        
+        # 3. 16kHz 변환 (이미 전처리에서 완료되었으나 버퍼 형태로 변환)
+        audio_buffer = io.BytesIO(preprocessed_bytes)
         
         # 3. 1차 진단: AST 모델
         try:
