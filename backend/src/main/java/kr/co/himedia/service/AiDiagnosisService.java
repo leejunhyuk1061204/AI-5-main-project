@@ -398,8 +398,11 @@ public class AiDiagnosisService {
         session.updateStatus(DiagStatus.REPLY_PROCESSING, "[Chat] AI가 답변을 분석 중입니다...");
         diagSessionRepository.save(session);
 
-        DiagResult existingResult = diagResultRepository.findByDiagSessionId(sessionId)
-                .orElseThrow(() -> new RuntimeException("DiagResult not found for session: " + sessionId));
+        List<DiagResult> existingResults = diagResultRepository.findAllByDiagSessionId(sessionId);
+        if (existingResults.isEmpty()) {
+            throw new RuntimeException("DiagResult not found for session: " + sessionId);
+        }
+        DiagResult existingResult = existingResults.get(0);
 
         // 1. 기존 대화 이력 파싱
         List<Map<String, Object>> conversation = new ArrayList<>();
@@ -451,6 +454,16 @@ public class AiDiagnosisService {
         }
         conversation.add(userTurn);
 
+        // [Logic Update] 3번째 턴(마지막)이면 강제로 리포트 생성 유도 프롬프트 추가
+        long currentUserTurns = conversation.stream().filter(t -> "user".equals(t.get("role"))).count();
+        if (currentUserTurns >= 3) {
+            log.info("[Reply] Max turns reached ({}), injecting System Instruction for Final Report.",
+                    currentUserTurns);
+            String originalContent = (String) userTurn.get("content");
+            userTurn.put("content", originalContent
+                    + "\n\n(System Note: This is the final interaction allowed. Please ignore any further questions and generate the FINAL DIAGNOSIS REPORT based on all information collected.)");
+        }
+
         // 4. GPT 요청 (Phase 2: 7대 항목)
         AiUnifiedRequestDto.AiUnifiedRequestDtoBuilder aiRequestBuilder = AiUnifiedRequestDto.builder()
                 .conversationHistory(conversation);
@@ -470,7 +483,7 @@ public class AiDiagnosisService {
         long userTurnCount = conversation.stream().filter(t -> "user".equals(t.get("role"))).count();
         log.info("[Reply] User Turn Count: {}", userTurnCount);
 
-        String effectiveMode = updateReplyResult(sessionId, aiResponse, conversation, userTurnCount, existingResult);
+        String effectiveMode = updateReplyResult(sessionId, aiResponse, conversation, userTurnCount, existingResults);
 
         DiagStatus finalStatus = "REPORT".equalsIgnoreCase(effectiveMode) ? DiagStatus.DONE
                 : DiagStatus.ACTION_REQUIRED;
@@ -501,7 +514,8 @@ public class AiDiagnosisService {
     }
 
     private String updateReplyResult(UUID sessionId, Map<String, Object> aiResponse,
-            List<Map<String, Object>> conversation, long userTurnCount, DiagResult existingResult) throws Exception {
+            List<Map<String, Object>> conversation, long userTurnCount, List<DiagResult> existingResults)
+            throws Exception {
         String mode = (String) aiResponse.getOrDefault("response_mode", "REPORT");
         boolean forceReport = userTurnCount >= 3 && "INTERACTIVE".equalsIgnoreCase(mode);
 
@@ -510,7 +524,7 @@ public class AiDiagnosisService {
             mode = "REPORT";
         }
 
-        diagResultRepository.delete(existingResult);
+        diagResultRepository.deleteAll(existingResults);
         DiagResult.DiagResultBuilder resultBuilder = DiagResult.builder()
                 .diagSessionId(sessionId)
                 .responseMode(mode)
@@ -731,6 +745,12 @@ public class AiDiagnosisService {
             String confidence = (String) response.getOrDefault("confidence_level", "LOW");
             String summary = (String) response.getOrDefault("summary", "");
 
+            // 기존 결과 중복 확인 및 제거 (Unique Result 보장)
+            List<DiagResult> existingResults = diagResultRepository.findAllByDiagSessionId(sessionId);
+            if (!existingResults.isEmpty()) {
+                diagResultRepository.deleteAll(existingResults);
+            }
+
             DiagResult.DiagResultBuilder resultBuilder = DiagResult.builder()
                     .diagSessionId(sessionId)
                     .responseMode(mode)
@@ -821,7 +841,8 @@ public class AiDiagnosisService {
         DiagSession session = diagSessionRepository.findById(sessionId)
                 .orElseThrow(() -> new RuntimeException("Session not found: " + sessionId));
 
-        DiagResult result = diagResultRepository.findByDiagSessionId(sessionId).orElse(null);
+        List<DiagResult> results = diagResultRepository.findAllByDiagSessionId(sessionId);
+        DiagResult result = results.isEmpty() ? null : results.get(0);
 
         DiagnosisResponseDto.DiagnosisResponseDtoBuilder builder = DiagnosisResponseDto.builder()
                 .sessionId(session.getDiagSessionId())
@@ -862,7 +883,8 @@ public class AiDiagnosisService {
         List<DiagSession> sessions = diagSessionRepository.findByVehiclesIdOrderByCreatedAtDesc(vehicleId);
 
         return sessions.stream().map(session -> {
-            DiagResult result = diagResultRepository.findByDiagSessionId(session.getDiagSessionId()).orElse(null);
+            List<DiagResult> results = diagResultRepository.findAllByDiagSessionId(session.getDiagSessionId());
+            DiagResult result = results.isEmpty() ? null : results.get(0);
 
             return DiagnosisListItemDto.builder()
                     .sessionId(session.getDiagSessionId())

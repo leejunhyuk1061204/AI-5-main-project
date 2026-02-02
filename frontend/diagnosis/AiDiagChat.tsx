@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, TouchableOpacity, TextInput, ActivityIndicator, ScrollView, Animated, Platform, StyleSheet, KeyboardAvoidingView, Keyboard, Image } from 'react-native';
+import { View, Text, TouchableOpacity, TextInput, ActivityIndicator, ScrollView, Animated, Platform, StyleSheet, KeyboardAvoidingView, Keyboard, Image, Alert } from 'react-native';
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -234,12 +234,27 @@ export default function AiDiagChat() {
             setIsWaitingForAi(isProcessing);
 
             // 완료 시 리포트 화면으로 이동
-            if (data.status === 'DONE' || data.status === 'COMPLETED' || data.responseMode === 'REPORT') {
+            if (data.status === 'DONE' || data.status === 'COMPLETED' || data.responseMode === 'REPORT' || data.response_mode === 'REPORT') {
                 console.log("[AiDiagChat] Diagnosis COMPLETED. Navigating to Report.");
                 navigation.replace('DiagnosisReport', {
                     sessionId: sid,
                     reportData: data
                 });
+            }
+
+            // FAILED 상태 처리 (알림 표시 후 이전 화면으로)
+            if (data.status === 'FAILED' || data.status === 'ERROR') {
+                console.log("[AiDiagChat] Diagnosis FAILED. Showing error message.");
+                Alert.alert(
+                    '진단 실패',
+                    data.progressMessage || 'AI 분석 중 문제가 발생했습니다. 다시 시도해 주세요.',
+                    [
+                        {
+                            text: '확인',
+                            onPress: () => navigation.goBack()
+                        }
+                    ]
+                );
             }
         } catch (error) {
             console.error('[AiDiagChat] Failed to load session:', error);
