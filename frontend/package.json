@@ -3,9 +3,9 @@
   "version": "1.0.0",
   "main": "index.ts",
   "scripts": {
-    "start": "expo start --port 3000",
+    "start": "adb reverse tcp:8080 tcp:8080 && expo start --port 3000",
     "dev": "expo start --port 3000",
-    "android": "expo start --android --port 3000",
+    "android": "adb reverse tcp:8080 tcp:8080 && expo start --android --port 3000",
     "android:build": "npx expo run:android",
     "ios": "expo start --ios --port 3000",
     "web": "expo start --web --port 3000",
