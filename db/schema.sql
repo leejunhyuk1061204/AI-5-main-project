@@ -102,10 +102,13 @@ CREATE TABLE IF NOT EXISTS vehicles (
 );
 
 -- 차량 모델 마스터 (2.1.5 - Track B Reference)
+-- 차량 모델 마스터 (2.1.5 - Track B Reference)
 CREATE TABLE IF NOT EXISTS car_model_master (
     model_id SERIAL PRIMARY KEY,
-    manufacturer VARCHAR(50),
-    model_name VARCHAR(100),
+    manufacturer_ko VARCHAR(50),
+    manufacturer_en VARCHAR(50),
+    model_name_ko VARCHAR(100),
+    model_name_en VARCHAR(100),
     model_year INT,
     fuel_type VARCHAR(20),
     displacement INT,

@@ -63,7 +63,7 @@ export default function RegisterMain() {
                             let detailMessage = `총 ${syncData.totalCount}대의 차량 정보가 성공적으로 최신화되었습니다.\n\n`;
                             results.forEach((res: any) => {
                                 const statusText = res.status === 'CONNECTED' ? '기존 차량 연결' : '신규 차량 등록';
-                                detailMessage += `• ${res.manufacturer} ${res.modelName}: ${statusText}\n`;
+                                detailMessage += `• ${res.manufacturerKo} ${res.modelNameKo}: ${statusText}\n`;
                             });
 
                             Alert.alert(

@@ -124,48 +124,40 @@ public class AiDiagnosisService {
                 dtcDto.setSummaryKo(codeEntity.get().getSummaryKo());
                 dtcDto.setSummaryEn(codeEntity.get().getSummaryEn());
             }
+        } catch (Exception e) {
+            log.warn("Failed to fetch DtcCode details from DB: {}", e.getMessage());
         }
-        }catch(
 
-    Exception e)
-    {
-        log.warn("Failed to fetch DtcCode details from DB: {}", e.getMessage());
-    }
-
-    // 1. DTC 이력 저장
-    DtcHistory history = DtcHistory.builder()
-            .vehiclesId(UUID.fromString(dtcDto.getVehicleId()))
-            .dtcCode(dtcDto.getDtcCode())
-            .description(descriptionKo) // 한국어 설명 저장 (History는 한국어 유지)
-            .severity(dtcDto.getSeverity())
-            .status(DtcHistory.DtcStatus.valueOf(dtcDto.getStatus()))
-            .build();dtcHistoryRepository.save(history);log.info("Saved DTC History: {} ({})",dtcDto.getDtcCode(),descriptionKo);
-
-    // 2. RAG 및 FCM 알림 발송 (직접 호출)
-    try
-    {
-        sendDtcNotification(dtcDto, ttsPhrase);
-    }catch(
-    Exception e)
-    {
-        log.error("Failed to send DTC notification", e);
-    }
-
-    // 3. AI 심층 진단 연결 (DTC 발생 시 자동 진단 트리거)
-    try
-    {
-        UnifiedDiagnosisRequestDto diagReq = UnifiedDiagnosisRequestDto.builder()
-                .vehicleId(UUID.fromString(dtcDto.getVehicleId()))
+        // 1. DTC 이력 저장
+        DtcHistory history = DtcHistory.builder()
+                .vehiclesId(UUID.fromString(dtcDto.getVehicleId()))
                 .dtcCode(dtcDto.getDtcCode())
+                .description(descriptionKo) // 한국어 설명 저장 (History는 한국어 유지)
+                .severity(dtcDto.getSeverity())
+                .status(DtcHistory.DtcStatus.valueOf(dtcDto.getStatus()))
                 .build();
-        // [수정] AUTO -> DTC (최근 3일 데이터 분석)
-        requestUnifiedDiagnosis(diagReq, null, null, DiagTriggerType.DTC);
-        log.info("Automatically triggered AI Diagnosis for DTC: {}", dtcDto.getDtcCode());
-    }catch(
-    Exception e)
-    {
-        log.error("Failed to trigger automatic AI diagnosis", e);
-    }
+        dtcHistoryRepository.save(history);
+        log.info("Saved DTC History: {} ({})", dtcDto.getDtcCode(), descriptionKo);
+
+        // 2. RAG 및 FCM 알림 발송 (직접 호출)
+        try {
+            sendDtcNotification(dtcDto, ttsPhrase);
+        } catch (Exception e) {
+            log.error("Failed to send DTC notification", e);
+        }
+
+        // 3. AI 심층 진단 연결 (DTC 발생 시 자동 진단 트리거)
+        try {
+            UnifiedDiagnosisRequestDto diagReq = UnifiedDiagnosisRequestDto.builder()
+                    .vehicleId(UUID.fromString(dtcDto.getVehicleId()))
+                    .dtcCode(dtcDto.getDtcCode())
+                    .build();
+            // [수정] AUTO -> DTC (최근 3일 데이터 분석)
+            requestUnifiedDiagnosis(diagReq, null, null, DiagTriggerType.DTC);
+            log.info("Automatically triggered AI Diagnosis for DTC: {}", dtcDto.getDtcCode());
+        } catch (Exception e) {
+            log.error("Failed to trigger automatic AI diagnosis", e);
+        }
     }
 
     /**
@@ -219,8 +211,15 @@ public class AiDiagnosisService {
                 .audioUrl(audioUrl)
                 .build();
 
-        rabbitTemplate.convertAndSend(kr.co.himedia.config.RabbitConfig.EXCHANGE_NAME,
-                kr.co.himedia.config.RabbitConfig.ROUTING_KEY, message);
+        // 2-2. 메시지 발행 (Transaction Commit 후 실행)
+        org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+                new org.springframework.transaction.support.TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        rabbitTemplate.convertAndSend(kr.co.himedia.config.RabbitConfig.EXCHANGE_NAME,
+                                kr.co.himedia.config.RabbitConfig.ROUTING_KEY, message);
+                    }
+                });
 
         return Map.of(
                 "message", "진단 요청이 접수되었습니다. 분석 완료 후 결과가 업데이트됩니다.",
@@ -410,7 +409,7 @@ public class AiDiagnosisService {
         finalResponse.put("response_mode", "REPORT"); // 기본적으로 리포트 모드로 설정
         finalResponse.put("confidence_level", "HIGH");
         finalResponse.put("summary", "차량의 상태를 분석한 결과, 엔진 오일 압력 센서 및 배기 시스템에 점검이 필요할 수 있습니다.");
-        
+
         Map<String, Object> reportData = new HashMap<>();
         reportData.put("final_guide", "엔진 오일의 상태를 먼저 점검하시고, 필요 시 전문가의 진단을 받으시기 바랍니다.");
         reportData.put("suspected_causes", List.of("엔진 오일 부족", "압력 센서 오작동"));
@@ -437,8 +436,11 @@ public class AiDiagnosisService {
         session.updateStatus(DiagStatus.REPLY_PROCESSING, "[Chat] AI가 답변을 분석 중입니다...");
         diagSessionRepository.save(session);
 
-        DiagResult existingResult = diagResultRepository.findByDiagSessionId(sessionId)
-                .orElseThrow(() -> new RuntimeException("DiagResult not found for session: " + sessionId));
+        List<DiagResult> existingResults = diagResultRepository.findAllByDiagSessionId(sessionId);
+        if (existingResults.isEmpty()) {
+            throw new RuntimeException("DiagResult not found for session: " + sessionId);
+        }
+        DiagResult existingResult = existingResults.get(0);
 
         // 1. 기존 대화 이력 파싱
         List<Map<String, Object>> conversation = new ArrayList<>();
@@ -506,7 +508,7 @@ public class AiDiagnosisService {
         long userTurnCount = conversation.stream().filter(t -> "user".equals(t.get("role"))).count();
         log.info("[Reply] User Turn Count: {}", userTurnCount);
 
-        String effectiveMode = updateReplyResult(sessionId, aiResponse, conversation, userTurnCount, existingResult);
+        String effectiveMode = updateReplyResult(sessionId, aiResponse, conversation, userTurnCount, existingResults);
 
         DiagStatus finalStatus = "REPORT".equalsIgnoreCase(effectiveMode) ? DiagStatus.DONE
                 : DiagStatus.ACTION_REQUIRED;
@@ -537,7 +539,8 @@ public class AiDiagnosisService {
     }
 
     private String updateReplyResult(UUID sessionId, Map<String, Object> aiResponse,
-            List<Map<String, Object>> conversation, long userTurnCount, DiagResult existingResult) throws Exception {
+            List<Map<String, Object>> conversation, long userTurnCount, List<DiagResult> existingResults)
+            throws Exception {
         String mode = (String) aiResponse.getOrDefault("response_mode", "REPORT");
         boolean forceReport = userTurnCount >= 3 && "INTERACTIVE".equalsIgnoreCase(mode);
 
@@ -547,6 +550,7 @@ public class AiDiagnosisService {
         }
 
         // [수정] 중복 방지: 기존 객체를 직접 수정 (delete-then-save 대신)
+        DiagResult existingResult = existingResults.get(0);
         existingResult.setResponseMode(mode);
         existingResult.setConfidenceLevel((String) aiResponse.getOrDefault("confidence_level", "LOW"));
         existingResult.setSummary((String) aiResponse.getOrDefault("summary", ""));
@@ -961,7 +965,8 @@ public class AiDiagnosisService {
         List<DiagSession> sessions = diagSessionRepository.findByVehiclesIdOrderByCreatedAtDesc(vehicleId);
 
         return sessions.stream().map(session -> {
-            DiagResult result = diagResultRepository.findByDiagSessionId(session.getDiagSessionId()).orElse(null);
+            List<DiagResult> results = diagResultRepository.findAllByDiagSessionId(session.getDiagSessionId());
+            DiagResult result = results.isEmpty() ? null : results.get(0);
 
             return DiagnosisListItemDto.builder()
                     .sessionId(session.getDiagSessionId())

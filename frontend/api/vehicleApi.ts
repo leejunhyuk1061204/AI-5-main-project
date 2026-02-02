@@ -4,8 +4,10 @@ import api from './axios';
 export interface VehicleResponse {
     vehicleId: string;
     userId: string;
-    manufacturer: string;
-    modelName: string;
+    manufacturerKo: string;
+    manufacturerEn: string;
+    modelNameKo: string;
+    modelNameEn: string;
     modelYear: number;
     fuelType: 'GASOLINE' | 'DIESEL' | 'LPG' | 'EV' | 'HEV' | null;
     totalMileage: number;
@@ -15,6 +17,7 @@ export interface VehicleResponse {
     isPrimary: boolean;
     registrationSource: 'MANUAL' | 'OBD' | 'CLOUD';
     obdDeviceId: string | null;
+    cloudLinked: boolean;
 
     // Spec info
     length?: number;
@@ -39,8 +42,10 @@ export interface ObdRegistrationRequest {
 
 // 수동 차량 등록 요청
 export interface ManualRegistrationRequest {
-    manufacturer: string;
-    modelName: string;
+    manufacturerKo: string;
+    manufacturerEn?: string;
+    modelNameKo: string;
+    modelNameEn?: string;
     modelYear: number;
     fuelType: 'GASOLINE' | 'DIESEL' | 'LPG' | 'EV' | 'HEV';
     totalMileage?: number;
