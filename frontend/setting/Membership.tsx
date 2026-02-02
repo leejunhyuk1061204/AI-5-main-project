@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, Dimensions } from 'react-native';
+import { View, Text, TouchableOpacity, Dimensions, Linking, Alert } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import BaseScreen from '../components/layout/BaseScreen';
+import paymentApi from '../api/paymentApi';
 
 const { width } = Dimensions.get('window');
 
@@ -79,8 +80,36 @@ export default function Membership() {
         setSelectedPlan(planId);
     };
 
-    const handleUpgrade = () => {
-        console.log('Upgrading to:', selectedPlan);
+    const handleUpgrade = async () => {
+        if (!selectedPlan) return;
+        const plan = MEMBERSHIP_PLANS.find(p => p.id === selectedPlan);
+        if (!plan) return;
+
+        try {
+            console.log('Initiating payment for:', plan.name);
+            const response = await paymentApi.ready(plan.name, plan.priceValue);
+
+            if (response.next_redirect_app_url) {
+                // 주문 ID 저장 (승인 시 필요)
+                await AsyncStorage.setItem('temp_order_id', response.orderId || ''); // Response DTO Update Needed on Frontend too?
+
+                // 카카오톡 결제 이동
+                const supported = await Linking.canOpenURL(response.next_redirect_app_url);
+                if (supported) {
+                    await Linking.openURL(response.next_redirect_app_url);
+                } else {
+                    // 앱 스킴이 안 되면 웹 URL 시도 (next_redirect_mobile_url)
+                    if (response.next_redirect_mobile_url) {
+                        await Linking.openURL(response.next_redirect_mobile_url);
+                    } else {
+                        Alert.alert('오류', '카카오톡을 실행할 수 없습니다.');
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Payment Error:', error);
+            Alert.alert('결제 오류', '결제 준비 중 문제가 발생했습니다.');
+        }
     };
 
     const currentPlanData = MEMBERSHIP_PLANS.find(p => p.id === currentPlan);
