@@ -18,6 +18,7 @@ export default function MyPage() {
     const [modalVisible, setModalVisible] = useState(false);
     const [modalType, setModalType] = useState<'nickname' | 'password' | 'delete' | 'alert' | 'none'>('none');
     const [tempInput, setTempInput] = useState('');
+    const [tempInputConfirm, setTempInputConfirm] = useState('');
 
     // Alert State
     const [alertConfig, setAlertConfig] = useState({ title: '', message: '', onConfirm: () => { } });
@@ -54,6 +55,7 @@ export default function MyPage() {
 
     const openPasswordModal = () => {
         setTempInput('');
+        setTempInputConfirm('');
         setModalType('password');
         setModalVisible(true);
     };
@@ -91,8 +93,19 @@ export default function MyPage() {
                 console.error(e);
             }
         } else if (modalType === 'password') {
-            if (!tempInput || tempInput.length < 6) {
-                showAlert('오류', '비밀번호는 6자리 이상이어야 합니다.', () => setModalType('password'));
+            if (!tempInput || tempInput.length < 8) {
+                showAlert('오류', '비밀번호는 8자리 이상이어야 합니다.', () => setModalType('password'));
+                return;
+            }
+            // 영문+숫자 포함 검증
+            const hasLetter = /[a-zA-Z]/.test(tempInput);
+            const hasNumber = /[0-9]/.test(tempInput);
+            if (!hasLetter || !hasNumber) {
+                showAlert('오류', '비밀번호는 영문과 숫자를 포함해야 합니다.', () => setModalType('password'));
+                return;
+            }
+            if (tempInput !== tempInputConfirm) {
+                showAlert('오류', '비밀번호가 일치하지 않습니다.', () => setModalType('password'));
                 return;
             }
             try {
@@ -317,11 +330,19 @@ export default function MyPage() {
                                     <TextInput
                                         value={tempInput}
                                         onChangeText={setTempInput}
-                                        className="w-full bg-black/30 text-white rounded-xl px-4 py-3 border border-white/10 mb-6"
-                                        placeholder="새 비밀번호 입력 (6자리 이상)"
+                                        className="w-full bg-black/30 text-white rounded-xl px-4 py-3 border border-white/10 mb-3"
+                                        placeholder="영문, 숫자 포함 8자리 이상"
                                         placeholderTextColor="#6b7280"
                                         secureTextEntry
                                         autoFocus
+                                    />
+                                    <TextInput
+                                        value={tempInputConfirm}
+                                        onChangeText={setTempInputConfirm}
+                                        className="w-full bg-black/30 text-white rounded-xl px-4 py-3 border border-white/10 mb-6"
+                                        placeholder="비밀번호 확인"
+                                        placeholderTextColor="#6b7280"
+                                        secureTextEntry
                                     />
                                 </>
                             )}
