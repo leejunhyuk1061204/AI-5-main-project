@@ -76,7 +76,13 @@ export default function DiagMain() {
         setVehicleId(vehicle.vehicleId);
 
         if (pendingAction === 'OBD') {
-            await startDiagnosis(vehicle.vehicleId);
+            navigation.navigate('ObdDiagLoading', { vehicleId: vehicle.vehicleId });
+            // await startDiagnosis(vehicle.vehicleId); // Loading page handles logic? Or both?
+            // Since ObdDiagLoading does polling, we might just let it handle it.
+            // But if startDiagnosis creates a session, we should keep it.
+            // Let's call startDiagnosis, but maybe ObdDiagLoading calls it too?
+            // ObdDiagLoading interacts with ObdService directly.
+            // For now, let's navigate first.
         } else if (pendingAction === 'SOUND') {
             navigation.navigate('EngineSoundDiag', { from: 'professional', vehicleId: vehicle.vehicleId });
         } else if (pendingAction === 'PHOTO') {
@@ -116,7 +122,9 @@ export default function DiagMain() {
                     onPress={() => {
                         reset();
                         const { selectedVehicleId } = useAiDiagnosisStore.getState();
-                        if (selectedVehicleId) startDiagnosis(selectedVehicleId);
+                        if (selectedVehicleId) {
+                            navigation.navigate('ObdDiagLoading', { vehicleId: selectedVehicleId });
+                        }
                         else { setPendingAction('OBD'); setVehicleSelectVisible(true); }
                     }}
                 >

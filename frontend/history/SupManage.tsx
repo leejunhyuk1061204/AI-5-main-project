@@ -73,14 +73,20 @@ export default function SupManage() {
             'ENGINE_OIL': { icon: 'oil', family: 'MaterialCommunityIcons' },
             'WIPER': { icon: 'wiper', family: 'MaterialCommunityIcons' },
             'AIR_FILTER': { icon: 'air-filter', family: 'MaterialCommunityIcons' },
-            'TIRE': { icon: 'car-tire-alert', family: 'MaterialCommunityIcons' },
+            'TIRE': { icon: 'tire', family: 'MaterialCommunityIcons' },
+            'TIRES': { icon: 'tire', family: 'MaterialCommunityIcons' },
+            'TIRE_FRONT': { icon: 'tire', family: 'MaterialCommunityIcons' },
+            'TIRE_REAR': { icon: 'tire', family: 'MaterialCommunityIcons' },
             'BRAKE_PAD': { icon: 'disc-full', family: 'MaterialIcons' },
+            'BRAKE_PAD_FRONT': { icon: 'disc-full', family: 'MaterialIcons' },
+            'BRAKE_PAD_REAR': { icon: 'disc-full', family: 'MaterialIcons' },
             'BATTERY': { icon: 'battery-charging-full', family: 'MaterialIcons' },
+            'BATTERY_12V': { icon: 'battery-charging-full', family: 'MaterialIcons' },
             'SPARK_PLUG': { icon: 'engine', family: 'MaterialCommunityIcons' },
             'BRAKE_FLUID': { icon: 'water-drop', family: 'MaterialIcons' },
             'COOLANT': { icon: 'thermostat', family: 'MaterialIcons' },
             'TRANSMISSION_FLUID': { icon: 'cog-transfer', family: 'MaterialCommunityIcons' },
-            'TIRES': { icon: 'car-tire-alert', family: 'MaterialCommunityIcons' }
+            'OTHER': { icon: 'construction', family: 'MaterialIcons' }
         };
         return map[code] || { icon: 'settings', family: 'MaterialIcons' };
     };

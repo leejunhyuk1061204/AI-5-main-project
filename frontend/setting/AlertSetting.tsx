@@ -11,9 +11,9 @@ export default function AlertSetting() {
 
     // Default state
     const [settings, setSettings] = useState<UserSetting>({
-        notiMaintenance: true,
-        notiAnomaly: true,
-        notiDtcTts: true,
+        notiMaintenance: false,
+        notiAnomaly: false,
+        notiDtcTts: false,
         notiMarketing: false,
         nightPushAllowed: false
     });
