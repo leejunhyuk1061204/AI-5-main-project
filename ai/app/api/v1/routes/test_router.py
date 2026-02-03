@@ -10,7 +10,7 @@
 [섹션 2] /test - ISC님 코드 (main 브랜치)
 ===============================================================================
 """
-from fastapi import APIRouter, UploadFile, File, HTTPException, Request
+from fastapi import APIRouter, UploadFile, File, HTTPException, Request, Body
 from fastapi.responses import JSONResponse
 from ai.app.services.common.local_service import process_visual_mock, process_audio_mock
 from ai.app.services.visual.router_service import SceneType
@@ -82,23 +82,41 @@ class AnomalyResponse(BaseModel):
 
 
 @connect_router.post("/predict/visual", response_model=VisualResponse)
-async def connect_analyze_visual(file: UploadFile = File(...)):
+async def connect_analyze_visual(
+    file: Optional[UploadFile] = File(None),
+    data: Optional[Dict] = Body(None)
+):
     """
-    [사용자 - Mock] 이미지 파일 직접 수신 -> Mock 응답 반환
+    [사용자 - Mock] 이미지 파일(Multipart) 또는 URL(JSON) 수신 -> Mock 응답 반환
     """
-    if not file.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="Invalid image file type")
+    image_url = None
+    if file:
+        content = await file.read()
+    elif data:
+        # data["imageUrl"] 또는 data["file_url"]
+        image_url = data.get("imageUrl") or data.get("file_url")
+        content = b"mock_image_from_url"
+    else:
+        raise HTTPException(status_code=422, detail="No file or imageUrl provided")
     
-    content = await file.read()
     return await process_visual_mock(content)
 
 
 @connect_router.post("/predict/audio", response_model=AudioResponse)
-async def connect_analyze_audio(file: UploadFile = File(...)):
+async def connect_analyze_audio(
+    file: Optional[UploadFile] = File(None),
+    data: Optional[Dict] = Body(None)
+):
     """
-    [사용자 - Mock] 오디오 파일 직접 수신 -> Mock 응답 반환
+    [사용자 - Mock] 오디오 파일(Multipart) 또는 URL(JSON) 수신 -> Mock 응답 반환
     """
-    content = await file.read()
+    if file:
+        content = await file.read()
+    elif data:
+        content = b"mock_audio_from_url"
+    else:
+        raise HTTPException(status_code=422, detail="No file or audioUrl provided")
+        
     return await process_audio_mock(content)
 
 
@@ -213,18 +231,18 @@ async def connect_comprehensive_mock(data: dict):
     knowledge = data.get("knowledge_data") or data.get("knowledgeData")
     consumables = data.get("consumables_status") or data.get("consumablesStatus")
     
-    # 대화 이력 파싱
-    conversation = data.get("conversation_history", [])
+    # 대화 이력 파싱 (camelCase/snake_case 모두 지원)
+    conversation = data.get("conversation_history") or data.get("conversationHistory") or []
     user_reply_count = len([m for m in conversation if m.get("role") == "user"])
     
     print(f"[Comprehensive] Request for vehicle: {vehicle_id}")
     print(f"- Visual: {'YES' if visual else 'NO'}, Audio: {'YES' if audio else 'NO'}, Anomaly: {'YES' if anomaly else 'NO'}")
     print(f"- Conversation history: {user_reply_count} user replies")
 
-    # [수정] 사용자 요청: "0, 1, 2" 로직
-    # - 0 (첫 번째): 무조건 INTERACTIVE (사진 있어도 추가 정보 요청)
-    # - 1, 2 (두 번째, 세 번째): 파일(사진/오디오) 있으면 REPORT
-    # - 나머지: INTERACTIVE
+    # [수정] 사용자 요청: "3번째부터 리포트" 로직
+    # - 1, 2회차: 무조건 INTERACTIVE (사진/오디오 있어도 추가 정보 요청)
+    # - 3회차 이상: 파일(사진/오디오)이 있으면 REPORT
+    # - 그 외: INTERACTIVE
 
     has_visua = bool(visual)
     has_audio = bool(audio)
@@ -232,8 +250,8 @@ async def connect_comprehensive_mock(data: dict):
     
     print(f"[Comprehensive] Visual: {has_visua}, Audio: {has_audio}, Turn: {user_reply_count}")
 
-    # 1회차 이상이고 미디어(사진/오디오)가 있으면 -> REPORT
-    if has_media and user_reply_count >= 2:
+    # 3회차 이상이고 미디어(사진/오디오)가 있으면 -> REPORT
+    if has_media and user_reply_count >= 3:
         is_anomaly = anomaly.get("is_anomaly") if anomaly else False
         has_issue = (visual.get("status") == "FAULTY" if visual else False) or \
                     (audio.get("status") == "FAULTY" if audio else False)
@@ -269,31 +287,35 @@ async def connect_comprehensive_mock(data: dict):
     # 시나리오 정의: 0회(Text) -> 1회(Audio) -> 2회(Photo) -> 3회(Text)
     scenario_steps = [
         {
-            "message": "정확한 분석을 위해 추가 정보가 필요합니다. **언제부터** 이런 증상이 나타났나요? (예: 일주일 전, 오늘 아침)",
+            "message": "네, 증상을 확인했습니다. 정확한 진단을 위해 우선 **언제부터** 이런 현상이 나타났는지, 그리고 **어떤 상황(시동 시, 주행 중 등)**에서 주로 발생하는지 알려주세요.",
             "action": "ANSWER_TEXT"
         },
         {
-            "message": "확인 감사합니다. 시동을 걸었을 때 들리는 **소리(끼익, 덜컹 등)**를 **녹음**해서 보내주실 수 있나요?",
-            "action": "RECORD_AUDIO"
-        },
-        {
-            "message": "소리 관련 답변 확인했습니다. 이번에는 **본넷을 열고 엔진룸 전체 사진**을 찍어주세요.",
+            "message": "상세한 설명 감사합니다. 육안 점검을 위해 우선 **본넷을 열고 엔진룸 전체의 사진**을 선명하게 한 장 찍어서 보내주시겠어요?",
             "action": "CAPTURE_PHOTO"
         },
         {
-            "message": "사진 정보 감사합니다. 마지막으로, 계기판에 **경고등**이 켜져 있거나 특이사항이 있다면 글로 남겨주세요.",
+            "message": "사진 확인했습니다! 이번에는 주행 중이나 시동 시에 들리는 **이상 소음**을 확인하고 싶습니다. **3~5초간 녹음**해서 보내주세요.",
+            "action": "RECORD_AUDIO"
+        },
+        {
+            "message": "네, 소리 정보까지 확인했습니다. 마지막으로 계기판에 **경고등**이 켜져 있거나, 그 외에 제가 알아야 할 특이사항이 있다면 적어주세요.",
             "action": "ANSWER_TEXT"
         }
     ]
 
-    # Index boundary check (User Count 1 -> Index 0)
-    step_idx = min(max(0, user_reply_count - 1), 3)
+    # Index boundary check (사용자 메시지 개수에 따라 다음 단계 결정)
+    # user_reply_count: 0(첫 진입) -> 0단계, 1(첫 답변) -> 1단계, 2(두 번째 답변) -> 2단계...
+    step_idx = min(user_reply_count, 3)
     step_data = scenario_steps[step_idx]
 
-    # 만약 파일은 보냈는데 0회차라서 반려된 경우 메시지 살짝 수정 (Optional)
+    # 파일 수신 시 피드백 로직 개선
     msg = step_data["message"]
-    if has_media and user_reply_count == 1:
-        msg = "파일 확인했습니다. 더 정확한 진단을 위해 우선 증상 발생 시점을 알려주세요."
+    if has_media:
+        if user_reply_count == 1: # 0단계 질문에 대한 답변으로 파일을 보낸 경우
+            msg = f"보내주신 파일 잘 확인했습니다! 그보다 우선, 증상이 **언제부터** 나타났는지 알려주실 수 있을까요?"
+        elif user_reply_count == 2: # 1단계 질문에 대한 답변으로 파일을 보낸 경우
+            msg = f"사진(또는 오디오) 정보 감사합니다. 촬영하신 부위 외에 **다른 특이한 흔적**은 없었나요?"
 
     return {
         "response_mode": "INTERACTIVE",
@@ -617,7 +639,7 @@ async def analyze_audio_local(file: UploadFile = File(...)):
         import io
         import torch
         import torch.nn.functional as F
-        from ai.app.services.ast_service import NORMAL_LABELS, get_category_from_label
+        from ai.app.services.audio.ast_service import NORMAL_LABELS, get_category_from_label
         
         tmp_path = os.path.join(tempfile.gettempdir(), f"audio_test_{os.getpid()}.wav")
         
@@ -672,7 +694,7 @@ async def analyze_audio_local(file: UploadFile = File(...)):
             # [Test Router] Production(AudioService)와 동일한 LLM Fallback 로직 적용
             if confidence < 0.85:
                 print(f"[Test Router] AST Low Confidence ({confidence:.2f}). Fallback to LLM...")
-                from ai.app.services.llm_service import analyze_audio_with_llm
+                from ai.app.services.common.llm_service import analyze_audio_with_llm
                 
                 # [Safe] 라이브러리 충돌 방지를 위해 원본 바이트(content)를 그대로 사용
                 # (librosa/soundfile 변환 과정 제거)

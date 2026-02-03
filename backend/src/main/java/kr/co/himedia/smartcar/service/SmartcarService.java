@@ -17,7 +17,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -137,8 +136,10 @@ public class SmartcarService {
                     kr.co.himedia.entity.Vehicle newVehicle = kr.co.himedia.entity.Vehicle.builder()
                             .userId(userId)
                             .vin(encryptionUtils.encrypt(smartcarVin))
-                            .manufacturer(attrs.getMake())
-                            .modelName(attrs.getModel())
+                            .manufacturerKo(attrs.getMake()) // 스마트카에서 온 정보를 일단 한글 필드에도 저장 (임시)
+                            .manufacturerEn(attrs.getMake())
+                            .modelNameKo(attrs.getModel())
+                            .modelNameEn(attrs.getModel())
                             .modelYear(attrs.getYear())
                             .registrationSource(RegistrationSource.CLOUD)
                             .nickname(attrs.getMake() + " " + attrs.getModel())

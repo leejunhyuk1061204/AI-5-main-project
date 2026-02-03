@@ -31,6 +31,7 @@ data/CarDD_release/
 data/obd/
 data/processed/
 data/yolo/
+data/audio/
 data/yolo_router/
 results/
 samples/

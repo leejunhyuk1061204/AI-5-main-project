@@ -31,11 +31,15 @@ public class VehicleDto {
     @Setter
     @NoArgsConstructor
     public static class RegistrationRequest {
-        @NotBlank(message = "제조사는 필수입니다.")
-        private String manufacturer;
+        @NotBlank(message = "제조사(한글)는 필수입니다.")
+        private String manufacturerKo;
 
-        @NotBlank(message = "모델명은 필수입니다.")
-        private String modelName;
+        private String manufacturerEn;
+
+        @NotBlank(message = "모델명(한글)은 필수입니다.")
+        private String modelNameKo;
+
+        private String modelNameEn;
 
         @NotNull(message = "연식은 필수입니다.")
         private Integer modelYear;
@@ -58,8 +62,10 @@ public class VehicleDto {
         public Vehicle toEntity(UUID userId) {
             return Vehicle.builder()
                     .userId(userId)
-                    .manufacturer(manufacturer)
-                    .modelName(modelName)
+                    .manufacturerKo(manufacturerKo)
+                    .manufacturerEn(manufacturerEn)
+                    .modelNameKo(modelNameKo)
+                    .modelNameEn(modelNameEn)
                     .modelYear(modelYear)
                     .fuelType(fuelType)
                     .totalMileage(totalMileage)
@@ -100,8 +106,10 @@ public class VehicleDto {
             return Vehicle.builder()
                     .userId(userId)
                     .vin(vin)
-                    .manufacturer("TBD") // API 승인 전까지 임시 값
-                    .modelName("TBD")
+                    .manufacturerKo("TBD") // API 승인 전까지 임시 값
+                    .manufacturerEn("TBD")
+                    .modelNameKo("TBD")
+                    .modelNameEn("TBD")
                     .modelYear(0)
                     .registrationSource(RegistrationSource.OBD)
                     .isPrimary(false)
@@ -114,8 +122,10 @@ public class VehicleDto {
     public static class Response {
         private UUID vehicleId;
         private UUID userId;
-        private String manufacturer;
-        private String modelName;
+        private String manufacturerKo;
+        private String manufacturerEn;
+        private String modelNameKo;
+        private String modelNameEn;
         private Integer modelYear;
         private FuelType fuelType;
         private Double totalMileage;
@@ -144,8 +154,10 @@ public class VehicleDto {
             Response response = new Response();
             response.setVehicleId(vehicle.getVehicleId());
             response.setUserId(vehicle.getUserId());
-            response.setManufacturer(vehicle.getManufacturer());
-            response.setModelName(vehicle.getModelName());
+            response.setManufacturerKo(vehicle.getManufacturerKo());
+            response.setManufacturerEn(vehicle.getManufacturerEn());
+            response.setModelNameKo(vehicle.getModelNameKo());
+            response.setModelNameEn(vehicle.getModelNameEn());
             response.setModelYear(vehicle.getModelYear());
             response.setFuelType(vehicle.getFuelType());
             response.setTotalMileage(vehicle.getTotalMileage());

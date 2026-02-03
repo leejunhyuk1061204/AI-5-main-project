@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, TouchableOpacity, TextInput, ActivityIndicator, ScrollView, Animated, Platform, StyleSheet, KeyboardAvoidingView, Keyboard, Image } from 'react-native';
+import { View, Text, TouchableOpacity, TextInput, ActivityIndicator, ScrollView, Animated, Platform, StyleSheet, KeyboardAvoidingView, Keyboard, Image, Alert } from 'react-native';
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -13,6 +13,7 @@ import { useBleStore } from '../store/useBleStore';
 
 // API
 import { getDiagnosisSessionStatus, replyToDiagnosisSession } from '../api/aiApi';
+import Header from '../header/Header';
 
 // Types
 type RootStackParamList = {
@@ -30,57 +31,7 @@ type RootStackParamList = {
     SettingTab: undefined;
 };
 
-/**
- * INLINE HEADER (StyleSheet Version)
- */
-const InlineHeader = ({
-    onBack,
-    onNavigate,
-    nickname,
-    bleStatus
-}: {
-    onBack: () => void;
-    onNavigate: (screen: keyof RootStackParamList) => void;
-    nickname: string | null;
-    bleStatus: string;
-}) => {
 
-    const getStatusColor = (s: string) => {
-        if (s === 'connected') return '#22c55e'; // green-500
-        if (s === 'connecting') return '#eab308'; // yellow-500
-        return '#9ca3af'; // gray-400
-    };
-
-    return (
-        <View style={styles.headerContainer}>
-            <View>
-                {nickname ? (
-                    <Text style={styles.headerTitle}>
-                        {nickname}님
-                    </Text>
-                ) : (
-                    <TouchableOpacity onPress={() => onNavigate('Login')}>
-                        <Text style={styles.headerTitle}>
-                            로그인
-                        </Text>
-                    </TouchableOpacity>
-                )}
-                <Text style={[styles.headerStatus, { color: getStatusColor(bleStatus) }]}>
-                    Vehicle Status: {bleStatus}
-                </Text>
-            </View>
-
-            <View style={styles.headerIcons}>
-                <TouchableOpacity
-                    style={styles.iconButton}
-                    onPress={() => onNavigate('AlertMain')}
-                >
-                    <Text style={styles.iconText}>🔔</Text>
-                </TouchableOpacity>
-            </View>
-        </View>
-    );
-};
 
 /**
  * SIMPLE BOTTOM NAV (Recreated Locally)
@@ -234,12 +185,27 @@ export default function AiDiagChat() {
             setIsWaitingForAi(isProcessing);
 
             // 완료 시 리포트 화면으로 이동
-            if (data.status === 'DONE' || data.status === 'COMPLETED' || data.responseMode === 'REPORT') {
+            if (data.status === 'DONE' || data.status === 'COMPLETED' || data.responseMode === 'REPORT' || data.response_mode === 'REPORT') {
                 console.log("[AiDiagChat] Diagnosis COMPLETED. Navigating to Report.");
                 navigation.replace('DiagnosisReport', {
                     sessionId: sid,
                     reportData: data
                 });
+            }
+
+            // FAILED 상태 처리 (알림 표시 후 이전 화면으로)
+            if (data.status === 'FAILED' || data.status === 'ERROR') {
+                console.log("[AiDiagChat] Diagnosis FAILED. Showing error message.");
+                Alert.alert(
+                    '진단 실패',
+                    data.progressMessage || 'AI 분석 중 문제가 발생했습니다. 다시 시도해 주세요.',
+                    [
+                        {
+                            text: '확인',
+                            onPress: () => navigation.goBack()
+                        }
+                    ]
+                );
             }
         } catch (error) {
             console.error('[AiDiagChat] Failed to load session:', error);
@@ -286,14 +252,23 @@ export default function AiDiagChat() {
         }, [sessionId, route.params?.pendingMessage])
     );
 
-    // 폴링 (진행 중일 때만)
+    // 폴링 (진행 중일 때만 - 1분 타임아웃 적용)
     useEffect(() => {
         if (!sessionId || !sessionData) return;
 
         const shouldPoll = sessionData.status === 'PROCESSING' || sessionData.status === 'REPLY_PROCESSING' || isWaitingForAi;
         if (!shouldPoll) return;
 
+        const startTime = Date.now();
         const intervalId = setInterval(() => {
+            const elapsed = Date.now() - startTime;
+            if (elapsed > 60000) { // 1분 초과 시
+                console.warn('[AiDiagChat] Polling Timeout (1min)');
+                clearInterval(intervalId);
+                setIsWaitingForAi(false);
+                Alert.alert('알림', '진단 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.');
+                return;
+            }
             loadSessionData(sessionId);
         }, 3000);
 
@@ -383,12 +358,7 @@ export default function AiDiagChat() {
 
             {/* Header */}
             <View style={{ paddingTop: insets.top }}>
-                <InlineHeader
-                    onBack={onBack}
-                    onNavigate={onNavigate}
-                    nickname={nickname}
-                    bleStatus={bleStatus}
-                />
+                <Header />
             </View>
 
             {/* Main Content with Keyboard Handling */}
@@ -454,7 +424,11 @@ export default function AiDiagChat() {
                                 <View style={[styles.messageBubble, styles.bubbleAi, styles.loadingBubble]}>
                                     <ActivityIndicator size="small" color="#0d7ff2" />
                                     <View style={styles.loadingTextWrapper}>
-                                        <Text style={styles.loadingText}>AI가 답변을 준비 중입니다</Text>
+                                        <Text style={styles.loadingText}>
+                                            {messages.filter(m => m.role === 'user').length >= 3
+                                                ? "AI가 진단 결과를 생성 중입니다"
+                                                : "AI가 답변을 준비 중입니다"}
+                                        </Text>
                                         <DotPulse />
                                     </View>
                                 </View>

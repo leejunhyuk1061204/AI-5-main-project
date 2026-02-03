@@ -34,7 +34,23 @@ public class AdminController {
         }
         UUID realVehicleId = vehicles.get(0).getVehicleId();
 
-        ObdLog log = new ObdLog(oldTime, realVehicleId, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, null);
+        ObdLog log = ObdLog.builder()
+                .time(oldTime)
+                .vehicleId(realVehicleId)
+                .rpm(0.0)
+                .speed(0.0)
+                .voltage(0.0)
+                .coolantTemp(0.0)
+                .engineLoad(0.0)
+                .fuelTrimShort(0.0)
+                .fuelTrimLong(0.0)
+                .intakeTemp(0.0)
+                .map(0.0)
+                .maf(0.0)
+                .throttlePos(0.0)
+                .engineRuntime(0)
+                .jsonExtra(null)
+                .build();
         obdLogRepository.save(log);
 
         return ResponseEntity.ok("Inserted an old log at: " + oldTime + " for Vehicle ID: " + realVehicleId);

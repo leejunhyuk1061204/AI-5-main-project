@@ -28,7 +28,7 @@ export default function DiagMain() {
     // UI Local State
     const [vehicleSelectVisible, setVehicleSelectVisible] = useState(false);
     const [selectedVehicleName, setSelectedVehicleName] = useState<string | null>(
-        primaryVehicle ? `${primaryVehicle.modelName} (${primaryVehicle.carNumber})` : null
+        primaryVehicle ? `${primaryVehicle.modelNameKo} (${primaryVehicle.carNumber})` : null
     );
     const [pendingAction, setPendingAction] = useState<'OBD' | 'SOUND' | 'PHOTO' | null>(null);
 
@@ -72,11 +72,17 @@ export default function DiagMain() {
 
     const handleVehicleSelect = async (vehicle: any) => {
         setVehicleSelectVisible(false);
-        setSelectedVehicleName(`${vehicle.modelName} (${vehicle.carNumber})`);
+        setSelectedVehicleName(`${vehicle.modelNameKo} (${vehicle.carNumber})`);
         setVehicleId(vehicle.vehicleId);
 
         if (pendingAction === 'OBD') {
-            await startDiagnosis(vehicle.vehicleId);
+            navigation.navigate('ObdDiagLoading', { vehicleId: vehicle.vehicleId });
+            // await startDiagnosis(vehicle.vehicleId); // Loading page handles logic? Or both?
+            // Since ObdDiagLoading does polling, we might just let it handle it.
+            // But if startDiagnosis creates a session, we should keep it.
+            // Let's call startDiagnosis, but maybe ObdDiagLoading calls it too?
+            // ObdDiagLoading interacts with ObdService directly.
+            // For now, let's navigate first.
         } else if (pendingAction === 'SOUND') {
             navigation.navigate('EngineSoundDiag', { from: 'professional', vehicleId: vehicle.vehicleId });
         } else if (pendingAction === 'PHOTO') {
@@ -116,7 +122,9 @@ export default function DiagMain() {
                     onPress={() => {
                         reset();
                         const { selectedVehicleId } = useAiDiagnosisStore.getState();
-                        if (selectedVehicleId) startDiagnosis(selectedVehicleId);
+                        if (selectedVehicleId) {
+                            navigation.navigate('ObdDiagLoading', { vehicleId: selectedVehicleId });
+                        }
                         else { setPendingAction('OBD'); setVehicleSelectVisible(true); }
                     }}
                 >

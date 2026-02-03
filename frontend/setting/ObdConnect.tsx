@@ -45,13 +45,16 @@ export default function ObdConnect({ visible, onClose, onConnected }: ObdConnect
     // but we can try to rely on store. status 'connected' means success)
 
     // We Map store devices to UnifiedDevice for rendering
-    const bleUnifiedDevices: UnifiedDevice[] = scannedDevices.map(d => ({
-        id: d.id,
-        name: d.name || `BLE_${d.id.substring(0, 8)}`,
-        rssi: d.rssi || -100,
-        type: 'ble',
-        blePeripheral: d as Peripheral
-    }));
+    // Filter out devices with no name (as requested)
+    const bleUnifiedDevices: UnifiedDevice[] = scannedDevices
+        .filter(d => d.name && d.name.trim().length > 0)
+        .map(d => ({
+            id: d.id,
+            name: d.name!,
+            rssi: d.rssi || -100,
+            type: 'ble',
+            blePeripheral: d as Peripheral
+        }));
 
     const allDevices = [...classicDevices, ...bleUnifiedDevices];
 
@@ -89,13 +92,15 @@ export default function ObdConnect({ visible, onClose, onConnected }: ObdConnect
             // 1. Classic Bluetooth 페어링된 기기 가져오기
             console.log('[ObdConnect] Getting Classic BT bonded devices...');
             const classicBonded = await ClassicBtService.getBondedDevices();
-            const classicList: UnifiedDevice[] = classicBonded.map(device => ({
-                id: device.address,
-                name: device.name || `Classic_${device.address.substring(0, 8)}`,
-                rssi: -50, // Classic BT는 RSSI 제공 안 함
-                type: 'classic',
-                classicDevice: device,
-            }));
+            const classicList: UnifiedDevice[] = classicBonded
+                .filter(device => device.name && device.name.trim().length > 0)
+                .map(device => ({
+                    id: device.address,
+                    name: device.name!,
+                    rssi: -50, // Classic BT는 RSSI 제공 안 함
+                    type: 'classic',
+                    classicDevice: device,
+                }));
             setClassicDevices(classicList);
 
             // 2. BLE 페어링된 기기 가져오기 - (BleService 내부에서 bonded 가져오는 로직은 생략하거나 store에 추가 가능, 

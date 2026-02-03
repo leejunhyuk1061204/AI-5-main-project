@@ -16,6 +16,10 @@ public class RabbitConfig {
     public static final String DLX_NAME = "ai.diagnosis.dlx";
     public static final String DLQ_NAME = "ai.diagnosis.dlq";
 
+    // Notification Queue 설정
+    public static final String NOTIFICATION_QUEUE_NAME = "notification.push.queue";
+    public static final String NOTIFICATION_ROUTING_KEY = "notification.push.request";
+
     // Cloud Sync 전용 설정
     public static final String CLOUD_SYNC_QUEUE = "cloud.vehicle.sync.queue";
     public static final String CLOUD_SYNC_DELAY_QUEUE = "cloud.vehicle.sync.delay.queue";
@@ -63,6 +67,21 @@ public class RabbitConfig {
         return BindingBuilder.bind(aiDiagnosisQueue)
                 .to(carSentryExchange)
                 .with(ROUTING_KEY);
+    }
+
+    // --- Notification Queue Bean 설정 ---
+    @Bean
+    public Queue notificationQueue() {
+        return QueueBuilder.durable(NOTIFICATION_QUEUE_NAME)
+                .build();
+    }
+
+    @Bean
+    public Binding notificationBinding(@Qualifier("notificationQueue") Queue notificationQueue,
+            @Qualifier("carSentryExchange") TopicExchange carSentryExchange) {
+        return BindingBuilder.bind(notificationQueue)
+                .to(carSentryExchange)
+                .with(NOTIFICATION_ROUTING_KEY);
     }
 
     // --- Cloud Sync 전용 Bean 설정 ---

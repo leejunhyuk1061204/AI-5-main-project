@@ -15,7 +15,7 @@ interface AiDiagnosisState {
     isWaitingForAi: boolean;
 
     // Actions
-    setVehicleId: (id: string) => void;
+    setVehicleId: (id: string | null) => void;
     startDiagnosis: (vehicleId: string) => Promise<string | null>;
     sendReply: (reply: string) => Promise<void>;
     updateStatus: (sessionId: string) => Promise<void>;
@@ -99,10 +99,23 @@ export const useAiDiagnosisStore = create<AiDiagnosisState>((set, get) => ({
             const currentStatus = (statusData.status || '').toUpperCase();
             let mode: DiagMode = 'PROCESSING';
 
-            if (currentStatus === 'INTERACTIVE' || currentStatus === 'ACTION_REQUIRED' || currentStatus === 'REPLY_PROCESSING') {
-                mode = currentStatus as DiagMode;
-            } else if (['REPORT', 'DONE', 'COMPLETED', 'SUCCESS'].includes(currentStatus)) {
+            // FAILED 상태 처리 (폴링 즉시 중지)
+            if (currentStatus === 'FAILED' || currentStatus === 'ERROR') {
+                set({
+                    messages: newMessages,
+                    status: 'IDLE',
+                    isWaitingForAi: false,
+                    requestedAction: null,
+                    diagResult: null,
+                    loadingMessage: statusData.progressMessage || '진단이 실패했습니다. 다시 시도해 주세요.'
+                });
+                return;
+            }
+
+            if (statusData.response_mode === 'REPORT' || statusData.responseMode === 'REPORT' || ['REPORT', 'DONE', 'COMPLETED', 'SUCCESS'].includes(currentStatus)) {
                 mode = 'REPORT';
+            } else if (currentStatus === 'INTERACTIVE' || currentStatus === 'ACTION_REQUIRED' || currentStatus === 'REPLY_PROCESSING') {
+                mode = currentStatus as DiagMode;
             }
 
             set({

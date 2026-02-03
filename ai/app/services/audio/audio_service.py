@@ -16,7 +16,6 @@ import os
 from ai.app.services.audio.hertz import process_to_16khz
 from ai.app.services.audio.ast_service import run_ast_inference
 from ai.app.services.common.llm_service import analyze_audio_with_llm
-from ai.app.services.audio.audio_enhancement import denoise_audio
 from ai.app.schemas.audio_schema import AudioResponse, AudioDetail
 import httpx
 import io
@@ -108,13 +107,21 @@ class AudioService:
                 status="ERROR",
                 analysis_type="IO",
                 category="UNKNOWN_AUDIO",
-                detail=AudioDetail(diagnosed_label="Load Error", description=str(e)),
+                data=AudioDetail(diagnosed_label="Load Error", description=str(e)),
                 confidence=0.0
             )
 
-        # 2. 전처리: 16kHz 변환
-        from ai.app.services.audio.hertz import convert_bytes_to_16khz
-        audio_buffer = await convert_bytes_to_16khz(audio_bytes)
+        # 2. 전처리: 노이즈 필터링 파이프라인 (음성/잡음 제거)
+        try:
+            from ai.app.services.audio.audio_preprocessing import preprocess_audio_pipeline
+            preprocessed_bytes = await preprocess_audio_pipeline(audio_bytes)
+            print(f"[Audio Service] 노이즈 필터링 완료 (원본: {len(audio_bytes)}B → 처리: {len(preprocessed_bytes)}B)")
+        except Exception as e:
+            print(f"[Audio Service] 전처리 실패 (Fallback to raw): {e}")
+            preprocessed_bytes = audio_bytes
+        
+        # 3. 16kHz 변환 (이미 전처리에서 완료되었으나 버퍼 형태로 변환)
+        audio_buffer = io.BytesIO(preprocessed_bytes)
         
         # 3. 1차 진단: AST 모델
         try:
@@ -126,16 +133,17 @@ class AudioService:
                 status="UNKNOWN",
                 analysis_type="AST_FAILED",
                 category="UNKNOWN_AUDIO",
-                detail=AudioDetail(diagnosed_label="Error", description="AST Model Failed"),
+                data=AudioDetail(diagnosed_label="Error", description="AST Model Failed"),
                 confidence=0.0,
                 is_critical=False
             )
         
         # 4. 2차 진단 판단 (Threshold 적용)
         if ast_result.confidence < FAST_PATH_AUDIO_CONF or ast_result.status == "UNKNOWN":
-            print(f"[Audio Service] AST 결과 미흡 (또는 에러). LLM으로 전환.")
+            print(f"[Audio Fallback] AST 결과 미흡 (신뢰도: {ast_result.confidence:.2f}, 상태: {ast_result.status}) -> LLM으로 전환 요청")
             wav_bytes = audio_buffer.getvalue() if audio_buffer else audio_bytes
             final_result = await analyze_audio_with_llm(s3_url, audio_bytes=wav_bytes)
+            print(f"[Audio Fallback] LLM 응답: {final_result}")
         else:
             final_result = ast_result
 
@@ -188,7 +196,7 @@ class AudioService:
             status="NORMAL",
             analysis_type="AST",
             category="ENGINE",
-            detail=AudioDetail(diagnosed_label="NORMAL", description="정상입니다."),
+            data=AudioDetail(diagnosed_label="NORMAL", description="정상입니다."),
             confidence=0.99,
             is_critical=False
         )
