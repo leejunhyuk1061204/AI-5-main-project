@@ -88,7 +88,7 @@ export default function SettingMain() {
 
             {/* Logout Button */}
             <TouchableOpacity
-                className="w-full py-4 bg-white/5 border border-error/10 rounded-2xl flex-row items-center justify-center gap-2 mt-2 active:bg-error/10 mb-10"
+                className="w-full py-4 bg-white/5 border border-error/10 rounded-2xl flex-row items-center justify-center gap-2 mt-2 active:bg-error/10"
                 activeOpacity={0.7}
                 onPress={async () => {
                     try {

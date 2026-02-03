@@ -34,6 +34,28 @@ const tripApi = {
             console.error('Error fetching trip detail:', error);
             throw error;
         }
+    },
+
+    // [BE-TD-001] 주행 세션 시작
+    startTrip: async (vehicleId: string): Promise<ApiResponse<TripSummary>> => {
+        try {
+            const response = await api.post('/api/v1/trips/start', { vehicleId });
+            return response.data;
+        } catch (error) {
+            console.error('Error starting trip:', error);
+            throw error;
+        }
+    },
+
+    // [BE-TD-004] 주행 세션 종료
+    endTrip: async (tripId: string): Promise<ApiResponse<TripSummary>> => {
+        try {
+            const response = await api.post('/api/v1/trips/end', { tripId });
+            return response.data;
+        } catch (error) {
+            console.error('Error ending trip:', error);
+            throw error;
+        }
     }
 };
 

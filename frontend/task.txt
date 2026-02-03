@@ -35,6 +35,7 @@
 - [x] **소모품 관리**: 소모품 교체 주기 관리 및 예외 처리 (`SupManage.tsx`)
 - [x] **백그라운드 수집**: `BackgroundService`와 `ObdService` 연동 완료
 - [x] **안드로이드 안정성**: 포그라운드 서비스 타입(`connectedDevice`) 명시 및 배터리 최적화 안내 팝업 구현
+- [x] **로그아웃 Store 초기화**: 로그아웃 시 모든 store reset 처리 완료
 
 ### 🎨 디자인 (Design)
 - [x] **UI 정리**: 불필요한 장식 제거 및 다크 모드 일관성 확보
@@ -43,20 +44,86 @@
 ---
 
 ## 🔥 진행 중 및 예정 (In Progress & Todo)
+
+### 🔗 백엔드-프론트엔드 연결 누락 (Backend-Frontend Integration Gaps)
+
+#### ❌ 미연결 백엔드 API (프론트엔드 미구현)
+
+**1. CloudAuth API (`/auth/cloud/**`) - 클라우드 차량 연동**
+- [ ] `PATCH /auth/cloud/vin` - VIN 정보 업데이트
+- [ ] `POST /auth/cloud/register` - 클라우드 차량 등록 (하이모빌리티)
+- [ ] `POST /auth/cloud/sync` - 차량 데이터 강제 동기화
+- [ ] `POST /auth/cloud/revoke` - 클라우드 차량 연동 해제
+> **참고**: 하이모빌리티 클라우드 연동 기능은 현재 프론트엔드에 구현되지 않음
+
+**2. Media API (`/media/**`) - 미디어 파일 업로드**
+- [ ] `POST /media/upload` - 범용 미디어 파일 업로드
+> **참고**: 현재 AI 진단 시 직접 multipart로 전송 중. 별도 업로드 API 미사용
+
+**3. Admin Test API (`/admin/test/**`)** - 관리자 테스트용
+- [ ] `POST /admin/test/insert-old-logs` - 테스트 데이터 삽입
+- [ ] `POST /admin/test/trigger-cleanup` - 데이터 정리 스케줄러 강제 실행
+> **참고**: 개발/테스트 전용이므로 프론트엔드 연결 불필요
+
+#### ⚠️ 부분 미연결 API
+
+**AuthController (`/api/v1/auth/**`)**
+- [ ] `PATCH /api/v1/auth/fcm-token` - FCM 토큰 등록/업데이트
+  - 백엔드 준비됨, 프론트엔드 `authApi.ts`에 함수 미구현
+  - 푸시 알림 기능 구현 시 필요
+
+**VehicleController (`/api/v1/vehicles/**`)**
+- [ ] `DELETE /api/v1/vehicles/{vehicleId}` - 차량 삭제
+  - 백엔드 준비됨, 프론트엔드 `vehicleApi.ts`에 함수 미구현
+  - 차량 관리 페이지에서 삭제 기능 필요 시 구현
+
+**MaintenanceController (`/api/v1/maintenance/**`)**
+- [ ] `GET /api/v1/maintenance/{vehicleId}/maintenance` - 정비 이력 조회
+  - 백엔드 준비됨, 프론트엔드 `maintenanceApi.ts`에 함수 미구현
+  - **정비 이력 페이지 구현** 시 함께 연결 필요
+
+**TripController (`/api/v1/trips/**`)**
+- [ ] `POST /api/v1/trips/start` - 주행 시작
+- [ ] `POST /api/v1/trips/end` - 주행 종료
+  - 백엔드 준비됨, 프론트엔드 `tripApi.ts`에 함수 미구현
+  - 현재는 자동 주행 생성이지만, 수동 주행 기록 기능 추가 시 필요
+
+---
+
 ### 🎨 UI/UX 고도화 & 페이지 구현
 - [ ] **소셜 로그인 UI**: 디자인 개선
-- [ ] **정비 이력**: 정비 이력 목록 및 상세 페이지 구현
+- [ ] **정비 이력 페이지**: 정비 이력 목록 및 상세 페이지 구현 (백엔드 API 연결 포함)
 - [ ] **AI 진단 결과 페이지**:
     - **음성 진단**: 분석 결과 표출 UI
     - **카메라 진단**: 분석 결과 표출 UI, 결과 확인/재촬영/저장 기능 구현
 - [x] **챗봇**: 헤더 스타일 통일 및 UI 수정 (`Header.tsx` 타이틀 지원 추가)
 
 ### 🚀 기능 고도화 (Advanced)
-- [ ] **오프라인 모드**: 네트워크 연결 끊김 시 데이터 로컬 저장 (SQLite) 후 재연결 시 자동 전송 구현 (진행 중)
-- [ ] **푸시 알림 (FCM)**: 기기별 토큰 발급 및 Firebase 연동 (현재 Polling 방식 대체)
+- [ ] **오프라인 모드**: 네트워크 연결 끊김 시 데이터 로컬 저장 (SQLite) 후 재연결 시 자동 전송 구현
+- [ ] **푸시 알림 (FCM)**: 
+  - 기기별 토큰 발급 및 Firebase 연동 (현재 Polling 방식 대체)
+  - **FCM 토큰 등록 API** (`PATCH /auth/fcm-token`) 연결 필요
 - [ ] **OAuth 딥링크 고도화**: 외부 브라우저 인증 후 앱 복귀 시 안정적인 딥링크 처리
+- [ ] **클라우드 차량 연동**: 하이모빌리티 클라우드 차량 등록/동기화 기능 구현
+  - CloudAuth API 연결 필요
 
 ### 🧹 코드 품질 및 기타
 - [ ] **타입스크립트 강화**: `any` 타입 지양
 - [ ] **에러 핸들링 강화**: 사용자 친화적 에러 메시지
 - [ ] **iOS 호환성 점검**
+
+---
+
+## 📋 API 연결 우선순위 권장사항
+
+### 🔴 높음 (High Priority)
+1. **FCM 토큰 등록** - 푸시 알림 기능 구현 필수
+2. **차량 삭제 API** - 사용자 차량 관리 완성도 향상
+3. **정비 이력 조회 API** - 정비 이력 페이지 구현과 동시 진행
+
+### 🟡 중간 (Medium Priority)
+4. **주행 시작/종료 API** - 수동 주행 기록 기능 추가 검토
+5. **클라우드 차량 연동 API** - 하이모빌리티 파트너십 활성화 시
+
+### 🟢 낮음 (Low Priority)
+6. **범용 미디어 업로드 API** - 현재는 AI 진단에서 직접 전송하므로 필요성 낮음
