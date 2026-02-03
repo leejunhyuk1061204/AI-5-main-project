@@ -27,74 +27,44 @@ MODEL_PATH = "ai/weights/audio/best_ast_model"
 # [정상 소리 라벨] - 이 라벨들은 NORMAL 상태로 처리됩니다
 # =============================================================================
 NORMAL_LABELS = {
-    "idle",       # 정상 공회전 소리
-    "normal",     # 명시적 정상
-    "brakes",     # 정상 브레이크 소리 (파일명에 normal_brakes면 정상)
+    "normal",     # 정상 소리
+}
+
+# =============================================================================
+# [결함 라벨 → 카테고리 매핑]
+# 새 데이터셋 기준: engine, brake, starter, normal
+# =============================================================================
+LABEL_TO_CATEGORY = {
+    "normal": "NORMAL",
+    "engine": "ENGINE",
+    "brake": "BRAKES",
+    "starter": "STARTER",
+}
+
+LABEL_TO_DESCRIPTION = {
+    "normal": "정상적인 차량 소리입니다.",
+    "engine": "엔진 관련 이상 소음이 감지되었습니다. 점검이 필요합니다.",
+    "brake": "브레이크 관련 이상 소음이 감지되었습니다. 즉시 점검이 필요합니다.",
+    "starter": "시동 관련 이상 소음이 감지되었습니다. 배터리 및 스타터 모터 점검이 필요합니다.",
 }
 
 # =============================================================================
 # [자동 카테고리 매핑 함수]
-# 라벨 이름 패턴에서 카테고리를 자동으로 추출합니다.
-# 재학습 시 코드 수정 불필요!
 # =============================================================================
 def get_category_from_label(label_name: str) -> str:
     """
-    라벨 이름에서 카테고리 자동 추출
+    라벨 이름에서 카테고리 추출
     
-    규칙:
-    - 접두사 ENG_, BRAKE_, SUSP_ 등으로 시작하면 해당 카테고리
-    - 또는 키워드 포함 여부로 판단
+    새 데이터셋 라벨: normal, engine, brake, starter
     """
-    label_upper = label_name.upper()
-    
-    # 1. 접두사 규칙 (권장: 학습 데이터에 접두사 사용)
-    if label_upper.startswith("ENG_"):
-        return "ENGINE"
-    elif label_upper.startswith("BRAKE_"):
-        return "BRAKES"
-    elif label_upper.startswith("SUSP_"):
-        return "SUSPENSION"
-    elif label_upper.startswith("EXHAUST_"):
-        return "EXHAUST"
-    elif label_upper.startswith("TIRE_"):
-        return "TIRES_WHEELS_AUDIO"
-    elif label_upper.startswith("BODY_"):
-        return "BODY"
-    
-    # 2. 키워드 규칙 (기존 학습 데이터용)
-    engine_keywords = ["ENGINE", "KNOCK", "MISFIRE", "BELT", "VALVE", "NORMAL"]
-    brake_keywords = ["BRAKE", "SQUEAL", "GRINDING"]
-    suspension_keywords = ["SUSPENSION", "CLUNK", "RATTLE"]
-    exhaust_keywords = ["EXHAUST", "MUFFLER", "LEAK"]
-    tire_keywords = ["TIRE", "WHEEL", "BEARING", "HUM"]
-    body_keywords = ["WIND", "BODY", "RATTLE", "SQUEAK"]
-    
-    for kw in engine_keywords:
-        if kw in label_upper:
-            return "ENGINE"
-    
-    # 2-1. IDLE은 엔진 정상 소리
-    if "IDLE" in label_upper:
-        return "ENGINE"
-    
-    for kw in brake_keywords:
-        if kw in label_upper:
-            return "BRAKES"
-    for kw in suspension_keywords:
-        if kw in label_upper:
-            return "SUSPENSION"
-    for kw in exhaust_keywords:
-        if kw in label_upper:
-            return "EXHAUST"
-    for kw in tire_keywords:
-        if kw in label_upper:
-            return "TIRES_WHEELS_AUDIO"
-    for kw in body_keywords:
-        if kw in label_upper:
-            return "BODY"
-    
-    # 3. 기본값 - UNKNOWN 대신 ENGINE 반환 (대부분 엔진 관련)
-    return "ENGINE"
+    label_lower = label_name.lower()
+    return LABEL_TO_CATEGORY.get(label_lower, "ENGINE")
+
+
+def get_description_from_label(label_name: str) -> str:
+    """라벨에 해당하는 설명 반환"""
+    label_lower = label_name.lower()
+    return LABEL_TO_DESCRIPTION.get(label_lower, "차량 소음 분석이 필요합니다.")
 
 # =============================================================================
 # 추론 함수
@@ -159,31 +129,33 @@ async def run_ast_inference(processed_audio_buffer, ast_model_payload=None) -> A
             # 4. 라벨 이름 변환
             label_name = model.config.id2label[predicted_id]
             category = get_category_from_label(label_name)
+            description = get_description_from_label(label_name)
             
-            # 5. 상태 결정
+            # 5. 상태 결정 (4-class: normal, engine, brake, starter)
             label_lower = label_name.lower()
             
             if confidence < 0.5:
                 status = "UNKNOWN"
                 is_critical = False
-                category = "UNKNOWN_AUDIO"
-                label_name = "unknown"
-                description = "분류할 수 없는 소리입니다. 차량 관련 소리인지 확인해주세요."
-            elif label_lower in NORMAL_LABELS or "normal" in label_lower:
+                category = "UNKNOWN_SOUND"
+                diagnosed_label = "UNKNOWN"
+                description = "식별 불가능한 소리입니다. 재녹음을 권장합니다."
+            elif label_lower == "normal":
                 status = "NORMAL"
                 is_critical = False
-                description = "정상적인 소리입니다."
+                diagnosed_label = "NORMAL"
             else:
-                status = "FAULTY"
+                # engine, brake, starter → CRITICAL
+                status = "CRITICAL"
                 is_critical = True
-                description = f"{label_name} 소음이 감지되었습니다. 점검이 필요합니다."
+                diagnosed_label = label_name.upper()
             
             return AudioResponse(
                 status=status,
                 analysis_type="AST",
                 category=category,
                 detail=AudioDetail(
-                    diagnosed_label=label_name,
+                    diagnosed_label=diagnosed_label if 'diagnosed_label' in dir() else label_name.upper(),
                     description=description
                 ),
                 confidence=round(confidence, 4),

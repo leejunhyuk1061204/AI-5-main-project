@@ -37,12 +37,15 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
             "android.permission.WAKE_LOCK"
         ],
         package: "com.lee_kang_hyun.frontend",
+        googleServicesFile: "./google-services.json",
         softwareKeyboardLayoutMode: "resize"
     },
     web: {
         favicon: "./assets/Gemini_Generated_Image_v1i03bv1i03bv1i0.png"
     },
     plugins: [
+        "@react-native-firebase/app",
+        "@react-native-firebase/messaging",
         "expo-font",
         "expo-sqlite",
 

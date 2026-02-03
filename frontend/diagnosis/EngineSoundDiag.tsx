@@ -525,7 +525,7 @@ export default function EngineSoundDiag() {
                             진단 결과: {diagnosisResult?.result === 'NORMAL' ? '정상' : '이상 감지'}
                         </Text>
                         <View className="bg-[#1a2430] px-4 py-1.5 rounded-full border border-slate-700 mb-8">
-                            <Text className="text-sm text-slate-300">종합 점수 <Text className="text-[#0d7ff2] font-bold">98점</Text></Text>
+                            <Text className="text-sm text-slate-300">종합 점수 <Text className="text-[#0d7ff2] font-bold">{Math.round((diagnosisResult?.confidence || 0.98) * 100)}점</Text></Text>
                         </View>
 
                         <View className="w-full bg-[#1a2430] rounded-2xl p-6 border border-slate-800 mb-8">
@@ -534,6 +534,27 @@ export default function EngineSoundDiag() {
                                 {diagnosisResult?.description || '분석 결과가 없습니다.'}
                             </Text>
                         </View>
+
+                        {/* Parts Details */}
+                        {diagnosisResult?.parts && diagnosisResult.parts.length > 0 && (
+                            <View className="w-full mb-8">
+                                <Text className="text-white font-bold text-lg mb-4 px-1">부품별 상세 분석</Text>
+                                {diagnosisResult.parts.map((part: any, index: number) => (
+                                    <View key={index} className="flex-row items-center justify-between bg-[#1a2430] p-4 rounded-xl border border-white/5 mb-3">
+                                        <Text className="text-slate-300 font-medium">{part.name}</Text>
+                                        <View className={`px-2.5 py-1 rounded-md ${part.status === 'NORMAL' ? 'bg-success/10' :
+                                            part.status === 'WARNING' ? 'bg-warning/10' : 'bg-error/10'
+                                            }`}>
+                                            <Text className={`text-xs font-bold ${part.status === 'NORMAL' ? 'text-success' :
+                                                part.status === 'WARNING' ? 'text-warning' : 'text-error'
+                                                }`}>
+                                                {part.status}
+                                            </Text>
+                                        </View>
+                                    </View>
+                                ))}
+                            </View>
+                        )}
 
                         <TouchableOpacity
                             onPress={() => navigation.goBack()}

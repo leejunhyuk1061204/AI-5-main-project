@@ -26,7 +26,7 @@ const getBaseUrl = () => {
     return 'http://localhost:8080';
 };
 
-const BASE_URL = getBaseUrl();
+export const BASE_URL = getBaseUrl();
 
 export interface ApiResponse<T> {
     success: boolean;
@@ -45,6 +45,7 @@ const api = axios.create({
 
 // Request interceptor
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useErrorStore } from '../store/useErrorStore';
 
 api.interceptors.request.use(
     async (config) => {
@@ -179,7 +180,46 @@ api.interceptors.response.use(
         if (error.response) {
             console.error('API Error Status:', error.response.status);
             console.error('API Error Data:', JSON.stringify(error.response.data, null, 2));
+
+            // Error Logic
+            const { showError } = useErrorStore.getState();
+            const status = error.response.status;
+
+            // 500: Server Error
+            if (status >= 500) {
+                showError(
+                    '서버 오류',
+                    '서버에서 문제가 발생했습니다.\n잠시 후 다시 시도해주세요.',
+                    'ERROR'
+                );
+            }
+            // 401/403: Auth Error (handled by refresh logic above, but if final failure)
+            else if (status === 401 || status === 403) {
+                // Only show if it's NOT a token refresh failure (which redirects to login)
+                if (originalRequest.url !== '/api/v1/auth/refresh') {
+                    showError(
+                        '인증 만료',
+                        '로그인이 만료되었습니다.\n다시 로그인해주세요.',
+                        'WARNING'
+                    );
+                }
+            }
+            // 400: Bad Request (show message if available)
+            else if (status === 400) {
+                const msg = error.response.data?.message || '요청이 올바르지 않습니다.';
+                // Only show critical 400s if needed, or rely on local catch
+                // showError('요청 오류', msg, 'WARNING'); 
+            }
+        } else if (error.request) {
+            // Network Error (No response)
+            console.error('API No Response:', error.request);
+            useErrorStore.getState().showError(
+                '네트워크 오류',
+                '서버와 연결할 수 없습니다.\n인터넷 연결 상태를 확인해주세요.',
+                'ERROR'
+            );
         } else {
+            // Setup Error
             console.error('API Error:', error.message);
         }
         return Promise.reject(error);

@@ -6,15 +6,8 @@
 이 파일은 타이어 이미지를 분석하여 마모도(%)와 위험 상태를 탐지하는 서비스입니다.
 
 [핵심 설계: YOLO + LLM 협업]
-┌─────────────────────────────────────────────────────────────────┐
-│ 데이터셋 현황:                                                   │
-│ - Tire YOLO 데이터셋: normal / worn 2클래스만 있음               │
-│ - crack, flat, bulge, uneven 등 세부 클래스 없음                 │
-│                                                                  │
-│ [해결책] 역할 분담!                                               │
-│ • YOLO: normal/worn 분류 (마모 여부 1차 판단)                     │
-│ • LLM: 마모도(%) + 위험 상태(crack/flat/bulge/uneven) 전부 담당   │
-└─────────────────────────────────────────────────────────────────┘
+- 데이터셋 현황: Tire YOLO는 normal/worn 2클래스만 존재하여 세부 상태(crack, bulge 등) 탐지가 어렵습니다.
+- 해결책: YOLO는 마모 여부(1차)만 판단하고, LLM이 상세 위험 상태와 마모도를 담당합니다.
 
 [재학습 계획]
 1. LLM이 측정한 마모도 + 위험상태 데이터가 S3에 축적됨
@@ -31,8 +24,6 @@
     "wear_status": "GOOD",     // GOOD(양호), DANGER(위험)
     "wear_level_pct": 45,      // 마모도 %
     "critical_issues": ["cracked"],  // LLM이 감지한 위험 상태
-    "description": "...",
-    "recommendation": "...",
     "is_replacement_needed": false
   }
 }
@@ -55,14 +46,8 @@ async def run_tire_yolo(
     """
     [YOLO 역할] 타이어 마모 여부만 1차 판단
     
-    ┌─────────────────────────────────────────────────────────────┐
-    │ 현재 데이터셋 한계:                                          │
-    │ - normal: 정상 타이어                                        │
-    │ - worn: 마모된 타이어                                        │
-    │                                                              │
-    │ crack, flat, bulge, uneven 등은 데이터셋에 없음!             │
-    │ → 이런 세부 위험 상태는 LLM이 감지함                          │
-    └─────────────────────────────────────────────────────────────┘
+    현재 데이터셋 한계:
+    - normal/worn 2종만 분류 가능하며, 세부 위험 상태(crack 등)는 LLM이 담당합니다.
     
     Returns:
         {
@@ -120,16 +105,10 @@ async def get_tire_analysis_from_llm(s3_url: str) -> Dict[str, Any]:
     """
     [LLM 역할] 마모도(%) + 위험 상태 전부 측정
     
-    ┌─────────────────────────────────────────────────────────────┐
-    │ LLM이 담당하는 것:                                           │
-    │ 1. 마모도 (wear_level_pct): 0~100%                          │
-    │ 2. 위험 상태 감지 (critical_issues):                         │
-    │    - cracked: 균열이 보이는가?                               │
-    │    - flat: 공기가 빠져 보이는가?                             │
-    │    - bulge: 측면이 부풀어 올랐는가?                          │
-    │    - uneven: 편마모가 있는가?                                │
-    │ 3. 상태 판단 및 권고사항                                     │
-    └─────────────────────────────────────────────────────────────┘
+    LLM 담당 업무:
+    1. 마모도 (wear_level_pct): 0~100% 측정
+    2. 위험 상태 감지 (critical_issues): cracked, flat, bulge, uneven 등
+    3. 상태 판단 및 권고사항 생성
     
     [반환값]
     {
@@ -169,8 +148,6 @@ async def get_tire_analysis_from_llm(s3_url: str) -> Dict[str, Any]:
     "wear_level_pct": 45,
     "wear_status": "GOOD",
     "critical_issues": null,
-    "description": "타이어가 45% 마모되었습니다. 트레드 홈이 약 4.5mm 남아있습니다.",
-    "recommendation": "현재 상태로 약 10,000km 주행 가능합니다. 5,000km 후 재점검을 권장합니다.",
     "is_replacement_needed": false
 }
 
@@ -193,8 +170,6 @@ async def get_tire_analysis_from_llm(s3_url: str) -> Dict[str, Any]:
                 "wear_level_pct": None,
                 "wear_status": "IRRELEVANT",
                 "critical_issues": None,
-                "description": "타이어/휠 이미지가 아닙니다.",
-                "recommendation": "타이어가 잘 보이는 정면 사진을 업로드해주세요.",
                 "is_replacement_needed": False
             }
 
@@ -211,8 +186,6 @@ async def get_tire_analysis_from_llm(s3_url: str) -> Dict[str, Any]:
             "wear_level_pct": None,
             "wear_status": "UNKNOWN",
             "critical_issues": None,
-            "description": "마모도 측정에 실패했습니다.",
-            "recommendation": "정비소에서 직접 점검을 권장합니다.",
             "is_replacement_needed": False
         }
 
@@ -225,19 +198,10 @@ async def analyze_tire_image(
     """
     [메인 함수] 타이어 종합 분석
     
-    ┌─────────────────────────────────────────────────────────────┐
-    │ 분석 파이프라인                                               │
-    │                                                              │
-    │ [Step 1] YOLO: 마모 여부 1차 판단 (normal/worn)               │
-    │    │       → 데이터셋 한계로 세부 분류 불가                    │
-    │    │                                                         │
-    │ [Step 2] LLM: 마모도(%) + 위험상태 정밀 측정                   │
-    │    │       → crack/flat/bulge/uneven 감지                    │
-    │    │       → 마모도 % 정밀 측정                               │
-    │    │                                                         │
-    │ [Step 3] Active Learning: 분석 데이터 S3 저장                 │
-    │           → 미래 YOLO 다중클래스 재학습에 사용                 │
-    └─────────────────────────────────────────────────────────────┘
+    분석 파이프라인:
+    - Step 1: YOLO: 타이어 존재 및 마모 여부 1차 판단
+    - Step 2: LLM: 마모도(%) 및 세부 위험상태(crack 등) 정밀 측정
+    - Step 3: Active Learning: 재학습을 위한 데이터 S3 저장
     """
     
     # =================================================================
@@ -259,16 +223,12 @@ async def analyze_tire_image(
             wear_status = "DANGER"
             wear_level_pct = 85
             critical_issues = ["crack"] if label == "cracked" else None
-            description = "타이어 마모가 심각하거나 균열이 감지되었습니다. 즉시 교체가 필요합니다."
-            recommendation = "가까운 정비소에서 즉시 타이어를 교체하십시오."
             is_replacement_needed = True
             final_status = "CRITICAL"
         else:
             wear_status = "GOOD"
             wear_level_pct = 20
             critical_issues = None
-            description = "타이어 상태가 양호합니다. 홈의 깊이가 충분하며 마모 한계선과의 거리가 멉니다."
-            recommendation = "현재 상태가 양호하므로 정기적인 공기압 보충과 위치 교환을 권장합니다."
             is_replacement_needed = False
             final_status = "NORMAL"
             
@@ -280,8 +240,6 @@ async def analyze_tire_image(
                 "wear_status": wear_status,
                 "wear_level_pct": wear_level_pct,
                 "critical_issues": critical_issues,
-                "description": description,
-                "recommendation": recommendation,
                 "is_replacement_needed": is_replacement_needed
             }
         }
@@ -295,8 +253,6 @@ async def analyze_tire_image(
     wear_level_pct = llm_result.get("wear_level_pct")
     wear_status = llm_result.get("wear_status", "UNKNOWN")
     critical_issues = llm_result.get("critical_issues")
-    description = llm_result.get("description", "")
-    recommendation = llm_result.get("recommendation", "")
     is_replacement_needed = llm_result.get("is_replacement_needed", False)
     
     # =================================================================
@@ -340,8 +296,6 @@ async def analyze_tire_image(
             "wear_status": wear_status,
             "wear_level_pct": wear_level_pct,
             "critical_issues": critical_issues,
-            "description": description,
-            "recommendation": recommendation,
             "is_replacement_needed": is_replacement_needed
         }
     }
@@ -355,12 +309,10 @@ async def _save_tire_analysis_data(
     """
     [Active Learning] 타이어 분석 데이터를 S3에 저장
     
-    ┌─────────────────────────────────────────────────────────────┐
-    │ 저장하는 데이터:                                             │
-    │ - 마모도 % (LLM 측정값) → Regression 모델 학습용             │
-    │ - 위험 상태 (LLM 감지값) → YOLO 다중클래스 재학습용          │
-    │ - YOLO 결과 (있으면) → 비교 분석용                           │
-    └─────────────────────────────────────────────────────────────┘
+    수집 데이터:
+    - LLM 측정 마모도 % (Regression 학습용)
+    - LLM 감지 위험 상태 (YOLO 다중클래스 학습용)
+    - YOLO 분석 결과 (비교 분석용)
     
     [저장 경로]
     dataset/tire/llm_confirmed/{file_id}.json

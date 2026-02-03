@@ -28,18 +28,22 @@ def normalize_bbox(bbox: List[float], width: int, height: int) -> List[int]:
     return [int(v) for v in bbox]
 
 
-def convert_xywh_to_xyxy(bbox: List[int]) -> List[int]:
+def convert_xywh_to_xyxy(x, y, w, h):
     """
-    Center-WH (cx, cy, w, h) 좌표를 Corner-XY (x1, y1, x2, y2) 좌표로 변환합니다.
+    Center-WH -> Corner-XY
     """
-    if not bbox or len(bbox) != 4:
-        return [0, 0, 0, 0]
-        
-    cx, cy, w, h = bbox
-    
-    x1 = int(cx - w / 2)
-    y1 = int(cy - h / 2)
-    x2 = int(cx + w / 2)
-    y2 = int(cy + h / 2)
-    
+    x1 = int(x - w / 2)
+    y1 = int(y - h / 2)
+    x2 = int(x + w / 2)
+    y2 = int(y + h / 2)
     return [x1, y1, x2, y2]
+
+
+def normalize_to_xywh(bbox: List[float], width: int, height: int) -> List[int]:
+    """
+    BBox를 [x, y, w, h] Pixel 좌표로 변환합니다. (x, y는 좌측 상단)
+    - 비율(Ratio) 및 픽셀(Pixel) 입력 모두 지원
+    """
+    xyxy = normalize_bbox(bbox, width, height)
+    x1, y1, x2, y2 = xyxy
+    return [int(x1), int(y1), int(x2 - x1), int(y2 - y1)]

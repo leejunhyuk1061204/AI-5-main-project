@@ -7,9 +7,10 @@ import { useBleStore } from '../store/useBleStore';
 
 interface HeaderProps {
     navigation?: any;
+    title?: string;
 }
 
-export default function Header({ navigation: propNavigation }: HeaderProps) {
+export default function Header({ navigation: propNavigation, ...props }: HeaderProps) {
     const navigation = propNavigation || useNavigation<any>();
     const { nickname, loadUser } = useUserStore();
     const { status } = useBleStore();
@@ -35,7 +36,11 @@ export default function Header({ navigation: propNavigation }: HeaderProps) {
     return (
         <View className="flex-row items-center justify-between px-6 py-4 pb-2 bg-transparent z-10">
             <View>
-                {nickname ? (
+                {props.title ? (
+                    <Text className="text-2xl font-bold text-white tracking-tight">
+                        {props.title}
+                    </Text>
+                ) : nickname ? (
                     <Text className="text-2xl font-bold text-primary tracking-tight">
                         {nickname}님
                     </Text>
@@ -51,11 +56,13 @@ export default function Header({ navigation: propNavigation }: HeaderProps) {
                 </Text>
             </View>
             <TouchableOpacity
-                className="w-10 h-10 items-center justify-center rounded-full bg-[#1b2127] border border-white/10 active:scale-95"
+                className="relative w-11 h-11 items-center justify-center rounded-xl bg-white/5 border border-white/10 active:bg-white/10"
                 activeOpacity={0.7}
                 onPress={() => navigation.navigate('AlertMain')}
             >
-                <MaterialIcons name="notifications-none" size={24} color="white" />
+                <MaterialIcons name="notifications-none" size={22} color="#0d7ff2" />
+                {/* Unread Badge - 읽지 않은 알림이 있을 때 표시 */}
+                {/* <View className="absolute top-1.5 right-1.5 w-2 h-2 bg-error rounded-full border border-[#101922]" /> */}
             </TouchableOpacity>
         </View>
     );

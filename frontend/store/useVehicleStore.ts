@@ -12,6 +12,7 @@ interface VehicleState {
     fetchVehicles: () => Promise<VehicleResponse[]>;
     loadFromStorage: () => Promise<void>;
     clearVehicle: () => Promise<void>;
+    reset: () => Promise<void>;
 }
 
 export const useVehicleStore = create<VehicleState>((set, get) => ({
@@ -77,6 +78,15 @@ export const useVehicleStore = create<VehicleState>((set, get) => ({
 
     clearVehicle: async () => {
         set({ primaryVehicle: null });
+        await AsyncStorage.removeItem('primaryVehicle');
+    },
+
+    reset: async () => {
+        set({
+            primaryVehicle: null,
+            vehicles: [],
+            isLoading: false
+        });
         await AsyncStorage.removeItem('primaryVehicle');
     }
 }));

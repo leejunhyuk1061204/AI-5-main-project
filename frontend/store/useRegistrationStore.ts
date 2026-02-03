@@ -195,8 +195,10 @@ export const useRegistrationStore = create<RegistrationState>((set, get) => ({
 
             // 2. Register Vehicle & Consumables together
             const vehicleRes = await registerVehicle({
-                manufacturer: s.manufacturer,
-                modelName: s.modelName,
+                manufacturerKo: s.manufacturer, // Assuming input is Korean
+                // manufacturerEn: undefined, 
+                modelNameKo: s.modelName,       // Assuming input is Korean
+                // modelNameEn: undefined,
                 modelYear: parseInt(s.modelYear),
                 fuelType: s.fuelType as any,
                 carNumber: s.vehicleNumber,

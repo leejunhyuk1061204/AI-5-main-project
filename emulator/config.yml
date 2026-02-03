@@ -1,41 +1,49 @@
 # OBD 에뮬레이터 설정 파일
 
-# 연결 설정
+# 연결 설정 (단일 포트 사용)
 connection:
   port: "COM3"
   baudrate: 38400
 
-# 모드 설정 (static: 고정값, replay: CSV 재생, high_mobility: 하이모빌리티 연동)
-mode: "static"
+# 차량 프로필 설정 (3대)
+vehicles:
+  - id: "DEV_001"
+    name: "YF Sonata"
+    vin: "1HMXOBSGK693TJ7JR"
+    csv_file: "scenarios/driving_normal.csv"
+    mappings: # PID: {column: "CSV_COL_NAME", formula: "EXPRESSION"}
+      "010C": { col: "rpm", formula: "x * 4" }       # RPM
+      "010D": { col: "speed", formula: "x" }         # Speed
+      "0105": { col: "temp", formula: "x + 40" }     # Coolant Temp
+      "0104": { col: "load", formula: "x * 2.55" }   # Engine Load (0-100% -> 0-255)
+      "0142": { col: "voltage", formula: "x * 1000"} # Voltage (V -> mV)
+    dtcs: ["P0115", "P0300"] # 초기 고장코드
 
-# 가상 차량 정보 (Mode 0902 대응용)
-vehicle:
-  vin: "1HMXOBSGK693TJ7JR"
-  brand: "sandbox"
+  - id: "DEV_002"
+    name: "K5 Hybrid"
+    vin: "KNAKU411B56382911"
+    csv_file: "scenarios/driving_traffic.csv"
+    mappings:
+      "010C": { col: "rpm", formula: "x * 4" }
+      "010D": { col: "speed", formula: "x" }
+      "0105": { col: "temp", formula: "x + 40" }
+      "0142": { col: "batt_volt", formula: "x * 1000"}
+    dtcs: []
 
-# [Mode: high_mobility] 하이모빌리티 샌드박스 연동 설정
-high_mobility:
-  access_token: "YOUR_HM_SANDBOX_TOKEN_HERE"
-  refresh_interval: 1.0  # 초 단위
+  - id: "DEV_003"
+    name: "Genesis G80"
+    vin: "KMHGN41EBJU183921"
+    csv_file: "scenarios/fault_scenario.csv"
+    mappings:
+      "010C": { col: "rpm", formula: "x * 4" }
+      "010D": { col: "speed", formula: "x" }
+      "0105": { col: "temp", formula: "x + 40" }
+      "0104": { col: "load", formula: "x * 2.55" }
+      "0142": { col: "voltage", formula: "x * 1000"}
+      "0111": { col: "throttle", formula: "x * 2.55"}
+    dtcs: ["P0011"]
 
-# [Mode: static] 고정 PID 데이터 설정
-pids:
-  rpm: "2EE0"         # 3000 RPM
-  speed: "3C"         # 60 km/h
-  coolant_temp: "82"  # 90도
-  engine_load: "7F"   # 50%
-  voltage: "3778"     # 14.2V
-  throttle: "33"      # 20%
-
-# [Mode: replay] CSV 주행 데이터 재생 및 매핑 설정
+# 공통 설정
 replay:
-  csv_file: "scenarios/overheating.csv"
   interval: 0.5
   loop: true
-  # CSV 컬럼명과 PID 데이터 매핑 (사용자의 CSV 형식에 맞춰 수정 가능)
-  mapping:
-    rpm: "Engine RPM [RPM]"
-    speed: "Vehicle Speed Sensor [km/h]"
-    coolant_temp: "Engine Coolant Temperature [°C]"
-    engine_load: "Calculated Engine Load [%]"
-    voltage: "Control Module Voltage [V]"

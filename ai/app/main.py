@@ -20,14 +20,21 @@ import asyncio
 from ultralytics import settings, YOLO
 from dotenv import load_dotenv, find_dotenv
 
-# AI 전용 설정(ai/.env)을 우선적으로 로드 (OpenAI Key 등)
-ai_env_path = os.path.join(os.getcwd(), 'ai', '.env')
-if os.path.exists(ai_env_path):
-    print(f"[Config] Loading AI specific settings from: {ai_env_path}")
-    load_dotenv(ai_env_path, override=True)
-else:
-    # ai/.env가 없으면 기본 루트 .env 탐색
-    load_dotenv(find_dotenv())
+# .env 파일 로드 (루트 디렉토리 우선 탐색)
+# find_dotenv()는 현재 디렉토리부터 상위로 올라가며 .env를 찾습니다.
+env_path = find_dotenv()
+if env_path:
+    print(f"[Config] Loading settings from: {env_path}")
+    load_dotenv(env_path, override=True)
+
+# [S3 Mapping] 사용자 .env의 S3_ACCESS_KEY -> AWS_ACCESS_KEY_ID 매핑
+# boto3는 표준 환경변수명을 사용하므로, 다른 이름으로 저장된 경우 보정해줍니다.
+if os.getenv("S3_ACCESS_KEY") and not os.getenv("AWS_ACCESS_KEY_ID"):
+    os.environ["AWS_ACCESS_KEY_ID"] = os.getenv("S3_ACCESS_KEY")
+if os.getenv("S3_SECRET_KEY") and not os.getenv("AWS_SECRET_ACCESS_KEY"):
+    os.environ["AWS_SECRET_ACCESS_KEY"] = os.getenv("S3_SECRET_KEY")
+if os.getenv("S3_REGION") and not os.getenv("AWS_DEFAULT_REGION"):
+    os.environ["AWS_DEFAULT_REGION"] = os.getenv("S3_REGION")
 
 # Ultralytics 전역 가중치 경로 설정
 settings.update({'weights_dir': os.path.join(os.getcwd(), 'ai', 'weights')})

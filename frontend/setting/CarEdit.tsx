@@ -48,6 +48,16 @@ export default function CarEdit() {
     const handleUpdate = async () => {
         if (!vehicleId) return;
 
+        // 차량번호 길이 검증
+        if (carNumber && carNumber.length > 20) {
+            useAlertStore.getState().showAlert(
+                '입력 오류',
+                '차량번호는 20자를 초과할 수 없습니다.\n다시 입력해주세요.',
+                'WARNING'
+            );
+            return;
+        }
+
         try {
             await updateVehicle(vehicleId, {
                 nickname: nickname,
@@ -137,7 +147,7 @@ export default function CarEdit() {
                         </View>
                         <View>
                             <Text className="text-white font-bold text-lg">
-                                {vehicle?.manufacturer} {vehicle?.modelName}
+                                {vehicle?.manufacturerKo} {vehicle?.modelNameKo}
                             </Text>
                             <Text className="text-slate-400 text-sm">
                                 {vehicle?.modelYear}년식 · {vehicle?.fuelType}

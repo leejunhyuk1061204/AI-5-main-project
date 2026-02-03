@@ -50,7 +50,31 @@ const recordMaintenanceBatch = async (vehicleId: string, items: { itemCode: stri
     }
 };
 
+// 정비 이력 응답 타입
+export interface MaintenanceHistoryResponse {
+    maintenanceId: string;
+    vehicleId: string;
+    maintenanceDate: string;
+    mileageAtMaintenance: number;
+    consumableItemCode: string;
+    consumableItemName?: string;
+    isStandardized: boolean;
+    createdAt?: string;
+}
+
+// 정비 이력 조회
+const getMaintenanceHistory = async (vehicleId: string): Promise<MaintenanceHistoryResponse[]> => {
+    try {
+        const response = await api.get(`/api/v1/vehicles/${vehicleId}/maintenance`);
+        return response.data.data || [];
+    } catch (error) {
+        console.error('Error fetching maintenance history:', error);
+        return [];
+    }
+};
+
 export default {
     getConsumableStatus,
-    recordMaintenanceBatch
+    recordMaintenanceBatch,
+    getMaintenanceHistory
 };

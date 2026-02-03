@@ -21,6 +21,7 @@ interface BaseScreenProps {
     useBottomNav?: boolean;
     bgColor?: string;
     androidKeyboardBehavior?: 'padding' | 'height' | 'position';
+    edges?: ('top' | 'right' | 'bottom' | 'left')[];
 }
 
 /**
@@ -39,6 +40,7 @@ export default function BaseScreen({
     useBottomNav = false,
     bgColor = '#101922',
     androidKeyboardBehavior = 'height', // 안드로이드는 height 리사이징이 기본
+    edges = ['top', 'left', 'right', 'bottom'], // 기본값: 모든 방향 Safe Area 적용
 }: BaseScreenProps) {
     const insets = useSafeAreaInsets();
     const { bottomNavVisible, isKeyboardVisible } = useUIStore();
@@ -141,7 +143,7 @@ export default function BaseScreen({
     return (
         <View className="flex-1" style={{ backgroundColor: bgColor }}>
             <StatusBar style="light" />
-            <SafeAreaView className="flex-1" edges={['top', 'left', 'right', 'bottom']}>
+            <SafeAreaView className="flex-1" edges={edges}>
                 {avoidKeyboard ? (
                     <KeyboardAvoidingView
                         behavior="padding"
