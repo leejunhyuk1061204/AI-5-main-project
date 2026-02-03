@@ -11,6 +11,8 @@ import * as NavigationBar from 'expo-navigation-bar';
 import * as SystemUI from 'expo-system-ui';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { GlobalErrorBoundary } from './components/common/GlobalErrorBoundary';
+import CustomErrorModal from './components/common/CustomErrorModal';
 
 import { useVehicleStore } from './store/useVehicleStore';
 import { useUIStore } from './store/useUIStore';
@@ -31,13 +33,13 @@ import MainPage from './mainPage/MainPage';
 import SplashScreenComponent from './splash/SplashScreen';
 import RegisterMain from './registration/RegisterMain';
 import ActiveReg from './registration/active/ActiveReg';
-import ActiveLoading from './registration/active/ActiveLoading';
-import ActiveSuccess from './registration/active/ActiveSuccess';
 import ObdResult from './registration/active/ObdResult';
 import PassiveReg from './registration/passive/PassiveReg';
 import MaintenanceReg from './registration/passive/MaintenanceReg';
 import MyPage from './setting/MyPage';
 import DiagMain from './diagnosis/DiagMain';
+import ObdDiagLoading from './diagnosis/ObdDiagLoading';
+import ObdDiagResult from './diagnosis/ObdDiagResult';
 import EngineSoundDiag from './diagnosis/EngineSoundDiag';
 import AiCompositeDiag from './diagnosis/AiCompositeDiag';
 import AiProfessionalDiag from './diagnosis/AiProfessionalDiag';
@@ -233,85 +235,87 @@ export default function App() {
 
   // NavigationContainer는 항상 마운트되어야 함 (useNavigation 등 훅이 정상 작동하도록)
   return (
-    <SafeAreaProvider>
-      <KeyboardProvider>
-        <NavigationContainer theme={AppTheme} linking={linking}>
-          {showCustomSplash ? (
-            // 스플래시 화면 표시
-            <View className="flex-1" onLayout={onLayoutRootView}>
-              <SplashScreenComponent onFinish={() => setShowCustomSplash(false)} />
-              <StatusBar style="light" />
-            </View>
-          ) : (
-            // 메인 앱 네비게이션
-            <>
-              <StatusBar style="auto" />
-              <Stack.Navigator
-                initialRouteName={initialRoute}
-                screenOptions={{
-                  headerShown: false,
-                  animation: 'slide_from_right',
-                  contentStyle: { backgroundColor: '#101922' }
-                }}
-              >
-                <Stack.Screen name="Tos" component={Tos} />
-                <Stack.Screen name="Login" component={Login} />
-                <Stack.Screen name="SignUp" component={SignUp} />
-                <Stack.Screen name="FindPW" component={FindPW} />
-                <Stack.Screen
-                  name="MainPage"
-                  component={MainTabNavigator}
-                  options={{ animation: 'none' }}
-                />
-                <Stack.Screen name="RegisterMain" component={RegisterMain} />
-                <Stack.Screen name="ActiveReg" component={ActiveReg} />
-                <Stack.Screen name="ActiveLoading" component={ActiveLoading} />
-                <Stack.Screen name="ActiveSuccess" component={ActiveSuccess} />
-                <Stack.Screen name="ObdResult" component={ObdResult} />
-                <Stack.Screen name="PassiveReg" component={PassiveReg} />
-                <Stack.Screen name="MaintenanceReg" component={MaintenanceReg} />
-                <Stack.Screen name="EngineSoundDiag" component={EngineSoundDiag} />
-                <Stack.Screen
-                  name="AiCompositeDiag"
-                  component={AiCompositeDiag}
-                  options={{ animation: 'none' }}
-                />
-                <Stack.Screen name="AiProfessionalDiag" component={AiProfessionalDiag} />
-                <Stack.Screen name="AiDiagChat" component={AiDiagChat} />
-                <Stack.Screen name="DiagnosisReport" component={DiagnosisReport} />
-                <Stack.Screen name="DiagnosisHistory" component={DiagnosisHistory} />
-                <Stack.Screen name="VisualDiagnosis" component={VisualDiagnosis} />
-                <Stack.Screen name="Filming" component={Filming} />
-                <Stack.Screen name="ChatCameraScreen" component={ChatCameraScreen} />
-                <Stack.Screen name="ChatAudioScreen" component={ChatAudioScreen} />
-                <Stack.Screen name="DrivingHis" component={DrivingHis} />
-                <Stack.Screen name="RecallHis" component={RecallHis} />
-                <Stack.Screen name="SupManage" component={SupManage} />
-                <Stack.Screen
-                  name="AlertMain"
-                  component={AlertMain}
-                  options={{ animation: 'none' }}
-                />
-                <Stack.Screen name="Spec" component={Spec} />
-                <Stack.Screen name="MyPage" component={MyPage} />
-                <Stack.Screen name="AlertSetting" component={AlertSetting} />
-                <Stack.Screen name="CarManage" component={CarManage} />
-                <Stack.Screen name="CarEdit" component={CarEdit} />
-                <Stack.Screen name="Cloud" component={Cloud} />
-                <Stack.Screen name="Membership" component={Membership} />
-                <Stack.Screen name="MaintenanceBook" component={MaintenanceBook} />
-                <Stack.Screen name="ReceiptScan" component={ReceiptScan} />
-                <Stack.Screen name="ReceiptResult" component={ReceiptResult} />
-                <Stack.Screen name="PaymentSuccess" component={PaymentSuccess} />
-                <Stack.Screen name="MaintenanceHistory" component={MaintenanceHistory} />
-              </Stack.Navigator >
-              <GlobalAlert />
-              <GlobalDatePicker />
-            </>
-          )
-          }
-        </NavigationContainer >
-      </KeyboardProvider >
-    </SafeAreaProvider >
+    <GlobalErrorBoundary>
+      <SafeAreaProvider>
+        <KeyboardProvider>
+          <NavigationContainer theme={AppTheme} linking={linking}>
+            {showCustomSplash ? (
+              // 스플래시 화면 표시
+              <View className="flex-1" onLayout={onLayoutRootView}>
+                <SplashScreenComponent onFinish={() => setShowCustomSplash(false)} />
+                <StatusBar style="light" />
+              </View>
+            ) : (
+              // 메인 앱 네비게이션
+              <>
+                <StatusBar style="auto" />
+                <Stack.Navigator
+                  initialRouteName={initialRoute}
+                  screenOptions={{
+                    headerShown: false,
+                    animation: 'slide_from_right',
+                    contentStyle: { backgroundColor: '#101922' }
+                  }}
+                >
+                  <Stack.Screen name="Tos" component={Tos} />
+                  <Stack.Screen name="Login" component={Login} />
+                  <Stack.Screen name="SignUp" component={SignUp} />
+                  <Stack.Screen name="FindPW" component={FindPW} />
+                  <Stack.Screen
+                    name="MainPage"
+                    component={MainTabNavigator}
+                    options={{ animation: 'none' }}
+                  />
+                  <Stack.Screen name="RegisterMain" component={RegisterMain} />
+                  <Stack.Screen name="ActiveReg" component={ActiveReg} />
+                  <Stack.Screen name="ObdResult" component={ObdResult} />
+                  <Stack.Screen name="PassiveReg" component={PassiveReg} />
+                  <Stack.Screen name="MaintenanceReg" component={MaintenanceReg} />
+                  <Stack.Screen name="EngineSoundDiag" component={EngineSoundDiag} />
+                  <Stack.Screen name="ObdDiagLoading" component={ObdDiagLoading} options={{ headerShown: false }} />
+                  <Stack.Screen name="ObdDiagResult" component={ObdDiagResult} options={{ headerShown: false }} />
+                  <Stack.Screen
+                    name="AiCompositeDiag"
+                    component={AiCompositeDiag}
+                    options={{ animation: 'none' }}
+                  />
+                  <Stack.Screen name="AiProfessionalDiag" component={AiProfessionalDiag} />
+                  <Stack.Screen name="AiDiagChat" component={AiDiagChat} />
+                  <Stack.Screen name="DiagnosisReport" component={DiagnosisReport} />
+                  <Stack.Screen name="DiagnosisHistory" component={DiagnosisHistory} />
+                  <Stack.Screen name="VisualDiagnosis" component={VisualDiagnosis} />
+                  <Stack.Screen name="Filming" component={Filming} />
+                  <Stack.Screen name="ChatCameraScreen" component={ChatCameraScreen} />
+                  <Stack.Screen name="ChatAudioScreen" component={ChatAudioScreen} />
+                  <Stack.Screen name="DrivingHis" component={DrivingHis} />
+                  <Stack.Screen name="RecallHis" component={RecallHis} />
+                  <Stack.Screen name="SupManage" component={SupManage} />
+                  <Stack.Screen
+                    name="AlertMain"
+                    component={AlertMain}
+                    options={{ animation: 'none' }}
+                  />
+                  <Stack.Screen name="Spec" component={Spec} />
+                  <Stack.Screen name="MyPage" component={MyPage} />
+                  <Stack.Screen name="AlertSetting" component={AlertSetting} />
+                  <Stack.Screen name="CarManage" component={CarManage} />
+                  <Stack.Screen name="CarEdit" component={CarEdit} />
+                  <Stack.Screen name="Cloud" component={Cloud} />
+                  <Stack.Screen name="Membership" component={Membership} />
+                  <Stack.Screen name="MaintenanceBook" component={MaintenanceBook} />
+                  <Stack.Screen name="ReceiptScan" component={ReceiptScan} />
+                  <Stack.Screen name="ReceiptResult" component={ReceiptResult} />
+                  <Stack.Screen name="PaymentSuccess" component={PaymentSuccess} />
+                  <Stack.Screen name="MaintenanceHistory" component={MaintenanceHistory} />
+                </Stack.Navigator>
+                <GlobalAlert />
+                <GlobalDatePicker />
+                <CustomErrorModal />
+              </>
+            )}
+          </NavigationContainer>
+        </KeyboardProvider>
+      </SafeAreaProvider>
+    </GlobalErrorBoundary>
   );
 }

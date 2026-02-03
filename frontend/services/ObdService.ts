@@ -12,6 +12,7 @@ import { uploadObdBatch, ObdLogRequest } from '../api/obdApi';
 import { useBleStore } from '../store/useBleStore';
 import BackgroundService from './BackgroundService';
 import { checkAndRequestBatteryOpt } from '../utils/BatteryOptConfig';
+import { useTripStore } from '../store/useTripStore';
 import NetworkService from './NetworkService';
 import OfflineStorage from './OfflineStorage';
 import api from '../api/axios';
@@ -263,6 +264,14 @@ class ObdService {
         useBleStore.getState().setPolling(true);
         this.pollingLoop(intervalMs);
 
+        // [Auto Trip] 주행 시작 (Trip ID 발급)
+        if (this.vehicleId) {
+            console.log('[ObdService] Auto-starting trip for vehicle:', this.vehicleId);
+            useTripStore.getState().startTrip(this.vehicleId);
+        } else {
+            console.warn('[ObdService] Cannot auto-start trip: Vehicle ID not set');
+        }
+
         // 안드로이드 백그라운드 서비스 시작
         if (Platform.OS === 'android') {
             BackgroundService.start();
@@ -276,6 +285,11 @@ class ObdService {
         useBleStore.getState().setPolling(false);
         console.log('[ObdService] Polling stopped, flushing buffer...');
         await this.flushBuffer();
+
+        // [Auto Trip] 주행 종료 (Trip ID 리셋)
+        // 연결이 해제되거나 폴링이 멈추면 주행 종료로 간주
+        console.log('[ObdService] Auto-ending trip...');
+        await useTripStore.getState().endTrip();
 
         // 안드로이드 백그라운드 서비스 중지
         if (Platform.OS === 'android') {
