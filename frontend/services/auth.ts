@@ -64,6 +64,12 @@ export const authService = {
         return response.data;
     },
 
+    // FCM 토큰 등록/업데이트
+    updateFcmToken: async (fcmToken: string): Promise<ApiResponse<string>> => {
+        const response = await api.patch<ApiResponse<string>>('/api/v1/auth/fcm-token', { fcmToken });
+        return response.data;
+    },
+
     deleteAccount: async (token: string): Promise<ApiResponse<string>> => {
         const response = await api.delete<ApiResponse<string>>('/api/v1/auth/me');
         return response.data;

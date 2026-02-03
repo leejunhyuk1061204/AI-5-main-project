@@ -8,7 +8,6 @@ import kr.co.himedia.dto.maintenance.ConsumableStatusResponse;
 import kr.co.himedia.dto.maintenance.OcrAnalysisResponse;
 
 import kr.co.himedia.entity.MaintenanceHistory;
-import kr.co.himedia.entity.MaintenanceItem; // Enum은 API 응답용으로 사용 or 삭제 고려
 import kr.co.himedia.entity.Vehicle;
 import kr.co.himedia.entity.VehicleConsumable;
 import kr.co.himedia.entity.ConsumableItem;
@@ -108,7 +107,7 @@ public class MaintenanceService {
                                                 newVc.setLastReplacedAt(request.getMaintenanceDate().atStartOfDay());
                                         }
                                         newVc.setLastReplacedMileage(request.getMileageAtMaintenance());
-                                        newVc.setRemainingLife(100.0);
+                                        newVc.setRemainingLife(100.0); // 교체 직후는 100%
                                         newVc.setIsInferred(false); // 직접 정비했으므로 추론 데이터 아님
                                         vehicleConsumableRepository.save(newVc);
                                 });
@@ -167,17 +166,6 @@ public class MaintenanceService {
                                                         ? item.getDefaultIntervalMonths()
                                                         : 12;
 
-                                        // Enum 매핑 (DTO가 Enum을 요구한다면)
-                                        // MaintenanceItem과 Code가 1:1 매핑된다고 가정하고 변환
-                                        MaintenanceItem itemEnum;
-                                        try {
-                                                itemEnum = MaintenanceItem.valueOf(item.getCode());
-                                        } catch (IllegalArgumentException e) {
-                                                // 마스터 데이터 코드가 Enum에 없으면 'OTHER' 등으로 처리하거나 스킵
-                                                // 여기서는 OTHER로 처리
-                                                itemEnum = MaintenanceItem.OTHER;
-                                        }
-
                                         // 4. 예상 교체일 계산 (잔여 수명 기반 역산)
                                         // 잔여 수명 %가 남은 기간 %와 같다고 가정
                                         // 남은 기간 = 전체 주기 * (잔여 수명 / 100)
@@ -189,8 +177,8 @@ public class MaintenanceService {
                                         }
 
                                         return ConsumableStatusResponse.builder()
-                                                        .item(itemEnum)
-                                                        .itemDescription(item.getName())
+                                                        .itemCode(item.getCode()) // DB 코드 직접 사용
+                                                        .itemDescription(item.getName()) // DB 이름 직접 사용
                                                         .consumableItemId(item.getId())
                                                         .remainingLifePercent(Math.round(remainingLife * 10.0) / 10.0)
                                                         .lastMaintenanceDate(lastHistory != null
