@@ -93,9 +93,32 @@ public class TripService {
             double distance = 0.0;
             int driveScore = 100;
 
+            // 추가 통계 변수 초기화
+            double sumRpm = 0.0;
+            double sumEngineLoad = 0.0;
+            double sumMaf = 0.0;
+            double sumThrottlePos = 0.0;
+            double sumFuelTrim = 0.0;
+
+            double maxCoolantTemp = -100.0;
+            double maxEngineLoad = 0.0;
+            double minBatteryVoltage = 0.0; // 초기값 0, 루프에서 갱신
+
+            int overheatDurationSec = 0;
+            int idleTime = 0;
+            int hardAccelCount = 0;
+            int hardBrakeCount = 0;
+            double prevSpeed = -1.0; // -1 for initial state
+
             for (ObdLog log : tripLogs) {
                 double speed = log.getSpeed() != null ? log.getSpeed() : 0.0;
                 double rpm = log.getRpm() != null ? log.getRpm() : 0.0;
+                double coolant = log.getCoolantTemp() != null ? log.getCoolantTemp() : 0.0;
+                double voltage = log.getVoltage() != null ? log.getVoltage() : 0.0;
+                double load = log.getEngineLoad() != null ? log.getEngineLoad() : 0.0;
+                double maf = log.getMaf() != null ? log.getMaf() : 0.0;
+                double throttle = log.getThrottlePos() != null ? log.getThrottlePos() : 0.0;
+                double fuelTrim = log.getFuelTrimShort() != null ? log.getFuelTrimShort() : 0.0;
 
                 // 최고 속도 갱신
                 if (speed > maxSpeed)
@@ -103,6 +126,38 @@ public class TripService {
 
                 // 속도 합계 (평균 속도 계산용)
                 sumSpeed += speed;
+
+                // 새로운 통계 데이터 집계
+                sumRpm += rpm;
+                sumEngineLoad += load;
+                sumMaf += maf;
+                sumThrottlePos += throttle;
+                sumFuelTrim += fuelTrim;
+
+                if (coolant > maxCoolantTemp)
+                    maxCoolantTemp = coolant;
+                if (load > maxEngineLoad)
+                    maxEngineLoad = load;
+                if (voltage > 0 && (minBatteryVoltage == 0 || voltage < minBatteryVoltage))
+                    minBatteryVoltage = voltage; // 0이 아닌 최소값
+
+                // 과열 지속 시간 (95도 이상)
+                if (coolant >= 95.0)
+                    overheatDurationSec++;
+
+                // 공회전 시간 (속도 0, RPM > 0)
+                if (speed < 1.0 && rpm > 0)
+                    idleTime++;
+
+                // 급가속/급감속 (이전 데이터와 비교)
+                if (prevSpeed != -1.0) {
+                    double speedDelta = speed - prevSpeed; // km/h per sec (assuming 1hz)
+                    if (speedDelta >= 10.0)
+                        hardAccelCount++; // 초당 10km/h 증가
+                    if (speedDelta <= -10.0)
+                        hardBrakeCount++; // 초당 10km/h 감소
+                }
+                prevSpeed = speed;
 
                 // 주행 거리 누적 (1초 주기 가정: speed km/h * 1s / 3600)
                 distance += (speed / 3600.0);
@@ -120,6 +175,23 @@ public class TripService {
             trip.setTopSpeed(maxSpeed);
             trip.setDistance(distance);
             trip.setDriveScore(driveScore);
+
+            // 추가 통계 설정
+            int count = tripLogs.size();
+            trip.setAvgRpm(sumRpm / count);
+            trip.setAvgEngineLoad(sumEngineLoad / count);
+            trip.setAvgMaf(sumMaf / count);
+            trip.setAvgThrottlePos(sumThrottlePos / count);
+            trip.setAvgFuelTrim(sumFuelTrim / count);
+
+            trip.setMaxCoolantTemp(maxCoolantTemp);
+            trip.setMaxEngineLoad(maxEngineLoad);
+            trip.setMinBatteryVoltage(minBatteryVoltage);
+
+            trip.setOverheatDurationSec(overheatDurationSec);
+            trip.setIdleTime(idleTime);
+            trip.setHardAccelCount(hardAccelCount);
+            trip.setHardBrakeCount(hardBrakeCount);
 
             log.info(
                     "[TripEnd] Final statistics calculated for trip {}: AvgSpeed={}, MaxSpeed={}, Distance={}, Score={}",
@@ -179,6 +251,19 @@ public class TripService {
             trip.setAverageSpeed(0.0);
             trip.setTopSpeed(0.0);
             trip.setDriveScore(100); // 운전 점수는 기본 100점 (운행 안했으니 감점 없음)
+
+            trip.setAvgRpm(0.0);
+            trip.setAvgEngineLoad(0.0);
+            trip.setAvgMaf(0.0);
+            trip.setAvgThrottlePos(0.0);
+            trip.setAvgFuelTrim(0.0);
+            trip.setMaxCoolantTemp(0.0);
+            trip.setMaxEngineLoad(0.0);
+            trip.setMinBatteryVoltage(0.0);
+            trip.setOverheatDurationSec(0);
+            trip.setIdleTime(0);
+            trip.setHardAccelCount(0);
+            trip.setHardBrakeCount(0);
             log.info("[TripEnd] No logs found for trip {}. Setting stats to default (0).", tripId);
         }
 
