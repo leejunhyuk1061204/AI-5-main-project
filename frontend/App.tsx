@@ -17,7 +17,7 @@ import { useUIStore } from './store/useUIStore';
 import { useUserStore } from './store/useUserStore';
 import ObdService from './services/ObdService';
 import BackgroundService from './services/BackgroundService';
-import fcmService from './services/fcmService';
+import NotificationService from './services/NotificationService';
 import GlobalAlert from './components/common/GlobalAlert';
 import GlobalDatePicker from './components/common/GlobalDatePicker';
 import BottomNav from './nav/BottomNav';
@@ -145,6 +145,10 @@ export default function App() {
           try {
             await loadUser(); // 사용자 정보 미리 로드
             const vehicles = await fetchVehicles();
+
+            // FCM 토큰 발급 및 서버 동기화 (자동 로그인 시)
+            await NotificationService.registerFcmToken();
+
             if (vehicles.length > 0) {
               setInitialRoute('MainPage');
             } else {
@@ -173,9 +177,13 @@ export default function App() {
 
     prepare();
 
+    // FCM 토큰 갱신 리스너 등록
+    const unsubscribe = NotificationService.setupTokenRefreshListener();
+
     return () => {
       showListener.remove();
       hideListener.remove();
+      if (unsubscribe) unsubscribe();
     };
   }, []);
 
@@ -293,17 +301,14 @@ export default function App() {
                 <Stack.Screen name="MaintenanceBook" component={MaintenanceBook} />
                 <Stack.Screen name="ReceiptScan" component={ReceiptScan} />
                 <Stack.Screen name="ReceiptResult" component={ReceiptResult} />
-<<<<<<< Updated upstream
-  <Stack.Screen name="PaymentSuccess" component={PaymentSuccess} />
-=======
+                <Stack.Screen name="PaymentSuccess" component={PaymentSuccess} />
                 <Stack.Screen name="MaintenanceHistory" component={MaintenanceHistory} />
->>>>>>> Stashed changes
               </Stack.Navigator >
               <GlobalAlert />
               <GlobalDatePicker />
             </>
           )
-}
+          }
         </NavigationContainer >
       </KeyboardProvider >
     </SafeAreaProvider >

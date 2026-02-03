@@ -77,10 +77,13 @@ data/postgres/
 data/manuals/zips/
 data/manuals/Sonata_2012/
 data/manuals/parsed/
+data/manuals/embedded/
 data/dtc/*.db
 data/sync_tracker.db
 data/logs/
 *.zip
+db/seed_knowledge_vectors.sql
+data/dtc/
 
 # ==================================================
 # OS

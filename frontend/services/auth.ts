@@ -73,5 +73,10 @@ export const authService = {
     deleteAccount: async (token: string): Promise<ApiResponse<string>> => {
         const response = await api.delete<ApiResponse<string>>('/api/v1/auth/me');
         return response.data;
+    },
+
+    updateFcmToken: async (fcmToken: string): Promise<ApiResponse<string>> => {
+        const response = await api.patch<ApiResponse<string>>('/api/v1/auth/fcm-token', { fcmToken });
+        return response.data;
     }
 };

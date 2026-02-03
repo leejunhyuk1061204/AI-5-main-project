@@ -300,7 +300,7 @@ public class UserService {
             }
 
             java.io.BufferedReader br = new java.io.BufferedReader(
-                    new java.io.InputStreamReader(conn.getInputStream()));
+                    new java.io.InputStreamReader(conn.getInputStream(), "UTF-8"));
             String line;
             StringBuilder result = new StringBuilder();
             while ((line = br.readLine()) != null) {
@@ -331,7 +331,7 @@ public class UserService {
     // Google ID Token 검증 (Frontend에서 Firebase Auth 미사용 시)
     private GoogleIdToken.Payload verifyGoogleIdToken(String tokenString) {
         // Web Client ID (from frontend/sign/Login.tsx or google-services.json)
-        final String CLIENT_ID = "415824813180-to8ea5houck16m7as32t9cavi7aq87e5.apps.googleusercontent.com";
+        final String CLIENT_ID = "540652803257-cl4t2p9tsvd0lbffrck17rq2sjs7i0k1.apps.googleusercontent.com";
 
         GoogleIdTokenVerifier verifier = new GoogleIdTokenVerifier.Builder(new NetHttpTransport(), new GsonFactory())
                 .setAudience(Collections.singletonList(CLIENT_ID))

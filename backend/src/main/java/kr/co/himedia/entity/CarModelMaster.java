@@ -16,11 +16,29 @@ public class CarModelMaster {
     @Column(name = "model_id")
     private Long modelId;
 
-    @Column(name = "manufacturer", length = 50)
-    private String manufacturer;
+    /**
+     * 제조사 (한글)
+     */
+    @Column(name = "manufacturer_ko", length = 50)
+    private String manufacturerKo;
 
-    @Column(name = "model_name", length = 100)
-    private String modelName;
+    /**
+     * 제조사 (영어)
+     */
+    @Column(name = "manufacturer_en", length = 50)
+    private String manufacturerEn;
+
+    /**
+     * 모델명 (한글)
+     */
+    @Column(name = "model_name_ko", length = 100)
+    private String modelNameKo;
+
+    /**
+     * 모델명 (영어)
+     */
+    @Column(name = "model_name_en", length = 100)
+    private String modelNameEn;
 
     @Column(name = "model_year")
     private Integer modelYear;

@@ -69,10 +69,16 @@ public class MasterDataService {
     // 제조사별 차량 모델 상세 목록 조회 (연식 내림차순 정렬)
     public List<CarModelDto> getModelsByManufacturer(String manufacturer) {
         List<CarModelMaster> models = carModelMasterRepository
-                .findByManufacturerOrderByModelNameAscModelYearDesc(manufacturer);
+                .findByManufacturerKoOrderByModelNameKoAscModelYearDesc(manufacturer);
 
         return models.stream()
-                .map(m -> new CarModelDto(m.getModelName(), m.getModelYear(), m.getFuelType()))
+                .map(m -> new CarModelDto(
+                        m.getModelNameKo(),
+                        m.getModelNameEn(),
+                        m.getManufacturerKo(),
+                        m.getManufacturerEn(),
+                        m.getModelYear(),
+                        m.getFuelType()))
                 .collect(Collectors.toList());
     }
 }

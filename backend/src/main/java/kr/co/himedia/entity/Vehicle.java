@@ -30,11 +30,29 @@ public class Vehicle {
     @Column(name = "car_number", length = 20)
     private String carNumber;
 
-    @Column(name = "manufacturer", length = 50)
-    private String manufacturer;
+    /**
+     * 제조사 (한글)
+     */
+    @Column(name = "manufacturer_ko", length = 50)
+    private String manufacturerKo;
 
-    @Column(name = "model_name", length = 100)
-    private String modelName;
+    /**
+     * 제조사 (영어)
+     */
+    @Column(name = "manufacturer_en", length = 50)
+    private String manufacturerEn;
+
+    /**
+     * 모델명 (한글)
+     */
+    @Column(name = "model_name_ko", length = 100)
+    private String modelNameKo;
+
+    /**
+     * 모델명 (영어)
+     */
+    @Column(name = "model_name_en", length = 100)
+    private String modelNameEn;
 
     @Column(name = "model_year")
     private Integer modelYear;
@@ -73,14 +91,17 @@ public class Vehicle {
     private LocalDateTime deletedAt;
 
     @Builder
-    public Vehicle(UUID userId, String vin, String carNumber, String manufacturer, String modelName,
+    public Vehicle(UUID userId, String vin, String carNumber, String manufacturerKo, String manufacturerEn,
+            String modelNameKo, String modelNameEn,
             Integer modelYear, FuelType fuelType, Double totalMileage, Boolean isPrimary,
             RegistrationSource registrationSource, String nickname, String memo, String obdDeviceId) {
         this.userId = userId;
         this.vin = vin;
         this.carNumber = carNumber;
-        this.manufacturer = manufacturer;
-        this.modelName = modelName;
+        this.manufacturerKo = manufacturerKo;
+        this.manufacturerEn = manufacturerEn;
+        this.modelNameKo = modelNameKo;
+        this.modelNameEn = modelNameEn;
         this.modelYear = modelYear;
         this.fuelType = fuelType;
         this.totalMileage = (totalMileage != null) ? totalMileage : 0.0;
