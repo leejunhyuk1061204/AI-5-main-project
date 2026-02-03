@@ -18,6 +18,7 @@ import { useUserStore } from './store/useUserStore';
 import ObdService from './services/ObdService';
 import BackgroundService from './services/BackgroundService';
 import NotificationService from './services/NotificationService';
+import fcmService from './services/fcmService';
 import GlobalAlert from './components/common/GlobalAlert';
 import GlobalDatePicker from './components/common/GlobalDatePicker';
 import BottomNav from './nav/BottomNav';
