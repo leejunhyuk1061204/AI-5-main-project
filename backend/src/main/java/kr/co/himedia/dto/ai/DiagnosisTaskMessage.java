@@ -16,8 +16,8 @@ public class DiagnosisTaskMessage {
     private UnifiedDiagnosisRequestDto requestDto;
     private ReplyRequestDto replyRequest; // 채팅 답변 요청 시 포함
     private MessageType messageType; // INITIAL vs REPLY
-    private String imageFilename;
-    private String audioFilename;
+    private String imageUrl;
+    private String audioUrl;
 
     public enum MessageType {
         INITIAL, REPLY

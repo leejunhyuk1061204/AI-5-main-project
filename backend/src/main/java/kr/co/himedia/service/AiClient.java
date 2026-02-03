@@ -32,10 +32,10 @@ public class AiClient {
 
     private final RestTemplate restTemplate;
 
-    @Value("${ai.server.url.visual:http://localhost:8001/api/v1/connect/predict/visual}")
+    @Value("${ai.server.url.visual:http://localhost:8001/api/v1/visual}")
     private String aiServerVisualUrl;
 
-    @Value("${ai.server.url.audio:http://localhost:8001/api/v1/connect/predict/audio}")
+    @Value("${ai.server.url.audio:http://localhost:8001/api/v1/audio}")
     private String aiServerAudioUrl;
 
     @Value("${ai.server.url.comprehensive:http://localhost:8001/api/v1/connect/predict/comprehensive}")
@@ -55,13 +55,17 @@ public class AiClient {
     }
 
     @Retryable(retryFor = Exception.class, maxAttempts = 3, backoff = @Backoff(delay = 2000))
-    public Map<String, Object> callVisualAnalysis(String filename, java.util.UUID vehicleId, java.util.UUID sessionId) {
-        log.info("[Retryable] Requesting Visual Analysis - Vehicle: {}, Session: {}, File: {}", vehicleId, sessionId,
-                filename);
+    public Map<String, Object> callVisualAnalysis(String imageUrl, java.util.UUID vehicleId, java.util.UUID sessionId) {
+        log.info("[Retryable] Requesting Visual Analysis - Vehicle: {}, Session: {}, URL: {}", vehicleId, sessionId,
+                imageUrl);
         try {
+            Map<String, Object> request = new java.util.HashMap<>();
+            request.put("imageUrl", imageUrl);
+            request.put("vehicleId", vehicleId != null ? vehicleId.toString() : null);
+            request.put("sessionId", sessionId != null ? sessionId.toString() : null);
+
             @SuppressWarnings("unchecked")
-            Map<String, Object> result = (Map<String, Object>) callMultipartApi(aiServerVisualUrl, filename, vehicleId,
-                    sessionId);
+            Map<String, Object> result = restTemplate.postForObject(aiServerVisualUrl, request, Map.class);
             return result;
         } catch (Exception e) {
             log.error("[AiClient] Visual Analysis Failed [Vehicle: {}, Session: {}]. URL: {}, Error: {}",
@@ -71,13 +75,17 @@ public class AiClient {
     }
 
     @Retryable(retryFor = Exception.class, maxAttempts = 3, backoff = @Backoff(delay = 2000))
-    public Map<String, Object> callAudioAnalysis(String filename, java.util.UUID vehicleId, java.util.UUID sessionId) {
-        log.info("[Retryable] Requesting Audio Analysis - Vehicle: {}, Session: {}, File: {}", vehicleId, sessionId,
-                filename);
+    public Map<String, Object> callAudioAnalysis(String audioUrl, java.util.UUID vehicleId, java.util.UUID sessionId) {
+        log.info("[Retryable] Requesting Audio Analysis - Vehicle: {}, Session: {}, URL: {}", vehicleId, sessionId,
+                audioUrl);
         try {
+            Map<String, Object> request = new java.util.HashMap<>();
+            request.put("audioUrl", audioUrl);
+            request.put("vehicleId", vehicleId != null ? vehicleId.toString() : null);
+            request.put("sessionId", sessionId != null ? sessionId.toString() : null);
+
             @SuppressWarnings("unchecked")
-            Map<String, Object> result = (Map<String, Object>) callMultipartApi(aiServerAudioUrl, filename, vehicleId,
-                    sessionId);
+            Map<String, Object> result = restTemplate.postForObject(aiServerAudioUrl, request, Map.class);
             return result;
         } catch (Exception e) {
             log.error("[AiClient] Audio Analysis Failed [Vehicle: {}, Session: {}]. URL: {}, Error: {}",
@@ -110,27 +118,33 @@ public class AiClient {
         }
     }
 
-    private Object callMultipartApi(String url, String filename, java.util.UUID vehicleId, java.util.UUID sessionId) {
-        Path filePath = Paths.get("uploads").toAbsolutePath().resolve(filename);
-        if (!filePath.toFile().exists()) {
-            throw new BaseException(ErrorCode.ENTITY_NOT_FOUND, "파일을 찾을 수 없습니다: " + filename);
+    @Value("${ai.server.url.embedding:http://localhost:8001/api/v1/connect/predict/embedding}")
+    private String aiServerEmbeddingUrl;
+
+    /**
+     * 텍스트 임베딩 요청 (Ollama)
+     */
+    @SuppressWarnings("unchecked")
+    @Retryable(retryFor = Exception.class, maxAttempts = 3, backoff = @Backoff(delay = 2000))
+    public double[] getEmbedding(String text) {
+        if (text == null || text.isBlank())
+            return null;
+        try {
+            Map<String, String> request = Map.of("text", text);
+            Map<String, Object> response = restTemplate.postForObject(aiServerEmbeddingUrl, request, Map.class);
+
+            if (response != null && response.containsKey("embedding")) {
+                Object embeddingObj = response.get("embedding");
+                if (embeddingObj instanceof java.util.List) {
+                    java.util.List<Double> embeddingList = (java.util.List<Double>) embeddingObj;
+                    return embeddingList.stream().mapToDouble(Double::doubleValue).toArray();
+                }
+            }
+        } catch (Exception e) {
+            log.error("[AiClient] Embedding API call failed: {}", e.getMessage());
+            throw new RuntimeException("임베딩 API 호출 실패", e);
         }
-
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.MULTIPART_FORM_DATA);
-
-        MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
-        body.add("file", new FileSystemResource(filePath.toFile()));
-
-        // Echo 식별자 추가
-        if (vehicleId != null)
-            body.add("vehicle_id", vehicleId.toString());
-        if (sessionId != null)
-            body.add("session_id", sessionId.toString());
-
-        HttpEntity<MultiValueMap<String, Object>> requestEntity = new HttpEntity<>(body, headers);
-
-        return restTemplate.postForObject(url, requestEntity, Map.class);
+        return null;
     }
 
     /**

@@ -30,6 +30,9 @@ public class AiUnifiedRequestDto {
     @com.fasterxml.jackson.annotation.JsonProperty("conversation_history")
     private List<Map<String, Object>> conversationHistory;
 
+    @com.fasterxml.jackson.annotation.JsonProperty("dtc_info")
+    private Map<String, Object> dtcInfo;
+
     @com.fasterxml.jackson.annotation.JsonProperty("vehicle_info")
     private Map<String, Object> vehicleInfo;
 

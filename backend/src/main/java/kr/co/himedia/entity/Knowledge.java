@@ -25,9 +25,6 @@ public class Knowledge {
     @Column(name = "knowledge_id", columnDefinition = "UUID")
     private UUID knowledgeId;
 
-    @Column(length = 20)
-    private String category;
-
     @Column(columnDefinition = "TEXT")
     private String content;
 

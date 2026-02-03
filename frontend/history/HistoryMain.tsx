@@ -58,32 +58,32 @@ export default function HistoryMain() {
             padding={false}
             useBottomNav={true}
         >
-            <View className="px-6 gap-5 pb-6 mt-4">
+            <View className="px-6 gap-3 mt-3">
                 {/* Card 1: Driving History Analysis */}
                 <TouchableOpacity
                     onPress={() => navigation.navigate('DrivingHis' as never)}
-                    className="w-full bg-white/5 border border-white/10 rounded-2xl p-6 active:bg-white/10"
+                    className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 active:bg-white/10"
                 >
-                    <View className="flex-row justify-between items-start mb-6">
+                    <View className="flex-row justify-between items-start mb-3">
                         <View className="flex-col gap-1">
                             <View className="flex-row items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 self-start">
                                 <View className="w-1.5 h-1.5 rounded-full bg-primary" />
                                 <Text className="text-xs font-bold text-primary uppercase tracking-wider">Analysis</Text>
                             </View>
-                            <Text className="text-lg font-bold text-white mt-2">주행 이력 분석</Text>
-                            <Text className="text-sm font-medium text-text-muted mt-0.5">
+                            <Text className="text-base font-bold text-white mt-1.5">주행 이력 분석</Text>
+                            <Text className="text-xs font-medium text-text-muted mt-0.5">
                                 {tripStats.hasData ? '최근 주행 기반 데이터' : '주행 기록 없음'}
                             </Text>
                         </View>
-                        <View className="flex-col items-center justify-center mr-10">
+                        <View className="flex-col items-center justify-center mr-8">
                             {loading ? (
                                 <ActivityIndicator size="small" color="#0d7ff2" />
                             ) : tripStats.hasData ? (
                                 <>
-                                    <Text className="text-7xl font-bold text-primary tracking-tighter leading-none">
+                                    <Text className="text-6xl font-bold text-primary tracking-tighter leading-none">
                                         {tripStats.totalScore}
                                     </Text>
-                                    <Text className="text-xs text-white font-bold uppercase tracking-widest mt-1">Total Score</Text>
+                                    <Text className="text-[10px] text-white font-bold uppercase tracking-widest mt-1">Total Score</Text>
                                 </>
                             ) : (
                                 <>
@@ -94,8 +94,8 @@ export default function HistoryMain() {
                         </View>
                     </View>
 
-                    <View className="flex-row gap-3 mt-4">
-                        <View className="flex-1 bg-surface-card rounded-xl p-4 border border-white/10 flex-col gap-1">
+                    <View className="flex-row gap-2.5 mt-3">
+                        <View className="flex-1 bg-surface-card rounded-xl p-3 border border-white/10 flex-col gap-1">
                             <Text className="text-text-muted text-sm font-medium mb-1">평균 속도</Text>
                             <View className="flex-row items-baseline gap-1">
                                 <Text className="text-xl font-bold text-white">
@@ -104,7 +104,7 @@ export default function HistoryMain() {
                                 <Text className="text-xs text-text-dim font-semibold">km/h</Text>
                             </View>
                         </View>
-                        <View className="flex-1 bg-surface-card rounded-xl p-4 border border-white/10 flex-col gap-1">
+                        <View className="flex-1 bg-surface-card rounded-xl p-3 border border-white/10 flex-col gap-1">
                             <Text className="text-text-muted text-sm font-medium mb-1">소모 연료량</Text>
                             <View className="flex-row items-baseline gap-1">
                                 <Text className="text-xl font-bold text-white">
@@ -119,7 +119,7 @@ export default function HistoryMain() {
                 {/* Card 2: Consumables Management */}
                 <TouchableOpacity
                     onPress={() => navigation.navigate('SupManage' as never)}
-                    className="w-full bg-white/5 border border-white/10 rounded-2xl p-6 active:bg-white/10"
+                    className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 active:bg-white/10"
                 >
                     <View className="flex-row justify-between items-center">
                         <View className="flex-col gap-1">
@@ -127,16 +127,34 @@ export default function HistoryMain() {
                                 <MaterialIcons name="build" size={10} color="#0d7ff2" />
                                 <Text className="text-xs font-bold text-primary uppercase tracking-wider">Prediction</Text>
                             </View>
-                            <Text className="text-lg font-bold text-white mt-2">소모품 관리 및 예지</Text>
-                            <Text className="text-sm text-text-muted">엔진 오일 잔여 수명 예측</Text>
+                            <Text className="text-base font-bold text-white mt-1.5">소모품 관리 및 예지</Text>
+                            <Text className="text-xs text-text-muted">엔진 오일 잔여 수명 예측</Text>
                         </View>
                     </View>
                 </TouchableOpacity>
 
-                {/* Card 2.5: AI Diagnosis History (NEW) */}
+                {/* Card 2.5: Maintenance History (정비 이력) */}
+                <TouchableOpacity
+                    onPress={() => navigation.navigate('MaintenanceHistory' as never)}
+                    className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 active:bg-white/10"
+                >
+                    <View className="flex-row justify-between items-center">
+                        <View className="flex-col gap-1">
+                            <View className="flex-row items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 self-start">
+                                <MaterialIcons name="build-circle" size={10} color="#0d7ff2" />
+                                <Text className="text-xs font-bold text-primary uppercase tracking-wider">Maintenance</Text>
+                            </View>
+                            <Text className="text-base font-bold text-white mt-1.5">정비 이력</Text>
+                            <Text className="text-xs text-text-muted">소모품 교체 및 정비 내역 조회</Text>
+                        </View>
+                        <MaterialIcons name="chevron-right" size={24} color="#64748b" />
+                    </View>
+                </TouchableOpacity>
+
+                {/* Card 2.6: AI Diagnosis History (NEW) */}
                 <TouchableOpacity
                     onPress={() => navigation.navigate('DiagnosisHistory' as never)}
-                    className="w-full bg-white/5 border border-white/10 rounded-2xl p-6 active:bg-white/10"
+                    className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 active:bg-white/10"
                 >
                     <View className="flex-row justify-between items-center">
                         <View className="flex-col gap-1">
@@ -144,8 +162,8 @@ export default function HistoryMain() {
                                 <MaterialIcons name="auto-awesome" size={10} color="#0d7ff2" />
                                 <Text className="text-xs font-bold text-primary uppercase tracking-wider">AI Report</Text>
                             </View>
-                            <Text className="text-lg font-bold text-white mt-2">AI 진단 내역</Text>
-                            <Text className="text-sm text-text-muted">진행했던 모든 AI 분석 보고서 보기</Text>
+                            <Text className="text-base font-bold text-white mt-1.5">AI 진단 내역</Text>
+                            <Text className="text-xs text-text-muted">진행했던 모든 AI 분석 보고서 보기</Text>
                         </View>
                         <MaterialIcons name="chevron-right" size={24} color="#64748b" />
                     </View>

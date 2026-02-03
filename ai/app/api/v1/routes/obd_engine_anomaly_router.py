@@ -3,7 +3,7 @@ from fastapi import APIRouter
 router = APIRouter(tags=["obd-engine-anomaly"])
 
 
-@router.post("/predict/anomaly")
+@router.post("/anomaly")
 def predict_anomaly(payload: dict):
     """
     임시(부트스트랩) 엔드포인트:

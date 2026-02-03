@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, TouchableOpacity, Modal, Pressable, ActivityIndicator, Alert, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, Modal, Pressable, ActivityIndicator, ScrollView } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -11,6 +11,7 @@ import ObdConnect from './ObdConnect';
 import { useVehicleStore } from '../store/useVehicleStore';
 import {
     setPrimaryVehicle as apiSetPrimaryVehicle,
+    deleteVehicle as apiDeleteVehicle,
     VehicleResponse
 } from '../api/vehicleApi';
 
@@ -44,6 +45,8 @@ export default function CarManage() {
     const [specModalVisible, setSpecModalVisible] = useState(false);
     const [editModalVisible, setEditModalVisible] = useState(false);
     const [obdModalVisible, setObdModalVisible] = useState(false);
+    const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+    const [vehicleToDelete, setVehicleToDelete] = useState<VehicleResponse | null>(null);
 
     // 다른 차량 목록 필터링
     const otherVehicles = vehicles.filter(v => v.vehicleId !== selectedVehicle?.vehicleId);
@@ -131,6 +134,37 @@ export default function CarManage() {
         });
     };
 
+    // 차량 삭제 핸들러
+    const handleDeleteVehicle = (vehicle?: VehicleResponse) => {
+        const targetVehicle = vehicle || (vehicles.length === 1 ? vehicles[0] : null);
+
+        if (!targetVehicle) {
+            useAlertStore.getState().showAlert('알림', '등록된 차량이 없습니다.', 'INFO');
+            return;
+        }
+
+
+        setVehicleToDelete(targetVehicle);
+        setDeleteModalVisible(true);
+    };
+
+    // 차량 삭제 확인
+    const confirmDeleteVehicle = async () => {
+        if (!vehicleToDelete) return;
+
+        try {
+            await apiDeleteVehicle(vehicleToDelete.vehicleId);
+            setDeleteModalVisible(false);
+            setVehicleToDelete(null);
+            useAlertStore.getState().showAlert('성공', '차량이 삭제되었습니다.', 'SUCCESS');
+            await loadVehicles(); // 목록 새로고침
+        } catch (error) {
+            console.error('[CarManage] Failed to delete vehicle:', error);
+            setDeleteModalVisible(false);
+            useAlertStore.getState().showAlert('오류', '차량 삭제에 실패했습니다.', 'ERROR');
+        }
+    };
+
     const HeaderCustom = (
         <View className="flex-row items-center px-4 py-3 border-b border-white/5">
             <TouchableOpacity
@@ -177,7 +211,7 @@ export default function CarManage() {
                                         <Text className="text-[10px] font-bold text-primary uppercase tracking-wider">대표 차량</Text>
                                     </View>
                                     <Text className="text-2xl font-bold text-white tracking-tight mb-1">
-                                        {selectedVehicle.manufacturer} {selectedVehicle.modelName}
+                                        {selectedVehicle.manufacturerKo} {selectedVehicle.modelNameKo}
                                     </Text>
                                     <Text className="text-text-muted text-sm">
                                         {selectedVehicle.carNumber || '번호판 미등록'}
@@ -228,7 +262,7 @@ export default function CarManage() {
                                     </View>
                                     <View className="flex-1">
                                         <Text className="text-white text-base font-medium mb-0.5">
-                                            {vehicle.manufacturer} {vehicle.modelName}
+                                            {vehicle.manufacturerKo} {vehicle.modelNameKo}
                                         </Text>
                                         <Text className="text-text-dim text-xs">
                                             {vehicle.carNumber || '번호판 미등록'}
@@ -288,13 +322,24 @@ export default function CarManage() {
                     </TouchableOpacity>
 
                     <TouchableOpacity
-                        className="flex-row items-center gap-4 px-5 py-4 active:bg-white/5"
+                        className="flex-row items-center gap-4 px-5 py-4 active:bg-white/5 border-b border-white/5"
                         onPress={() => navigation.navigate('MaintenanceBook')}
                     >
                         <View className="w-11 h-11 items-center justify-center rounded-xl bg-surface-highlight shrink-0">
                             <MaterialIcons name="receipt-long" size={24} color="#cbd5e1" />
                         </View>
                         <Text className="text-white text-base font-medium flex-1">차계부</Text>
+                        <MaterialIcons name="chevron-right" size={24} color="#475569" />
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        className="flex-row items-center gap-4 px-5 py-4 active:bg-white/5"
+                        onPress={() => vehicles.length > 0 ? handleDeleteVehicle() : useAlertStore.getState().showAlert('알림', '등록된 차량이 없습니다.', 'INFO')}
+                    >
+                        <View className="w-11 h-11 items-center justify-center rounded-xl bg-red-500/10 shrink-0">
+                            <MaterialIcons name="delete-outline" size={24} color="#ef4444" />
+                        </View>
+                        <Text className="text-red-400 text-base font-medium flex-1">차량 삭제</Text>
                         <MaterialIcons name="chevron-right" size={24} color="#475569" />
                     </TouchableOpacity>
                 </View>
@@ -364,7 +409,7 @@ export default function CarManage() {
 
                                         <View className="flex-1">
                                             <Text className={`text-base font-semibold mb-0.5 ${isSelected ? 'text-primary' : 'text-white'}`}>
-                                                {vehicle.manufacturer} {vehicle.modelName}
+                                                {vehicle.manufacturerKo} {vehicle.modelNameKo}
                                             </Text>
                                             <Text className="text-text-dim text-xs">{vehicle.carNumber || '번호판 미등록'}</Text>
                                         </View>
@@ -428,7 +473,7 @@ export default function CarManage() {
                                         </View>
                                         <View className="flex-1">
                                             <Text className="text-base font-semibold text-white">
-                                                {vehicle.manufacturer} {vehicle.modelName}
+                                                {vehicle.manufacturerKo} {vehicle.modelNameKo}
                                             </Text>
                                             <Text className="text-text-dim text-xs">{vehicle.carNumber}</Text>
                                         </View>
@@ -479,7 +524,7 @@ export default function CarManage() {
                                         </View>
                                         <View className="flex-1">
                                             <Text className="text-base font-semibold text-white">
-                                                {vehicle.manufacturer} {vehicle.modelName}
+                                                {vehicle.manufacturerKo} {vehicle.modelNameKo}
                                             </Text>
                                             <Text className="text-text-dim text-xs">{vehicle.carNumber}</Text>
                                         </View>
@@ -488,6 +533,76 @@ export default function CarManage() {
                                 );
                             })}
                         </ScrollView>
+                    </Pressable>
+                </Pressable>
+            </Modal>
+
+            {/* 차량 삭제 확인 모달 */}
+            <Modal
+                animationType="fade"
+                transparent={true}
+                visible={deleteModalVisible}
+                onRequestClose={() => setDeleteModalVisible(false)}
+            >
+                <Pressable
+                    className="flex-1 bg-black/70 justify-center items-center px-6"
+                    onPress={() => setDeleteModalVisible(false)}
+                >
+                    <Pressable
+                        className="w-full bg-surface-dark border border-red-500/20 rounded-3xl overflow-hidden"
+                        onPress={(e) => e.stopPropagation()}
+                    >
+                        {/* Header */}
+                        <View className="px-6 py-5 border-b border-white/10 flex-row items-center justify-between bg-red-500/5">
+                            <View className="flex-row items-center gap-3">
+                                <View className="w-10 h-10 items-center justify-center rounded-full bg-red-500/20">
+                                    <MaterialIcons name="warning" size={24} color="#ef4444" />
+                                </View>
+                                <Text className="text-lg font-bold text-white">차량 삭제</Text>
+                            </View>
+                            <TouchableOpacity
+                                className="w-8 h-8 items-center justify-center rounded-full bg-white/5 active:bg-white/10"
+                                onPress={() => setDeleteModalVisible(false)}
+                            >
+                                <MaterialIcons name="close" size={20} color="#94a3b8" />
+                            </TouchableOpacity>
+                        </View>
+
+                        {/* Content */}
+                        <View className="px-6 py-6">
+                            {vehicleToDelete && (
+                                <>
+                                    <View className="bg-white/5 border border-white/10 rounded-2xl p-4 mb-4">
+                                        <Text className="text-base font-semibold text-white mb-1">
+                                            {vehicleToDelete.manufacturerKo} {vehicleToDelete.modelNameKo}
+                                        </Text>
+                                        <Text className="text-sm text-text-muted">
+                                            {vehicleToDelete.carNumber || '번호판 미등록'}
+                                        </Text>
+                                    </View>
+                                    <Text className="text-sm text-text-muted leading-relaxed">
+                                        선택한 차량을 삭제하시겠습니까?{'\n\n'}
+                                        <Text className="text-red-400 font-medium">이 작업은 되돌릴 수 없습니다.</Text>
+                                    </Text>
+                                </>
+                            )}
+                        </View>
+
+                        {/* Actions */}
+                        <View className="px-6 py-4 border-t border-white/10 flex-row gap-3">
+                            <TouchableOpacity
+                                className="flex-1 py-3.5 bg-white/5 border border-white/10 rounded-xl active:bg-white/10"
+                                onPress={() => setDeleteModalVisible(false)}
+                            >
+                                <Text className="text-white text-center font-semibold">취소</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                className="flex-1 py-3.5 bg-red-500 rounded-xl active:bg-red-600"
+                                onPress={confirmDeleteVehicle}
+                            >
+                                <Text className="text-white text-center font-semibold">삭제</Text>
+                            </TouchableOpacity>
+                        </View>
                     </Pressable>
                 </Pressable>
             </Modal>

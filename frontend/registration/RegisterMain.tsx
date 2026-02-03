@@ -46,6 +46,7 @@ export default function RegisterMain() {
                 if (accessToken) {
                     try {
                         const jwtToken = await AsyncStorage.getItem('accessToken');
+                        // Use the configured backend URL if possible, or fallback to localhost for dev
                         const backendUrl = 'http://localhost:8080';
 
                         // 단순 조회가 아닌 백엔드 sync API 호출 (POST)
@@ -63,7 +64,7 @@ export default function RegisterMain() {
                             let detailMessage = `총 ${syncData.totalCount}대의 차량 정보가 성공적으로 최신화되었습니다.\n\n`;
                             results.forEach((res: any) => {
                                 const statusText = res.status === 'CONNECTED' ? '기존 차량 연결' : '신규 차량 등록';
-                                detailMessage += `• ${res.manufacturer} ${res.modelName}: ${statusText}\n`;
+                                detailMessage += `• ${res.manufacturerKo} ${res.modelNameKo}: ${statusText}\n`;
                             });
 
                             Alert.alert(
@@ -163,7 +164,7 @@ export default function RegisterMain() {
                         </View>
                     </TouchableOpacity>
 
-                    {/* Card 2: OBD-II Auto Connect */}
+                    {/* Card 2: SmartCar Connection (Bluetooth) - Previously OBD Auto */}
                     <TouchableOpacity
                         className="relative flex flex-col items-start gap-4 rounded-2xl border border-primary/30 bg-white/5 p-6 shadow-lg shadow-blue-500/10 active:bg-white/10 active:border-primary active:scale-[0.98]"
                         activeOpacity={0.9}
@@ -178,36 +179,13 @@ export default function RegisterMain() {
                             <MaterialIcons name="bluetooth" size={32} color="#0d7ff2" />
                         </View>
                         <View>
-                            <Text className="text-lg font-bold text-white mb-1">OBD-II 자동 연결</Text>
+                            <Text className="text-lg font-bold text-white mb-1">SmartCar 연결</Text>
                             <Text className="text-sm text-slate-400 leading-relaxed">
-                                블루투스 스캐너를 연결하여{'\n'}차량 제원을 자동으로 불러옵니다.
-                            </Text>
-                        </View>
-                    </TouchableOpacity>
-
-                    {/* Card 3: Smartcar Connect (From Main) */}
-                    <TouchableOpacity
-                        className="group relative flex flex-col items-start gap-4 rounded-2xl border border-white/10 bg-white/5 p-6 active:bg-white/10 active:scale-[0.98]"
-                        activeOpacity={0.9}
-                        onPress={() => {
-                            const backendUrl = 'http://localhost:8080';
-                            Linking.openURL(`${backendUrl}/api/smartcar/login`);
-                        }}
-                    >
-                        <View className="absolute top-0 right-0 rounded-bl-xl rounded-tr-xl bg-green-500 px-3 py-1 shadow-sm">
-                            <Text className="text-[10px] font-bold text-white">NEW</Text>
-                        </View>
-                        <View className="rounded-full bg-green-500/10 p-3">
-                            <MaterialIcons name="electric-car" size={32} color="#22c55e" />
-                        </View>
-                        <View>
-                            <Text className="text-lg font-bold text-white mb-1">Smartcar 연결</Text>
-                            <Text className="text-sm text-slate-400 leading-relaxed">
-                                Smartcar 계정을 연결하여{'\n'}차량 정보를 불러옵니다.
+                                SmartCar 어댑터(블루투스)를 연결하여{'\n'}차량 제원을 자동으로 불러옵니다.
                             </Text>
                         </View>
                         <View className="absolute top-6 right-6 opacity-50">
-                            <MaterialIcons name="arrow-forward" size={24} color="#22c55e" />
+                            <MaterialIcons name="arrow-forward" size={24} color="#0d7ff2" />
                         </View>
                     </TouchableOpacity>
                 </View>

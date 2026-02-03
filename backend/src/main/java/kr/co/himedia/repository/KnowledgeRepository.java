@@ -15,23 +15,33 @@ import java.util.UUID;
 @Repository
 public interface KnowledgeRepository extends JpaRepository<Knowledge, UUID> {
 
-    /**
-     * 벡터 유사도 검색 (Cosine Distance)
-     * pgvector의 <=> 연산자를 사용함
-     */
-    @Query(value = "SELECT * FROM knowledge_vectors kv " +
-            "ORDER BY kv.embedding <=> cast(:embedding as vector) " +
-            "LIMIT :limit", nativeQuery = true)
-    List<Knowledge> findSimilarDocuments(@Param("embedding") double[] embedding, @Param("limit") int limit);
+        /**
+         * 벡터 유사도 검색 (Cosine Distance)
+         * pgvector의 <=> 연산자를 사용함
+         */
+        /**
+         * 벡터 유사도 검색 (Cosine Distance)
+         * pgvector의 <=> 연산자를 사용함
+         */
+        @Query(value = "SELECT * FROM knowledge_vectors kv " +
+                        "ORDER BY kv.embedding <=> cast(:embedding as vector) " +
+                        "LIMIT :limit", nativeQuery = true)
+        List<Knowledge> findSimilarDocuments(@Param("embedding") double[] embedding, @Param("limit") int limit);
 
-    /**
-     * 카테고리별 벡터 유사도 검색
-     */
-    @Query(value = "SELECT * FROM knowledge_vectors kv " +
-            "WHERE kv.category = :category " +
-            "ORDER BY kv.embedding <=> cast(:embedding as vector) " +
-            "LIMIT :limit", nativeQuery = true)
-    List<Knowledge> findSimilarDocumentsByCategory(@Param("category") String category,
-            @Param("embedding") double[] embedding,
-            @Param("limit") int limit);
+        /**
+         * 제조사, 모델 필터링 및 유사도 임계값을 적용한 벡터 유사도 검색
+         * distance 가 threshold 이하인 문서만 반환함
+         */
+        @Query(value = "SELECT * FROM knowledge_vectors kv " +
+                        "WHERE kv.metadata->>'manufacturer' = :manufacturer " +
+                        "AND kv.metadata->>'model_name' = :modelName " +
+                        "AND (kv.embedding <=> cast(:embedding as vector)) <= :threshold " +
+                        "ORDER BY kv.embedding <=> cast(:embedding as vector) " +
+                        "LIMIT :limit", nativeQuery = true)
+        List<Knowledge> findSimilarDocumentsWithFilter(
+                        @Param("manufacturer") String manufacturer,
+                        @Param("modelName") String modelName,
+                        @Param("embedding") double[] embedding,
+                        @Param("threshold") double threshold,
+                        @Param("limit") int limit);
 }

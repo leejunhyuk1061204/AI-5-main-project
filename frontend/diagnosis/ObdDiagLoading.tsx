@@ -14,7 +14,7 @@ import Animated, {
     Easing
 } from 'react-native-reanimated';
 
-import ObdService from '../../services/ObdService';
+import ObdService from '../services/ObdService';
 
 const { width } = Dimensions.get('window');
 
@@ -23,9 +23,9 @@ type ActiveLoadingParams = {
     vehicleId?: string;
 };
 
-export default function ActiveLoading({ navigation }: any) {
+export default function ObdDiagLoading({ navigation }: any) {
     const insets = useSafeAreaInsets();
-    const route = useRoute<RouteProp<{ ActiveLoading: ActiveLoadingParams }, 'ActiveLoading'>>();
+    const route = useRoute<RouteProp<{ ObdDiagLoading: ActiveLoadingParams }, 'ObdDiagLoading'>>();
     const vehicleId = route.params?.vehicleId;
 
     // Animations
@@ -36,10 +36,10 @@ export default function ActiveLoading({ navigation }: any) {
     useEffect(() => {
         // vehicleId가 있으면 ObdService에 설정 (배치 업로드에 필요)
         if (vehicleId) {
-            console.log(`[ActiveLoading] Setting vehicleId: ${vehicleId}`);
+            console.log(`[ObdDiagLoading] Setting vehicleId: ${vehicleId}`);
             ObdService.setVehicleId(vehicleId);
         } else {
-            console.warn('[ActiveLoading] No vehicleId provided - batch upload will be disabled');
+            console.warn('[ObdDiagLoading] No vehicleId provided - batch upload will be disabled');
         }
 
         // 1. Start Background Polling
@@ -48,15 +48,15 @@ export default function ActiveLoading({ navigation }: any) {
 
         // 2. 데이터 수신 여부와 관계없이 5초 후 자동 이동 (더미 결과 화면)
         const autoNavigateTimer = setTimeout(() => {
-            console.log("[ActiveLoading] Auto-navigating to ObdResult after timeout...");
-            navigation.replace('ObdResult');
+            console.log("[ObdDiagLoading] Auto-navigating to ObdDiagResult after timeout...");
+            navigation.replace('ObdDiagResult');
         }, 5000);
 
         // 3. Data Listener for Early Transition (데이터 받으면 즉시 이동)
         const unsubscribe = ObdService.onData((data) => {
             // Check if we received valid data (any primary field)
             if (data.rpm !== undefined || data.speed !== undefined || data.voltage !== undefined) {
-                console.log("[ActiveLoading] Valid data received! Transitioning to Real-time Dashboard...");
+                console.log("[ObdDiagLoading] Valid data received! Transitioning to Result...");
 
                 // Clear the auto-navigate timer since we're navigating early
                 clearTimeout(autoNavigateTimer);
@@ -65,7 +65,14 @@ export default function ActiveLoading({ navigation }: any) {
                 unsubscribe();
 
                 // Navigate immediately - DO NOT stop polling (Keep connection alive)
-                navigation.replace('ObdResult');
+                navigation.replace('ObdDiagResult', {
+                    // Pass some dummy or real diagnosis summary if available
+                    result: {
+                        dtcCount: 0,
+                        status: 'NORMAL',
+                        description: '모든 시스템이 정상입니다.'
+                    }
+                });
             }
         });
 

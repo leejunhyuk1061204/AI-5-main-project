@@ -38,11 +38,15 @@ class SceneType(str, Enum):
 class VisualRequest(BaseModel):
     """통합 시각 분석 요청"""
     imageUrl: str = Field(..., description="S3에 저장된 이미지 URL")
+    vehicleId: Optional[str] = Field(None, description="차량 식별자 (UUID)")
+    sessionId: Optional[str] = Field(None, description="진단 세션 식별자 (UUID)")
 
 
 class EngineAnalysisRequest(BaseModel):
     """엔진룸 전용 분석 요청"""
     imageUrl: str = Field(..., description="Engine room image S3 URL")
+    vehicleId: Optional[str] = Field(None, description="차량 식별자 (UUID)")
+    sessionId: Optional[str] = Field(None, description="진단 세션 식별자 (UUID)")
 
 
 # =============================================================================

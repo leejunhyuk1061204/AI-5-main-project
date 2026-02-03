@@ -8,8 +8,8 @@ from datetime import datetime
 
 # 설정
 BASE_URL = "http://localhost:8080/api/v1"
-VEHICLE_ID = "7d9e2ddc-362d-4cf7-9d02-b684387dcdac"
-ACCESS_TOKEN = "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJjZTI1NTE2MC02MjAwLTQwYjUtOWYwOS0wMTVjMTI4ZWE1OWQiLCJpYXQiOjE3Njk2OTg4MjksImV4cCI6MTc2OTcwMjQyOX0.X4Sj0rcQzkHB1ESYBcCJ7Ko7aa1l31Y-HfOGQvPPKkE9nX9JedEgRAfLR28EvVOJ294wcWhBlcXaQyUXSnaABA"
+VEHICLE_ID = "9db0e652-a852-4fdb-bda4-a86adeb3778b"
+ACCESS_TOKEN = "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJlNmQ5ODU5MS04ZTRlLTRlMTEtOTI5YS1jZDg3NDk3MDdmYWIiLCJpYXQiOjE3NzAxMDgxMTYsImV4cCI6MTc3MDExMTcxNn0.mOVLrnD-69MA95wvXA_VNtYAHLV7uKdbQdjLYMcYhFzm2IMmAOtHYPvMDh0dVRR03vlGTHYvaJWN2kVak7ItEA"
 
 def get_headers():
     if os.path.exists("token.json"):
@@ -83,7 +83,12 @@ def send_bulk_logs(vehicle_id, target_duration_min):
             "coolantTemp": round(90.0 + random.uniform(-2, 5), 1),
             "engineLoad": round(45.0 + random.uniform(-10, 10), 1),
             "fuelTrimShort": 2.5,
-            "fuelTrimLong": 1.0
+            "fuelTrimLong": 1.0,
+            "intakeTemp": round(25.0 + random.uniform(0, 5), 1),
+            "map": round(30.0 + random.uniform(5, 70), 1),
+            "maf": round(15.0 + random.uniform(2, 40), 1),
+            "throttlePos": round(15.0 + random.uniform(0, 80), 1),
+            "engineRuntime": 3600
         }
         logs.append(log)
 
@@ -113,6 +118,10 @@ def end_trip(trip_id):
         print(f"    - Trip ID: {data.get('tripId')}")
         print(f"    - Distance: {data.get('distance')} km")
         print(f"    - Avg Speed: {data.get('averageSpeed')} km/h")
+        print(f"    - Avg RPM: {data.get('avgRpm')}")
+        print(f"    - Avg Engine Load: {data.get('avgEngineLoad')}")
+        print(f"    - Overheat Duration: {data.get('overheatDurationSec')} sec")
+        print(f"    - Hard Accel Count: {data.get('hardAccelCount')}")
         print(f"    - Score: {data.get('driveScore')}")
         print("="*30)
     else:
@@ -122,7 +131,7 @@ import argparse
 
 def main():
     parser = argparse.ArgumentParser(description="Driving Data Simulation Test")
-    parser.add_argument("--duration", type=float, default=17, help="주행 시간 (분)")
+    parser.add_argument("--duration", type=float, default=5, help="주행 시간 (분)")
     parser.add_argument("--interval", type=int, default=1, help="데이터 생성 간격 (초)")
     parser.add_argument("--batch", type=int, default=60, help="배치 전송 단위 (초)")
     
