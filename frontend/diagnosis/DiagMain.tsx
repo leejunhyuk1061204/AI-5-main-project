@@ -28,7 +28,7 @@ export default function DiagMain() {
     // UI Local State
     const [vehicleSelectVisible, setVehicleSelectVisible] = useState(false);
     const [selectedVehicleName, setSelectedVehicleName] = useState<string | null>(
-        primaryVehicle ? `${primaryVehicle.modelName} (${primaryVehicle.carNumber})` : null
+        primaryVehicle ? `${primaryVehicle.modelNameKo} (${primaryVehicle.carNumber})` : null
     );
     const [pendingAction, setPendingAction] = useState<'OBD' | 'SOUND' | 'PHOTO' | null>(null);
 
@@ -72,7 +72,7 @@ export default function DiagMain() {
 
     const handleVehicleSelect = async (vehicle: any) => {
         setVehicleSelectVisible(false);
-        setSelectedVehicleName(`${vehicle.modelName} (${vehicle.carNumber})`);
+        setSelectedVehicleName(`${vehicle.modelNameKo} (${vehicle.carNumber})`);
         setVehicleId(vehicle.vehicleId);
 
         if (pendingAction === 'OBD') {
