@@ -16,7 +16,7 @@ from ai.app.services.common.local_service import process_visual_mock, process_au
 from ai.app.services.visual.router_service import SceneType
 from ai.app.schemas.visual_schema import VisualResponse, DetectionItem
 from ai.app.schemas.audio_schema import AudioResponse
-from ai.app.schemas.wear_factor import VehicleMetadata, DrivingHabits # 공통 메타데이터는 재사용
+from ai.app.schemas.wear_factor import VehicleMetadata, DrivingSummary # 공통 메타데이터는 재사용
 from pydantic import BaseModel, Field
 from typing import List, Dict, Optional
 from PIL import Image
@@ -339,7 +339,7 @@ class ConnectConsumableContext(BaseModel):
 
 class ConnectWearFactorRequest(BaseModel):
     vehicle_metadata: VehicleMetadata
-    driving_habits: DrivingHabits
+    driving_summary: DrivingSummary
     consumables: List[ConnectConsumableContext]
 
 class ConnectWearFactorResponse(BaseModel):
