@@ -129,7 +129,7 @@ export default function SupManage() {
                         <Text className="text-white text-base font-bold">소모품 관리</Text>
                         <View className="flex-row items-center gap-1">
                             <Text className="text-xs text-text-dim">
-                                {selectedVehicle ? `${selectedVehicle.manufacturer} ${selectedVehicle.modelName}` : '차량 선택'}
+                                {selectedVehicle ? `${selectedVehicle.manufacturerKo} ${selectedVehicle.modelNameKo}` : '차량 선택'}
                             </Text>
                             <MaterialIcons name="arrow-drop-down" size={16} color="#94a3b8" />
                         </View>
@@ -287,7 +287,7 @@ export default function SupManage() {
                                         </View>
                                         <View className="flex-1">
                                             <Text className={`text-base font-semibold ${isSelected ? 'text-primary' : 'text-white'}`}>
-                                                {vehicle.manufacturer} {vehicle.modelName}
+                                                {vehicle.manufacturerKo} {vehicle.modelNameKo}
                                             </Text>
                                             <Text className="text-text-dim text-xs">{vehicle.carNumber}</Text>
                                         </View>

@@ -161,9 +161,10 @@ async def get_smart_visual_diagnosis(
         
         # 신뢰도가 낮으면 LLM에게 직접 판단 요청 (Fallback)
         if confidence < 0.4:
-            print(f"[Visual Service] Router 신뢰도 낮음, LLM Fallback 실행")
+            print(f"[Visual Fallback] Router 결과: {scene_type.value} (신뢰도: {confidence:.2f}) -> LLM으로 전환 요청")
             # [Fix] llm_result 먼저 생성 (NameError 방지)
             llm_result = await analyze_general_image(s3_url)
+            print(f"[Visual Fallback] LLM 응답: {llm_result}")
             
             # Map LLM result to VisualResponse (llm_result is VisualResponse object)
             # IRRELEVANT 처리 -> SCENE_ETC로 통합하되 Status로 구분
@@ -191,9 +192,10 @@ async def get_smart_visual_diagnosis(
                     
                     # [Guard] Validate LLM Result
                     if not validate_llm_label_result(label_result):
-                        print(f"[Visual Service] LLM Label Generation Failed or Invalid: {label_result.get('status')}")
+                        print(f"[Visual Fallback] LLM BBox 생성 실패 또는 유효하지 않음: {label_result}")
                         # Skip processing, llm_detections remains []
                     else:
+                        print(f"[Visual Fallback] LLM BBox 생성 결과: {label_result}")
                         for lbl in label_result.get("labels", []):
                             # [Sanitize] Add source check
                             lbl = sanitize_confidence(lbl)
@@ -340,13 +342,15 @@ async def get_smart_visual_diagnosis(
         
         else:
             # Unknown scene → LLM Fallback
-            print(f"[Visual Service] Unknown scene: {scene_type}, LLM Fallback")
+            print(f"[Visual Fallback] 정의되지 않은 장면: {scene_type} -> LLM으로 전환 요청")
             llm_result = await analyze_general_image(s3_url)
+            print(f"[Visual Fallback] LLM 응답: {llm_result}")
             return llm_result
             
     except Exception as e:
-        print(f"[Visual Service] 분석 오류, LLM Fallback: {e}")
+        print(f"[Visual Fallback] 분석 오류 발생, LLM으로 전환: {e}")
         llm_result = await analyze_general_image(s3_url)
+        print(f"[Visual Fallback] LLM 응답: {llm_result}")
         return llm_result
     
     finally:

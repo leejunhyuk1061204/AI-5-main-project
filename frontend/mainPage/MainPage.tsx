@@ -66,7 +66,7 @@ export default function MainPage() {
 
     // fallback for display
     const currentVehicle = primaryVehicle || {
-        modelName: '차량을 등록해주세요',
+        modelNameKo: '차량을 등록해주세요',
         carNumber: '- - -',
         totalMileage: 0,
         fuelType: null
@@ -86,8 +86,8 @@ export default function MainPage() {
                             <MaterialIcons name="directions-car" size={20} color="#d1d5db" />
                         </View>
                         <View>
-                            <Text className="text-white text-sm font-bold leading-tight">{currentVehicle.modelName}</Text>
-                            <Text className="text-text-muted text-xs font-normal">{currentVehicle.carNumber}</Text>
+                            <Text className="text-white text-base font-bold leading-tight">{currentVehicle.modelNameKo || (currentVehicle as any).modelName}</Text>
+                            <Text className="text-text-muted text-sm font-normal">{currentVehicle.carNumber}</Text>
                         </View>
                     </View>
                     <TouchableOpacity

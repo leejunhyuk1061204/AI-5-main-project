@@ -69,13 +69,13 @@ export default function AiCompositeDiag() {
     const handleVehicleSelect = (vehicle: any) => {
         selectionRef.current = true;
         setSelectedVehicleId(vehicle.vehicleId);
-        setSelectedVehicleName(`${vehicle.manufacturer} ${vehicle.modelName}`);
+        setSelectedVehicleName(`${vehicle.manufacturerKo} ${vehicle.modelNameKo}`);
         setVehicleSelectVisible(false);
 
         const newMsg = {
             id: Date.now(),
             type: 'ai',
-            text: `${vehicle.manufacturer} ${vehicle.modelName} 차량의 진단을 시작합니다.`,
+            text: `${vehicle.manufacturerKo} ${vehicle.modelNameKo} 차량의 진단을 시작합니다.`,
             isFirst: false
         };
         setMessages(prev => [...prev, newMsg]);
