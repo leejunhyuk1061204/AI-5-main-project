@@ -15,5 +15,5 @@ public interface FileStorageService {
      * @return 접근 가능한 파일 URL
      * @throws IOException 입출력 예외 발생 시
      */
-    String uploadFile(MultipartFile file) throws IOException;
+    String uploadFile(MultipartFile file, String folder) throws IOException;
 }

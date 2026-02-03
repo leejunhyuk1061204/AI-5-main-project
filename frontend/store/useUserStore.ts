@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { authService } from '../services/auth';
 import { getVehicleList } from '../api/vehicleApi';
 import { useVehicleStore } from './useVehicleStore';
+import fcmService from '../services/fcmService';
 
 /**
  * 사용자 정보 및 인증 상태를 관리하는 Store
@@ -74,6 +75,14 @@ export const useUserStore = create<UserState>((set) => ({
             console.log('[Logout] All stores have been reset.');
         } catch (error) {
             console.error('[Logout] Failed to reset some stores:', error);
+        }
+
+        // 4. FCM 토큰 삭제
+        try {
+            await fcmService.deleteToken();
+            console.log('[Logout] FCM token deleted.');
+        } catch (error) {
+            console.error('[Logout] Failed to delete FCM token:', error);
         }
     },
 
@@ -147,6 +156,14 @@ const handleLoginSuccess = async (data: any, set: any) => {
         const vehicles = await getVehicleList();
         useVehicleStore.getState().setVehicles(vehicles); // Store update
         const hasVehicle = vehicles && vehicles.length > 0;
+
+        // 4. FCM 토큰 등록
+        try {
+            await fcmService.initialize();
+            console.log('[Auth] FCM initialized on login');
+        } catch (e) {
+            console.error('[Auth] FCM initialization failed:', e);
+        }
 
         return { success: true, hasVehicle };
     } catch (e) {

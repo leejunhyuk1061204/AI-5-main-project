@@ -73,14 +73,20 @@ export default function SupManage() {
             'ENGINE_OIL': { icon: 'oil', family: 'MaterialCommunityIcons' },
             'WIPER': { icon: 'wiper', family: 'MaterialCommunityIcons' },
             'AIR_FILTER': { icon: 'air-filter', family: 'MaterialCommunityIcons' },
-            'TIRE': { icon: 'car-tire-alert', family: 'MaterialCommunityIcons' },
+            'TIRE': { icon: 'tire', family: 'MaterialCommunityIcons' },
+            'TIRES': { icon: 'tire', family: 'MaterialCommunityIcons' },
+            'TIRE_FRONT': { icon: 'tire', family: 'MaterialCommunityIcons' },
+            'TIRE_REAR': { icon: 'tire', family: 'MaterialCommunityIcons' },
             'BRAKE_PAD': { icon: 'disc-full', family: 'MaterialIcons' },
+            'BRAKE_PAD_FRONT': { icon: 'disc-full', family: 'MaterialIcons' },
+            'BRAKE_PAD_REAR': { icon: 'disc-full', family: 'MaterialIcons' },
             'BATTERY': { icon: 'battery-charging-full', family: 'MaterialIcons' },
+            'BATTERY_12V': { icon: 'battery-charging-full', family: 'MaterialIcons' },
             'SPARK_PLUG': { icon: 'engine', family: 'MaterialCommunityIcons' },
             'BRAKE_FLUID': { icon: 'water-drop', family: 'MaterialIcons' },
             'COOLANT': { icon: 'thermostat', family: 'MaterialIcons' },
             'TRANSMISSION_FLUID': { icon: 'cog-transfer', family: 'MaterialCommunityIcons' },
-            'TIRES': { icon: 'car-tire-alert', family: 'MaterialCommunityIcons' }
+            'OTHER': { icon: 'construction', family: 'MaterialIcons' }
         };
         return map[code] || { icon: 'settings', family: 'MaterialIcons' };
     };
@@ -129,7 +135,7 @@ export default function SupManage() {
                         <Text className="text-white text-base font-bold">소모품 관리</Text>
                         <View className="flex-row items-center gap-1">
                             <Text className="text-xs text-text-dim">
-                                {selectedVehicle ? `${selectedVehicle.manufacturer} ${selectedVehicle.modelName}` : '차량 선택'}
+                                {selectedVehicle ? `${selectedVehicle.manufacturerKo} ${selectedVehicle.modelNameKo}` : '차량 선택'}
                             </Text>
                             <MaterialIcons name="arrow-drop-down" size={16} color="#94a3b8" />
                         </View>
@@ -287,7 +293,7 @@ export default function SupManage() {
                                         </View>
                                         <View className="flex-1">
                                             <Text className={`text-base font-semibold ${isSelected ? 'text-primary' : 'text-white'}`}>
-                                                {vehicle.manufacturer} {vehicle.modelName}
+                                                {vehicle.manufacturerKo} {vehicle.modelNameKo}
                                             </Text>
                                             <Text className="text-text-dim text-xs">{vehicle.carNumber}</Text>
                                         </View>

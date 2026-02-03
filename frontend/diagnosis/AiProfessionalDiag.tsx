@@ -41,7 +41,7 @@ export default function AiProfessionalDiag() {
     const handleVehicleSelect = async (vehicle: any) => {
         setVehicleSelectVisible(false);
         setSelectedVehicleId(vehicle.vehicleId);
-        setSelectedVehicleName(`${vehicle.modelName} (${vehicle.carNumber})`);
+        setSelectedVehicleName(`${vehicle.modelNameKo} (${vehicle.carNumber})`);
 
         // Dispatch action based on pendingAction
         if (pendingAction === 'OBD') {
@@ -142,12 +142,23 @@ export default function AiProfessionalDiag() {
         }
     }, [route.params?.diagnosisResult]);
 
-    // Polling Effect
+    // Polling Effect (1분 타임아웃 적용)
     useEffect(() => {
         let intervalId: NodeJS.Timeout;
+        const startTime = Date.now();
 
         if ((mode === 'PROCESSING' || mode === 'INTERACTIVE') && currentSessionId) {
             intervalId = setInterval(async () => {
+                const elapsed = Date.now() - startTime;
+                if (elapsed > 60000) { // 1분 초과 시
+                    console.warn('[AiProfessionalDiag] Polling Timeout (1min)');
+                    clearInterval(intervalId);
+                    setMode('IDLE');
+                    setIsWaitingForAi(false);
+                    Alert.alert('알림', '진단 시간이 초과되었습니다. 현재 연결 상태를 확인해주세요.');
+                    return;
+                }
+
                 try {
                     const statusData = await getDiagnosisSessionStatus(currentSessionId);
 

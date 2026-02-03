@@ -118,7 +118,7 @@ export default function VehicleSelectModal({
                                             {/* Vehicle Info */}
                                             <View className="flex-1">
                                                 <Text className="text-base font-semibold text-white mb-0.5">
-                                                    {vehicle.manufacturer} {vehicle.modelName}
+                                                    {vehicle.manufacturerKo} {vehicle.modelNameKo}
                                                 </Text>
                                                 <Text className="text-slate-500 text-xs">
                                                     {vehicle.carNumber || '번호판 미등록'}

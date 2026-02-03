@@ -16,8 +16,12 @@ import lombok.Setter;
 @Builder
 public class DtcDto {
     private String vehicleId;
+
     private String dtcCode;
-    private String description;
+    private String descriptionKo; // 한국어 설명
+    private String descriptionEn; // 영어 설명 (LLM 용)
+    private String summaryKo;
+    private String summaryEn;
     private String severity; // CRITICAL, WARNING, INFO
     private String status; // ACTIVE, STORED, PENDING
 }

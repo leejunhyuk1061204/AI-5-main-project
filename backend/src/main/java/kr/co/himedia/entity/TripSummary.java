@@ -46,6 +46,42 @@ public class TripSummary {
     @Column(name = "fuel_consumed")
     private Double fuelConsumed;
 
+    @Column(name = "min_battery_voltage")
+    private Double minBatteryVoltage;
+
+    @Column(name = "max_coolant_temp")
+    private Double maxCoolantTemp;
+
+    @Column(name = "avg_fuel_trim")
+    private Double avgFuelTrim;
+
+    @Column(name = "max_engine_load")
+    private Double maxEngineLoad;
+
+    @Column(name = "idle_time")
+    private Integer idleTime;
+
+    @Column(name = "hard_accel_count")
+    private Integer hardAccelCount;
+
+    @Column(name = "hard_brake_count")
+    private Integer hardBrakeCount;
+
+    @Column(name = "avg_rpm")
+    private Double avgRpm;
+
+    @Column(name = "avg_engine_load")
+    private Double avgEngineLoad;
+
+    @Column(name = "avg_maf")
+    private Double avgMaf;
+
+    @Column(name = "avg_throttle_pos")
+    private Double avgThrottlePos;
+
+    @Column(name = "overheat_duration_sec")
+    private Integer overheatDurationSec;
+
     @Embeddable
     @Getter
     @Setter

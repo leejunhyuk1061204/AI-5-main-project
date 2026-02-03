@@ -91,6 +91,11 @@ public class ObdService {
                 .engineLoad(dto.getEngineLoad())
                 .fuelTrimShort(dto.getFuelTrimShort())
                 .fuelTrimLong(dto.getFuelTrimLong())
+                .intakeTemp(dto.getIntakeTemp())
+                .map(dto.getMap())
+                .maf(dto.getMaf())
+                .throttlePos(dto.getThrottlePos())
+                .engineRuntime(dto.getEngineRuntime())
                 .build();
     }
 }

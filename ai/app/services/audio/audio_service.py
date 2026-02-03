@@ -107,7 +107,7 @@ class AudioService:
                 status="ERROR",
                 analysis_type="IO",
                 category="UNKNOWN_AUDIO",
-                detail=AudioDetail(diagnosed_label="Load Error", description=str(e)),
+                data=AudioDetail(diagnosed_label="Load Error", description=str(e)),
                 confidence=0.0
             )
 
@@ -133,16 +133,17 @@ class AudioService:
                 status="UNKNOWN",
                 analysis_type="AST_FAILED",
                 category="UNKNOWN_AUDIO",
-                detail=AudioDetail(diagnosed_label="Error", description="AST Model Failed"),
+                data=AudioDetail(diagnosed_label="Error", description="AST Model Failed"),
                 confidence=0.0,
                 is_critical=False
             )
         
         # 4. 2차 진단 판단 (Threshold 적용)
         if ast_result.confidence < FAST_PATH_AUDIO_CONF or ast_result.status == "UNKNOWN":
-            print(f"[Audio Service] AST 결과 미흡 (또는 에러). LLM으로 전환.")
+            print(f"[Audio Fallback] AST 결과 미흡 (신뢰도: {ast_result.confidence:.2f}, 상태: {ast_result.status}) -> LLM으로 전환 요청")
             wav_bytes = audio_buffer.getvalue() if audio_buffer else audio_bytes
             final_result = await analyze_audio_with_llm(s3_url, audio_bytes=wav_bytes)
+            print(f"[Audio Fallback] LLM 응답: {final_result}")
         else:
             final_result = ast_result
 
@@ -195,7 +196,7 @@ class AudioService:
             status="NORMAL",
             analysis_type="AST",
             category="ENGINE",
-            detail=AudioDetail(diagnosed_label="NORMAL", description="정상입니다."),
+            data=AudioDetail(diagnosed_label="NORMAL", description="정상입니다."),
             confidence=0.99,
             is_critical=False
         )

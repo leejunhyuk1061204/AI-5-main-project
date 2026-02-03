@@ -13,6 +13,7 @@ import { useBleStore } from '../store/useBleStore';
 
 // API
 import { getDiagnosisSessionStatus, replyToDiagnosisSession } from '../api/aiApi';
+import Header from '../header/Header';
 
 // Types
 type RootStackParamList = {
@@ -30,57 +31,7 @@ type RootStackParamList = {
     SettingTab: undefined;
 };
 
-/**
- * INLINE HEADER (StyleSheet Version)
- */
-const InlineHeader = ({
-    onBack,
-    onNavigate,
-    nickname,
-    bleStatus
-}: {
-    onBack: () => void;
-    onNavigate: (screen: keyof RootStackParamList) => void;
-    nickname: string | null;
-    bleStatus: string;
-}) => {
 
-    const getStatusColor = (s: string) => {
-        if (s === 'connected') return '#22c55e'; // green-500
-        if (s === 'connecting') return '#eab308'; // yellow-500
-        return '#9ca3af'; // gray-400
-    };
-
-    return (
-        <View style={styles.headerContainer}>
-            <View>
-                {nickname ? (
-                    <Text style={styles.headerTitle}>
-                        {nickname}님
-                    </Text>
-                ) : (
-                    <TouchableOpacity onPress={() => onNavigate('Login')}>
-                        <Text style={styles.headerTitle}>
-                            로그인
-                        </Text>
-                    </TouchableOpacity>
-                )}
-                <Text style={[styles.headerStatus, { color: getStatusColor(bleStatus) }]}>
-                    Vehicle Status: {bleStatus}
-                </Text>
-            </View>
-
-            <View style={styles.headerIcons}>
-                <TouchableOpacity
-                    style={styles.iconButton}
-                    onPress={() => onNavigate('AlertMain')}
-                >
-                    <Text style={styles.iconText}>🔔</Text>
-                </TouchableOpacity>
-            </View>
-        </View>
-    );
-};
 
 /**
  * SIMPLE BOTTOM NAV (Recreated Locally)
@@ -301,14 +252,23 @@ export default function AiDiagChat() {
         }, [sessionId, route.params?.pendingMessage])
     );
 
-    // 폴링 (진행 중일 때만)
+    // 폴링 (진행 중일 때만 - 1분 타임아웃 적용)
     useEffect(() => {
         if (!sessionId || !sessionData) return;
 
         const shouldPoll = sessionData.status === 'PROCESSING' || sessionData.status === 'REPLY_PROCESSING' || isWaitingForAi;
         if (!shouldPoll) return;
 
+        const startTime = Date.now();
         const intervalId = setInterval(() => {
+            const elapsed = Date.now() - startTime;
+            if (elapsed > 60000) { // 1분 초과 시
+                console.warn('[AiDiagChat] Polling Timeout (1min)');
+                clearInterval(intervalId);
+                setIsWaitingForAi(false);
+                Alert.alert('알림', '진단 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.');
+                return;
+            }
             loadSessionData(sessionId);
         }, 3000);
 
@@ -398,12 +358,7 @@ export default function AiDiagChat() {
 
             {/* Header */}
             <View style={{ paddingTop: insets.top }}>
-                <InlineHeader
-                    onBack={onBack}
-                    onNavigate={onNavigate}
-                    nickname={nickname}
-                    bleStatus={bleStatus}
-                />
+                <Header />
             </View>
 
             {/* Main Content with Keyboard Handling */}
@@ -469,7 +424,11 @@ export default function AiDiagChat() {
                                 <View style={[styles.messageBubble, styles.bubbleAi, styles.loadingBubble]}>
                                     <ActivityIndicator size="small" color="#0d7ff2" />
                                     <View style={styles.loadingTextWrapper}>
-                                        <Text style={styles.loadingText}>AI가 답변을 준비 중입니다</Text>
+                                        <Text style={styles.loadingText}>
+                                            {messages.filter(m => m.role === 'user').length >= 3
+                                                ? "AI가 진단 결과를 생성 중입니다"
+                                                : "AI가 답변을 준비 중입니다"}
+                                        </Text>
                                         <DotPulse />
                                     </View>
                                 </View>
