@@ -188,10 +188,10 @@ def process_audio_for_hybrid(item):
         y, sr = librosa.load(item["audio"], sr=16000)
         
         # 전처리
-        y = trim_silence_rms(y, sr)
+        y = trim_silence_rms(y, sr, top_db=50)
         y = apply_bandpass_filter(y, sr)
         speech_ratio, vad_mask = calculate_speech_ratio(y, sr)
-        if item["label"] == "normal" and speech_ratio > 0.2:
+        if item["label"] == "normal" and speech_ratio > 0.05:
             y = apply_speech_soft_masking(y, sr, vad_mask)
         y = apply_spectral_gating(y, sr, min_gain=0.2 if item["label"] == "normal" else 0.5)
         
@@ -227,6 +227,7 @@ def prepare_hybrid_datasets(data_list, desc="Data"):
         
         for i, res in enumerate(futures):
             if "error" in res:
+                print(f"[Error] Failed to process {res.get('path', 'unknown')}: {res['error']}")
                 continue
             
             # AST features

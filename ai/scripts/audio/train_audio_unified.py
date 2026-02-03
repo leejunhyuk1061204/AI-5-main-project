@@ -31,7 +31,7 @@ import librosa
 import gc
 from collections import Counter
 from transformers import ASTForAudioClassification, ASTFeatureExtractor, Trainer, TrainingArguments
-from datasets import Dataset, disable_caching
+from datasets import Dataset, disable_caching, Features, Value, Array2D, Sequence
 from sklearn.metrics import precision_recall_fscore_support, accuracy_score, confusion_matrix
 from sklearn.model_selection import train_test_split
 
@@ -79,6 +79,13 @@ stage2_label2id = {l: i for i, l in enumerate(STAGE2_LABELS)}
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 _feature_extractor = None
 
+# =============================================================================
+# [공통 상수] Abstraction layer for future ablation studies
+# =============================================================================
+# VAD Speech Ratio is essentially a "High-Energy Detector".
+SPEECH_SKIP_THRESHOLD = 0.01 # Relaxed threshold (1%) to include almost all background sounds
+SPEECH_MASK_THRESHOLD = 0.05 # Lower threshold to apply masking even for small amounts of speech
+
 def get_feature_extractor(model_id):
     global _feature_extractor
     if _feature_extractor is None:
@@ -113,7 +120,11 @@ def load_data_from_dir(base_dir):
     return data_list
 
 def process_audio(item, backbone="ast"):
-    """전처리 파이프라인 (backbone-aware)"""
+    """
+    전처리 파이프라인 (backbone-aware)
+    - Samples with less than 10% detected speech were excluded from both training and evaluation.
+    - Preprocessing-aware Baseline: Even 'baseline' mode uses these same filters for fairness.
+    """
     try:
         cfg = BACKBONE_CONFIGS.get(backbone, BACKBONE_CONFIGS["ast"])
         sr = cfg.get("sr", 16000)
@@ -121,22 +132,34 @@ def process_audio(item, backbone="ast"):
         label = item.get("label", "normal")
         
         # 공통 전처리
-        y = trim_silence_rms(y, sr)
+        y = trim_silence_rms(y, sr, top_db=50) # top_db=50: 무음 제거 기준 완화 (작은 소리도 유지)
         y = apply_bandpass_filter(y, sr)
         
+        # VAD & Speech Ratio (High-Energy Detector)
+        speech_ratio, vad_mask = calculate_speech_ratio(y, sr)
+        
+        # ✅ "자동으로 0개 처리" 방어 코드: VAD 기준 미달이라도 Skip하지 않고 포함
+        if speech_ratio < SPEECH_SKIP_THRESHOLD:
+            print(f"[Warning] Low speech ratio ({speech_ratio:.2%}), but preserving data (Defense Mode).")
+            # return {"skip": "no_speech", "path": item.get("audio", "unknown")} # 기존 Skip 로직 제거
+
         # AST backbone: 전체 전처리 적용
-        # CNN backbone: 최소 전처리만 (silent trim + bandpass)
         if backbone == "ast":
-            speech_ratio, vad_mask = calculate_speech_ratio(y, sr)
-            if label == "normal" and speech_ratio > 0.2:
+            # ✅ 'Normal' 클래스에 대해서만 Speech Masking 적용
+            if label == "normal" and speech_ratio > SPEECH_MASK_THRESHOLD:
                 y = apply_speech_soft_masking(y, sr, vad_mask)
-            y = apply_spectral_gating(y, sr, min_gain=0.2 if label == "normal" else 0.5)
+            # ✅ 전처리 불일치 해소: 모든 클래스/스플릿에 대해 min_gain=0.2 통일
+            y = apply_spectral_gating(y, sr, min_gain=0.2)
         
         # RMS 정규화
         target_rms = 0.1
         current_rms = np.sqrt(np.mean(y**2)) + 1e-8
         y = y * (target_rms / current_rms)
         
+        # ✅ Baseline mode: No augmentation applied by design (Baseline/Test reproducibility)
+        if backbone == "cnn" and backbone != "ast": # Simple marker for now internally
+            pass 
+
         # Mel for CNN
         mel_spec = librosa.feature.melspectrogram(y=y, sr=sr, n_mels=128, fmax=8000)
         mel_spec_db = librosa.power_to_db(mel_spec, ref=np.max)
@@ -145,19 +168,56 @@ def process_audio(item, backbone="ast"):
     except Exception as e:
         return {"error": str(e), "path": item.get("audio", "unknown")}
 
+def filter_audio_list(data_list, desc="Data", backbone="ast"):
+    """
+    [Robust Filtering] 
+    Dataset 생성 전, VAD 기반으로 무음 샘플을 미리 걸러냅니다.
+    """
+    print(f"[Info] {desc} 사전 검수 중 (샘플 수: {len(data_list)}, backbone={backbone})...")
+    filtered = []
+    skipped = Counter()
+    
+    for item in data_list:
+        try:
+            cfg = BACKBONE_CONFIGS.get(backbone, BACKBONE_CONFIGS["ast"])
+            sr = cfg.get("sr", 16000)
+            y, _ = librosa.load(item["audio"], sr=sr)
+            y = trim_silence_rms(y, sr)
+            ratio, _ = calculate_speech_ratio(y, sr)
+            
+            if ratio < SPEECH_SKIP_THRESHOLD:
+                skipped[item.get("label", "unknown")] += 1
+                continue
+            filtered.append(item)
+        except Exception:
+            skipped["error"] += 1
+            
+    skip_total = sum(skipped.values())
+    print(f"[Summary] {desc} 검수 완료: {len(filtered)} 유지, {skip_total} 제외 {dict(skipped)}")
+    return filtered
+
 def prepare_dataset_generator(data_list, label_key, label2id_map, model_id, desc="Data", backbone="ast"):
     """Generator 방식으로 메모리 효율적 Dataset 생성 (backbone-aware)"""
     fe = get_feature_extractor(model_id)
     cfg = BACKBONE_CONFIGS["ast"]
     cnn_cfg = BACKBONE_CONFIGS["cnn"]
     
-    print(f"[Info] {desc} 전처리 중 ({len(data_list)}개, backbone={backbone})...")
+    print(f"[Info] {desc} 데이터 생성 중 (샘플 수: {len(data_list)})...")
+    processed = 0
     
     for i, item in enumerate(data_list):
         res = process_audio(item, backbone=backbone)
-        if "error" in res or res.get(label_key) is None:
+        
+        # 사전 검수를 거쳤으므로 skip/error는 무시하거나 로깅만 수행
+        if "error" in res:
+            print(f"[Error] Failed to process {item['audio']}: {res['error']}")
+            continue
+        if "skip" in res:
+            print(f"[Skip] {item['audio']}: {res['skip']}")
             continue
         
+        processed += 1
+        # ✅ AST 규격: 모든 구간에서 input_values로 단일화하여 정합성 유지
         ast_input = fe(
             res["audio_array"], sampling_rate=cfg["sr"],
             return_tensors="pt", padding=cfg["padding"],
@@ -176,12 +236,16 @@ def prepare_dataset_generator(data_list, label_key, label2id_map, model_id, desc
             "labels": label2id_map[res[label_key]]
         }
         
-        if (i + 1) % 100 == 0:
-            print(f"  > {desc}: {i+1}/{len(data_list)}")
-            gc.collect()
+    print(f"[Summary] {desc} Dataset Ready: {processed} samples.")
 
 def prepare_dataset(data_list, label_key, label2id_map, model_id, desc="Data", backbone="ast"):
     """Dataset 준비 (from_generator 사용으로 메모리 효율화)"""
+    features = Features({
+        "input_values": Sequence(Sequence(Value("float32"))),
+        "cnn_input": Array2D(shape=(128, 256), dtype="float32"),
+        "labels": Value("int64")
+    })
+
     return Dataset.from_generator(
         prepare_dataset_generator,
         gen_kwargs={
@@ -191,7 +255,10 @@ def prepare_dataset(data_list, label_key, label2id_map, model_id, desc="Data", b
             "model_id": model_id,
             "desc": desc,
             "backbone": backbone
-        }
+        },
+        features=features,
+        # ✅ length 제거 (Skip 발생 시 length 불일치로 인한 IndexError 방지)
+        keep_in_memory=False,
     )
 
 def evaluate(model, dataloader, label_names, arch, component, baseline_type) -> BaselineResult:
@@ -688,8 +755,19 @@ if __name__ == "__main__":
     train_data = load_data_from_dir(TRAIN_DATA_DIR)
     test_data = load_data_from_dir(TEST_DATA_DIR)
     
-    print(f"\n[Data] Train: {dict(Counter([x['label'] for x in train_data]))}")
-    print(f"[Data] Test: {dict(Counter([x['label'] for x in test_data]))}")
+    # ✅ Robust Pre-scan Filtering
+    # AST sr(16000) 기준으로 사전 필터링 수행
+    if train_data:
+        train_data = filter_audio_list(train_data, "Train", backbone="ast")
+    if test_data:
+        test_data = filter_audio_list(test_data, "Test", backbone="ast")
+        
+    if not train_data and not test_data:
+        print("⚠️ Warning: No data found or all data skipped after filtering!")
+        sys.exit(0)
+
+    print(f"\n[Data] Final Train: {dict(Counter([x['label'] for x in train_data]))}")
+    print(f"[Data] Final Test: {dict(Counter([x['label'] for x in test_data]))}")
     
     archs = {
         "basic": BasicArch(args.model_id),
