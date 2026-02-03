@@ -126,6 +126,11 @@ CREATE TABLE IF NOT EXISTS obd_logs (
     engine_load FLOAT,
     fuel_trim_short FLOAT,
     fuel_trim_long FLOAT,
+    intake_temp FLOAT,
+    map FLOAT,
+    maf FLOAT,
+    throttle_pos FLOAT,
+    engine_runtime INT,
     json_extra JSONB
 );
 -- 시계열 테이블로 변환
@@ -178,6 +183,18 @@ CREATE TABLE IF NOT EXISTS trip_summaries (
     average_speed FLOAT,
     top_speed FLOAT,
     fuel_consumed FLOAT,
+    min_battery_voltage FLOAT,
+    max_coolant_temp FLOAT,
+    avg_fuel_trim FLOAT,
+    max_engine_load FLOAT,
+    idle_time INT,
+    hard_accel_count INT,
+    hard_brake_count INT,
+    avg_rpm FLOAT,
+    avg_engine_load FLOAT,
+    avg_maf FLOAT,
+    avg_throttle_pos FLOAT,
+    overheat_duration_sec INT,
     json_extra JSONB, -- 추가적인 주행 데이터 (경로 등)
     PRIMARY KEY (start_time, vehicles_id)
 );
