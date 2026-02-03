@@ -41,7 +41,7 @@ export default function AiProfessionalDiag() {
     const handleVehicleSelect = async (vehicle: any) => {
         setVehicleSelectVisible(false);
         setSelectedVehicleId(vehicle.vehicleId);
-        setSelectedVehicleName(`${vehicle.modelName} (${vehicle.carNumber})`);
+        setSelectedVehicleName(`${vehicle.modelNameKo} (${vehicle.carNumber})`);
 
         // Dispatch action based on pendingAction
         if (pendingAction === 'OBD') {
