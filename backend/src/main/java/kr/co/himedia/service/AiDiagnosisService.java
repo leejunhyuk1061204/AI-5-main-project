@@ -569,6 +569,8 @@ public class AiDiagnosisService {
             vehicleRepository.findById(vehicleId).ifPresent(vehicle -> {
                 String fcmToken = userService.getFcmToken(vehicle.getUserId());
                 if (fcmToken != null) {
+                    log.info("[FCM] Found token for user {}: {}...", vehicle.getUserId(),
+                            fcmToken.substring(0, Math.min(fcmToken.length(), 10)));
                     boolean isInteractive = "INTERACTIVE".equalsIgnoreCase(responseMode);
                     String title = isInteractive ? "[확인 필요] 차량 진단 추가 요청" : "차량 정밀 진단 완료";
                     String body = isInteractive ? "정확한 분석을 위해 사진 촬영이나 소음 녹음이 필요합니다. 대화를 이어가보세요."
@@ -581,6 +583,8 @@ public class AiDiagnosisService {
 
                     fcmService.sendMessage("User-" + vehicle.getUserId(), fcmToken, title, body, data);
                     log.info("Sent Diagnosis Notification [Vehicle: {}, Mode: {}]", vehicleId, responseMode);
+                } else {
+                    log.warn("[FCM] No token found for user {}", vehicle.getUserId());
                 }
             });
         } catch (Exception e) {

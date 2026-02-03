@@ -17,6 +17,7 @@ import { useUIStore } from './store/useUIStore';
 import { useUserStore } from './store/useUserStore';
 import ObdService from './services/ObdService';
 import BackgroundService from './services/BackgroundService';
+import fcmService from './services/fcmService';
 import GlobalAlert from './components/common/GlobalAlert';
 import GlobalDatePicker from './components/common/GlobalDatePicker';
 import BottomNav from './nav/BottomNav';
@@ -61,6 +62,7 @@ import ChatAudioScreen from './diagnosis/ChatAudioScreen';
 import MaintenanceBook from './maintenance/MaintenanceBook';
 import ReceiptScan from './maintenance/ReceiptScan';
 import ReceiptResult from './maintenance/ReceiptResult';
+<<<<<<< Updated upstream
 import PaymentSuccess from './payment/PaymentSuccess';
 
 // Deep Linking Configuration
@@ -74,6 +76,9 @@ const linking = {
   },
 };
 
+=======
+import MaintenanceHistory from './history/MaintenanceHistory';
+>>>>>>> Stashed changes
 
 // Keep the splash screen visible while we fetch resources
 ExpoSplashScreen.preventAutoHideAsync();
@@ -178,6 +183,20 @@ export default function App() {
     };
   }, []);
 
+  // 4. FCM Initialization (로그인 후)
+  useEffect(() => {
+    const initializeFcm = async () => {
+      const token = await AsyncStorage.getItem('accessToken');
+      if (token) {
+        // 로그인된 상태에서만 FCM 초기화
+        await fcmService.initialize();
+        fcmService.setupForegroundHandler();
+      }
+    };
+
+    initializeFcm();
+  }, [initialRoute]);
+
   // 3. Background Service Handling
   useEffect(() => {
     const subscription = AppState.addEventListener('change', async (nextAppState) => {
@@ -278,7 +297,11 @@ export default function App() {
                 <Stack.Screen name="MaintenanceBook" component={MaintenanceBook} />
                 <Stack.Screen name="ReceiptScan" component={ReceiptScan} />
                 <Stack.Screen name="ReceiptResult" component={ReceiptResult} />
+<<<<<<< Updated upstream
                 <Stack.Screen name="PaymentSuccess" component={PaymentSuccess} />
+=======
+                <Stack.Screen name="MaintenanceHistory" component={MaintenanceHistory} />
+>>>>>>> Stashed changes
               </Stack.Navigator>
               <GlobalAlert />
               <GlobalDatePicker />
