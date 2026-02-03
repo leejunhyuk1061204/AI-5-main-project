@@ -73,5 +73,7 @@ export const authService = {
     deleteAccount: async (token: string): Promise<ApiResponse<string>> => {
         const response = await api.delete<ApiResponse<string>>('/api/v1/auth/me');
         return response.data;
-    }
+    },
+
+
 };

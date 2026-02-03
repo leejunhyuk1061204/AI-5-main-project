@@ -147,7 +147,7 @@ export default function CarEdit() {
                         </View>
                         <View>
                             <Text className="text-white font-bold text-lg">
-                                {vehicle?.manufacturer} {vehicle?.modelName}
+                                {vehicle?.manufacturerKo} {vehicle?.modelNameKo}
                             </Text>
                             <Text className="text-slate-400 text-sm">
                                 {vehicle?.modelYear}년식 · {vehicle?.fuelType}

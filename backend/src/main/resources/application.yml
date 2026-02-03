@@ -32,12 +32,13 @@ spring:
   cloud:
     aws:
       region:
-        static: ap-northeast-2
+        static: ${S3_REGION:ap-northeast-2}
       credentials:
-        access-key: ${AWS_ACCESS_KEY_ID:dummy}
-        secret-key: ${AWS_SECRET_ACCESS_KEY:dummy}
+        access-key: ${S3_ACCESS_KEY:dummy}
+        secret-key: ${S3_SECRET_KEY:dummy}
       s3:
         enabled: true
+        bucket: ${S3_BUCKET_NAME:car-sentry-bucket}
       stack:
         auto: false
 
@@ -71,7 +72,7 @@ logging:
   level:
     org.hibernate.SQL: INFO
     org.hibernate.type.descriptor.sql.BasicBinder: INFO
-    org.springframework.web: DEBUG # 404 디버깅용 로그 추가
+    org.springframework.web: INFO # 404 디버깅용 로그 원복 (너무 많아서 INFO로 조정)
 
 # 암호화 키(코드는 가짜를 들고 있고, 서버가 진짜를 넣어주는 방식"이므로 보안상 안전함)
 # 암호화 키 (환경변수 관리)

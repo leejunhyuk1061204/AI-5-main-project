@@ -252,14 +252,23 @@ export default function AiDiagChat() {
         }, [sessionId, route.params?.pendingMessage])
     );
 
-    // 폴링 (진행 중일 때만)
+    // 폴링 (진행 중일 때만 - 1분 타임아웃 적용)
     useEffect(() => {
         if (!sessionId || !sessionData) return;
 
         const shouldPoll = sessionData.status === 'PROCESSING' || sessionData.status === 'REPLY_PROCESSING' || isWaitingForAi;
         if (!shouldPoll) return;
 
+        const startTime = Date.now();
         const intervalId = setInterval(() => {
+            const elapsed = Date.now() - startTime;
+            if (elapsed > 60000) { // 1분 초과 시
+                console.warn('[AiDiagChat] Polling Timeout (1min)');
+                clearInterval(intervalId);
+                setIsWaitingForAi(false);
+                Alert.alert('알림', '진단 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.');
+                return;
+            }
             loadSessionData(sessionId);
         }, 3000);
 

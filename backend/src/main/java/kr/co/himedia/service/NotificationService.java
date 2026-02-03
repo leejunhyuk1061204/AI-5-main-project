@@ -1,11 +1,16 @@
 package kr.co.himedia.service;
 
-import com.google.firebase.messaging.FirebaseMessaging;
-import com.google.firebase.messaging.Message;
-import com.google.firebase.messaging.Notification;
+import kr.co.himedia.entity.Notification;
 import kr.co.himedia.entity.User;
 import kr.co.himedia.repository.NotificationRepository;
-import kr.co.himedia.repository.UserRepository;
+import kr.co.himedia.repository.UserSettingRepository; // Re-adding just in case, or removing if truly unused. 
+// Should check usage. shouldSendPush uses UserSettingRepository?
+// shouldSendPush uses user.getUserSetting() usually? 
+// Checking code in previous steps... sendNotification uses UserSetting?
+// Ah wait NotificationService has private final UserSettingRepository userSettingRepository;
+// So I need to keep it.
+
+import kr.co.himedia.repository.UserSettingRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -13,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -20,8 +26,9 @@ import java.util.List;
 public class NotificationService {
 
     private final NotificationRepository notificationRepository;
-    private final UserRepository userRepository;
     private final kr.co.himedia.repository.UserSettingRepository userSettingRepository;
+    // FcmService 제거 (Consumer에서 사용)
+    private final org.springframework.amqp.rabbit.core.RabbitTemplate rabbitTemplate;
 
     /**
      * 알림 전송 및 저장
@@ -33,7 +40,7 @@ public class NotificationService {
      */
     @Transactional
     public void sendNotification(User user, String title, String body,
-            kr.co.himedia.entity.Notification.NotificationType type) {
+            kr.co.himedia.entity.Notification.NotificationType type, Map<String, String> data) {
         // 1. DB에 알림 내역 저장 (항상 저장)
         kr.co.himedia.entity.Notification notification = kr.co.himedia.entity.Notification.builder()
                 .user(user)
@@ -50,27 +57,34 @@ public class NotificationService {
             return;
         }
 
-        // 3. FCM 전송 (토큰이 있는 경우)
-        if (user.getFcmToken() != null && !user.getFcmToken().isEmpty()) {
-            try {
-                Message message = Message.builder()
-                        .setToken(user.getFcmToken())
-                        .setNotification(Notification.builder()
-                                .setTitle(title)
-                                .setBody(body)
-                                .build())
-                        .putData("type", type.name())
-                        .putData("notificationId", notification.getId().toString())
-                        .build();
+        // 3. RabbitMQ로 메시지 발행 (비동기 처리)
+        try {
+            kr.co.himedia.dto.notification.NotificationTaskMessage message = kr.co.himedia.dto.notification.NotificationTaskMessage
+                    .builder()
+                    .userId(user.getUserId().toString())
+                    .notificationId(notification.getId())
+                    .title(title)
+                    .body(body)
+                    .type(type.name()) // "DTC_ALERT" etc.
+                    .data(data)
+                    .build();
 
-                String response = FirebaseMessaging.getInstance().send(message);
-                log.info("FCM Sent successfully: " + response);
-            } catch (Exception e) {
-                log.error("FCM Send failed: " + e.getMessage());
-            }
-        } else {
-            log.info("User {} has no FCM token. Notification saved to DB only.", user.getUserId());
+            rabbitTemplate.convertAndSend(
+                    kr.co.himedia.config.RabbitConfig.EXCHANGE_NAME,
+                    kr.co.himedia.config.RabbitConfig.NOTIFICATION_ROUTING_KEY,
+                    message);
+            log.info("Published notification task to RabbitMQ. NotiID: {}", notification.getId());
+        } catch (Exception e) {
+            log.error("Failed to publish notification task to RabbitMQ", e);
+            // DB에는 저장되었으므로 에러를 던지지 않고 로그만 남김 (선택 사항)
         }
+    }
+
+    // 기존 메서드 오버로딩 (data 없는 경우)
+    @Transactional
+    public void sendNotification(User user, String title, String body,
+            kr.co.himedia.entity.Notification.NotificationType type) {
+        sendNotification(user, title, body, type, null);
     }
 
     private boolean shouldSendPush(User user, kr.co.himedia.entity.Notification.NotificationType type) {

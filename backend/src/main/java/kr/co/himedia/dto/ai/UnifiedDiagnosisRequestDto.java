@@ -19,4 +19,5 @@ public class UnifiedDiagnosisRequestDto {
     private Map<String, Object> visualAnalysis; // 사진 분석 결과 (Optional)
     private Map<String, Object> lstmAnalysis; // LSTM 분석 결과 (Optional)
     private java.util.List<String> knowledgeData; // RAG 검색 결과 (Optional)
+    private String dtcCode; // DTC 코드 (Optional, DTC 진단 시 사용)
 }

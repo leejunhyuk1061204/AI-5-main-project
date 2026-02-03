@@ -9,6 +9,8 @@ import java.util.UUID;
 @Entity
 @Table(name = "diag_results")
 @Getter
+@Setter
+@ToString
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
