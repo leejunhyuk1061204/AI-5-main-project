@@ -111,11 +111,12 @@ def process_single_audio(item):
         label = item.get("label", "normal")
         
         # 전처리 파이프라인
-        y = trim_silence_rms(y, sr)
+        y = trim_silence_rms(y, sr, top_db=50) # top_db=50: 무음 제거 기준 완화
         y = apply_bandpass_filter(y, sr)
         
         speech_ratio, vad_mask = calculate_speech_ratio(y, sr)
-        if label == "normal" and speech_ratio > 0.2:
+        # ✅ VAD 기준 완화: 0.2 -> 0.05
+        if label == "normal" and speech_ratio > 0.05:
             y = apply_speech_soft_masking(y, sr, vad_mask)
         
         if label == "normal":
@@ -172,9 +173,9 @@ def prepare_datasets(data_list, label_key, label2id, desc="Data"):
 # =============================================================================
 # 2. Stage 1: Normal vs Abnormal
 # =============================================================================
-def train_stage1(train_data, test_data, epochs=10):
+def train_stage1(train_data, test_data, epochs=10, batch_size=4, grad_accum=4):
     print("\n" + "="*60)
-    print("[Stage 1] Normal vs Abnormal 이진 분류 학습")
+    print(f"[Stage 1] Normal vs Abnormal 이진 분류 학습 (Batch: {batch_size}, Accum: {grad_accum})")
     print("="*60)
     
     # 데이터 준비
@@ -211,7 +212,8 @@ def train_stage1(train_data, test_data, epochs=10):
     
     training_args = TrainingArguments(
         output_dir=OUTPUT_DIR_STAGE1,
-        per_device_train_batch_size=8,
+        per_device_train_batch_size=batch_size,
+        gradient_accumulation_steps=grad_accum,
         num_train_epochs=epochs,
         learning_rate=3e-5,
         logging_steps=10,
@@ -263,9 +265,9 @@ def train_stage1(train_data, test_data, epochs=10):
 # =============================================================================
 # 3. Stage 2: Abnormal → Fault Type
 # =============================================================================
-def train_stage2(train_data, test_data, epochs=10):
+def train_stage2(train_data, test_data, epochs=10, batch_size=4, grad_accum=4):
     print("\n" + "="*60)
-    print("[Stage 2] Abnormal → Engine/Brake/Starter 분류 학습")
+    print(f"[Stage 2] Abnormal → Engine/Brake/Starter 분류 학습 (Batch: {batch_size}, Accum: {grad_accum})")
     print("="*60)
     
     # abnormal 데이터만 필터링
@@ -308,7 +310,8 @@ def train_stage2(train_data, test_data, epochs=10):
     
     training_args = TrainingArguments(
         output_dir=OUTPUT_DIR_STAGE2,
-        per_device_train_batch_size=8,
+        per_device_train_batch_size=batch_size,
+        gradient_accumulation_steps=grad_accum,
         num_train_epochs=epochs,
         learning_rate=3e-5,
         logging_steps=10,
@@ -508,6 +511,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--mode", type=str, default="all", choices=["baseline", "stage1", "stage2", "golden", "all"])
     parser.add_argument("--epochs", type=int, default=10)
+    parser.add_argument("--batch_size", type=int, default=4, help="Batch size for training")
+    parser.add_argument("--grad_accum", type=int, default=4, help="Gradient accumulation steps")
     args = parser.parse_args()
     
     print(f"[Info] 사용 디바이스: {device}")
@@ -522,14 +527,14 @@ if __name__ == "__main__":
     if args.mode == "baseline":
         evaluate_baseline(test_data)
     elif args.mode == "stage1":
-        train_stage1(train_data, test_data, args.epochs)
+        train_stage1(train_data, test_data, args.epochs, args.batch_size, args.grad_accum)
     elif args.mode == "stage2":
-        train_stage2(train_data, test_data, args.epochs)
+        train_stage2(train_data, test_data, args.epochs, args.batch_size, args.grad_accum)
     elif args.mode == "golden":
         evaluate_golden()
     elif args.mode == "all":
-        train_stage1(train_data, test_data, args.epochs)
-        train_stage2(train_data, test_data, args.epochs)
+        train_stage1(train_data, test_data, args.epochs, args.batch_size, args.grad_accum)
+        train_stage2(train_data, test_data, args.epochs, args.batch_size, args.grad_accum)
         evaluate_golden()
     
     print("\n✅ 완료!")

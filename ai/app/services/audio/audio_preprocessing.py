@@ -21,13 +21,13 @@ import soundfile as sf
 # =============================================================================
 # 1. RMS 기반 Silence Trim
 # =============================================================================
-def trim_silence_rms(audio: np.ndarray, sr: int, top_db: int = 25) -> np.ndarray:
+def trim_silence_rms(audio: np.ndarray, sr: int, top_db: int = 20) -> np.ndarray:
     """
     RMS 에너지 기반으로 앞뒤 무음 구간 제거.
     librosa.effects.trim의 내부 로직과 유사.
     """
     trimmed, _ = librosa.effects.trim(audio, top_db=top_db)
-    print(f"[Preprocess] Silence Trim: {len(audio)} → {len(trimmed)} samples")
+    print(f"[Preprocess] Silence Trim: {len(audio)} → {len(trimmed)} samples (top_db: {top_db})")
     return trimmed
 
 
