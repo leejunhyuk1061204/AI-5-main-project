@@ -71,6 +71,9 @@ class RobustElmEmulator:
             '0142': '00 00',       # Control Module Voltage
         }
         self.vin = self.config.get('vehicle', {}).get('vin', '1HM00000000000001')
+        self.dtcs = self.config.get('vehicle', {}).get('initial_dtcs', [])
+        self.mil_on = len(self.dtcs) > 0
+        self.voltage = 14.2 # Default voltage
         self.running = True
         self.ser = None
 
@@ -122,7 +125,8 @@ class RobustElmEmulator:
                 'speed': row.get(mapping.get('speed')),
                 'coolant': row.get(mapping.get('coolant_temp')),
                 'load': row.get(mapping.get('engine_load')),
-                'voltage': row.get(mapping.get('voltage'))
+                'voltage': row.get(mapping.get('voltage')),
+                'dtcs': row.get(mapping.get('dtcs'))
             }
             self.update_pids_from_dict(data)
         except Exception as e:
@@ -222,25 +226,71 @@ class RobustElmEmulator:
             elif cmd == "ATS0": response = "OK"
             elif cmd == "ATH0": response = "OK"
             elif cmd == "ATSP0": response = "OK"
+            elif cmd == "ATRV": response = f"{self.voltage:.1f}V"
+            elif cmd == "ATDP": response = "ISO 15765-4 (CAN 11/500)"
+            elif cmd == "ATDPN": response = "6"
             else: response = "OK"
             
         # 2. OBD 서비스 01 (실시간 데이터)
         elif cmd.startswith("01"):
             pid = cmd[0:4]
-            if pid in self.pids:
+            if pid == "0101":
+                # MIL 상태 및 DTC 개수
+                # Byte A: bit 7 = MIL status, bits 0-6 = number of DTCs
+                dtc_count = len(self.dtcs) & 0x7F
+                byte_a = (0x80 if self.mil_on else 0x00) | dtc_count
+                # 응답: 41 01 [Byte A] [Byte B] [Byte C] [Byte D]
+                # B, C, D는 보통 테스트 완료 상태 등을 나타냄 (여기서는 00 처리)
+                response = f"41 01 {byte_a:02X} 00 00 00"
+            elif pid in self.pids:
                 # 41(응답 서비스) + PID + Data
                 response = f"41 {pid[2:4]} {self.pids[pid]}"
             else:
                 response = "NO DATA"
 
-        # 3. OBD 서비스 09 (차량 정보)
+        # 3. OBD 서비스 03 (저장된 DTC 조회)
+        elif cmd == "03":
+            if not self.dtcs:
+                response = "43 00 00 00 00 00 00" # No DTCs
+            else:
+                # DTC 포맷: P0123 -> 2바이트 16진수
+                # 첫 글자: P=0, C=1, B=2, U=3
+                # 대략적인 변환 예시 (정밀 구현은 복잡하므로 단순화된 헥사 매핑 사용 가능)
+                hex_dtcs = []
+                for code in self.dtcs[:3]: # 한 프레임에 최대 3개 (단순화)
+                    prefix = code[0]
+                    num = int(code[1:])
+                    prefix_val = {'P': 0x0, 'C': 0x4, 'B': 0x8, 'U': 0xC}.get(prefix, 0)
+                    b1 = (prefix_val << 4) | (num >> 8 & 0x0F)
+                    b2 = num & 0xFF
+                    hex_dtcs.append(f"{b1:02X} {b2:02X}")
+                
+                # 부족한 부분은 00으로 채움
+                while len(hex_dtcs) < 3:
+                    hex_dtcs.append("00 00")
+                
+                response = f"43 {' '.join(hex_dtcs)}"
+
+        # 4. OBD 서비스 04 (DTC 삭제)
+        elif cmd == "04":
+            logger.info(" Clearing DTCs...")
+            self.dtcs = []
+            self.mil_on = False
+            response = "44"
+
+        # 5. OBD 서비스 07 (보류 중인 DTC 조회)
+        elif cmd == "07":
+            # 여기선 간단히 03과 동일하게 처리하거나 빈 응답
+            response = "47 00 00 00 00 00 00"
+
+        # 6. OBD 서비스 09 (차량 정보)
         elif cmd.startswith("0902"):
             # VIN을 16진수 문자열로 변환 (예: '1' -> '31')
             vin_hex = " ".join([f"{ord(c):02X}" for c in self.vin])
             # 49(응답 서비스) + 02(PID) + 01(데이터 인덱스) + VIN 데이터
             response = f"49 02 01 {vin_hex}"
             
-        # 4. 기타 명령어
+        # 7. 기타 명령어
         else:
             response = "OK"
 

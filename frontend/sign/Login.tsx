@@ -7,6 +7,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useUserStore } from '../store/useUserStore';
 import { useAlertStore } from '../store/useAlertStore';
 import BaseScreen from '../components/layout/BaseScreen';
+import NotificationService from '../services/NotificationService';
 
 // Kakao Login Import (Platform check)
 let login: () => Promise<any>;
@@ -41,11 +42,14 @@ export default function Login() {
 
     useEffect(() => {
         GoogleSignin.configure({
-            webClientId: '415824813180-to8ea5houck16m7as32t9cavi7aq87e5.apps.googleusercontent.com',
+            webClientId: '540652803257-cl4t2p9tsvd0lbffrck17rq2sjs7i0k1.apps.googleusercontent.com',
         });
     }, []);
 
-    const handleNavigation = (result: any) => {
+    const handleNavigation = async (result: any) => {
+        // FCM 토큰 등록/갱신
+        await NotificationService.registerFcmToken();
+
         if (route.params?.fromSignup) {
             navigation.navigate('RegisterMain');
         } else if (result.hasVehicle) {

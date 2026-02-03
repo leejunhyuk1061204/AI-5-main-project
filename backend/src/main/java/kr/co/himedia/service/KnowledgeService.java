@@ -1,6 +1,8 @@
 package kr.co.himedia.service;
 
+import kr.co.himedia.entity.DtcCode;
 import kr.co.himedia.entity.Knowledge;
+import kr.co.himedia.repository.DtcCodeRepository;
 import kr.co.himedia.repository.KnowledgeRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -10,8 +12,10 @@ import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**
@@ -23,6 +27,7 @@ import java.util.stream.Collectors;
 public class KnowledgeService {
 
     private final KnowledgeRepository knowledgeRepository;
+    private final DtcCodeRepository dtcCodeRepository;
     private final RestTemplate restTemplate = new RestTemplate();
 
     @Value("${ai.server.url.embedding:http://localhost:8001/api/v1/connect/predict/embedding}")
@@ -47,6 +52,72 @@ public class KnowledgeService {
         return documents.stream()
                 .map(Knowledge::getContent)
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * 자연어 쿼리 + 제조사/모델 필터링 + 유사도 임계값 검색
+     */
+    public List<String> searchKnowledgeWithFilter(String query, String manufacturer, String model, int limit,
+            Double threshold) {
+        if (threshold == null || threshold <= 0) {
+            threshold = 0.4; // 기본 유사도 임계값
+        }
+
+        // 1. 임베딩 벡터 생성
+        double[] vector = getEmbedding(query);
+        if (vector == null) {
+            log.error("Failed to get embedding for filtered search: {}", query);
+            return List.of();
+        }
+
+        // 2. 필터링된 DB 검색
+        List<Knowledge> documents = knowledgeRepository.findSimilarDocumentsWithFilter(
+                manufacturer, model, vector, threshold, limit);
+
+        log.info("RAG Filtered Search: query='{}', mfr='{}', model='{}', threshold={}, results={}",
+                query, manufacturer, model, threshold, documents.size());
+
+        // 3. 텍스트 추출
+        return documents.stream()
+                .map(Knowledge::getContent)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * DTC 코드를 기반으로 관련 매뉴얼 검색 (Dual Description Strategy)
+     */
+    public List<String> searchDtcInformation(String code, String manufacturer, int limit) {
+        List<String> results = new ArrayList<>();
+        String searchContext = code;
+
+        // 1. DTC 정보 조회 (DtcCodeRepository)
+        if (manufacturer != null && !manufacturer.isBlank()) {
+            Optional<DtcCode> exact = dtcCodeRepository.findByCodeAndManufacturer(code, manufacturer);
+            if (exact.isEmpty()) {
+                exact = dtcCodeRepository.findByCodeGeneric(code);
+            }
+
+            if (exact.isPresent()) {
+                String descKo = exact.get().getDescriptionKo();
+                String descEn = exact.get().getDescriptionEn();
+
+                // RAG 검색용 컨텍스트는 '영어 설명' 우선 (없으면 한국어)
+                String description = (descEn != null && !descEn.isBlank()) ? descEn : descKo;
+                searchContext = description;
+
+                // 결과에는 한국어/영어 정의 모두 포함 (LLM 참고용)
+                if (descEn != null && !descEn.isBlank())
+                    results.add("[DTC Definition (En)] " + descEn);
+                if (descKo != null && !descKo.isBlank())
+                    results.add("[DTC Definition (Ko)] " + descKo);
+            }
+        }
+
+        /*
+         * 사용자 요청 반영: DTC 조회 시 매뉴얼 검색(RAG)은 수행하지 않음.
+         * 매뉴얼 검색이 필요하면 searchKnowledge()를 별도로 호출해야 함.
+         */
+        return results;
     }
 
     /**

@@ -124,7 +124,7 @@ export default function DiagnosisHistory() {
                                             }`}
                                     >
                                         <Text className={`text-sm font-semibold ${isSelected ? 'text-primary' : 'text-text-dim'}`}>
-                                            {item.nickname || item.modelName}
+                                            {item.nickname || item.modelNameKo}
                                         </Text>
                                         {item.carNumber && (
                                             <Text className={`text-[10px] ${isSelected ? 'text-primary/70' : 'text-text-muted/50'}`}>

@@ -19,4 +19,9 @@ public class ObdLogDto {
     private Double engineLoad;
     private Double fuelTrimShort;
     private Double fuelTrimLong;
+    private Double intakeTemp;
+    private Double map;
+    private Double maf;
+    private Double throttlePos;
+    private Integer engineRuntime;
 }
