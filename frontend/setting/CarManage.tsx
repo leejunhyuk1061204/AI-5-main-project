@@ -574,7 +574,7 @@ export default function CarManage() {
                                 <>
                                     <View className="bg-white/5 border border-white/10 rounded-2xl p-4 mb-4">
                                         <Text className="text-base font-semibold text-white mb-1">
-                                            {vehicleToDelete.manufacturer} {vehicleToDelete.modelName}
+                                            {vehicleToDelete.manufacturerKo} {vehicleToDelete.modelNameKo}
                                         </Text>
                                         <Text className="text-sm text-text-muted">
                                             {vehicleToDelete.carNumber || '번호판 미등록'}

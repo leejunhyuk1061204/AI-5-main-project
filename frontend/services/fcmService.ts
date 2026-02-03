@@ -100,7 +100,7 @@ class FcmService {
 
             // 데이터 처리
             if (remoteMessage.data) {
-                this.handleNotificationData(remoteMessage.data);
+                this.handleNotificationData(remoteMessage.data as unknown as { [key: string]: string });
             }
         });
 
@@ -116,7 +116,7 @@ class FcmService {
             console.log('[FCM] Background message received:', remoteMessage);
 
             if (remoteMessage.data) {
-                this.handleNotificationData(remoteMessage.data);
+                this.handleNotificationData(remoteMessage.data as unknown as { [key: string]: string });
             }
         });
 
@@ -134,14 +134,14 @@ class FcmService {
             .then((remoteMessage) => {
                 if (remoteMessage) {
                     console.log('[FCM] Notification caused app to open:', remoteMessage);
-                    this.handleNotificationNavigation(remoteMessage.data, navigation);
+                    this.handleNotificationNavigation(remoteMessage.data as unknown as { [key: string]: string }, navigation);
                 }
             });
 
         // 앱이 백그라운드 상태에서 알림 클릭
         messaging().onNotificationOpenedApp((remoteMessage) => {
             console.log('[FCM] Notification opened app:', remoteMessage);
-            this.handleNotificationNavigation(remoteMessage.data, navigation);
+            this.handleNotificationNavigation(remoteMessage.data as unknown as { [key: string]: string }, navigation);
         });
 
         console.log('[FCM] Notification opened handler set up');

@@ -75,8 +75,5 @@ export const authService = {
         return response.data;
     },
 
-    updateFcmToken: async (fcmToken: string): Promise<ApiResponse<string>> => {
-        const response = await api.patch<ApiResponse<string>>('/api/v1/auth/fcm-token', { fcmToken });
-        return response.data;
-    }
+
 };
