@@ -60,10 +60,11 @@ spring:
 
 
 app:
+  backend-url: ${APP_BACKEND_URL:http://localhost:8080}
   storage:
     type: ${STORAGE_TYPE:local} # local or s3
   firebase:
-    config-path: ${FIREBASE_CONFIG_PATH}
+    config-path: ${FIREBASE_CONFIG_PATH:firebase-service-account.json}
 
 logging:
   file:
@@ -95,4 +96,8 @@ ocr:
     secret-key: ${NAVER_OCR_SECRET_KEY:}
   openai:
     api-key: ${OPENAI_API_KEY:}
+
+kakao:
+  pay:
+    secret-key: ${KAKAO_PAY_SECRET_KEY}
 
