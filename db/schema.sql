@@ -8,42 +8,41 @@ CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;
 CREATE EXTENSION IF NOT EXISTS vector;
 
 -- 2. ENUM 타입 정의
-DO $$ BEGIN
-    CREATE TYPE user_level AS ENUM ('FREE', 'PREMIUM', 'ADMIN');
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'user_level') THEN CREATE TYPE user_level AS ENUM ('FREE', 'PREMIUM', 'ADMIN');
 
-CREATE TYPE fuel_type AS ENUM ('GASOLINE', 'DIESEL', 'EV', 'HEV', 'LPG');
-
-CREATE TYPE registration_source AS ENUM ('MANUAL', 'OBD', 'CLOUD');
-
-CREATE TYPE charging_status AS ENUM ('DISCONNECTED', 'CHARGING', 'FULL', 'ERROR');
-
-CREATE TYPE diag_trigger_type AS ENUM ('AUTO', 'DATA', 'VISUAL', 'AUDIO', 'DTC', 'ROUTINE');
-
-CREATE TYPE diag_status AS ENUM ('PENDING', 'PROCESSING', 'REPLY_PROCESSING', 'DONE', 'FAILED');
-
-CREATE TYPE risk_level AS ENUM ('LOW', 'MID', 'HIGH', 'CRITICAL');
-
-CREATE TYPE media_type AS ENUM ('AUDIO', 'IMAGE', 'SNAPSHOT');
-
-CREATE TYPE evidence_status AS ENUM ('REQUESTED', 'UPLOADED', 'FAILED');
-
-CREATE TYPE dtc_type AS ENUM ('STORED', 'PENDING', 'PERMANENT');
-
-CREATE TYPE dtc_status AS ENUM ('ACTIVE', 'RESOLVED', 'CLEARED');
-
-CREATE TYPE dtc_resolution_type AS ENUM ('AUTO', 'MANUAL', 'OBD_CLEAR');
-
-CREATE TYPE noti_type AS ENUM ('ALARM', 'RECALL', 'INFO', 'REPORT');
-
-CREATE TYPE insight_category AS ENUM ('ECO_DRIVING', 'SAFETY', 'MAINTENANCE');
-
-CREATE TYPE recall_status AS ENUM ('OPEN', 'CLOSED');
-
-CREATE TYPE inspection_type AS ENUM ('REGULAR', 'TOTAL');
-
-EXCEPTION WHEN duplicate_object THEN null;
+END IF;
 
 END $$;
+
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'fuel_type') THEN CREATE TYPE fuel_type AS ENUM ('GASOLINE', 'DIESEL', 'EV', 'HEV', 'LPG'); END IF; END $$;
+
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'registration_source') THEN CREATE TYPE registration_source AS ENUM ('MANUAL', 'OBD', 'CLOUD'); END IF; END $$;
+
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'charging_status') THEN CREATE TYPE charging_status AS ENUM ('DISCONNECTED', 'CHARGING', 'FULL', 'ERROR'); END IF; END $$;
+
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'diag_trigger_type') THEN CREATE TYPE diag_trigger_type AS ENUM ('AUTO', 'DATA', 'VISUAL', 'AUDIO','DTC','ROUTINE'); END IF; END $$;
+
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'diag_status') THEN CREATE TYPE diag_status AS ENUM ('PENDING', 'PROCESSING', 'REPLY_PROCESSING', 'DONE', 'FAILED'); END IF; END $$;
+
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'risk_level') THEN CREATE TYPE risk_level AS ENUM ('LOW', 'MID', 'HIGH', 'CRITICAL'); END IF; END $$;
+
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'media_type') THEN CREATE TYPE media_type AS ENUM ('AUDIO', 'IMAGE', 'SNAPSHOT'); END IF; END $$;
+
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'evidence_status') THEN CREATE TYPE evidence_status AS ENUM ('REQUESTED', 'UPLOADED', 'FAILED'); END IF; END $$;
+
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'dtc_type') THEN CREATE TYPE dtc_type AS ENUM ('STORED', 'PENDING', 'PERMANENT'); END IF; END $$;
+
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'dtc_status') THEN CREATE TYPE dtc_status AS ENUM ('ACTIVE', 'RESOLVED', 'CLEARED'); END IF; END $$;
+
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'dtc_resolution_type') THEN CREATE TYPE dtc_resolution_type AS ENUM ('AUTO', 'MANUAL', 'OBD_CLEAR'); END IF; END $$;
+
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'noti_type') THEN CREATE TYPE noti_type AS ENUM ('ALARM', 'RECALL', 'INFO', 'REPORT'); END IF; END $$;
+
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'insight_category') THEN CREATE TYPE insight_category AS ENUM ('ECO_DRIVING', 'SAFETY', 'MAINTENANCE'); END IF; END $$;
+
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'recall_status') THEN CREATE TYPE recall_status AS ENUM ('OPEN', 'CLOSED'); END IF; END $$;
+
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'inspection_type') THEN CREATE TYPE inspection_type AS ENUM ('REGULAR', 'TOTAL'); END IF; END $$;
 
 -- 3. 테이블 생성 (Core)
 
@@ -101,7 +100,6 @@ CREATE TABLE IF NOT EXISTS vehicles (
     deleted_at TIMESTAMP
 );
 
--- 차량 모델 마스터 (2.1.5 - Track B Reference)
 -- 차량 모델 마스터 (2.1.5 - Track B Reference)
 CREATE TABLE IF NOT EXISTS car_model_master (
     model_id SERIAL PRIMARY KEY,
@@ -180,6 +178,7 @@ CREATE TABLE IF NOT EXISTS trip_summaries (
     average_speed FLOAT,
     top_speed FLOAT,
     fuel_consumed FLOAT,
+    json_extra JSONB, -- 추가적인 주행 데이터 (경로 등)
     PRIMARY KEY (start_time, vehicles_id)
 );
 
@@ -222,17 +221,32 @@ CREATE TABLE IF NOT EXISTS ai_evidences (
 
 -- 6. 상태 관리 및 히스토리 (Status & History)
 
+-- DTC 고장 코드 마스터 (2.4.0)
+CREATE TABLE IF NOT EXISTS dtc_codes (
+    code VARCHAR(10),
+    manufacturer VARCHAR(50) DEFAULT 'GENERIC',
+    description_ko TEXT,
+    description_en TEXT,
+    summary_ko TEXT,
+    summary_en TEXT,
+    tts_phrase TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (code, manufacturer)
+);
+
 -- DTC 고장 코드 이력 (2.4.1)
 CREATE TABLE IF NOT EXISTS dtc_history (
     dtc_id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
     vehicles_id UUID REFERENCES vehicles (vehicles_id),
     dtc_code VARCHAR(10),
+    dtc_manufacturer VARCHAR(50) DEFAULT 'GENERIC',
     description TEXT,
     dtc_type dtc_type,
     status dtc_status,
     resolution_type dtc_resolution_type,
     discovered_at TIMESTAMP,
-    resolved_at TIMESTAMP
+    resolved_at TIMESTAMP,
+    FOREIGN KEY (dtc_code, dtc_manufacturer) REFERENCES dtc_codes (code, manufacturer)
 );
 
 -- DTC 고장 시점 스냅샷 (2.4.2)
@@ -395,10 +409,3 @@ CREATE TABLE IF NOT EXISTS user_insights (
     created_at TIMESTAMP DEFAULT NOW(),
     is_read BOOLEAN DEFAULT FALSE
 );
-
--- RAG 지식 벡터 저장소 (2.5 - AI/RAG)
--- (Cleaned up duplicate definition)
-
--- knowledge_vectors 인덱스
-
-CREATE INDEX IF NOT EXISTS idx_knowledge_metadata ON knowledge_vectors USING GIN (metadata);
