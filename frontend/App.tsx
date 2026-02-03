@@ -62,8 +62,8 @@ import ChatAudioScreen from './diagnosis/ChatAudioScreen';
 import MaintenanceBook from './maintenance/MaintenanceBook';
 import ReceiptScan from './maintenance/ReceiptScan';
 import ReceiptResult from './maintenance/ReceiptResult';
-<<<<<<< Updated upstream
 import PaymentSuccess from './payment/PaymentSuccess';
+import MaintenanceHistory from './history/MaintenanceHistory';
 
 // Deep Linking Configuration
 const linking = {
@@ -75,10 +75,6 @@ const linking = {
     },
   },
 };
-
-=======
-import MaintenanceHistory from './history/MaintenanceHistory';
->>>>>>> Stashed changes
 
 // Keep the splash screen visible while we fetch resources
 ExpoSplashScreen.preventAutoHideAsync();
@@ -298,17 +294,18 @@ export default function App() {
                 <Stack.Screen name="ReceiptScan" component={ReceiptScan} />
                 <Stack.Screen name="ReceiptResult" component={ReceiptResult} />
 <<<<<<< Updated upstream
-                <Stack.Screen name="PaymentSuccess" component={PaymentSuccess} />
+  <Stack.Screen name="PaymentSuccess" component={PaymentSuccess} />
 =======
                 <Stack.Screen name="MaintenanceHistory" component={MaintenanceHistory} />
 >>>>>>> Stashed changes
-              </Stack.Navigator>
+              </Stack.Navigator >
               <GlobalAlert />
               <GlobalDatePicker />
             </>
-          )}
-        </NavigationContainer>
-      </KeyboardProvider>
-    </SafeAreaProvider>
+          )
+}
+        </NavigationContainer >
+      </KeyboardProvider >
+    </SafeAreaProvider >
   );
 }
