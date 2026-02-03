@@ -241,7 +241,8 @@ export default function ActiveReg({ navigation }: any) {
                     setObdModalVisible(false);
                     // Add a small delay for better UX before transitioning
                     setTimeout(() => {
-                        navigation.navigate('ActiveLoading');
+                        // Navigate to new AI Diagnosis Loading screen
+                        navigation.navigate('ObdDiagLoading');
                     }, 500);
                 }}
             />

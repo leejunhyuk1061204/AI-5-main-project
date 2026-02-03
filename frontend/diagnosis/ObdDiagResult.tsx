@@ -6,12 +6,12 @@ import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-export default function ActiveSuccess({ navigation }: any) {
-    const [vehicleNumber, setVehicleNumber] = useState('');
+export default function ObdDiagResult({ navigation, route }: any) {
+    const params = route.params || {};
     const insets = useSafeAreaInsets();
 
     const handleGoHome = () => {
-        navigation.navigate('CarManage');
+        navigation.navigate('MainPage');
     };
 
     return (
@@ -19,7 +19,7 @@ export default function ActiveSuccess({ navigation }: any) {
             <StatusBar style="light" />
 
             <View style={styles.header}>
-                <Text style={styles.headerTitle}>차량 등록 결과</Text>
+                <Text style={styles.headerTitle}>진단 결과</Text>
                 <View style={{ width: 40 }} />
             </View>
 
@@ -31,78 +31,62 @@ export default function ActiveSuccess({ navigation }: any) {
                     <MaterialIcons name="check-circle" size={80} color="#0d7ff2" style={styles.shadowIcon} />
                 </View>
 
-                <Text style={styles.title}>차량 등록이{'\n'}완료되었습니다!</Text>
-                <Text style={styles.subtitle}>제네시스 GV80 차량 정보가 등록되었습니다.</Text>
+                <Text style={styles.title}>차량 진단이{'\n'}완료되었습니다</Text>
+                <Text style={styles.subtitle}>모든 주요 시스템이 정상 작동 중입니다.</Text>
 
                 <View style={styles.card}>
                     <View style={styles.cardRow}>
                         <View style={[styles.cardItem, styles.borderRight]}>
-                            <Text style={styles.cardLabel}>모델명</Text>
-                            <Text style={styles.cardValue} numberOfLines={1}>Genesis GV80</Text>
+                            <Text style={styles.cardLabel}>엔진 상태</Text>
+                            <Text style={styles.cardValue} numberOfLines={1}>정상</Text>
                         </View>
                         <View style={styles.cardItem}>
-                            <Text style={styles.cardLabel}>연식</Text>
-                            <Text style={styles.cardValue}>2023년형</Text>
+                            <Text style={styles.cardLabel}>DTC 코드</Text>
+                            <Text style={styles.cardValue}>없음</Text>
                         </View>
                     </View>
                     <View style={styles.cardRow}>
                         <View style={[styles.cardItem, styles.borderRight]}>
-                            <Text style={styles.cardLabel}>배기량</Text>
-                            <Text style={styles.cardValue}>2,497cc</Text>
+                            <Text style={styles.cardLabel}>배터리 전압</Text>
+                            <Text style={styles.cardValue}>12.4V</Text>
                         </View>
                         <View style={styles.cardItem}>
-                            <Text style={styles.cardLabel}>연료 타입</Text>
-                            <Text style={styles.cardValue}>가솔린</Text>
+                            <Text style={styles.cardLabel}>냉각수 온도</Text>
+                            <Text style={styles.cardValue}>90°C</Text>
                         </View>
                     </View>
-                </View>
-
-                {/* Input Section */}
-                <View style={styles.inputContainer}>
-                    <Text style={styles.label}>차량 번호 입력</Text>
-                    <TextInput
-                        value={vehicleNumber}
-                        onChangeText={setVehicleNumber}
-                        placeholder="예: 12가 3456"
-                        placeholderTextColor="#94a3b8"
-                        style={styles.input}
-                    />
-                    <Text style={styles.helperText}>
-                        차량 번호를 입력해야 홈으로 이동할 수 있습니다.
-                    </Text>
                 </View>
 
                 {/* Checklist */}
                 <View style={styles.checklistContainer}>
                     <View style={styles.checklistItem}>
                         <View style={[styles.iconCircle, { backgroundColor: 'rgba(16, 185, 129, 0.1)' }]}>
-                            <MaterialIcons name="fact-check" size={24} color="#10b981" />
+                            <MaterialIcons name="security" size={24} color="#10b981" />
                         </View>
-                        <Text style={styles.checklistText}>차대번호(VIN) 조회 및 매칭 성공</Text>
+                        <Text style={styles.checklistText}>주행 안전성 : 우수 (98점)</Text>
                         <MaterialIcons name="check" size={20} color="#64748b" />
                     </View>
                     <View style={styles.checklistItem}>
                         <View style={[styles.iconCircle, { backgroundColor: 'rgba(13, 127, 242, 0.1)' }]}>
-                            <MaterialIcons name="settings-backup-restore" size={24} color="#0d7ff2" />
+                            <MaterialIcons name="build" size={24} color="#0d7ff2" />
                         </View>
-                        <Text style={styles.checklistText}>제조사 권장 소모품 주기 적용</Text>
+                        <Text style={styles.checklistText}>소모품 상태 : 양호</Text>
                         <MaterialIcons name="check" size={20} color="#64748b" />
                     </View>
                 </View>
 
                 <TouchableOpacity
-                    style={[styles.buttonWrapper, !vehicleNumber && { opacity: 0.5 }]}
+                    style={[styles.buttonWrapper]}
                     onPress={handleGoHome}
-                    disabled={!vehicleNumber}
                     activeOpacity={0.9}
                 >
                     <LinearGradient
-                        colors={!vehicleNumber ? ['#64748b', '#475569'] : ['#0d7ff2', '#06b6d4']}
+                        colors={['#0d7ff2', '#06b6d4']}
                         start={{ x: 0, y: 0 }}
                         end={{ x: 1, y: 0 }}
                         style={styles.gradientButton}
                     >
-                        <Text style={styles.buttonText}>홈으로 이동</Text>
+                        <Text style={styles.buttonText}>확인 (홈으로)</Text>
                         <MaterialIcons name="home" size={24} color="white" />
                     </LinearGradient>
                 </TouchableOpacity>
