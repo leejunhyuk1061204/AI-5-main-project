@@ -321,16 +321,7 @@ export default function CarManage() {
                         <MaterialIcons name="chevron-right" size={24} color="#475569" />
                     </TouchableOpacity>
 
-                    <TouchableOpacity
-                        className="flex-row items-center gap-4 px-5 py-4 active:bg-white/5 border-b border-white/5"
-                        onPress={() => navigation.navigate('MaintenanceBook')}
-                    >
-                        <View className="w-11 h-11 items-center justify-center rounded-xl bg-surface-highlight shrink-0">
-                            <MaterialIcons name="receipt-long" size={24} color="#cbd5e1" />
-                        </View>
-                        <Text className="text-white text-base font-medium flex-1">차계부</Text>
-                        <MaterialIcons name="chevron-right" size={24} color="#475569" />
-                    </TouchableOpacity>
+
 
                     <TouchableOpacity
                         className="flex-row items-center gap-4 px-5 py-4 active:bg-white/5"

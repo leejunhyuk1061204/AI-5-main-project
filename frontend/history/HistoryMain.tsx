@@ -135,17 +135,17 @@ export default function HistoryMain() {
 
                 {/* Card 2.5: Maintenance History (정비 이력) */}
                 <TouchableOpacity
-                    onPress={() => navigation.navigate('MaintenanceHistory' as never)}
+                    onPress={() => navigation.navigate('MaintenanceBook' as never)}
                     className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 active:bg-white/10"
                 >
                     <View className="flex-row justify-between items-center">
                         <View className="flex-col gap-1">
                             <View className="flex-row items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 self-start">
-                                <MaterialIcons name="build-circle" size={10} color="#0d7ff2" />
-                                <Text className="text-xs font-bold text-primary uppercase tracking-wider">Maintenance</Text>
+                                <MaterialIcons name="receipt-long" size={10} color="#0d7ff2" />
+                                <Text className="text-xs font-bold text-primary uppercase tracking-wider">Book</Text>
                             </View>
-                            <Text className="text-base font-bold text-white mt-1.5">정비 이력</Text>
-                            <Text className="text-xs text-text-muted">소모품 교체 및 정비 내역 조회</Text>
+                            <Text className="text-base font-bold text-white mt-1.5">차계부</Text>
+                            <Text className="text-xs text-text-muted">소모품 교체, 정비 내역, 비용 관리</Text>
                         </View>
                         <MaterialIcons name="chevron-right" size={24} color="#64748b" />
                     </View>

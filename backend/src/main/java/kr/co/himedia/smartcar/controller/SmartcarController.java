@@ -41,7 +41,7 @@ public class SmartcarController {
             String accessToken = auth.getAccessToken();
 
             // Redirect back to the mobile app with the access token
-            String redirectUrl = "exp+frontend://smartcar/callback?accessToken=" + accessToken;
+            String redirectUrl = "frontend://smartcar/callback?accessToken=" + accessToken;
 
             return ResponseEntity.status(HttpStatus.FOUND)
                     .header("Location", redirectUrl)

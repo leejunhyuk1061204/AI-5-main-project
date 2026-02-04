@@ -22,19 +22,9 @@ export default function MainPage() {
 
     // Consumables State (Hoisted)
     const [consumables, setConsumables] = useState<any[]>([]);
-    const [masterConsumables, setMasterConsumables] = useState<any[]>([]);
 
-    useEffect(() => {
-        const loadMasterData = async () => {
-            try {
-                const data = await require('../api/masterApi').getAllConsumableItems();
-                setMasterConsumables(data || []);
-            } catch (e) {
-                console.log('Failed to load master consumables', e);
-            }
-        };
-        loadMasterData();
-    }, []);
+
+
 
     // Auto-connect OBD on mount
     useEffect(() => {
@@ -118,9 +108,8 @@ export default function MainPage() {
         }
 
         // 1. Calculate Consumable Health (Average %)
-        // Use dynamic master list for filtering
-        const criticalCodes = masterConsumables.map(m => m.code);
-        const validConsumables = consumables.filter(c => c?.item && criticalCodes.includes(c.item));
+        // Backend returns valid items for this vehicle
+        const validConsumables = consumables.filter(c => c?.itemCode);
 
         let maintenanceScore = 100;
         if (validConsumables.length > 0) {
@@ -137,10 +126,6 @@ export default function MainPage() {
 
         // 3. Weighted Average
         // Maintenance (60%) + Driving (40%)
-        // If maintenance is essentially perfect (100), driving score dominates variance
-        // But if maintenance is bad, it drags down score significantly
-
-        // Adjust weights
         const weightedScore = (maintenanceScore * 0.6) + (drivingScore * 0.4);
         const finalScore = Math.max(0, Math.min(100, Math.round(weightedScore - penalty)));
 
@@ -154,12 +139,12 @@ export default function MainPage() {
         let item;
 
         if (type === 'BATTERY') {
-            item = consumables.find(c => c.item === 'BATTERY_12V' || c.item === 'BATTERY');
+            item = consumables.find(c => c.itemCode === 'BATTERY_12V' || c.itemCode === 'BATTERY');
         } else if (type === 'COOLANT') {
-            item = consumables.find(c => c?.item === 'COOLANT');
+            item = consumables.find(c => c?.itemCode === 'COOLANT');
         } else {
             // Default lookups (ENGINE_OIL etc)
-            item = consumables.find(c => c.item === type);
+            item = consumables.find(c => c.itemCode === type);
         }
 
         if (!item) return { color: '#334155', text: '-', percent: 0, iconColor: '#475569' };
@@ -315,7 +300,7 @@ export default function MainPage() {
                 </View>
                 <View className="flex-row gap-2.5">
                     {[
-                        { label: '엔진', icon: 'oil', family: 'MaterialCommunityIcons', data: engineStatus },
+                        { label: '엔진오일', icon: 'oil', family: 'MaterialCommunityIcons', data: engineStatus },
                         { label: '배터리', icon: 'battery-charging-full', family: 'MaterialIcons', data: batteryStatus },
                         { label: '냉각수', icon: 'coolant-temperature', family: 'MaterialCommunityIcons', data: coolantStatus }
                     ].map((item, index) => (

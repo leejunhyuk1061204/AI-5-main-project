@@ -121,11 +121,13 @@ public class SmartcarService {
                                 && smartcarVin.trim().equalsIgnoreCase(encryptionUtils.decrypt(v.getVin()).trim()))
                         .findFirst();
 
+                UUID matchedVehicleId;
                 String status;
                 if (existingVehicle.isPresent()) {
                     // [기존 차량 있음] -> 상태 업데이트
                     kr.co.himedia.entity.Vehicle v = existingVehicle.get();
                     v.updateCloudLinkStatus(true);
+                    matchedVehicleId = v.getVehicleId();
                     log.info("[SmartcarService] 기존 차량 매칭 성공 (VIN 일치) - vehicleId: {}", v.getVehicleId());
 
                     // 실시간 데이터 수집 및 저장
@@ -148,6 +150,7 @@ public class SmartcarService {
 
                     newVehicle.updateCloudLinkStatus(true);
                     kr.co.himedia.entity.Vehicle savedVehicle = vehicleRepository.save(newVehicle);
+                    matchedVehicleId = savedVehicle.getVehicleId();
                     log.info("[SmartcarService] 신규 차량 등록 완료 (일치하는 VIN 없음) - VIN: {}", smartcarVin);
 
                     // 실시간 데이터 수집 및 저장
@@ -160,6 +163,7 @@ public class SmartcarService {
                         .modelName(attrs.getModel())
                         .vin(smartcarVin)
                         .status(status)
+                        .vehicleId(matchedVehicleId)
                         .build());
 
             } catch (Exception e) {
