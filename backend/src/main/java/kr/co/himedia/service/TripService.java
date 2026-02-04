@@ -207,8 +207,8 @@ public class TripService {
                     log.info("[TripEnd] Updated Vehicle Total Mileage: {} -> {}", currentTotal, newTotal);
 
                     try {
-                        wearFactorService.calculateAndSaveWearFactors(trip.getVehicleId(), newTotal,
-                                trip.getDistance());
+                        // [Mod] 통계가 모두 계산된 trip 객체를 직접 전달하여 데이터 정합성 보장
+                        wearFactorService.calculateAndSaveWearFactors(trip.getVehicleId(), newTotal, trip);
                         log.info("Successfully triggered wear factor calculation for vehicle: {}", trip.getVehicleId());
                     } catch (Exception e) {
                         log.error("Wear factor trigger failed", e);

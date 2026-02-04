@@ -3,9 +3,8 @@ package kr.co.himedia.service;
 import kr.co.himedia.common.exception.BaseException;
 import kr.co.himedia.common.exception.ErrorCode;
 import kr.co.himedia.dto.auth.*;
-import kr.co.himedia.entity.RefreshToken;
+
 import kr.co.himedia.entity.User;
-import kr.co.himedia.repository.RefreshTokenRepository;
 import kr.co.himedia.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

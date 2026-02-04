@@ -132,8 +132,12 @@ brain/
 # Security & Firebase
 # ==================================================
 **/firebase-service-account.json
-backend/google-services.json
-frontend/google-services.json
+**/google-services.json
+release.keystore
+*.keystore
+!debug.keystore
+.env
+.env.local
 
 # ==================================================
 # AI Large Files (Models / Weights / Runs / Data)
@@ -150,3 +154,43 @@ ai/weights/
 ai/runs/
 
 yolo*.pt
+
+# ==================================================
+# Anomaly Detection Offline (Kaggle EFD)
+# ==================================================
+
+# raw data (절대 커밋 금지)
+offline/raw/
+offline/raw/efd/
+offline/raw/efd/*.csv
+
+# generated datasets (용량 크면 제외 권장)
+offline/datasets/**/*.jsonl
+# 예시/샘플만 허용하고 싶으면 아래 라인으로 예외 허용(필요시 주석 해제)
+# !offline/datasets/kaggle_efd/example_*.jsonl
+
+# registry artifacts (학습 산출물)
+offline/registry/models/
+offline/registry/scalers/
+# 안전망: 산출물 확장자(이미 전역에서도 무시 중이지만 중복 명시)
+offline/registry/**/*.[pP][tT]
+offline/registry/**/*.[pP][kK][lL]
+offline/registry/**/*.[oO][nN][nN][xX]
+offline/registry/**/*.[hH]5
+
+# logs / temps
+offline/**/*.log
+offline/**/*.tmp
+offline/**/*.npy
+offline/**/*.npz
+
+# python cache (오프라인 폴더 한정)
+offline/**/__pycache__/
+offline/**/*.pyc
+
+# Anomaly Offline (absolute paths)
+ai/app/services/obd_anomaly/offline/raw/
+ai/app/services/obd_anomaly/offline/datasets/**/*.jsonl
+ai/app/services/obd_anomaly/offline/registry/models/
+ai/app/services/obd_anomaly/offline/registry/scalers/
+
