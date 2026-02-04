@@ -175,7 +175,7 @@ export default function Login() {
                             </View>
                             <TextInput
                                 value={email}
-                                onChangeText={setEmail}
+                                onChangeText={(t) => setEmail(t.trim())}
                                 className="block w-full rounded-xl border border-border-light bg-input-dark/80 text-white placeholder:text-text-dim focus:border-primary px-4 py-3.5 pl-11"
                                 placeholder="example@email.com"
                                 placeholderTextColor="#6b7280"
