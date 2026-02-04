@@ -146,16 +146,24 @@ public class TripService {
                     overheatDurationSec++;
 
                 // 공회전 시간 (속도 0, RPM > 0)
-                if (speed < 1.0 && rpm > 0)
+                if (speed < 1.0 && rpm > 0) {
                     idleTime++;
+                    if (idleTime % 60 == 0) {
+                        driveScore = Math.max(0, driveScore - 1); // 60초 누적 시 -1점
+                    }
+                }
 
                 // 급가속/급감속 (이전 데이터와 비교)
                 if (prevSpeed != -1.0) {
                     double speedDelta = speed - prevSpeed; // km/h per sec (assuming 1hz)
-                    if (speedDelta >= 10.0)
+                    if (speedDelta >= 10.0) {
                         hardAccelCount++; // 초당 10km/h 증가
-                    if (speedDelta <= -10.0)
+                        driveScore = Math.max(0, driveScore - 5); // 급가속 -5점
+                    }
+                    if (speedDelta <= -10.0) {
                         hardBrakeCount++; // 초당 10km/h 감소
+                        driveScore = Math.max(0, driveScore - 5); // 급측정 -5점
+                    }
                 }
                 prevSpeed = speed;
 
@@ -168,6 +176,12 @@ public class TripService {
                     driveScore = Math.max(0, driveScore - 1);
                 // 고속 RPM (5000rpm 초과) 시 감점
                 if (rpm > 5000)
+                    driveScore = Math.max(0, driveScore - 1);
+                // 풀 악셀 (Throttle > 90%) 시 감점
+                if (throttle > 90)
+                    driveScore = Math.max(0, driveScore - 1);
+                // 엔진 과부하 (Engine Load > 90%) 시 감점
+                if (load > 90)
                     driveScore = Math.max(0, driveScore - 1);
             }
 
