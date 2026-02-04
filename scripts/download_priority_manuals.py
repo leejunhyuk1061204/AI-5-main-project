@@ -6,6 +6,7 @@ import requests
 # --- 설정 ---
 OUTPUT_DIR = "data/manuals/zips"
 PARSED_DIR = "data/manuals/parsed"
+EMBEDDED_DIR = "data/manuals/embedded"
 PRIORITY_LIST_PATH = "data/manuals/prioritized_targets.json"
 DELAY = 15  # 15초 대기
 
@@ -16,8 +17,14 @@ def download_zip(brand, year, model):
     parsed_filepath = os.path.join(PARSED_DIR, parsed_filename)
 
     # 1. 이미 파싱된 경우 건너뛰기
+    # 1. 이미 파싱/임베딩된 경우 건너뛰기
     if os.path.exists(parsed_filepath):
         print(f"  [SKIP] Already parsed: {parsed_filename}")
+        return True
+    
+    embedded_filepath = os.path.join(EMBEDDED_DIR, parsed_filename)
+    if os.path.exists(embedded_filepath):
+        print(f"  [SKIP] Already embedded: {parsed_filename}")
         return True
 
     # 2. 이미 다운로드된 ZIP이 있는 경우 (중단된 경우 대비)

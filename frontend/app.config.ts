@@ -61,21 +61,6 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
         "./plugins/withAndroidForegroundService",
         "./plugins/withNotifeeRepo",
         [
-            "expo-build-properties",
-            {
-                "android": {
-                    "bridgelessEnabled": false,
-                    "extraMavenRepos": [
-                        "https://devrepo.kakao.com/nexus/content/groups/public/"
-                    ],
-                    "kotlinVersion": "2.0.20"
-                },
-                "ios": {
-                    "bridgelessEnabled": false
-                }
-            }
-        ],
-        [
             "@react-native-google-signin/google-signin",
             {
                 "iosUrlScheme": "com.googleusercontent.apps.PLACEHOLDER",
@@ -91,7 +76,22 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
             "@react-native-seoul/kakao-login",
             {
                 "kakaoAppKey": process.env.KAKAO_NATIVE_APP_KEY ?? "",
-                "kotlinVersion": "2.0.20"
+                "kotlinVersion": "2.1.20"
+            }
+        ],
+        [
+            "expo-build-properties",
+            {
+                "android": {
+                    "bridgelessEnabled": false,
+                    "extraMavenRepos": [
+                        "https://devrepo.kakao.com/nexus/content/groups/public/"
+                    ],
+                    "kotlinVersion": "2.1.20"
+                },
+                "ios": {
+                    "bridgelessEnabled": false
+                }
             }
         ]
     ],
