@@ -434,11 +434,11 @@ async def analyze_audio_with_llm(s3_url: str, audio_bytes: Optional[bytes] = Non
             status="NORMAL",
             analysis_type="LLM_AUDIO",
             category="ENGINE",
-            detail=AudioDetail(
-                diagnosed_label="정상 구동음"
-            ),
             confidence=0.9,
-            is_critical=False
+            is_critical=False,
+            data=AudioDetail(
+                diagnosed_label="정상 구동음"
+            )
         )
    
     try:
@@ -452,9 +452,9 @@ async def analyze_audio_with_llm(s3_url: str, audio_bytes: Optional[bytes] = Non
 
         # [Correct] Audio Input via 'chat.completions.create'
         response = await _get_client().chat.completions.create(
-            model="gpt-5",
-            modalities=["text", "audio"],
-            audio={"voice": "alloy", "format": "wav"},
+            model="gpt-4o-audio-preview",  # [Model Update] gpt-5 -> gpt-4o-audio-preview for audio input
+            modalities=["text"], # Start with text output
+            # audio={"voice": "alloy", "format": "wav"}, # ❌ Removed invalid param for input-only task
             messages=[
                 {
                     "role": "user",
@@ -472,7 +472,7 @@ async def analyze_audio_with_llm(s3_url: str, audio_bytes: Optional[bytes] = Non
             ]
         )
         
-        content = response.choices[0].message.audio.transcript
+        content = response.choices[0].message.content
 
         
         match = re.search(r'\{.*\}', content, re.DOTALL)
@@ -490,7 +490,7 @@ async def analyze_audio_with_llm(s3_url: str, audio_bytes: Optional[bytes] = Non
             status=current_status,
             analysis_type="LLM_AUDIO",
             category=result.get("category", "ENGINE"),
-            detail=AudioDetail(
+            data=AudioDetail(
                 diagnosed_label=result.get("diagnosed_label", "LLM 진단")
             ),
             confidence=float(result.get("confidence", 0.8)),
@@ -502,7 +502,7 @@ async def analyze_audio_with_llm(s3_url: str, audio_bytes: Optional[bytes] = Non
             status="ERROR",
             analysis_type="LLM_AUDIO",
             category="UNKNOWN_AUDIO",
-            detail=AudioDetail(diagnosed_label="Error"),
+            data=AudioDetail(diagnosed_label="Error"),
             confidence=0.0,
             is_critical=False
         )

@@ -39,6 +39,7 @@ effdet                  # EfficientDet (외관 모델)
 timm                    # PyTorch Image Models (effdet 의존성)
 ultralytics             # YOLOv8
 opencv-python-headless  # 서버 환경용 OpenCV
+seaborn                 # 시각화
 
 # ==================================================
 # 7. Audio (다른 팀원 담당)
