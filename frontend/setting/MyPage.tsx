@@ -12,7 +12,7 @@ import { useUserStore } from '../store/useUserStore';
 
 export default function MyPage() {
     const navigation = useNavigation<any>();
-    const { nickname, email, loadUser, logout } = useUserStore();
+    const { nickname, email, membership, membershipExpiry, loadUser, logout } = useUserStore();
     const [loading, setLoading] = useState(false);
     // Modal State
     const [modalVisible, setModalVisible] = useState(false);
@@ -167,11 +167,11 @@ export default function MyPage() {
             onPress={onPress}
         >
             <View className="flex-row items-center gap-4">
-                <View className={`w-10 h-10 rounded-lg items-center justify-center ${isDestructive ? 'bg-error/10' : 'bg-primary/10'}`}>
+                <View className={`w-10 h-10 rounded-lg items-center justify-center ${isDestructive ? 'bg-error/10' : (icon === 'stars' ? (membership === 'BUSINESS' ? 'bg-premium/10' : membership === 'PREMIUM' ? 'bg-primary/10' : 'bg-white/5') : 'bg-primary/10')}`}>
                     <MaterialIcons
                         name={icon}
                         size={20}
-                        color={isDestructive ? '#ff6b6b' : (icon === 'stars' ? '#c5a059' : '#0d7ff2')} // error, premium, primary tokens
+                        color={isDestructive ? '#ff6b6b' : (icon === 'stars' ? (membership === 'BUSINESS' ? '#c5a059' : membership === 'PREMIUM' ? '#0d7ff2' : '#6b7280') : '#0d7ff2')}
                     />
                 </View>
                 <View>
@@ -211,10 +211,12 @@ export default function MyPage() {
                     end={{ x: 1, y: 1 }}
                     className="p-8 rounded-2xl border border-white/5 relative overflow-hidden mb-8 items-center"
                 >
-                    <View className="absolute -right-4 -top-4 w-24 h-24 bg-primary/10 rounded-full blur-3xl pointer-events-none" />
+                    <View className={`absolute -right-4 -top-4 w-24 h-24 ${membership === 'BUSINESS' ? 'bg-premium/10' : 'bg-primary/10'} rounded-full blur-3xl pointer-events-none`} />
 
-                    <View className="px-2 py-0.5 rounded-full bg-premium/20 border border-premium/30 mb-3">
-                        <Text className="text-premium text-[10px] font-bold uppercase tracking-wider">PREMIUM</Text>
+                    <View className={`px-2 py-0.5 rounded-full ${membership === 'BUSINESS' ? 'bg-premium/20 border border-premium/30' : membership === 'PREMIUM' ? 'bg-primary/20 border border-primary/30' : 'bg-gray-500/10 border border-white/10'} mb-3`}>
+                        <Text className={`${membership === 'BUSINESS' ? 'text-premium' : membership === 'PREMIUM' ? 'text-primary' : 'text-gray-400'} text-[10px] font-bold uppercase tracking-wider`}>
+                            {membership || 'FREE'}
+                        </Text>
                     </View>
 
                     <Text className="text-white text-2xl font-bold tracking-tight mb-1">
@@ -223,6 +225,11 @@ export default function MyPage() {
                     <Text className="text-gray-400 text-sm">
                         {email || 'user@example.com'}
                     </Text>
+                    {membership && membership !== 'FREE' && membershipExpiry && (
+                        <Text className="text-white/40 text-[10px] mt-2">
+                            멤버십 만료일: {membershipExpiry.substring(0, 10).replace(/-/g, '.')}
+                        </Text>
+                    )}
                 </LinearGradient>
 
                 {/* Account Management */}
@@ -231,7 +238,7 @@ export default function MyPage() {
                 <SettingItem
                     icon="stars"
                     label="멤버십 등급"
-                    value="프리미엄 멤버십"
+                    value={membership === 'BUSINESS' ? '비즈니스 멤버십' : membership === 'PREMIUM' ? '프리미엄 멤버십' : '일반 멤버십'}
                     onPress={() => navigation.navigate('Membership')}
                 />
 

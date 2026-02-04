@@ -12,7 +12,7 @@ interface HeaderProps {
 
 export default function Header({ navigation: propNavigation, ...props }: HeaderProps) {
     const navigation = propNavigation || useNavigation<any>();
-    const { nickname, loadUser } = useUserStore();
+    const { nickname, membership, loadUser } = useUserStore();
     const { status } = useBleStore();
 
     useEffect(() => {
@@ -41,9 +41,20 @@ export default function Header({ navigation: propNavigation, ...props }: HeaderP
                         {props.title}
                     </Text>
                 ) : nickname ? (
-                    <Text className="text-2xl font-bold text-primary tracking-tight">
-                        {nickname}님
-                    </Text>
+                    <View className="flex-row items-center gap-2">
+                        <Text className="text-2xl font-bold text-primary tracking-tight">
+                            {nickname}님
+                        </Text>
+                        {membership === 'BUSINESS' ? (
+                            <View className="bg-premium/20 px-2 py-0.5 rounded-full border border-premium/40">
+                                <Text className="text-premium text-[10px] font-bold">BUSINESS</Text>
+                            </View>
+                        ) : membership === 'PREMIUM' ? (
+                            <View className="bg-primary/20 px-2 py-0.5 rounded-full border border-primary/40">
+                                <Text className="text-primary text-[10px] font-bold">PREMIUM</Text>
+                            </View>
+                        ) : null}
+                    </View>
                 ) : (
                     <TouchableOpacity onPress={() => navigation.navigate('Login')}>
                         <Text className="text-2xl font-bold text-primary tracking-tight">

@@ -1,9 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, Dimensions, Linking, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, Dimensions, Linking } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
+
 import { LinearGradient } from 'expo-linear-gradient';
+import * as WebBrowser from 'expo-web-browser';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useAlertStore } from '../store/useAlertStore';
+import { useUserStore } from '../store/useUserStore';
 import BaseScreen from '../components/layout/BaseScreen';
 import paymentApi from '../api/paymentApi';
 
@@ -37,9 +41,8 @@ const MEMBERSHIP_PLANS = [
             'OBD 실시간 모니터링',
             '우선 고객 지원',
         ],
-        color: '#c5a059',
-        gradientColors: ['#c5a059', '#8b6914'] as const,
-        recommended: true,
+        color: '#0d7ff2',
+        gradientColors: ['#0d7ff2', '#0062cc'] as const,
     },
     {
         id: 'business',
@@ -54,26 +57,28 @@ const MEMBERSHIP_PLANS = [
             'API 접근 권한',
             '전담 매니저 배정',
         ],
-        color: '#0d7ff2',
-        gradientColors: ['#0d7ff2', '#0062cc'] as const,
+        color: '#c5a059',
+        gradientColors: ['#c5a059', '#8b6914'] as const,
+        recommended: true,
     },
 ];
 
 export default function Membership() {
     const navigation = useNavigation<any>();
-    const [currentPlan, setCurrentPlan] = useState('premium');
+    const showAlert = useAlertStore(state => state.showAlert);
+    const { membership: currentLevel, membershipExpiry, loadUser } = useUserStore();
     const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
 
-    useEffect(() => {
-        loadMembershipStatus();
-    }, []);
+    // 내부 ID(lower)와 DB 레벨(upper) 매핑
+    const currentPlan = currentLevel?.toLowerCase() || 'free';
 
-    const loadMembershipStatus = async () => {
-        const stored = await AsyncStorage.getItem('membershipPlan');
-        if (stored) {
-            setCurrentPlan(stored);
-        }
-    };
+    // 화면이 포커스될 때마다 사용자 정보 갱신 (결제 후 복귀 시)
+    useFocusEffect(
+        React.useCallback(() => {
+            console.log('Membership page focused - reloading user data');
+            loadUser();
+        }, [])
+    );
 
     const handleSelectPlan = (planId: string) => {
         if (planId === currentPlan) return;
@@ -85,30 +90,50 @@ export default function Membership() {
         const plan = MEMBERSHIP_PLANS.find(p => p.id === selectedPlan);
         if (!plan) return;
 
+        // 무료 플랜으로 변경 (초기화) 처리
+        if (selectedPlan === 'free') {
+            showAlert(
+                '멤버십 변경',
+                '무료 플랜으로 변경하시면 현재 누리고 계신 모든 유능 혜택이 즉시 사라집니다. 정말 변경하시겠습니까?',
+                'WARNING',
+                async () => {
+                    try {
+                        await paymentApi.resetMembership();
+                        await useUserStore.getState().loadUser(); // Zustand 스토어 데이터 갱신
+                        showAlert('성공', '무료 플랜으로 변경되었습니다.', 'SUCCESS', () => {
+                            navigation.navigate('MainPage');
+                        });
+                        setSelectedPlan(null);
+                    } catch (error) {
+                        console.error('Reset Membership Error:', error);
+                        showAlert('오류', '멤버십 변경 중 문제가 발생했습니다.', 'ERROR');
+                    }
+                },
+                { confirmText: '변경 확인', cancelText: '취소', isDestructive: true }
+            );
+            return;
+        }
+
         try {
             console.log('Initiating payment for:', plan.name);
             const response = await paymentApi.ready(plan.name, plan.priceValue);
+            console.log('Payment ready response:', response);
 
-            if (response.next_redirect_app_url) {
-                // 주문 ID 저장 (승인 시 필요)
-                await AsyncStorage.setItem('temp_order_id', response.orderId || ''); // Response DTO Update Needed on Frontend too?
+            const urlToOpen = response.next_redirect_mobile_url || response.next_redirect_app_url;
+            console.log('URL to open:', urlToOpen);
 
-                // 카카오톡 결제 이동
-                const supported = await Linking.canOpenURL(response.next_redirect_app_url);
-                if (supported) {
-                    await Linking.openURL(response.next_redirect_app_url);
-                } else {
-                    // 앱 스킴이 안 되면 웹 URL 시도 (next_redirect_mobile_url)
-                    if (response.next_redirect_mobile_url) {
-                        await Linking.openURL(response.next_redirect_mobile_url);
-                    } else {
-                        Alert.alert('오류', '카카오톡을 실행할 수 없습니다.');
-                    }
-                }
+            if (urlToOpen) {
+                await AsyncStorage.setItem('temp_order_id', response.orderId || '');
+                console.log('Order ID saved:', response.orderId);
+
+                // 외부 브라우저로 결제 페이지 열기 (카카오톡 앱으로 이동)
+                // 결제 완료 후 딥링크로 앱이 자동으로 열림
+                await Linking.openURL(urlToOpen);
+                console.log('External browser opened');
             }
         } catch (error) {
             console.error('Payment Error:', error);
-            Alert.alert('결제 오류', '결제 준비 중 문제가 발생했습니다.');
+            showAlert('결제 오류', '결제 준비 중 문제가 발생했습니다.', 'ERROR');
         }
     };
 
@@ -171,10 +196,10 @@ export default function Membership() {
                         </View>
 
                         <Text className="text-white text-3xl font-bold mb-1">
-                            {currentPlanData?.name}
+                            {currentPlanData?.name || (currentLevel === 'BUSINESS' ? 'Business' : currentPlan.charAt(0).toUpperCase() + currentPlan.slice(1))}
                         </Text>
                         <Text className="text-white/70 text-sm">
-                            {currentPlan === 'free' ? '무료 플랜 이용 중' : '다음 결제일: 2026.02.21'}
+                            {currentPlan === 'free' ? '무료 플랜 이용 중' : `만료 예정일: ${membershipExpiry ? membershipExpiry.substring(0, 10).replace(/-/g, '.') : '-'}`}
                         </Text>
 
                         {currentPlan !== 'free' && (
@@ -195,19 +220,19 @@ export default function Membership() {
                     {MEMBERSHIP_PLANS.map((plan) => (
                         <TouchableOpacity
                             key={plan.id}
-                            className={`mb-4 rounded-2xl border overflow-hidden ${plan.id === currentPlan
-                                ? 'border-2 border-primary bg-primary/5'
-                                : selectedPlan === plan.id
-                                    ? 'border-2 border-white/30 bg-white/5'
-                                    : 'border-white/10 bg-[#17212b]'
-                                }`}
+                            style={{
+                                borderColor: (plan.id === currentPlan || selectedPlan === plan.id) ? plan.color : 'rgba(255,255,255,0.1)',
+                                borderWidth: (plan.id === currentPlan || selectedPlan === plan.id) ? 2 : 1,
+                                backgroundColor: (plan.id === currentPlan || selectedPlan === plan.id) ? `${plan.color}15` : '#17212b'
+                            }}
+                            className="mb-4 rounded-2xl overflow-hidden"
                             onPress={() => handleSelectPlan(plan.id)}
                             activeOpacity={0.8}
                         >
                             {plan.recommended && (
-                                <View className="bg-[#c5a059] py-1.5 px-4">
-                                    <Text className="text-black text-xs font-bold text-center uppercase tracking-wider">
-                                        MOST POPULAR
+                                <View style={{ backgroundColor: plan.id === 'business' ? '#c5a059' : '#0d7ff2' }} className="py-1.5 px-4">
+                                    <Text className={`${plan.id === 'business' ? 'text-black' : 'text-white'} text-xs font-bold text-center uppercase tracking-wider`}>
+                                        BEST VALUE
                                     </Text>
                                 </View>
                             )}
@@ -224,8 +249,8 @@ export default function Membership() {
                                         </View>
                                         {plan.id === currentPlan && (
                                             <View className="flex-row items-center gap-1 mt-1">
-                                                <MaterialIcons name="check-circle" size={14} color="#0d7ff2" />
-                                                <Text className="text-primary text-xs font-medium">현재 이용 중</Text>
+                                                <MaterialIcons name="check-circle" size={14} color={plan.color} />
+                                                <Text style={{ color: plan.color }} className="text-xs font-medium">현재 이용 중</Text>
                                             </View>
                                         )}
                                     </View>
@@ -264,11 +289,11 @@ export default function Membership() {
                     <View className="bg-[#1a2a3a] rounded-2xl p-5 border border-white/5">
                         <View className="flex-row items-center gap-2 mb-3">
                             <MaterialIcons name="auto-awesome" size={18} color="#c5a059" />
-                            <Text className="text-[#c5a059] font-bold">프리미엄 혜택</Text>
+                            <Text className="text-[#c5a059] font-bold">비즈니스 혜택</Text>
                         </View>
                         <Text className="text-gray-400 text-sm leading-relaxed">
-                            프리미엄 멤버십 가입 시 AI 기반 실시간 차량 진단, 맞춤형 정비 예측, OBD 연동 모니터링 등
-                            모든 기능을 무제한으로 이용하실 수 있습니다.
+                            비즈니스 멤버십 가입 시 다중 차량 통합 관리, 정비소 실시간 연동, 전담 매니저 배정 등
+                            강력한 엔터프라이즈 기능을 무제한으로 이용하실 수 있습니다.
                         </Text>
                     </View>
                 </View>

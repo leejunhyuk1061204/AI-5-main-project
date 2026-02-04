@@ -11,12 +11,14 @@ import fcmService from '../services/fcmService';
 interface UserState {
     nickname: string | null;
     email: string | null;
+    membership: string | null;
+    membershipExpiry: string | null;
     isAuthenticated: boolean;
     isLoading: boolean;
 
     // Actions
-    setUser: (nickname: string | null, email?: string | null) => Promise<void>;
-    login: (nickname: string, email: string) => Promise<void>;
+    setUser: (nickname: string | null, email?: string | null, membership?: string | null, membershipExpiry?: string | null) => Promise<void>;
+    login: (nickname: string, email: string, membership: string, membershipExpiry: string | null) => Promise<void>;
     logout: () => Promise<void>;
     loadUser: () => Promise<void>;
 
@@ -28,24 +30,32 @@ interface UserState {
 export const useUserStore = create<UserState>((set) => ({
     nickname: null,
     email: null,
+    membership: null,
+    membershipExpiry: null,
     isAuthenticated: false,
     isLoading: true,
 
-    setUser: async (nickname, email = null) => {
-        set({ nickname, email, isAuthenticated: !!nickname });
+    setUser: async (nickname, email = null, membership = null, membershipExpiry = null) => {
+        set({ nickname, email, membership, membershipExpiry, isAuthenticated: !!nickname });
         if (nickname) {
             await AsyncStorage.setItem('userNickname', nickname);
             if (email) await AsyncStorage.setItem('userEmail', email);
+            if (membership) await AsyncStorage.setItem('userMembership', membership);
+            if (membershipExpiry) await AsyncStorage.setItem('userMembershipExpiry', membershipExpiry);
         } else {
             await AsyncStorage.removeItem('userNickname');
             await AsyncStorage.removeItem('userEmail');
+            await AsyncStorage.removeItem('userMembership');
+            await AsyncStorage.removeItem('userMembershipExpiry');
         }
     },
 
-    login: async (nickname, email) => {
-        set({ nickname, email, isAuthenticated: true });
+    login: async (nickname, email, membership, membershipExpiry) => {
+        set({ nickname, email, membership, membershipExpiry, isAuthenticated: true });
         await AsyncStorage.setItem('userNickname', nickname);
         await AsyncStorage.setItem('userEmail', email);
+        await AsyncStorage.setItem('userMembership', membership);
+        if (membershipExpiry) await AsyncStorage.setItem('userMembershipExpiry', membershipExpiry);
     },
 
     logout: async () => {
@@ -55,6 +65,8 @@ export const useUserStore = create<UserState>((set) => ({
         // 2. AsyncStorage 토큰 삭제
         await AsyncStorage.removeItem('userNickname');
         await AsyncStorage.removeItem('userEmail');
+        await AsyncStorage.removeItem('userMembership');
+        await AsyncStorage.removeItem('userMembershipExpiry');
         await AsyncStorage.removeItem('accessToken');
         await AsyncStorage.removeItem('refreshToken');
 
@@ -89,10 +101,38 @@ export const useUserStore = create<UserState>((set) => ({
     loadUser: async () => {
         set({ isLoading: true });
         try {
+            // 1. First, load from local storage to show UI quickly
             const nickname = await AsyncStorage.getItem('userNickname');
             const email = await AsyncStorage.getItem('userEmail');
+            const membership = await AsyncStorage.getItem('userMembership');
+            const membershipExpiry = await AsyncStorage.getItem('userMembershipExpiry');
+            const accessToken = await AsyncStorage.getItem('accessToken');
+
             if (nickname) {
-                set({ nickname, email, isAuthenticated: true });
+                set({ nickname, email, membership, membershipExpiry, isAuthenticated: true });
+            }
+
+            // 2. Then, fetch latest profile from server to sync (especially membership)
+            if (accessToken) {
+                const profileResponse = await authService.getProfile(accessToken);
+                if (profileResponse.success && profileResponse.data) {
+                    const data = profileResponse.data;
+                    set({
+                        nickname: data.nickname,
+                        email: data.email,
+                        membership: data.membership,
+                        membershipExpiry: data.membershipExpiry ? data.membershipExpiry.toString() : null,
+                        isAuthenticated: true
+                    });
+
+                    // Sync storage
+                    await AsyncStorage.setItem('userNickname', data.nickname);
+                    await AsyncStorage.setItem('userEmail', data.email);
+                    await AsyncStorage.setItem('userMembership', data.membership);
+                    if (data.membershipExpiry) {
+                        await AsyncStorage.setItem('userMembershipExpiry', data.membershipExpiry.toString());
+                    }
+                }
             }
         } catch (e) {
             console.error('Failed to load user info', e);
@@ -146,10 +186,12 @@ const handleLoginSuccess = async (data: any, set: any) => {
         // 2. Fetch Profile & Update Store
         const profileResponse = await authService.getProfile(data.accessToken);
         if (profileResponse.success && profileResponse.data) {
-            const { nickname, email } = profileResponse.data;
-            set({ nickname, email, isAuthenticated: true });
+            const { nickname, email, membership, membershipExpiry } = profileResponse.data;
+            set({ nickname, email, membership, membershipExpiry, isAuthenticated: true });
             await AsyncStorage.setItem('userNickname', nickname);
             await AsyncStorage.setItem('userEmail', email);
+            await AsyncStorage.setItem('userMembership', membership || 'FREE');
+            if (membershipExpiry) await AsyncStorage.setItem('userMembershipExpiry', membershipExpiry.toString());
         }
 
         // 3. Check Vehicles
