@@ -7,11 +7,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import BaseScreen from '../components/layout/BaseScreen';
 
 import { useUserStore } from '../store/useUserStore';
+import { useAlertStore } from '../store/useAlertStore';
+import { BASE_URL } from '../api/axios';
 
 export default function RegisterMain() {
     const insets = useSafeAreaInsets();
     const navigation = useNavigation<any>();
     const logout = useUserStore(state => state.logout);
+    const showAlert = useAlertStore(state => state.showAlert);
 
     const handleLogout = async () => {
         Alert.alert(
@@ -46,11 +49,9 @@ export default function RegisterMain() {
                 if (accessToken) {
                     try {
                         const jwtToken = await AsyncStorage.getItem('accessToken');
-                        // Use the configured backend URL if possible, or fallback to localhost for dev
-                        const backendUrl = 'http://localhost:8080';
 
                         // 단순 조회가 아닌 백엔드 sync API 호출 (POST)
-                        const response = await fetch(`${backendUrl}/api/smartcar/sync?accessToken=${accessToken}`, {
+                        const response = await fetch(`${BASE_URL}/api/smartcar/sync?accessToken=${accessToken}`, {
                             method: 'POST',
                             headers: {
                                 'Authorization': `Bearer ${jwtToken}`
@@ -62,22 +63,30 @@ export default function RegisterMain() {
                             const results = syncData.results || [];
 
                             let detailMessage = `총 ${syncData.totalCount}대의 차량 정보가 성공적으로 최신화되었습니다.\n\n`;
+                            let targetVehicleId: string | null = null;
                             results.forEach((res: any) => {
-                                const statusText = res.status === 'CONNECTED' ? '기존 차량 연결' : '신규 차량 등록';
-                                detailMessage += `• ${res.manufacturerKo} ${res.modelNameKo}: ${statusText}\n`;
+                                if (res.vehicleId) targetVehicleId = res.vehicleId;
                             });
 
-                            Alert.alert(
+                            showAlert(
                                 "연동 완료",
                                 detailMessage,
-                                [{ text: "확인", onPress: () => navigation.navigate('MainPage') }]
+                                "SUCCESS",
+                                () => {
+                                    // 연동된 차량이 있으면 바로 수정 페이지로 이동 (차량 번호 입력 유도)
+                                    if (targetVehicleId) {
+                                        navigation.navigate('CarEdit', { vehicleId: targetVehicleId });
+                                    } else {
+                                        navigation.navigate('MainPage');
+                                    }
+                                }
                             );
                         } else {
                             const errorData = await response.text();
                             throw new Error(errorData || "동기화 실패");
                         }
                     } catch (error) {
-                        Alert.alert("연동 오류", "차량 정보를 동기화하는 중 오류가 발생했습니다.");
+                        showAlert("연동 오류", "차량 정보를 동기화하는 중 오류가 발생했습니다.", "ERROR");
                         console.error("[Smartcar Sync Error]", error);
                     }
                 }
@@ -164,28 +173,30 @@ export default function RegisterMain() {
                         </View>
                     </TouchableOpacity>
 
-                    {/* Card 2: SmartCar Connection (Bluetooth) - Previously OBD Auto */}
+                    {/* Card 2: SmartCar Connection */}
                     <TouchableOpacity
-                        className="relative flex flex-col items-start gap-4 rounded-2xl border border-primary/30 bg-white/5 p-6 shadow-lg shadow-blue-500/10 active:bg-white/10 active:border-primary active:scale-[0.98]"
+                        className="relative flex flex-col items-start gap-4 rounded-2xl border border-green-500/30 bg-white/5 p-6 shadow-lg shadow-green-500/10 active:bg-white/10 active:border-green-500 active:scale-[0.98]"
                         activeOpacity={0.9}
-                        onPress={() => navigation.navigate('ActiveReg')}
+                        onPress={() => {
+                            Linking.openURL(`${BASE_URL}/api/smartcar/login`);
+                        }}
                     >
-                        {/* Recommended Badge */}
-                        <View className="absolute top-0 right-0 rounded-bl-xl rounded-tr-xl bg-primary px-3 py-1 shadow-sm">
-                            <Text className="text-[10px] font-bold text-white">RECOMMENDED</Text>
+                        {/* New Badge */}
+                        <View className="absolute top-0 right-0 rounded-bl-xl rounded-tr-xl bg-green-500 px-3 py-1 shadow-sm">
+                            <Text className="text-[10px] font-bold text-white">NEW</Text>
                         </View>
 
-                        <View className="rounded-full bg-primary/10 p-3">
-                            <MaterialIcons name="bluetooth" size={32} color="#0d7ff2" />
+                        <View className="rounded-full bg-green-500/10 p-3">
+                            <MaterialIcons name="electric-car" size={32} color="#22c55e" />
                         </View>
                         <View>
                             <Text className="text-lg font-bold text-white mb-1">SmartCar 연결</Text>
                             <Text className="text-sm text-slate-400 leading-relaxed">
-                                SmartCar 어댑터(블루투스)를 연결하여{'\n'}차량 제원을 자동으로 불러옵니다.
+                                Smartcar 계정을 연결하여{'\n'}차량 정보를 불러옵니다.
                             </Text>
                         </View>
                         <View className="absolute top-6 right-6 opacity-50">
-                            <MaterialIcons name="arrow-forward" size={24} color="#0d7ff2" />
+                            <MaterialIcons name="arrow-forward" size={24} color="#22c55e" />
                         </View>
                     </TouchableOpacity>
                 </View>
