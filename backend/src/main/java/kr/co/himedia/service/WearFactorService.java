@@ -39,9 +39,10 @@ public class WearFactorService {
      */
     @Async
     @Transactional
-    public void calculateAndSaveWearFactors(UUID vehicleId, Double currentTotalMileage, Double tripDistance) {
-        log.info("[WearFactor] 마모율 일괄 계산 시작 [Vehicle: {}, Mileage: {}, Trip: {}]", vehicleId, currentTotalMileage,
-                tripDistance);
+    public void calculateAndSaveWearFactors(UUID vehicleId, Double currentTotalMileage,
+            kr.co.himedia.entity.TripSummary latestTrip) {
+        log.info("[WearFactor] 마모율 일괄 계산 시작 [Vehicle: {}, Mileage: {}, TripDist: {}]", vehicleId, currentTotalMileage,
+                latestTrip.getDistance());
 
         Vehicle vehicle = vehicleRepository.findById(vehicleId)
                 .orElseThrow(() -> new RuntimeException("차량을 찾을 수 없습니다: " + vehicleId));
@@ -57,8 +58,8 @@ public class WearFactorService {
                         .build())
                 .collect(java.util.stream.Collectors.toList());
 
-        // 2. 공통 데이터 준비 (운전 습관 및 메타데이터)
-        AiWearFactorRequest.DrivingHabits habits = getRecentDrivingHabits(vehicle.getVehicleId());
+        // 2. 공통 데이터 준비 (실제 주행 데이터 기반)
+        AiWearFactorRequest.DrivingHabits habits = calculateHabitsFromTrip(latestTrip);
         AiWearFactorRequest request = AiWearFactorRequest.builder()
                 .vehicleMetadata(AiWearFactorRequest.VehicleMetadata.builder()
                         .modelYear(vehicle.getModelYear() != null ? vehicle.getModelYear() : 2023)
@@ -73,7 +74,7 @@ public class WearFactorService {
         try {
             AiWearFactorResponse response = aiClient.getWearFactor(request);
             if (response != null && response.getWearFactors() != null) {
-                updateAllFactors(vehicle, response, currentTotalMileage, tripDistance);
+                updateAllFactors(vehicle, response, currentTotalMileage, latestTrip.getDistance());
             }
         } catch (Exception e) {
             log.error("[WearFactor] 일괄 마모율 계산 실패: {}", e.getMessage());
@@ -205,42 +206,39 @@ public class WearFactorService {
                 owner.getNickname(), itemName, remainingLife);
     }
 
-    private AiWearFactorRequest.DrivingHabits getRecentDrivingHabits(UUID vehicleId) {
+    /**
+     * 방금 수행한 주행(latestTrip)의 실제 데이터를 AI 요청 형식으로 변환
+     */
+    private AiWearFactorRequest.DrivingHabits calculateHabitsFromTrip(kr.co.himedia.entity.TripSummary trip) {
+        double avgRpm = trip.getAvgRpm() != null ? trip.getAvgRpm() : 2000.0;
+        int hardAccel = trip.getHardAccelCount() != null ? trip.getHardAccelCount() : 0;
+        int hardBrake = trip.getHardBrakeCount() != null ? trip.getHardBrakeCount() : 0;
+
+        // 공회전 비율 계산: idleTime(초) / totalDuration(초)
+        double idleRatio = 0.1; // 기본값
         try {
-            List<kr.co.himedia.entity.TripSummary> recentTrips = tripSummaryRepository
-                    .findByVehicleIdOrderByStartTimeDesc(vehicleId);
-            if (recentTrips.isEmpty()) {
-                return AiWearFactorRequest.DrivingHabits.builder()
-                        .avgRpm(2000.0).hardAccelCount(0).hardBrakeCount(0).idleRatio(0.1).build();
+            if (trip.getStartTime() != null && trip.getEndTime() != null) {
+                long durationSec = java.time.Duration.between(trip.getStartTime(), trip.getEndTime()).toSeconds();
+                if (durationSec > 0) {
+                    idleRatio = (double) (trip.getIdleTime() != null ? trip.getIdleTime() : 0) / durationSec;
+                    // 비율은 0.0 ~ 1.0 사이로 제한
+                    idleRatio = Math.min(1.0, Math.max(0.0, idleRatio));
+                }
             }
-
-            // 최대 5개 계산
-            int limit = Math.min(recentTrips.size(), 5);
-            double sumScore = 0;
-            double sumSpeed = 0;
-
-            for (int i = 0; i < limit; i++) {
-                kr.co.himedia.entity.TripSummary trip = recentTrips.get(i);
-                sumScore += (trip.getDriveScore() != null ? trip.getDriveScore() : 100);
-                sumSpeed += (trip.getAverageSpeed() != null ? trip.getAverageSpeed() : 0);
-            }
-
-            double avgScore = sumScore / limit;
-            double avgSpeed = sumSpeed / limit;
-
-            // Heuristic conversion
-            int estimatedHardEvents = (int) ((100.0 - avgScore) / 5.0);
-
-            return AiWearFactorRequest.DrivingHabits.builder()
-                    .avgRpm(2000.0 + (100 - avgScore) * 50)
-                    .hardAccelCount(Math.max(0, estimatedHardEvents / 2))
-                    .hardBrakeCount(Math.max(0, estimatedHardEvents / 2))
-                    .idleRatio(0.1)
-                    .build();
         } catch (Exception e) {
-            log.warn("Failed to calculate driving habits, using defaults", e);
-            return AiWearFactorRequest.DrivingHabits.builder()
-                    .avgRpm(2000.0).hardAccelCount(0).hardBrakeCount(0).idleRatio(0.1).build();
+            log.warn("[WearFactor] idleRatio 계산 실패, 기본값 사용: {}", e.getMessage());
         }
+
+        log.info("[WearFactor] 실측 데이터 기반 Habits 생성: avgRpm={}, idleRatio={}, accel={}, brake={}",
+                avgRpm, String.format("%.3f", idleRatio), hardAccel, hardBrake);
+
+        return AiWearFactorRequest.DrivingHabits.builder()
+                .avgRpm(avgRpm)
+                .hardAccelCount(hardAccel)
+                .hardBrakeCount(hardBrake)
+                .idleRatio(idleRatio)
+                .build();
     }
+
+    // 기존 5개 평균 로직(getRecentDrivingHabits)은 더 이상 사용하지 않으므로 삭제하거나 무시합니다.
 }
