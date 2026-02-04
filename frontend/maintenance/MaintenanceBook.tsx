@@ -283,9 +283,32 @@ export default function MaintenanceBook() {
                                                 {(() => {
                                                     try {
                                                         const parsed = JSON.parse(selectedHistory.ocrData);
+
+                                                        // [수정] 구조화된 items 배열이 있으면 우선적으로 표시
+                                                        if (parsed.items && Array.isArray(parsed.items) && parsed.items.length > 0) {
+                                                            return (
+                                                                <View>
+                                                                    <View className="flex-row justify-between pb-2 border-b border-white/20 mb-2">
+                                                                        <Text className="text-text-secondary text-xs font-bold">품목</Text>
+                                                                        <Text className="text-text-secondary text-xs font-bold">금액</Text>
+                                                                    </View>
+                                                                    {parsed.items.map((item: any, idx: number) => (
+                                                                        <View key={idx} className="flex-row justify-between py-1.5">
+                                                                            <Text className="text-text-muted text-xs flex-1 mr-2">{item.name}</Text>
+                                                                            <Text className="text-white text-xs">
+                                                                                {typeof item.cost === 'number'
+                                                                                    ? `${item.cost.toLocaleString()}원`
+                                                                                    : item.cost}
+                                                                            </Text>
+                                                                        </View>
+                                                                    ))}
+                                                                </View>
+                                                            );
+                                                        }
+
                                                         const rawText = parsed.text || selectedHistory.ocrData;
 
-                                                        // 모든 "품목 - 금액원" 또는 "품목: 금액원" 패턴을 찾음
+                                                        // 기존 로직: 텍스트에서 정규식으로 추출
                                                         const pricePattern = /([가-힣a-zA-Z0-9\s\(\)\-]+?)[\s]*[-:]+[\s]*([\d,]+)원/g;
                                                         const items: { name: string; price: string; isTotal: boolean }[] = [];
 
@@ -329,7 +352,7 @@ export default function MaintenanceBook() {
                                                         }
 
                                                         // 파싱 실패 시 원본 텍스트 표시
-                                                        return <Text className="text-text-muted text-xs leading-5">{rawText}</Text>;
+                                                        return <Text className="text-text-muted text-xs leading-5">{typeof rawText === 'string' ? rawText : JSON.stringify(parsed)}</Text>;
                                                     } catch (e) {
                                                         return <Text className="text-text-muted text-xs leading-5">{selectedHistory.ocrData}</Text>;
                                                     }
