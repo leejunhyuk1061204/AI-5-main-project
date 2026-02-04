@@ -48,7 +48,7 @@ MODELS = {
 }
 
 def log_debug(msg):
-    print(f"[DEBUG] {msg}")
+    print(f"[DEBUG] {msg}", flush=True)
 
 def save_confusion_matrix(cm, classes, filename, title="Confusion Matrix"):
     plt.figure(figsize=(10, 8))
@@ -63,7 +63,7 @@ def save_confusion_matrix(cm, classes, filename, title="Confusion Matrix"):
     return filename
 
 def eval_detection(name, data_path, model_path, label="Ours"):
-    print(f"\n🚀 Evaluating {name.upper()} ({label}) Model (Detection)...")
+    print(f"\n🚀 Evaluating {name.upper()} ({label}) Model (Detection)...", flush=True)
     
     # Handle missing model
     if not os.path.exists(model_path) and not model_path.endswith(".pt"): 
@@ -135,7 +135,7 @@ def eval_detection(name, data_path, model_path, label="Ours"):
         return {}
 
 def eval_classification(name, data_path, model_path, label="Ours"):
-    print(f"\n🚀 Evaluating {name.upper()} ({label}) Model (Classification)...")
+    print(f"\n🚀 Evaluating {name.upper()} ({label}) Model (Classification)...", flush=True)
     
     # Handle path logic similar to detection
     if os.path.sep in model_path and not os.path.exists(model_path):
@@ -311,11 +311,13 @@ def main():
              results_markdown.append(f"\n![ROC Curve]({ours_res['roc_img']})")
     
     # Final Table
-    df = pd.DataFrame(summary_data, columns=["Task (Metric)", "Baseline (Raw)", "Ours (Trained)", "Improvement"])
+    # Use manual formatting to avoid tabulate dependency
+    table_md = "| Task (Metric) | Baseline (Raw) | Ours (Trained) | Improvement |\n"
+    table_md += "| :--- | :--- | :--- | :--- |\n"
+    for row in summary_data:
+        table_md += f"| {row[0]} | {row[1]:.4f} | {row[2]:.4f} | {row[3]} |\n"
     
-    # Insert Table at the top of markdown (using list insert)
-    # We need to render it to markdown string
-    table_md = df.to_markdown(index=False)
+    # Insert Table at the top of markdown
     results_markdown.insert(3, "\n### 📈 Performance Summary")
     results_markdown.insert(4, table_md)
     
