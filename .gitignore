@@ -133,6 +133,9 @@ brain/
 # ==================================================
 **/firebase-service-account.json
 **/google-services.json
+release.keystore
+*.keystore
+!debug.keystore
 .env
 .env.local
 

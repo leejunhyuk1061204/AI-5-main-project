@@ -248,12 +248,19 @@ export default function Login() {
 
                 {/* Social Login Options */}
                 <View className="gap-3 w-full">
-                    <GoogleSigninButton
-                        style={{ width: '100%', height: 50 }}
-                        size={GoogleSigninButton.Size.Wide}
-                        color={GoogleSigninButton.Color.Light}
+                    {/* Custom Google Login Button */}
+                    <TouchableOpacity
                         onPress={onGoogleButtonPress}
-                    />
+                        className="w-full flex-row items-center justify-center gap-3 rounded-xl bg-white border border-border-light px-4 py-3 shadow-sm active:bg-gray-50"
+                    >
+                        <View className="w-5 h-5 items-center justify-center">
+                            {/* Simple G logo using Text or Icon if SVG not available */}
+                            <Text className="text-lg font-bold text-blue-600">G</Text>
+                        </View>
+                        <Text className="text-sm font-bold text-gray-700">Google 계정으로 로그인</Text>
+                    </TouchableOpacity>
+
+                    {/* Kakao Login Button */}
                     <TouchableOpacity
                         onPress={onKakaoButtonPress}
                         className="w-full flex-row items-center justify-center gap-3 rounded-xl bg-kakao-yellow border border-kakao-yellow px-4 py-3 active:bg-yellow-400"
