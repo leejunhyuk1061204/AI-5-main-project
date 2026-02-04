@@ -1,14 +1,18 @@
-import React from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, TouchableOpacity, Linking, ActivityIndicator } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import Header from '../header/Header';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import BaseScreen from '../components/layout/BaseScreen';
+import { BASE_URL } from '../api/axios';
+import { useAlertStore } from '../store/useAlertStore';
 
 export default function SettingMain() {
     const navigation = useNavigation<any>();
     const [nickname, setNickname] = React.useState<string>('사용자');
+    const [isLoading, setIsLoading] = useState(false);
+    const showAlert = useAlertStore(state => state.showAlert);
 
     React.useEffect(() => {
         const getNickname = async () => {
@@ -18,6 +22,83 @@ export default function SettingMain() {
         const unsubscribe = navigation.addListener('focus', getNickname);
         return unsubscribe;
     }, [navigation]);
+
+    // Deep Link Handler for SmartCar Sync
+    useEffect(() => {
+        const handleDeepLink = async (event: { url: string }) => {
+            // 화면이 포커스된 상태에서만 딥링크 처리 (중복 처리 방지)
+            if (!navigation.isFocused()) return;
+
+            const { url } = event;
+            if (url && url.includes('smartcar/callback')) {
+                // Extract params from URL
+                const regexAccessToken = /[?&]accessToken=([^&#]*)/;
+                const regexVehicleId = /[?&]vehicleId=([^&#]*)/;
+
+                const accessToken = regexAccessToken.exec(url)?.[1];
+                const targetedVehicleId = regexVehicleId.exec(url)?.[1];
+
+                // 특정 차량 지정 연동(Targeted Linking)인 경우 SettingMain(배경)에서는 무시
+                if (targetedVehicleId) return;
+
+                if (accessToken) {
+                    setIsLoading(true);
+                    try {
+                        const jwtToken = await AsyncStorage.getItem('accessToken');
+
+                        // Sync API Call
+                        const response = await fetch(`${BASE_URL}/api/smartcar/sync?accessToken=${accessToken}`, {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': `Bearer ${jwtToken}`
+                            }
+                        });
+
+                        if (response.ok) {
+                            const syncData = await response.json();
+                            const results = syncData.results || [];
+
+                            showAlert(
+                                "연동 완료",
+                                `총 ${syncData.totalCount}대의 차량 정보가 성공적으로 최신화되었습니다.`,
+                                "SUCCESS",
+                                () => {
+                                    // 단일 차량 연동 시, 번호판 정보가 있으면 관리 목록으로, 없으면 수정 페이지로 이동
+                                    if (results.length === 1 && results[0].vehicleId) {
+                                        const hasCarNumber = results[0].carNumber && results[0].carNumber.trim() !== '';
+                                        if (hasCarNumber) {
+                                            navigation.navigate('CarManage');
+                                        } else {
+                                            navigation.navigate('CarEdit', { vehicleId: results[0].vehicleId });
+                                        }
+                                    } else {
+                                        navigation.navigate('CarManage');
+                                    }
+                                }
+                            );
+                        } else {
+                            const errorData = await response.text();
+                            throw new Error(errorData || "동기화 실패");
+                        }
+                    } catch (error) {
+                        console.error("[Smartcar Sync Error]", error);
+                        showAlert("연동 오류", "차량 정보를 동기화하는 중 오류가 발생했습니다.", "ERROR");
+                    } finally {
+                        setIsLoading(false);
+                    }
+                }
+            }
+        };
+
+        const subscription = Linking.addEventListener('url', handleDeepLink);
+        Linking.getInitialURL().then((url) => {
+            if (url) handleDeepLink({ url });
+        });
+
+        return () => {
+            subscription.remove();
+        };
+    }, []);
 
     const SectionTitle = ({ title }: { title: string }) => (
         <View className="px-2 mb-3 mt-2 flex-row items-center justify-between">
@@ -79,9 +160,10 @@ export default function SettingMain() {
                     />
                     <SettingsItem
                         icon="cloud-sync"
-                        title="클라우드 연동"
+                        title="커넥티드 카 연동"
+                        subtitle="SmartCar 계정 연결"
                         isLast
-                        onPress={() => navigation.navigate('Cloud')}
+                        onPress={() => Linking.openURL(`${BASE_URL}/api/smartcar/login`)}
                     />
                 </View>
             </View>
@@ -106,6 +188,17 @@ export default function SettingMain() {
                 <MaterialIcons name="logout" size={18} color="#ff6b6b" />
                 <Text className="text-error font-semibold text-sm">로그아웃</Text>
             </TouchableOpacity>
+
+            {/* Loading Overlay */}
+            {isLoading && (
+                <View className="absolute inset-0 bg-black/60 items-center justify-center z-50">
+                    <View className="bg-surface-dark p-6 rounded-2xl border border-white/10 items-center">
+                        <ActivityIndicator size="large" color="#0d7ff2" className="mb-4" />
+                        <Text className="text-white font-bold text-lg mb-1">차량 정보 동기화 중</Text>
+                        <Text className="text-text-dim text-sm">잠시만 기다려주세요...</Text>
+                    </View>
+                </View>
+            )}
         </BaseScreen>
     );
 }

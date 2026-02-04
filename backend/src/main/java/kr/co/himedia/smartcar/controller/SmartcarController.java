@@ -27,21 +27,26 @@ public class SmartcarController {
     }
 
     @GetMapping("/login")
-    public ResponseEntity<?> getLoginUrl() {
-        String authUrl = smartcarService.getAuthUrl();
+    public ResponseEntity<?> getLoginUrl(@RequestParam(value = "vehicleId", required = false) String vehicleId) {
+        // vehicleId가 있으면 state 파라미터로 전달하여 콜백에서 다시 돌려받음
+        String state = (vehicleId != null && !vehicleId.isEmpty()) ? vehicleId : "";
+        String authUrl = smartcarService.getAuthUrl(state);
         return ResponseEntity.status(HttpStatus.FOUND)
                 .header("Location", authUrl)
                 .build();
     }
 
     @GetMapping("/callback")
-    public ResponseEntity<?> handleCallback(@RequestParam("code") String code) {
+    public ResponseEntity<?> handleCallback(@RequestParam("code") String code,
+            @RequestParam(value = "state", required = false) String state) {
         try {
             Auth auth = smartcarService.exchangeCodeForToken(code);
             String accessToken = auth.getAccessToken();
 
-            // Redirect back to the mobile app with the access token
-            String redirectUrl = "frontend://smartcar/callback?accessToken=" + accessToken;
+            // Redirect back to the mobile app with the access token and vehicleId(from
+            // state)
+            String redirectUrl = "frontend://smartcar/callback?accessToken=" + accessToken
+                    + (state != null && !state.isEmpty() ? "&vehicleId=" + state : "");
 
             return ResponseEntity.status(HttpStatus.FOUND)
                     .header("Location", redirectUrl)
@@ -76,13 +81,20 @@ public class SmartcarController {
 
     /**
      * 사용자의 Smartcar 계정과 연동된 차량들을 동기화(매칭 또는 신규 등록)합니다.
+     * vehicleId가 제공되면 해당 차량에 대해서만 특정하여 연동(Targeted Linking)을 수행합니다.
      */
     @PostMapping("/sync")
     public ResponseEntity<?> syncVehicles(@AuthenticationPrincipal CustomUserDetails userDetails,
-            @RequestParam("accessToken") String accessToken) {
+            @RequestParam("accessToken") String accessToken,
+            @RequestParam(value = "vehicleId", required = false) String vehicleId) {
         try {
+            // vehicleId가 있으면 UUID로 변환, 없으면 null
+            java.util.UUID targetVehicleId = (vehicleId != null && !vehicleId.isEmpty())
+                    ? java.util.UUID.fromString(vehicleId)
+                    : null;
+
             List<SmartcarSyncResponse.VehicleSyncResult> results = smartcarService.syncVehicles(userDetails.getUserId(),
-                    accessToken);
+                    accessToken, targetVehicleId);
 
             SmartcarSyncResponse response = SmartcarSyncResponse.builder()
                     .totalCount(results.size())

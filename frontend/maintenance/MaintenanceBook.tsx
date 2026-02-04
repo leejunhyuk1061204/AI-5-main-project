@@ -6,14 +6,17 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useVehicleStore } from '../store/useVehicleStore';
 import { useAlertStore } from '../store/useAlertStore';
+import VehicleSelectModal from '../components/VehicleSelectModal';
 import ocrApi, { MaintenanceHistoryResponse } from '../api/ocrApi';
 
 export default function MaintenanceBook() {
     const navigation = useNavigation<any>();
-    const { vehicles, primaryVehicle } = useVehicleStore();
+    const { vehicles, primaryVehicle, setPrimaryVehicle } = useVehicleStore();
 
     const [selectedVehicle, setSelectedVehicle] = useState<any>(null);
+    const [isVehicleModalVisible, setIsVehicleModalVisible] = useState(false);
     const [maintenanceList, setMaintenanceList] = useState<MaintenanceHistoryResponse[]>([]);
+    const [monthlyTotal, setMonthlyTotal] = useState(0);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [detailModalVisible, setDetailModalVisible] = useState(false);
@@ -26,7 +29,26 @@ export default function MaintenanceBook() {
         } else if (vehicles.length > 0) {
             setSelectedVehicle(vehicles[0]);
         }
-    }, [primaryVehicle, vehicles]);
+    }, [primaryVehicle]);
+
+    // 이번 달 합계 계산
+    useEffect(() => {
+        if (maintenanceList.length > 0) {
+            const now = new Date();
+            const currentMonth = now.getMonth();
+            const currentYear = now.getFullYear();
+
+            const sum = maintenanceList
+                .filter(item => {
+                    const d = new Date(item.maintenanceDate);
+                    return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+                })
+                .reduce((acc, item) => acc + (item.cost || 0), 0);
+            setMonthlyTotal(sum);
+        } else {
+            setMonthlyTotal(0);
+        }
+    }, [maintenanceList]);
 
     // 정비 이력 불러오기
     const loadMaintenanceHistory = async () => {
@@ -91,14 +113,21 @@ export default function MaintenanceBook() {
                     <MaterialIcons name="arrow-back-ios" size={20} color="white" />
                 </TouchableOpacity>
 
-                <View className="items-center">
-                    <Text className="text-white text-lg font-bold">차계부</Text>
+                <TouchableOpacity
+                    className="flex-1 items-center"
+                    activeOpacity={0.7}
+                    onPress={() => setIsVehicleModalVisible(true)}
+                >
+                    <View className="flex-row items-center gap-1">
+                        <Text className="text-white text-lg font-bold">차계부</Text>
+                        <MaterialIcons name="keyboard-arrow-down" size={18} color="#94a3b8" />
+                    </View>
                     {selectedVehicle && (
                         <Text className="text-xs text-text-dim">
                             {selectedVehicle.manufacturerKo} {selectedVehicle.modelNameKo}
                         </Text>
                     )}
-                </View>
+                </TouchableOpacity>
 
                 <TouchableOpacity
                     onPress={loadMaintenanceHistory}
@@ -366,6 +395,17 @@ export default function MaintenanceBook() {
                     </Pressable>
                 </Pressable>
             </Modal>
+            {/* Vehicle Selection Modal */}
+            <VehicleSelectModal
+                visible={isVehicleModalVisible}
+                onClose={() => setIsVehicleModalVisible(false)}
+                onSelect={(vehicle) => {
+                    setSelectedVehicle(vehicle);
+                    setIsVehicleModalVisible(false);
+                }}
+                title="차량 선택"
+                description="정비 내역을 확인할 차량을 선택해주세요."
+            />
         </SafeAreaView>
     );
 }

@@ -11,14 +11,17 @@ import BaseScreen from '../components/layout/BaseScreen';
 import { useVehicleStore } from '../store/useVehicleStore';
 import ObdService from '../services/ObdService';
 import NotificationOnboardingModal from '../components/NotificationOnboardingModal';
+import VehicleSelectModal from '../components/VehicleSelectModal';
 import { useUserStore } from '../store/useUserStore';
 
 export default function MainPage() {
     const navigation = useNavigation<any>();
-    const { primaryVehicle, fetchVehicles } = useVehicleStore();
+    const { primaryVehicle, fetchVehicles, setPrimaryVehicle } = useVehicleStore();
     const { nickname, membership, loadUser } = useUserStore();
     const [maintenanceScore, setMaintenanceScore] = useState(100);
-    const [drivingScore, setDrivingScore] = useState(0);
+    const [drivingScore, setDrivingScore] = useState<number | null>(null);
+
+    const [isSelectModalVisible, setIsSelectModalVisible] = useState(false);
 
     // Consumables State (Hoisted)
     const [consumables, setConsumables] = useState<any[]>([]);
@@ -41,7 +44,7 @@ export default function MainPage() {
     useFocusEffect(
         React.useCallback(() => {
             console.log('MainPage focused - reloading user data');
-            fetchVehicles();
+            fetchVehicles().catch(e => console.log('Silent fetch error in MainPage', e));
             loadUser();
         }, [])
     );
@@ -91,11 +94,11 @@ export default function MainPage() {
                 const avgScore = Math.round(totalScore / trips.length);
                 setDrivingScore(avgScore);
             } else {
-                setDrivingScore(98); // Default high score for new drivers
+                setDrivingScore(null); // No data -> Display as -
             }
         } catch (tripError) {
             console.log('Failed to load trips for score:', tripError);
-            setDrivingScore(98);
+            setDrivingScore(null);
         }
     };
 
@@ -125,8 +128,11 @@ export default function MainPage() {
         });
 
         // 3. Weighted Average
-        // Maintenance (60%) + Driving (40%)
-        const weightedScore = (maintenanceScore * 0.6) + (drivingScore * 0.4);
+        // Maintenance (60%) + Driving (40%) - If driving missing, use maintenance 100%
+        const weightedScore = drivingScore === null
+            ? maintenanceScore
+            : (maintenanceScore * 0.6) + (drivingScore * 0.4);
+
         const finalScore = Math.max(0, Math.min(100, Math.round(weightedScore - penalty)));
 
         setMaintenanceScore(finalScore);
@@ -201,7 +207,10 @@ export default function MainPage() {
     };
 
     // Helper for Gauge Color
-    const getScoreColorStops = (score: number) => {
+    const getScoreColorStops = (score: number | null) => {
+        if (score === null) {
+            return [{ offset: "0%", color: "#334155" }, { offset: "100%", color: "#1e293b" }]; // Gray for no data
+        }
         if (score < 30) {
             return [{ offset: "0%", color: "#ef4444" }, { offset: "100%", color: "#b91c1c" }]; // Red
         } else if (score < 70) {
@@ -212,11 +221,13 @@ export default function MainPage() {
     };
 
     // Reusable Gauge Component
-    const ScoreGauge = ({ score, label }: { score: number, label: string }) => {
+    const ScoreGauge = ({ score, label }: { score: number | null, label: string }) => {
         const radius = 40;
         const strokeWidth = 7;
         const circumference = 2 * Math.PI * radius;
         const colorStops = getScoreColorStops(score);
+
+        const displayScore = score === null ? 0 : score;
 
         return (
             <View className="items-center justify-center">
@@ -236,14 +247,14 @@ export default function MainPage() {
                             strokeWidth={strokeWidth}
                             fill="transparent"
                             strokeDasharray={`${circumference}`}
-                            strokeDashoffset={`${circumference * (1 - score / 100)}`}
+                            strokeDashoffset={`${circumference * (1 - displayScore / 100)}`}
                             strokeLinecap="round"
                         />
                     </Svg>
                     <View className="absolute inset-0 items-center justify-center z-10">
                         <Text className="text-text-muted text-xs font-medium tracking-wide mb-1">{label}</Text>
                         <Text className="text-3xl font-bold text-white tracking-tighter">
-                            {score}<Text className="text-sm text-text-dim font-normal">점</Text>
+                            {score === null ? '-' : score}<Text className="text-sm text-text-dim font-normal">점</Text>
                         </Text>
                     </View>
                 </View>
@@ -260,15 +271,24 @@ export default function MainPage() {
             {/* Car Info Card */}
             <View className="px-6 py-3">
                 <View className="relative overflow-hidden rounded-xl bg-white/5 border border-white/10 p-3 flex-row items-center justify-between shadow-lg">
-                    <View className="flex-row items-center gap-3 z-10">
+                    <TouchableOpacity
+                        className="flex-row items-center gap-3 z-10 flex-1"
+                        activeOpacity={0.7}
+                        onPress={() => setIsSelectModalVisible(true)}
+                    >
                         <View className="w-10 h-10 rounded-lg bg-surface-card border border-white/10 items-center justify-center shadow-inner">
                             <MaterialIcons name="directions-car" size={20} color="#d1d5db" />
                         </View>
                         <View>
-                            <Text className="text-white text-base font-bold leading-tight">{currentVehicle.modelNameKo || (currentVehicle as any).modelName}</Text>
+                            <View className="flex-row items-center gap-1.5">
+                                <Text className="text-white text-base font-bold leading-tight">
+                                    {currentVehicle.modelNameKo || (currentVehicle as any).modelName}
+                                </Text>
+                                <MaterialIcons name="keyboard-arrow-down" size={16} color="#94a3b8" />
+                            </View>
                             <Text className="text-text-muted text-sm font-normal">{currentVehicle.carNumber}</Text>
                         </View>
-                    </View>
+                    </TouchableOpacity>
                     <TouchableOpacity
                         className="flex-row items-center gap-1 bg-primary/10 px-2.5 py-1 rounded-full border border-primary/20"
                         onPress={() => navigation.navigate('CarManage')}
@@ -411,6 +431,16 @@ export default function MainPage() {
                     </TouchableOpacity>
                 </View>
             )}
+            <VehicleSelectModal
+                visible={isSelectModalVisible}
+                onClose={() => setIsSelectModalVisible(false)}
+                onSelect={(vehicle) => {
+                    setPrimaryVehicle(vehicle);
+                    setIsSelectModalVisible(false);
+                }}
+                title="차량 선택"
+                description="메인 화면에 표시할 차량을 선택해주세요."
+            />
             {/* Notification Onboarding Modal */}
             <NotificationOnboardingModal
                 visible={showNotiOnboarding}
