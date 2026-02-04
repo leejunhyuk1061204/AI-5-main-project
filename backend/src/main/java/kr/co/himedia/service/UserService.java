@@ -14,12 +14,15 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import kr.co.himedia.security.JwtTokenProvider;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Base64;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
 import com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier;
@@ -36,7 +39,9 @@ public class UserService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
-    private final RefreshTokenRepository refreshTokenRepository;
+    private final StringRedisTemplate redisTemplate;
+
+    private static final String RT_PREFIX = "RT:";
 
     // 사용자 회원가입
     public UserResponse createUser(SignupRequest req) {
@@ -76,16 +81,13 @@ public class UserService {
         String accessToken = jwtTokenProvider.createAccessToken(user.getUserId().toString());
         String refreshToken = jwtTokenProvider.createRefreshToken(user.getUserId().toString());
 
-        // Create refresh token (Upsert: Update if exists, else Insert)
-        RefreshToken refreshTokenEntity = refreshTokenRepository.findByUser(user)
-                .orElse(RefreshToken.builder()
-                        .user(user)
-                        .build());
+        // Redis에 Refresh Token 저장 (Key: RT:userId, TTL: 7Days)
+        redisTemplate.opsForValue().set(
+                RT_PREFIX + user.getUserId(),
+                refreshToken,
+                7,
+                TimeUnit.DAYS);
 
-        refreshTokenEntity.setToken(refreshToken);
-        refreshTokenEntity.setExpiryDate(java.time.Instant.now().plusMillis(604800000)); // 7 days
-
-        refreshTokenRepository.save(refreshTokenEntity);
         user.setLastLoginAt(LocalDateTime.now());
         userRepository.save(user);
 
@@ -96,34 +98,35 @@ public class UserService {
     }
 
     public TokenResponse refresh(TokenRefreshRequest req) {
-        log.info("[Token Refresh] Request received with token prefix: {}...",
-                req.getRefreshToken().substring(0, Math.min(req.getRefreshToken().length(), 10)));
+        String oldToken = req.getRefreshToken();
 
-        RefreshToken refreshToken = refreshTokenRepository.findByToken(req.getRefreshToken())
-                .orElseThrow(() -> {
-                    log.error("[Token Refresh] Token not found in DB or already rotated.");
-                    return new BaseException(ErrorCode.INVALID_REFRESH_TOKEN);
-                });
-
-        if (refreshToken.getExpiryDate().isBefore(java.time.Instant.now())) {
-            log.warn("[Token Refresh] Token expired: {}", refreshToken.getExpiryDate());
-            refreshTokenRepository.delete(refreshToken);
+        // 1. 토큰 자체의 유효성 검증 (서명 및 만료 체크)
+        if (!jwtTokenProvider.validateToken(oldToken)) {
             throw new BaseException(ErrorCode.REFRESH_TOKEN_EXPIRED);
         }
 
-        User user = refreshToken.getUser();
-        log.info("[Token Refresh] Refreshing for user: {}", user.getEmail());
+        // 2. 토큰에서 유저 ID 추출
+        String userId = jwtTokenProvider.getUserId(oldToken);
+        String redisKey = RT_PREFIX + userId;
 
-        // Token Rotation: Update existing token
-        String newAccessToken = jwtTokenProvider.createAccessToken(user.getUserId().toString());
-        String newRefreshToken = jwtTokenProvider.createRefreshToken(user.getUserId().toString());
+        // 3. Redis에 저장된 토큰과 비교 (RTR 재사용 감지 핵심)
+        String savedToken = redisTemplate.opsForValue().get(redisKey);
 
-        refreshToken.setToken(newRefreshToken);
-        refreshToken.setExpiryDate(java.time.Instant.now().plusMillis(604800000));
+        if (savedToken == null || !savedToken.equals(oldToken)) {
+            // [재사용 감지!] 이미 회전되었거나 비정상적인 접근
+            log.error("[RTR Detection] Potential reuse attack for user: {}. Invalidating all sessions.", userId);
+            redisTemplate.delete(redisKey); // 해당 유저의 모든 세션 무효화
+            throw new BaseException(ErrorCode.INVALID_REFRESH_TOKEN);
+        }
 
-        refreshTokenRepository.save(refreshToken);
+        // 4. 새로운 토큰 쌍 발급 (Rotation)
+        String newAccessToken = jwtTokenProvider.createAccessToken(userId);
+        String newRefreshToken = jwtTokenProvider.createRefreshToken(userId);
 
-        log.info("[Token Refresh] Successfully rotated token for user: {}", user.getEmail());
+        // 5. Redis 업데이트 (기존 토큰 무효화 및 새 토큰 저장)
+        redisTemplate.opsForValue().set(redisKey, newRefreshToken, 7, TimeUnit.DAYS);
+
+        log.info("[RTR Success] Rotated tokens for user: {}", userId);
 
         return TokenResponse.builder()
                 .accessToken(newAccessToken)
@@ -186,15 +189,11 @@ public class UserService {
             String accessToken = jwtTokenProvider.createAccessToken(user.getUserId().toString());
             String refreshToken = jwtTokenProvider.createRefreshToken(user.getUserId().toString());
 
-            RefreshToken refreshTokenEntity = refreshTokenRepository.findByUser(user)
-                    .orElse(RefreshToken.builder()
-                            .user(user)
-                            .build());
-
-            refreshTokenEntity.setToken(refreshToken);
-            refreshTokenEntity.setExpiryDate(java.time.Instant.now().plusMillis(604800000)); // 7 days
-
-            refreshTokenRepository.save(refreshTokenEntity);
+            redisTemplate.opsForValue().set(
+                    RT_PREFIX + user.getUserId(),
+                    refreshToken,
+                    7,
+                    TimeUnit.DAYS);
             user.setLastLoginAt(LocalDateTime.now());
             userRepository.save(user);
 
@@ -269,6 +268,15 @@ public class UserService {
 
         user.setDeletedAt(LocalDateTime.now());
         userRepository.save(user);
+
+        // RTR: 탈퇴 시 리프레시 토큰도 즉시 폐기
+        redisTemplate.delete(RT_PREFIX + userId);
+    }
+
+    // 로그아웃 처리
+    public void logout(UUID userId) {
+        log.info("[Logout] Invalidating refresh token for user: {}", userId);
+        redisTemplate.delete(RT_PREFIX + userId);
     }
 
     // 사용자 프로필 이미지 업로드
