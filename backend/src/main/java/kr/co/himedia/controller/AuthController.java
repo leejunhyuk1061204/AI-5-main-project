@@ -40,6 +40,13 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.success(token));
     }
 
+    // BE-AU-005 소셜 로그인 (Google/Kakao)
+    @PostMapping("/social-login")
+    public ResponseEntity<ApiResponse<TokenResponse>> socialLogin(@Valid @RequestBody SocialLoginRequest req) {
+        TokenResponse token = userService.socialLogin(req);
+        return ResponseEntity.ok(ApiResponse.success(token));
+    }
+
     // BE-AU-003 내 정보 조회
     @GetMapping("/me")
     public ResponseEntity<ApiResponse<UserResponse>> getProfile(Authentication auth) {
@@ -68,6 +75,16 @@ public class AuthController {
         if (auth != null && auth.getPrincipal() instanceof kr.co.himedia.security.CustomUserDetails userDetails) {
             userService.updateFcmToken(userDetails.getUserId(), req.getFcmToken());
             return ResponseEntity.ok(ApiResponse.success("FCM token updated"));
+        }
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+    }
+
+    // BE-AU-006 로그아웃
+    @PostMapping("/logout")
+    public ResponseEntity<ApiResponse<String>> logout(Authentication auth) {
+        if (auth != null && auth.getPrincipal() instanceof kr.co.himedia.security.CustomUserDetails userDetails) {
+            userService.logout(userDetails.getUserId());
+            return ResponseEntity.ok(ApiResponse.success("Successfully logged out"));
         }
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
     }

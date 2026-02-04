@@ -12,7 +12,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import BleService, { Peripheral } from '../services/BleService';
 import ClassicBtService from '../services/ClassicBtService';
 import ObdService from '../services/ObdService';
-import { BluetoothDevice } from 'react-native-bluetooth-classic';
+import type { BluetoothDevice } from 'react-native-bluetooth-classic';
+import { useBleStore } from '../store/useBleStore';
 
 // 통합 기기 타입 (BLE 또는 Classic)
 interface UnifiedDevice {
@@ -31,10 +32,31 @@ interface ObdConnectProps {
 }
 
 export default function ObdConnect({ visible, onClose, onConnected }: ObdConnectProps) {
-    const [isScanning, setIsScanning] = useState(false);
-    const [devices, setDevices] = useState<Map<string, UnifiedDevice>>(new Map());
-    const [connectionStatus, setConnectionStatus] = useState<'idle' | 'connecting' | 'success' | 'error'>('idle');
-    const [errorMessage, setErrorMessage] = useState('');
+    const {
+        isScanning,
+        status,
+        scannedDevices,
+        error: storeError,
+        setScanning
+    } = useBleStore();
+
+    const [classicDevices, setClassicDevices] = useState<UnifiedDevice[]>([]);
+    // UI Local Status (to keep 'success' modal behavior separate from just 'connected' state if needed, 
+    // but we can try to rely on store. status 'connected' means success)
+
+    // We Map store devices to UnifiedDevice for rendering
+    // Filter out devices with no name (as requested)
+    const bleUnifiedDevices: UnifiedDevice[] = scannedDevices
+        .filter(d => d.name && d.name.trim().length > 0)
+        .map(d => ({
+            id: d.id,
+            name: d.name!,
+            rssi: d.rssi || -100,
+            type: 'ble',
+            blePeripheral: d as Peripheral
+        }));
+
+    const allDevices = [...classicDevices, ...bleUnifiedDevices];
 
     useEffect(() => {
         BleService.initialize();
@@ -43,99 +65,55 @@ export default function ObdConnect({ visible, onClose, onConnected }: ObdConnect
 
     useEffect(() => {
         if (visible) {
-            setConnectionStatus('idle');
-            setErrorMessage('');
-            setDevices(new Map());
+            // Reset UI View state if needed, but store state prevails
+            setClassicDevices([]);
         }
     }, [visible]);
 
+    // 연결 성공 시 자동으로 다음 페이지로 이동
     useEffect(() => {
-        const discoverListener = BleService.addListener(
-            'BleManagerDiscoverPeripheral',
-            handleDiscoverBlePeripheral
-        );
-        const stopScanListener = BleService.addListener(
-            'BleManagerStopScan',
-            handleStopScan
-        );
+        if (status === 'connected' && visible) {
+            const timer = setTimeout(() => {
+                console.log('[ObdConnect] Auto-closing after connection success');
+                onClose();
+            }, 1500); // 1.5초 후 자동 닫기
+            return () => clearTimeout(timer);
+        }
+    }, [status, visible, onClose]);
 
-        return () => {
-            discoverListener.remove();
-            stopScanListener.remove();
-        };
-    }, []);
-
-    // BLE 기기 발견 핸들러
-    const handleDiscoverBlePeripheral = (peripheral: Peripheral) => {
-        const localName = peripheral.advertising?.localName || peripheral.advertising?.kCBAdvDataLocalName;
-        const deviceName = peripheral.name || localName || `BLE_${peripheral.id.substring(0, 8)}`;
-
-        const unifiedDevice: UnifiedDevice = {
-            id: peripheral.id,
-            name: deviceName,
-            rssi: peripheral.rssi || -100,
-            type: 'ble',
-            blePeripheral: { ...peripheral, name: deviceName },
-        };
-
-        setDevices((map) => new Map(map.set(peripheral.id, unifiedDevice)));
-    };
-
-    const handleStopScan = () => {
-        setIsScanning(false);
-    };
+    // Listeners are now in BleService -> Store
+    // Removed local listeners
 
     // 통합 스캔 (BLE + Classic)
     const startScan = async () => {
-        setConnectionStatus('idle');
-        setErrorMessage('');
-        setDevices(new Map());
-        setIsScanning(true);
+        setClassicDevices([]);
 
         try {
-            const deviceMap = new Map<string, UnifiedDevice>();
-
             // 1. Classic Bluetooth 페어링된 기기 가져오기
             console.log('[ObdConnect] Getting Classic BT bonded devices...');
             const classicBonded = await ClassicBtService.getBondedDevices();
-            classicBonded.forEach((device) => {
-                const unified: UnifiedDevice = {
+            const classicList: UnifiedDevice[] = classicBonded
+                .filter(device => device.name && device.name.trim().length > 0)
+                .map(device => ({
                     id: device.address,
-                    name: device.name || `Classic_${device.address.substring(0, 8)}`,
+                    name: device.name!,
                     rssi: -50, // Classic BT는 RSSI 제공 안 함
                     type: 'classic',
                     classicDevice: device,
-                };
-                deviceMap.set(device.address, unified);
-                console.log(`[ObdConnect] Classic device: ${unified.name} (${device.address})`);
-            });
+                }));
+            setClassicDevices(classicList);
 
-            // 2. BLE 페어링된 기기 가져오기
-            console.log('[ObdConnect] Getting BLE bonded devices...');
-            const bleBonded = await BleService.getBondedPeripherals();
-            bleBonded.forEach((p) => {
-                // Classic과 중복되지 않으면 추가
-                if (!deviceMap.has(p.id)) {
-                    const unified: UnifiedDevice = {
-                        id: p.id,
-                        name: p.name || `BLE_${p.id.substring(0, 8)}`,
-                        rssi: p.rssi || -100,
-                        type: 'ble',
-                        blePeripheral: p,
-                    };
-                    deviceMap.set(p.id, unified);
-                }
-            });
+            // 2. BLE 페어링된 기기 가져오기 - (BleService 내부에서 bonded 가져오는 로직은 생략하거나 store에 추가 가능, 
+            // 현재 BleService store action은 스캔된 것만 추가함. 
+            // bonded도 스캔 리스트에 추가하고 싶으면 여기서 수동으로 store action 호출 가능)
+            // For now, let's rely on scan.
 
-            setDevices(deviceMap);
-            console.log(`[ObdConnect] Total devices found: ${deviceMap.size}`);
-
-            // 3. BLE 스캔 시작 (새 기기 발견용)
+            // 3. BLE 스캔 시작 (새 기기 발견용) - This clears previous scan results in store
             await BleService.startScan();
 
         } catch (e) {
             console.error('[ObdConnect] Scan error:', e);
-            setIsScanning(false);
+            setScanning(false);
         }
     };
 
@@ -145,8 +123,9 @@ export default function ObdConnect({ visible, onClose, onConnected }: ObdConnect
     const connectToDevice = async (device: UnifiedDevice, retries = 3) => {
         try {
             await BleService.stopScan();
-            setIsScanning(false);
-            setConnectionStatus('connecting');
+            // Store status automatically updates to 'connecting' via BleService.connect
+            // But for Classic, updating store manually in ObdService.setClassicDevice
+
             await delay(1000);
 
             console.log(`[ObdConnect] Connecting to ${device.name} (${device.type})...`);
@@ -157,12 +136,8 @@ export default function ObdConnect({ visible, onClose, onConnected }: ObdConnect
 
                 if (connected) {
                     console.log('[ObdConnect] Classic BT connected!');
-
-                    // ObdService에 Classic BT 기기 설정 (OBD 데이터 수집 준비)
-                    console.log('[ObdConnect] Configuring ObdService for Classic BT...');
                     await ObdService.setClassicDevice(device.classicDevice);
-
-                    setConnectionStatus('success');
+                    // Status update is handled in ObdService
 
                     setTimeout(() => {
                         if (onConnected) onConnected(device);
@@ -171,31 +146,18 @@ export default function ObdConnect({ visible, onClose, onConnected }: ObdConnect
                     throw new Error('Classic BT connection failed');
                 }
 
-            } else if (device.type === 'ble' && device.blePeripheral) {
+            } else if (device.type === 'ble') { // Device ID is sufficient
                 // ===== BLE 연결 =====
                 await delay(500);
 
-                const isConnected = await BleService.isPeripheralConnected(device.id, []);
-
-                if (!isConnected) {
-                    try {
-                        await BleService.disconnect(device.id);
-                        await delay(500);
-                    } catch (e) {
-                        // Ignore
-                    }
-
-                    await BleService.connect(device.id);
-                    await delay(2000);
-                }
+                // BleService.connect handles status updates via store
+                await BleService.connect(device.id);
 
                 console.log('[ObdConnect] Retrieving Services...');
                 await BleService.retrieveServices(device.id);
 
                 console.log('[ObdConnect] Configuring ObdService...');
                 await ObdService.setTargetDevice(device.id);
-
-                setConnectionStatus('success');
 
                 setTimeout(() => {
                     if (onConnected) onConnected(device);
@@ -206,32 +168,16 @@ export default function ObdConnect({ visible, onClose, onConnected }: ObdConnect
             const msg = error instanceof Error ? error.message : JSON.stringify(error);
             console.warn(`[ObdConnect] Connection failed: ${msg}`);
 
-            // BLE 연결 실패 시 removeBond 시도
-            if (device.type === 'ble') {
-                try {
-                    if (msg.includes('Device disconnected') || msg.includes('status 133')) {
-                        console.log('[ObdConnect] Attempting to remove stale bond (3s timeout)...');
-                        const removeBondWithTimeout = Promise.race([
-                            BleService.removeBond(device.id),
-                            new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 3000))
-                        ]);
-                        await removeBondWithTimeout;
-                        await delay(500);
-                    }
-                } catch (e) {
-                    console.warn('[ObdConnect] Remove bond skipped/failed:', e);
-                }
-            }
+            // Status will be 'disconnected' (set by BleService/ObdService on error)
 
             if (retries > 0) {
                 console.log(`[ObdConnect] Retrying in 2 seconds...`);
-                setErrorMessage(`연결 재시도 중... (${retries})`);
+                // Optionally show retry UI?
                 await delay(2000);
                 await connectToDevice(device, retries - 1);
             } else {
-                setConnectionStatus('error');
                 console.error('[ObdConnect] Connection Failed:', msg);
-                setErrorMessage(`연결 실패: ${msg}\n\n[해결법]\n1. 안드로이드 설정 > 블루투스에서 기기 등록 해제(Unpair)\n2. 다시 페어링 후 재시도`);
+                // Store error state is set by BleService
             }
         }
     };
@@ -240,7 +186,7 @@ export default function ObdConnect({ visible, onClose, onConnected }: ObdConnect
         <TouchableOpacity
             className="bg-[#ffffff08] p-4 mb-3 rounded-2xl flex-row items-center justify-between border border-[#ffffff0d] active:bg-[#ffffff10]"
             onPress={() => connectToDevice(item)}
-            disabled={connectionStatus === 'connecting'}
+            disabled={status === 'connecting'}
         >
             <View className="flex-row items-center gap-3">
                 {/* 타입 아이콘 */}
@@ -287,7 +233,7 @@ export default function ObdConnect({ visible, onClose, onConnected }: ObdConnect
                     </View>
 
                     {/* Content based on Connection Status */}
-                    {connectionStatus === 'success' ? (
+                    {status === 'connected' ? (
                         <View className="flex-1 items-center justify-center pb-20">
                             <View className="w-24 h-24 rounded-full bg-[#0d7ff2]/10 items-center justify-center mb-6 border border-[#0d7ff2]/20">
                                 <MaterialIcons name="check" size={48} color="#0d7ff2" />
@@ -295,15 +241,15 @@ export default function ObdConnect({ visible, onClose, onConnected }: ObdConnect
                             <Text className="text-white text-2xl font-bold mb-2">연결 성공!</Text>
                             <Text className="text-slate-400 text-center">OBD 기기와 성공적으로{'\n'}연결되었습니다.</Text>
                         </View>
-                    ) : connectionStatus === 'error' ? (
+                    ) : status === 'disconnected' && storeError ? (
                         <View className="flex-1 items-center justify-center pb-20">
                             <View className="w-24 h-24 rounded-full bg-red-500/10 items-center justify-center mb-6 border border-red-500/20">
                                 <MaterialIcons name="error-outline" size={48} color="#ef4444" />
                             </View>
                             <Text className="text-white text-2xl font-bold mb-2">연결 실패</Text>
-                            <Text className="text-slate-400 text-center mb-6">{errorMessage || '기기를 찾을 수 없습니다.'}</Text>
+                            <Text className="text-slate-400 text-center mb-6">{storeError || '기기를 찾을 수 없습니다.'}</Text>
                             <TouchableOpacity
-                                onPress={() => setConnectionStatus('idle')}
+                                onPress={() => useBleStore.getState().setError(null)}
                                 className="px-8 py-3 bg-[#ffffff08] rounded-full border border-white/10"
                             >
                                 <Text className="text-white font-medium">다시 시도</Text>
@@ -314,7 +260,7 @@ export default function ObdConnect({ visible, onClose, onConnected }: ObdConnect
                             {/* Scanning & List UI */}
                             <TouchableOpacity
                                 onPress={startScan}
-                                disabled={isScanning || connectionStatus === 'connecting'}
+                                disabled={isScanning || status === 'connecting'}
                                 className="w-full mb-6 active:opacity-90"
                             >
                                 <LinearGradient
@@ -349,7 +295,7 @@ export default function ObdConnect({ visible, onClose, onConnected }: ObdConnect
                                 </View>
                             </View>
 
-                            {connectionStatus === 'connecting' && (
+                            {status === 'connecting' && (
                                 <View className="absolute inset-0 z-10 bg-[#101922]/80 items-center justify-center rounded-t-[32px]">
                                     <ActivityIndicator size="large" color="#0d7ff2" />
                                     <Text className="text-white font-medium mt-4">기기에 연결 중입니다...</Text>
@@ -357,7 +303,7 @@ export default function ObdConnect({ visible, onClose, onConnected }: ObdConnect
                             )}
 
                             <FlatList
-                                data={Array.from(devices.values()).sort((a, b) => {
+                                data={allDevices.sort((a, b) => {
                                     // Classic 먼저, 그 다음 이름순
                                     if (a.type !== b.type) return a.type === 'classic' ? -1 : 1;
                                     return (a.name || '').localeCompare(b.name || '');

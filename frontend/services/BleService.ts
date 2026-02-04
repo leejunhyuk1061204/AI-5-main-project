@@ -1,13 +1,23 @@
-import BleManager from 'react-native-ble-manager';
-import { NativeEventEmitter, NativeModules, Platform, PermissionsAndroid, DeviceEventEmitter, Alert } from 'react-native';
+import { NativeEventEmitter, NativeModules, Platform, PermissionsAndroid, DeviceEventEmitter } from 'react-native';
+import { useAlertStore } from '../store/useAlertStore';
+import { useBleStore } from '../store/useBleStore';
 
-const BleManagerModule = NativeModules.BleManager;
-// Fallback to DeviceEventEmitter if NativeEventEmitter fails or warns significantly
-const bleManagerEmitter = new NativeEventEmitter(BleManagerModule); // Keep this for now, but we will use DeviceEventEmitter in addListener logic if needed
+let BleManager: any;
+let BleManagerModule: any;
 
-if (!BleManagerModule) {
+if (Platform.OS !== 'web') {
+    BleManager = require('react-native-ble-manager').default;
+    BleManagerModule = NativeModules.BleManager;
+}
+
+// Fallback for Web/No-Native environment
+const bleManagerEmitter = (Platform.OS !== 'web' && BleManagerModule)
+    ? new NativeEventEmitter(BleManagerModule)
+    : DeviceEventEmitter;
+
+if (Platform.OS !== 'web' && !BleManagerModule) {
     console.error('BleManagerModule is null! Native module not linked.');
-} else {
+} else if (Platform.OS !== 'web') {
     // Debug: Log available methods
     console.log('BleManagerModule keys:', Object.keys(BleManagerModule));
 }
@@ -29,6 +39,12 @@ class BleService {
 
     async initialize() {
         if (this.isInitialized) return;
+        if (Platform.OS === 'web') {
+            console.log('[BleService] Web environment detected - mocking BLE');
+            this.isInitialized = true;
+            return;
+        }
+
         try {
             await BleManager.start({ showAlert: false });
             this.isInitialized = true;
@@ -37,10 +53,29 @@ class BleService {
             // DEBUG: Global listener to see if ANY event comes through
             DeviceEventEmitter.addListener('BleManagerDiscoverPeripheral', (data) => {
                 console.log('[BleService DEBUG] Global Listener Event:', data);
+                useBleStore.getState().addDevice(data);
+            });
+
+            DeviceEventEmitter.addListener('BleManagerStopScan', () => {
+                console.log('[BleService] Scan stopped');
+                useBleStore.getState().setScanning(false);
+            });
+
+            DeviceEventEmitter.addListener('BleManagerConnectPeripheral', (data: any) => {
+                console.log('[BleService] Connected:', data);
+                useBleStore.getState().setStatus('connected');
+                useBleStore.getState().setConnectedDevice(data.peripheral);
+            });
+
+            DeviceEventEmitter.addListener('BleManagerDisconnectPeripheral', (data: any) => {
+                console.log('[BleService] Disconnected:', data);
+                useBleStore.getState().setStatus('disconnected');
+                useBleStore.getState().setConnectedDevice(null);
             });
 
         } catch (error) {
             console.error('[BleService] Failed to initialize BleManager', error);
+            useBleStore.getState().setError('Failed to initialize BLE');
         }
     }
 
@@ -70,15 +105,30 @@ class BleService {
     }
 
     async startScan() {
+        if (Platform.OS === 'web') {
+            console.log('[BleService] Web scan simulated');
+            useBleStore.getState().setScanning(true);
+            setTimeout(() => {
+                useBleStore.getState().addDevice({ id: 'WEB-SIM-1', name: 'Simulated OBD', rssi: -50 } as any);
+                useBleStore.getState().addDevice({ id: 'WEB-SIM-2', name: 'Simulated Device 2' } as any);
+                useBleStore.getState().setScanning(false);
+            }, 2000);
+            return;
+        }
+
         // Debug: Check Permissions
         const hasPermission = await this.requestPermissions();
         console.log('[BleService] Permissions granted:', hasPermission);
         // Alert.alert('Debug', `Permissions granted: ${hasPermission}`); // Uncomment if console is hard to see
 
         if (!hasPermission) {
-            Alert.alert('Permission Error', 'Bluetooth permissions are required.');
+            useAlertStore.getState().showAlert('Permission Error', 'Bluetooth permissions are required.', 'ERROR');
             return;
         }
+
+        useBleStore.getState().setScanning(true);
+        useBleStore.getState().setStatus('scanning');
+        useBleStore.getState().clearDevices();
 
         console.log('[BleService] Starting scan with defaults...');
         // Correct v12+ signature: scan(options: ScanOptions)
@@ -88,45 +138,69 @@ class BleService {
             allowDuplicates: true,
         }).then(() => {
             console.log('[BleService] Scan started successfully');
-        }).catch(err => {
+        }).catch((err: any) => {
             console.error('[BleService] Scan failed to start', err);
-            Alert.alert('Scan Error', `Failed to start scan: ${err}`);
+            useAlertStore.getState().showAlert('Scan Error', `Failed to start scan: ${err}`, 'ERROR');
+            useBleStore.getState().setScanning(false);
+            useBleStore.getState().setStatus('disconnected');
         });
     }
 
     stopScan() {
+        if (Platform.OS === 'web') return Promise.resolve();
         return BleManager.stopScan();
     }
 
     connect(id: string) {
-        return BleManager.connect(id);
+        if (Platform.OS === 'web') return Promise.resolve();
+        useBleStore.getState().setStatus('connecting');
+        return BleManager.connect(id)
+            .then(() => {
+                useBleStore.getState().setStatus('connected');
+                useBleStore.getState().setConnectedDevice(id);
+            })
+            .catch((err: any) => {
+                useBleStore.getState().setStatus('disconnected');
+                useBleStore.getState().setError(`Connection failed: ${err}`);
+                throw err;
+            });
     }
 
     createBond(id: string) {
+        if (Platform.OS === 'web') return Promise.resolve();
         return BleManager.createBond(id);
     }
 
     removeBond(id: string) {
+        if (Platform.OS === 'web') return Promise.resolve();
         return BleManager.removeBond(id);
     }
 
     disconnect(id: string) {
-        return BleManager.disconnect(id);
+        if (Platform.OS === 'web') return Promise.resolve();
+        return BleManager.disconnect(id).then(() => {
+            useBleStore.getState().setStatus('disconnected');
+            useBleStore.getState().setConnectedDevice(null);
+        });
     }
 
     retrieveServices(id: string) {
+        if (Platform.OS === 'web') return Promise.resolve({ characteristics: [] });
         return BleManager.retrieveServices(id);
     }
 
     async startNotification(id: string, serviceUUID: string, charUUID: string) {
+        if (Platform.OS === 'web') return;
         await BleManager.startNotification(id, serviceUUID, charUUID);
     }
 
     getBondedPeripherals() {
+        if (Platform.OS === 'web') return Promise.resolve([]);
         return BleManager.getBondedPeripherals();
     }
 
     isPeripheralConnected(id: string, serviceUUIDs: string[] = []) {
+        if (Platform.OS === 'web') return Promise.resolve(false);
         return BleManager.isPeripheralConnected(id, serviceUUIDs);
     }
 

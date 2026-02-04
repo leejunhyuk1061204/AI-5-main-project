@@ -12,4 +12,9 @@ public interface ObdLogRepository extends JpaRepository<ObdLog, ObdLog.ObdLogId>
             java.util.UUID vehicleId,
             java.time.OffsetDateTime startTime,
             java.time.OffsetDateTime endTime);
+
+    java.util.List<ObdLog> findByVehicleIdAndTimeGreaterThanEqualOrderByTimeAsc(
+            java.util.UUID vehicleId,
+            java.time.OffsetDateTime startTime);
+
 }

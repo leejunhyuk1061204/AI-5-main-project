@@ -1,0 +1,888 @@
+﻿EXTRA_TARGETS = [
+    ("Hyundai", "2010", "Accent%20L4-1.6L"), # Accent L4-1.6L
+    ("Hyundai", "2010", "Azera%20V6-3.3L"), # Azera V6-3.3L
+    ("Hyundai", "2010", "Azera%20V6-3.8L"), # Azera V6-3.8L
+    ("Hyundai", "2010", "Elantra%20Touring%20L4-2.0L"), # Elantra Touring L4-2.0L
+    ("Hyundai", "2010", "Elantra%20L4-2.0L"), # Elantra L4-2.0L
+    ("Hyundai", "2010", "Genesis%20Coupe%20L4-2.0L%20Turbo"), # Genesis Coupe L4-2.0L Turbo
+    ("Hyundai", "2010", "Genesis%20Coupe%20V6-3.8L"), # Genesis Coupe V6-3.8L
+    ("Hyundai", "2010", "Genesis%20Sedan%20V6-3.8L"), # Genesis Sedan V6-3.8L
+    ("Hyundai", "2010", "Genesis%20Sedan%20V8-4.6L"), # Genesis Sedan V8-4.6L
+    ("Hyundai", "2010", "Sonata%20L4-2.4L"), # Sonata L4-2.4L
+    ("Hyundai", "2010", "Sonata%20V6-3.3L"), # Sonata V6-3.3L
+    ("Hyundai", "2010", "Tucson%20AWD%20L4-2.4L"), # Tucson AWD L4-2.4L
+    ("Hyundai", "2010", "Tucson%20FWD%20L4-2.4L"), # Tucson FWD L4-2.4L
+    ("Hyundai", "2010", "Veracruz%20AWD%20V6-3.8L"), # Veracruz AWD V6-3.8L
+    ("Hyundai", "2010", "Veracruz%20FWD%20V6-3.8L"), # Veracruz FWD V6-3.8L
+    ("Hyundai", "2011", "Accent%20L4-1.6L"), # Accent L4-1.6L
+    ("Hyundai", "2011", "Azera%20V6-3.3L"), # Azera V6-3.3L
+    ("Hyundai", "2011", "Azera%20V6-3.8L"), # Azera V6-3.8L
+    ("Hyundai", "2011", "Elantra%20Touring%20L4-2.0L"), # Elantra Touring L4-2.0L
+    ("Hyundai", "2011", "Elantra%20L4-1.8L"), # Elantra L4-1.8L
+    ("Hyundai", "2011", "Genesis%20Coupe%20L4-2.0L%20Turbo"), # Genesis Coupe L4-2.0L Turbo
+    ("Hyundai", "2011", "Genesis%20Coupe%20V6-3.8L"), # Genesis Coupe V6-3.8L
+    ("Hyundai", "2011", "Genesis%20Sedan%20V6-3.8L"), # Genesis Sedan V6-3.8L
+    ("Hyundai", "2011", "Genesis%20Sedan%20V8-4.6L"), # Genesis Sedan V8-4.6L
+    ("Hyundai", "2011", "Sonata%20L4-2.0L%20Turbo"), # Sonata L4-2.0L Turbo
+    ("Hyundai", "2011", "Sonata%20L4-2.4L%20Hybrid"), # Sonata L4-2.4L Hybrid
+    ("Hyundai", "2011", "Sonata%20L4-2.4L"), # Sonata L4-2.4L
+    ("Hyundai", "2011", "Tucson%20AWD%20L4-2.4L"), # Tucson AWD L4-2.4L
+    ("Hyundai", "2011", "Tucson%20FWD%20L4-2.0L"), # Tucson FWD L4-2.0L
+    ("Hyundai", "2011", "Tucson%20FWD%20L4-2.4L"), # Tucson FWD L4-2.4L
+    ("Hyundai", "2011", "Veracruz%20AWD%20V6-3.8L"), # Veracruz AWD V6-3.8L
+    ("Hyundai", "2011", "Veracruz%20FWD%20V6-3.8L"), # Veracruz FWD V6-3.8L
+    ("Hyundai", "2012", "Accent%20L4-1.6L"), # Accent L4-1.6L
+    ("Hyundai", "2012", "Azera%20V6-3.3L"), # Azera V6-3.3L
+    ("Hyundai", "2012", "Elantra%20Touring%20L4-2.0L"), # Elantra Touring L4-2.0L
+    ("Hyundai", "2012", "Elantra%20L4-1.8L"), # Elantra L4-1.8L
+    ("Hyundai", "2012", "Genesis%20Coupe%20L4-2.0L%20Turbo"), # Genesis Coupe L4-2.0L Turbo
+    ("Hyundai", "2012", "Genesis%20Coupe%20V6-3.8L"), # Genesis Coupe V6-3.8L
+    ("Hyundai", "2012", "Genesis%20Sedan%20V6-3.8L"), # Genesis Sedan V6-3.8L
+    ("Hyundai", "2012", "Genesis%20Sedan%20V8-4.6L"), # Genesis Sedan V8-4.6L
+    ("Hyundai", "2012", "Genesis%20Sedan%20V8-5.0L"), # Genesis Sedan V8-5.0L
+    ("Hyundai", "2012", "Sonata%20L4-2.0L%20Turbo"), # Sonata L4-2.0L Turbo
+    ("Hyundai", "2012", "Sonata%20L4-2.4L%20Hybrid"), # Sonata L4-2.4L Hybrid
+    ("Hyundai", "2012", "Sonata%20L4-2.4L"), # Sonata L4-2.4L
+    ("Hyundai", "2012", "Tucson%20AWD%20L4-2.4L"), # Tucson AWD L4-2.4L
+    ("Hyundai", "2012", "Tucson%20FWD%20L4-2.0L"), # Tucson FWD L4-2.0L
+    ("Hyundai", "2012", "Tucson%20FWD%20L4-2.4L"), # Tucson FWD L4-2.4L
+    ("Hyundai", "2012", "Veloster%20L4-1.6L"), # Veloster L4-1.6L
+    ("Hyundai", "2012", "Veracruz%20AWD%20V6-3.8L"), # Veracruz AWD V6-3.8L
+    ("Hyundai", "2012", "Veracruz%20FWD%20V6-3.8L"), # Veracruz FWD V6-3.8L
+    ("Hyundai", "2013", "Accent%20L4-1.6L"), # Accent L4-1.6L
+    ("Hyundai", "2013", "Azera%20V6-3.3L"), # Azera V6-3.3L
+    ("Hyundai", "2013", "Elantra%20Coupe%20L4-1.8L"), # Elantra Coupe L4-1.8L
+    ("Hyundai", "2013", "Elantra%20GT%20L4-1.8L"), # Elantra GT L4-1.8L
+    ("Hyundai", "2013", "Elantra%20L4-1.8L"), # Elantra L4-1.8L
+    ("Hyundai", "2013", "Genesis%20Coupe%20L4-2.0L%20Turbo"), # Genesis Coupe L4-2.0L Turbo
+    ("Hyundai", "2013", "Genesis%20Coupe%20V6-3.8L"), # Genesis Coupe V6-3.8L
+    ("Hyundai", "2013", "Genesis%20Sedan%20V6-3.8L"), # Genesis Sedan V6-3.8L
+    ("Hyundai", "2013", "Genesis%20Sedan%20V8-4.6L"), # Genesis Sedan V8-4.6L
+    ("Hyundai", "2013", "Genesis%20Sedan%20V8-5.0L"), # Genesis Sedan V8-5.0L
+    ("Hyundai", "2013", "Sonata%20L4-2.0L%20Turbo"), # Sonata L4-2.0L Turbo
+    ("Hyundai", "2013", "Sonata%20L4-2.4L%20Hybrid"), # Sonata L4-2.4L Hybrid
+    ("Hyundai", "2013", "Sonata%20L4-2.4L"), # Sonata L4-2.4L
+    ("Hyundai", "2013", "Tucson%20AWD%20L4-2.4L"), # Tucson AWD L4-2.4L
+    ("Hyundai", "2013", "Tucson%20FWD%20L4-2.0L"), # Tucson FWD L4-2.0L
+    ("Hyundai", "2013", "Tucson%20FWD%20L4-2.4L"), # Tucson FWD L4-2.4L
+    ("Hyundai", "2013", "Veloster%20L4-1.6L%20Turbo"), # Veloster L4-1.6L Turbo
+    ("Hyundai", "2013", "Veloster%20L4-1.6L"), # Veloster L4-1.6L
+    ("Kia", "2010", "Borrego%202WD%20%28CANADA%29%20V6-3.8L"), # Borrego 2WD (CANADA) V6-3.8L
+    ("Kia", "2010", "Borrego%202WD%20%28CANADA%29%20V8-4.6L"), # Borrego 2WD (CANADA) V8-4.6L
+    ("Kia", "2010", "Borrego%204WD%20%28CANADA%29%20V6-3.8L"), # Borrego 4WD (CANADA) V6-3.8L
+    ("Kia", "2010", "Borrego%204WD%20%28CANADA%29%20V8-4.6L"), # Borrego 4WD (CANADA) V8-4.6L
+    ("Kia", "2010", "Forte%20L4-2.0L"), # Forte L4-2.0L
+    ("Kia", "2010", "Forte%20L4-2.4L"), # Forte L4-2.4L
+    ("Kia", "2010", "Optima%20L4-2.4L"), # Optima L4-2.4L
+    ("Kia", "2010", "Optima%20V6-2.7L"), # Optima V6-2.7L
+    ("Kia", "2010", "Rio%20L4-1.6L"), # Rio L4-1.6L
+    ("Kia", "2010", "Sedona%20V6-3.8L"), # Sedona V6-3.8L
+    ("Kia", "2010", "Soul%20L4-1.6L"), # Soul L4-1.6L
+    ("Kia", "2010", "Soul%20L4-2.0L"), # Soul L4-2.0L
+    ("Kia", "2010", "Sportage%202WD%20L4-2.0L"), # Sportage 2WD L4-2.0L
+    ("Kia", "2010", "Sportage%202WD%20V6-2.7L"), # Sportage 2WD V6-2.7L
+    ("Kia", "2010", "Sportage%204WD%20L4-2.0L"), # Sportage 4WD L4-2.0L
+    ("Kia", "2010", "Sportage%204WD%20V6-2.7L"), # Sportage 4WD V6-2.7L
+    ("Kia", "2011", "Borrego%202WD%20%28CANADA%29%20V6-3.8L"), # Borrego 2WD (CANADA) V6-3.8L
+    ("Kia", "2011", "Borrego%202WD%20%28CANADA%29%20V8-4.6L"), # Borrego 2WD (CANADA) V8-4.6L
+    ("Kia", "2011", "Borrego%204WD%20%28CANADA%29%20V6-3.8L"), # Borrego 4WD (CANADA) V6-3.8L
+    ("Kia", "2011", "Borrego%204WD%20%28CANADA%29%20V8-4.6L"), # Borrego 4WD (CANADA) V8-4.6L
+    ("Kia", "2011", "Forte%20L4-2.0L"), # Forte L4-2.0L
+    ("Kia", "2011", "Forte%20L4-2.4L"), # Forte L4-2.4L
+    ("Kia", "2011", "Optima%20L4-2.0L%20Turbo"), # Optima L4-2.0L Turbo
+    ("Kia", "2011", "Optima%20L4-2.4L%20Hybrid"), # Optima L4-2.4L Hybrid
+    ("Kia", "2011", "Optima%20L4-2.4L"), # Optima L4-2.4L
+    ("Kia", "2011", "Rio%20L4-1.6L"), # Rio L4-1.6L
+    ("Kia", "2011", "Sedona%20V6-3.5L"), # Sedona V6-3.5L
+    ("Kia", "2011", "Sorento%202WD%20L4-2.4L"), # Sorento 2WD L4-2.4L
+    ("Kia", "2011", "Sorento%202WD%20V6-3.5L"), # Sorento 2WD V6-3.5L
+    ("Kia", "2011", "Sorento%204WD%20L4-2.4L"), # Sorento 4WD L4-2.4L
+    ("Kia", "2011", "Sorento%204WD%20V6-3.5L"), # Sorento 4WD V6-3.5L
+    ("Kia", "2011", "Soul%20L4-1.6L"), # Soul L4-1.6L
+    ("Kia", "2011", "Soul%20L4-2.0L"), # Soul L4-2.0L
+    ("Kia", "2011", "Sportage%202WD%20L4-2.0L%20Turbo"), # Sportage 2WD L4-2.0L Turbo
+    ("Kia", "2011", "Sportage%202WD%20L4-2.4L"), # Sportage 2WD L4-2.4L
+    ("Kia", "2011", "Sportage%204WD%20L4-2.0L%20Turbo"), # Sportage 4WD L4-2.0L Turbo
+    ("Kia", "2011", "Sportage%204WD%20L4-2.4L"), # Sportage 4WD L4-2.4L
+    ("Kia", "2012", "Forte%20L4-2.0L"), # Forte L4-2.0L
+    ("Kia", "2012", "Forte%20L4-2.4L"), # Forte L4-2.4L
+    ("Kia", "2012", "Optima%20L4-2.0L%20Turbo"), # Optima L4-2.0L Turbo
+    ("Kia", "2012", "Optima%20L4-2.4L%20Hybrid"), # Optima L4-2.4L Hybrid
+    ("Kia", "2012", "Optima%20L4-2.4L"), # Optima L4-2.4L
+    ("Kia", "2012", "Rio%20L4-1.6L"), # Rio L4-1.6L
+    ("Kia", "2012", "Sedona%20V6-3.5L"), # Sedona V6-3.5L
+    ("Kia", "2012", "Sorento%202WD%20L4-2.4L%20VIN%201%20%28MPI%29"), # Sorento 2WD L4-2.4L VIN 1 (MPI)
+    ("Kia", "2012", "Sorento%202WD%20L4-2.4L%20VIN%206%20%28GDI%29"), # Sorento 2WD L4-2.4L VIN 6 (GDI)
+    ("Kia", "2012", "Sorento%202WD%20V6-3.5L"), # Sorento 2WD V6-3.5L
+    ("Kia", "2012", "Sorento%204WD%20L4-2.4L%20VIN%201%20%28MPI%29"), # Sorento 4WD L4-2.4L VIN 1 (MPI)
+    ("Kia", "2012", "Sorento%204WD%20L4-2.4L%20VIN%206%20%28GDI%29"), # Sorento 4WD L4-2.4L VIN 6 (GDI)
+    ("Kia", "2012", "Sorento%204WD%20V6-3.5L"), # Sorento 4WD V6-3.5L
+    ("Kia", "2012", "Soul%20L4-1.6L"), # Soul L4-1.6L
+    ("Kia", "2012", "Soul%20L4-2.0L"), # Soul L4-2.0L
+    ("Kia", "2012", "Sportage%202WD%20L4-2.0L%20Turbo"), # Sportage 2WD L4-2.0L Turbo
+    ("Kia", "2012", "Sportage%202WD%20L4-2.4L"), # Sportage 2WD L4-2.4L
+    ("Kia", "2012", "Sportage%204WD%20L4-2.0L%20Turbo"), # Sportage 4WD L4-2.0L Turbo
+    ("Kia", "2012", "Sportage%204WD%20L4-2.4L"), # Sportage 4WD L4-2.4L
+    ("Kia", "2013", "Forte%20L4-2.0L"), # Forte L4-2.0L
+    ("Kia", "2013", "Forte%20L4-2.4L"), # Forte L4-2.4L
+    ("Kia", "2013", "Optima%20L4-2.0L%20Turbo"), # Optima L4-2.0L Turbo
+    ("Kia", "2013", "Optima%20L4-2.4L"), # Optima L4-2.4L
+    ("Kia", "2013", "Rio%20L4-1.6L"), # Rio L4-1.6L
+    ("Kia", "2013", "Sorento%202WD%20L4-2.4L%20VIN%201%20%28MPI%29"), # Sorento 2WD L4-2.4L VIN 1 (MPI)
+    ("Kia", "2013", "Sorento%202WD%20L4-2.4L%20VIN%206%20%28GDI%29"), # Sorento 2WD L4-2.4L VIN 6 (GDI)
+    ("Kia", "2013", "Sorento%202WD%20V6-3.5L"), # Sorento 2WD V6-3.5L
+    ("Kia", "2013", "Sorento%204WD%20L4-2.4L%20VIN%201%20%28MPI%29"), # Sorento 4WD L4-2.4L VIN 1 (MPI)
+    ("Kia", "2013", "Sorento%204WD%20L4-2.4L%20VIN%206%20%28GDI%29"), # Sorento 4WD L4-2.4L VIN 6 (GDI)
+    ("Kia", "2013", "Sorento%204WD%20V6-3.5L"), # Sorento 4WD V6-3.5L
+    ("Kia", "2013", "Soul%20L4-1.6L"), # Soul L4-1.6L
+    ("Kia", "2013", "Soul%20L4-2.0L"), # Soul L4-2.0L
+    ("Kia", "2013", "Sportage%202WD%20L4-2.0L%20Turbo"), # Sportage 2WD L4-2.0L Turbo
+    ("Kia", "2013", "Sportage%202WD%20L4-2.4L"), # Sportage 2WD L4-2.4L
+    ("Kia", "2013", "Sportage%204WD%20L4-2.0L%20Turbo"), # Sportage 4WD L4-2.0L Turbo
+    ("Kia", "2013", "Sportage%204WD%20L4-2.4L"), # Sportage 4WD L4-2.4L
+    ("BMW", "2010", "328i%20Coupe%20%28E92%29%20L6-3.0L%20%28N51%29"), # 328i Coupe (E92) L6-3.0L (N51)
+    ("BMW", "2010", "328i%20Coupe%20%28E92%29%20L6-3.0L%20%28N52K%29"), # 328i Coupe (E92) L6-3.0L (N52K)
+    ("BMW", "2010", "328i%20Sedan%20%28E90%29%20L6-3.0L%20%28N51%29"), # 328i Sedan (E90) L6-3.0L (N51)
+    ("BMW", "2010", "328i%20Sedan%20%28E90%29%20L6-3.0L%20%28N52K%29"), # 328i Sedan (E90) L6-3.0L (N52K)
+    ("BMW", "2010", "328i%20Wagon%20%28E91%29%20L6-3.0L%20%28N52K%29"), # 328i Wagon (E91) L6-3.0L (N52K)
+    ("BMW", "2010", "335i%20Coupe%20%28E92%29%20L6-3.0L%20Turbo%20%28N54%29"), # 335i Coupe (E92) L6-3.0L Turbo (N54)
+    ("BMW", "2010", "335i%20Sedan%20%28E90%29%20L6-3.0L%20Turbo%20%28N54%29"), # 335i Sedan (E90) L6-3.0L Turbo (N54)
+    ("BMW", "2010", "528i%20%28E60%29%20L6-3.0L%20%28N52K%29"), # 528i (E60) L6-3.0L (N52K)
+    ("BMW", "2010", "535i%20Sedan%20%28E60%29%20L6-3.0L%20Turbo%20%28N54%29"), # 535i Sedan (E60) L6-3.0L Turbo (N54)
+    ("BMW", "2010", "750i%20%28F01%29%20V8-4.4L%20Turbo%20%28N63%29"), # 750i (F01) V8-4.4L Turbo (N63)
+    ("BMW", "2010", "750i%20xDrive%20AWD%20%28F01%29%20V8-4.4L%20Turbo%20%28N63%29"), # 750i xDrive AWD (F01) V8-4.4L Turbo (N63)
+    ("BMW", "2010", "X3%203.0i%20%28E83%29%20L6-3.0L%20%28N52K%29"), # X3 3.0i (E83) L6-3.0L (N52K)
+    ("BMW", "2010", "X3%203.0si%20%28E83%29%20L6-3.0L%20%28N52K%29"), # X3 3.0si (E83) L6-3.0L (N52K)
+    ("BMW", "2010", "X3%20xDrive%2028i%20%28E83%29%20%28CANADA%29%20L6-3.0L%20%28N52K%29"), # X3 xDrive 28i (E83) (CANADA) L6-3.0L (N52K)
+    ("BMW", "2010", "X3%20xDrive%2030i%20%28E83%29%20%28CANADA%29%20L6-3.0L%20%28N52K%29"), # X3 xDrive 30i (E83) (CANADA) L6-3.0L (N52K)
+    ("BMW", "2010", "X5%203.0i%20%28E70%29%20L6-3.0L%20%28N52K%29"), # X5 3.0i (E70) L6-3.0L (N52K)
+    ("BMW", "2010", "X5%2035d%20%28E70%29%20L6-3.0L%20DSL%20Turbo%20%28M57Y%29"), # X5 35d (E70) L6-3.0L DSL Turbo (M57Y)
+    ("BMW", "2010", "X5%204.8i%20%28E70%29%20V8-4.8L%20%28N62TU%29"), # X5 4.8i (E70) V8-4.8L (N62TU)
+    ("BMW", "2010", "X5%20M%20%28E70%29%20V8-4.4L%20Turbo%20%28S63%29"), # X5 M (E70) V8-4.4L Turbo (S63)
+    ("BMW", "2011", "328i%20Coupe%20%28E92%29%20L6-3.0L%20%28N51%29"), # 328i Coupe (E92) L6-3.0L (N51)
+    ("BMW", "2011", "328i%20Coupe%20%28E92%29%20L6-3.0L%20%28N52K%29"), # 328i Coupe (E92) L6-3.0L (N52K)
+    ("BMW", "2011", "328i%20Sedan%20%28E90%29%20L6-3.0L%20%28N51%29"), # 328i Sedan (E90) L6-3.0L (N51)
+    ("BMW", "2011", "328i%20Sedan%20%28E90%29%20L6-3.0L%20%28N52K%29"), # 328i Sedan (E90) L6-3.0L (N52K)
+    ("BMW", "2011", "328i%20Wagon%20%28E91%29%20L6-3.0L%20%28N52K%29"), # 328i Wagon (E91) L6-3.0L (N52K)
+    ("BMW", "2011", "335i%20Coupe%20%28E92%29%20L6-3.0L%20Turbo%20%28N55%29"), # 335i Coupe (E92) L6-3.0L Turbo (N55)
+    ("BMW", "2011", "335i%20Sedan%20%28E90%29%20L6-3.0L%20Turbo%20%28N55%29"), # 335i Sedan (E90) L6-3.0L Turbo (N55)
+    ("BMW", "2011", "335is%20Convertible%20%28E93%29%20L6-3.0L%20Turbo%20%28N54T%29"), # 335is Convertible (E93) L6-3.0L Turbo (N54T)
+    ("BMW", "2011", "335is%20Coupe%20%28E92%29%20L6-3.0L%20Turbo%20%28N54T%29"), # 335is Coupe (E92) L6-3.0L Turbo (N54T)
+    ("BMW", "2011", "528i%20Sedan%20%28F10%29%20L6-3.0L%20%28N52T%29"), # 528i Sedan (F10) L6-3.0L (N52T)
+    ("BMW", "2011", "535i%20GT%20%28F07%29%20L6-3.0L%20Turbo%20%28N55%29"), # 535i GT (F07) L6-3.0L Turbo (N55)
+    ("BMW", "2011", "535i%20Sedan%20%28F10%29%20L6-3.0L%20Turbo%20%28N55%29"), # 535i Sedan (F10) L6-3.0L Turbo (N55)
+    ("BMW", "2011", "535i%20xDrive%20GT%20AWD%20%28F07%29%20L6-3.0L%20Turbo%20%28N55%29"), # 535i xDrive GT AWD (F07) L6-3.0L Turbo (N55)
+    ("BMW", "2011", "535i%20xDrive%20Sedan%20AWD%20%28F10%29%20L6-3.0L%20Turbo%20%28N55%29"), # 535i xDrive Sedan AWD (F10) L6-3.0L Turbo (N55)
+    ("BMW", "2011", "740i%20%28F01%29%20L6-3.0L%20Turbo%20%28N54%29"), # 740i (F01) L6-3.0L Turbo (N54)
+    ("BMW", "2011", "750i%20%28F01%29%20V8-4.4L%20Turbo%20%28N63%29"), # 750i (F01) V8-4.4L Turbo (N63)
+    ("BMW", "2011", "750i%20ActiveHybrid%20%28F04%29%20V8-4.4L%20Turbo%20%28N63%29%20Hybrid"), # 750i ActiveHybrid (F04) V8-4.4L Turbo (N63) Hybrid
+    ("BMW", "2011", "750i%20xDrive%20AWD%20%28F01%29%20V8-4.4L%20Turbo%20%28N63%29"), # 750i xDrive AWD (F01) V8-4.4L Turbo (N63)
+    ("BMW", "2011", "X3%20xDrive%2028i%20%28F25%29%20L6-3.0L%20%28N52T%29"), # X3 xDrive 28i (F25) L6-3.0L (N52T)
+    ("BMW", "2011", "X3%20xDrive%2035i%20%28F25%29%20L6-3.0L%20Turbo%20%28N55%29"), # X3 xDrive 35i (F25) L6-3.0L Turbo (N55)
+    ("BMW", "2011", "X5%20M%20%28E70%29%20V8-4.4L%20Turbo%20%28S63%29"), # X5 M (E70) V8-4.4L Turbo (S63)
+    ("BMW", "2011", "X5%20xDrive%2035d%20%28E70%29%20L6-3.0L%20DSL%20Turbo%20%28M57Y%29"), # X5 xDrive 35d (E70) L6-3.0L DSL Turbo (M57Y)
+    ("BMW", "2011", "X5%20xDrive%2035i%20%28E70%29%20L6-3.0L%20Turbo%20%28N55%29"), # X5 xDrive 35i (E70) L6-3.0L Turbo (N55)
+    ("BMW", "2011", "X5%20xDrive%2050i%20%28E70%29%20V8-4.4L%20Turbo%20%28N63%29"), # X5 xDrive 50i (E70) V8-4.4L Turbo (N63)
+    ("BMW", "2012", "328i%20Coupe%20%28E92%29%20L6-3.0L%20%28N51%29"), # 328i Coupe (E92) L6-3.0L (N51)
+    ("BMW", "2012", "328i%20Coupe%20%28E92%29%20L6-3.0L%20%28N52K%29"), # 328i Coupe (E92) L6-3.0L (N52K)
+    ("BMW", "2012", "328i%20Sedan%20%28F30%29%20L4-2.0L%20Turbo%20%28N20%29"), # 328i Sedan (F30) L4-2.0L Turbo (N20)
+    ("BMW", "2012", "328i%20Sedan%20%28F30%29%20L4-2.0L%20Turbo%20%28N26%29"), # 328i Sedan (F30) L4-2.0L Turbo (N26)
+    ("BMW", "2012", "328i%20Wagon%20%28E91%29%20L6-3.0L%20%28N52K%29"), # 328i Wagon (E91) L6-3.0L (N52K)
+    ("BMW", "2012", "335i%20Coupe%20%28E92%29%20L6-3.0L%20Turbo%20%28N55%29"), # 335i Coupe (E92) L6-3.0L Turbo (N55)
+    ("BMW", "2012", "335i%20Sedan%20%28F30%29%20L6-3.0L%20Turbo%20%28N55%29"), # 335i Sedan (F30) L6-3.0L Turbo (N55)
+    ("BMW", "2012", "335is%20Convertible%20%28E93%29%20L6-3.0L%20Turbo%20%28N54T%29"), # 335is Convertible (E93) L6-3.0L Turbo (N54T)
+    ("BMW", "2012", "335is%20Coupe%20%28E92%29%20L6-3.0L%20Turbo%20%28N54T%29"), # 335is Coupe (E92) L6-3.0L Turbo (N54T)
+    ("BMW", "2012", "528i%20Sedan%20%28F10%29%20L4-2.0L%20Turbo%20%28N20%29"), # 528i Sedan (F10) L4-2.0L Turbo (N20)
+    ("BMW", "2012", "528i%20xDrive%20Sedan%20AWD%20%28F10%29%20L4-2.0L%20Turbo%20%28N20%29"), # 528i xDrive Sedan AWD (F10) L4-2.0L Turbo (N20)
+    ("BMW", "2012", "535i%20GT%20%28F07%29%20L6-3.0L%20Turbo%20%28N55%29"), # 535i GT (F07) L6-3.0L Turbo (N55)
+    ("BMW", "2012", "535i%20Sedan%20%28F10%29%20L6-3.0L%20Turbo%20%28N55%29"), # 535i Sedan (F10) L6-3.0L Turbo (N55)
+    ("BMW", "2012", "535i%20xDrive%20GT%20AWD%20%28F07%29%20L6-3.0L%20Turbo%20%28N55%29"), # 535i xDrive GT AWD (F07) L6-3.0L Turbo (N55)
+    ("BMW", "2012", "535i%20xDrive%20Sedan%20AWD%20%28F10%29%20L6-3.0L%20Turbo%20%28N55%29"), # 535i xDrive Sedan AWD (F10) L6-3.0L Turbo (N55)
+    ("BMW", "2012", "740i%20%28F01%29%20L6-3.0L%20Turbo%20%28N54%29"), # 740i (F01) L6-3.0L Turbo (N54)
+    ("BMW", "2012", "750i%20%28F01%29%20V8-4.4L%20Turbo%20%28N63%29"), # 750i (F01) V8-4.4L Turbo (N63)
+    ("BMW", "2012", "750i%20ActiveHybrid%20%28F04%29%20V8-4.4L%20Turbo%20%28N63%29%20Hybrid"), # 750i ActiveHybrid (F04) V8-4.4L Turbo (N63) Hybrid
+    ("BMW", "2012", "750i%20xDrive%20AWD%20%28F01%29%20V8-4.4L%20Turbo%20%28N63%29"), # 750i xDrive AWD (F01) V8-4.4L Turbo (N63)
+    ("BMW", "2012", "X3%20xDrive%2028i%20%28F25%29%20L6-3.0L%20%28N52T%29"), # X3 xDrive 28i (F25) L6-3.0L (N52T)
+    ("BMW", "2012", "X3%20xDrive%2035i%20%28F25%29%20L6-3.0L%20Turbo%20%28N55%29"), # X3 xDrive 35i (F25) L6-3.0L Turbo (N55)
+    ("BMW", "2012", "X5%20M%20%28E70%29%20V8-4.4L%20Turbo%20%28S63%29"), # X5 M (E70) V8-4.4L Turbo (S63)
+    ("BMW", "2012", "X5%20xDrive%2035d%20%28E70%29%20L6-3.0L%20DSL%20Turbo%20%28M57Y%29"), # X5 xDrive 35d (E70) L6-3.0L DSL Turbo (M57Y)
+    ("BMW", "2012", "X5%20xDrive%2035i%20%28E70%29%20L6-3.0L%20Turbo%20%28N55%29"), # X5 xDrive 35i (E70) L6-3.0L Turbo (N55)
+    ("BMW", "2012", "X5%20xDrive%2050i%20%28E70%29%20V8-4.4L%20Turbo%20%28N63%29"), # X5 xDrive 50i (E70) V8-4.4L Turbo (N63)
+    ("BMW", "2013", "328i%20Convertible%20%28E93%29%20L6-3.0L%20%28N51%29"), # 328i Convertible (E93) L6-3.0L (N51)
+    ("BMW", "2013", "328i%20Convertible%20%28E93%29%20L6-3.0L%20%28N52K%29"), # 328i Convertible (E93) L6-3.0L (N52K)
+    ("BMW", "2013", "328i%20Coupe%20%28E92%29%20L6-3.0L%20%28N51%29"), # 328i Coupe (E92) L6-3.0L (N51)
+    ("BMW", "2013", "328i%20Coupe%20%28E92%29%20L6-3.0L%20%28N52K%29"), # 328i Coupe (E92) L6-3.0L (N52K)
+    ("BMW", "2013", "328i%20Sedan%20%28F30%29%20L4-2.0L%20Turbo%20%28N20%29"), # 328i Sedan (F30) L4-2.0L Turbo (N20)
+    ("BMW", "2013", "328i%20Sedan%20%28F30%29%20L4-2.0L%20Turbo%20%28N26%29"), # 328i Sedan (F30) L4-2.0L Turbo (N26)
+    ("BMW", "2013", "328i%20xDrive%20Coupe%20AWD%20%28E92%29%20L6-3.0L%20%28N51%29"), # 328i xDrive Coupe AWD (E92) L6-3.0L (N51)
+    ("BMW", "2013", "328i%20xDrive%20Coupe%20AWD%20%28E92%29%20L6-3.0L%20%28N52K%29"), # 328i xDrive Coupe AWD (E92) L6-3.0L (N52K)
+    ("BMW", "2013", "328i%20xDrive%20Sedan%20AWD%20%28F30%29%20L4-2.0L%20Turbo%20%28N20%29"), # 328i xDrive Sedan AWD (F30) L4-2.0L Turbo (N20)
+    ("BMW", "2013", "328i%20xDrive%20Sedan%20AWD%20%28F30%29%20L4-2.0L%20Turbo%20%28N26%29"), # 328i xDrive Sedan AWD (F30) L4-2.0L Turbo (N26)
+    ("BMW", "2013", "335i%20Convertible%20%28E93%29%20L6-3.0L%20Turbo%20%28N55%29"), # 335i Convertible (E93) L6-3.0L Turbo (N55)
+    ("BMW", "2013", "335i%20Coupe%20%28E92%29%20L6-3.0L%20Turbo%20%28N55%29"), # 335i Coupe (E92) L6-3.0L Turbo (N55)
+    ("BMW", "2013", "335i%20Sedan%20%28F30%29%20L6-3.0L%20Turbo%20%28N55%29"), # 335i Sedan (F30) L6-3.0L Turbo (N55)
+    ("BMW", "2013", "335i%20xDrive%20Coupe%20AWD%20%28E92%29%20L6-3.0L%20Turbo%20%28N55%29"), # 335i xDrive Coupe AWD (E92) L6-3.0L Turbo (N55)
+    ("BMW", "2013", "335i%20xDrive%20Sedan%20AWD%20%28F30%29%20L6-3.0L%20Turbo%20%28N55%29"), # 335i xDrive Sedan AWD (F30) L6-3.0L Turbo (N55)
+    ("BMW", "2013", "335is%20Convertible%20%28E93%29%20L6-3.0L%20Turbo%20%28N54T%29"), # 335is Convertible (E93) L6-3.0L Turbo (N54T)
+    ("BMW", "2013", "335is%20Coupe%20%28E92%29%20L6-3.0L%20Turbo%20%28N54T%29"), # 335is Coupe (E92) L6-3.0L Turbo (N54T)
+    ("BMW", "2013", "528i%20Sedan%20%28F10%29%20L4-2.0L%20Turbo%20%28N20%29"), # 528i Sedan (F10) L4-2.0L Turbo (N20)
+    ("BMW", "2013", "528i%20xDrive%20Sedan%20AWD%20%28F10%29%20L4-2.0L%20Turbo%20%28N20%29"), # 528i xDrive Sedan AWD (F10) L4-2.0L Turbo (N20)
+    ("BMW", "2013", "535i%20GT%20%28F07%29%20L6-3.0L%20Turbo%20%28N55%29"), # 535i GT (F07) L6-3.0L Turbo (N55)
+    ("BMW", "2013", "535i%20Sedan%20%28F10%29%20L6-3.0L%20Turbo%20%28N55%29"), # 535i Sedan (F10) L6-3.0L Turbo (N55)
+    ("BMW", "2013", "535i%20xDrive%20GT%20AWD%20%28F07%29%20L6-3.0L%20Turbo%20%28N55%29"), # 535i xDrive GT AWD (F07) L6-3.0L Turbo (N55)
+    ("BMW", "2013", "535i%20xDrive%20Sedan%20AWD%20%28F10%29%20L6-3.0L%20Turbo%20%28N55%29"), # 535i xDrive Sedan AWD (F10) L6-3.0L Turbo (N55)
+    ("BMW", "2013", "740i%20%28F01%29%20L6-3.0L%20Turbo%20%28N55%29"), # 740i (F01) L6-3.0L Turbo (N55)
+    ("BMW", "2013", "750i%20%28F01%29%20V8-4.4L%20Turbo%20%28N63T%29"), # 750i (F01) V8-4.4L Turbo (N63T)
+    ("BMW", "2013", "750i%20xDrive%20AWD%20%28F01%29%20V8-4.4L%20Turbo%20%28N63T%29"), # 750i xDrive AWD (F01) V8-4.4L Turbo (N63T)
+    ("BMW", "2013", "X3%20xDrive%2028i%20%28F25%29%20L4-2.0L%20Turbo%20%28N20%29"), # X3 xDrive 28i (F25) L4-2.0L Turbo (N20)
+    ("BMW", "2013", "X3%20xDrive%2035i%20%28F25%29%20L6-3.0L%20Turbo%20%28N55%29"), # X3 xDrive 35i (F25) L6-3.0L Turbo (N55)
+    ("BMW", "2013", "X5%20M%20%28E70%29%20V8-4.4L%20Turbo%20%28S63%29"), # X5 M (E70) V8-4.4L Turbo (S63)
+    ("BMW", "2013", "X5%20xDrive%2035d%20%28E70%29%20L6-3.0L%20DSL%20Turbo%20%28M57Y%29"), # X5 xDrive 35d (E70) L6-3.0L DSL Turbo (M57Y)
+    ("BMW", "2013", "X5%20xDrive%2035i%20%28E70%29%20L6-3.0L%20Turbo%20%28N55%29"), # X5 xDrive 35i (E70) L6-3.0L Turbo (N55)
+    ("BMW", "2013", "X5%20xDrive%2050i%20%28E70%29%20V8-4.4L%20Turbo%20%28N63%29"), # X5 xDrive 50i (E70) V8-4.4L Turbo (N63)
+    ("Audi", "2010", "A3%20%288PA%29%20L4-2.0L%20Turbo%20%28CCTA%29"), # A3 (8PA) L4-2.0L Turbo (CCTA)
+    ("Audi", "2010", "A3%20Quattro%20%288PA%29%20L4-2.0L%20Turbo%20%28CCTA%29"), # A3 Quattro (8PA) L4-2.0L Turbo (CCTA)
+    ("Audi", "2010", "A4%20Quattro%20Sedan%20%288K2%29%20L4-2.0L%20Turbo%20%28CAEB%29"), # A4 Quattro Sedan (8K2) L4-2.0L Turbo (CAEB)
+    ("Audi", "2010", "A4%20Quattro%20Wagon%20%288K5%29%20L4-2.0L%20Turbo%20%28CAEB%29"), # A4 Quattro Wagon (8K5) L4-2.0L Turbo (CAEB)
+    ("Audi", "2010", "A4%20Sedan%20%288K2%29%20L4-2.0L%20Turbo%20%28CAEB%29"), # A4 Sedan (8K2) L4-2.0L Turbo (CAEB)
+    ("Audi", "2010", "A5%20Cabriolet%20%288F7%29%20L4-2.0L%20Turbo%20%28CAEB%29"), # A5 Cabriolet (8F7) L4-2.0L Turbo (CAEB)
+    ("Audi", "2010", "A5%20Quattro%20Cabriolet%20%288F7%29%20L4-2.0L%20Turbo%20%28CAEB%29"), # A5 Quattro Cabriolet (8F7) L4-2.0L Turbo (CAEB)
+    ("Audi", "2010", "A5%20Quattro%20Coupe%20%288T3%29%20L4-2.0L%20Turbo%20%28CAEB%29"), # A5 Quattro Coupe (8T3) L4-2.0L Turbo (CAEB)
+    ("Audi", "2010", "A5%20Quattro%20Coupe%20%288T3%29%20V6-3.2L%20%28CALA%29"), # A5 Quattro Coupe (8T3) V6-3.2L (CALA)
+    ("Audi", "2010", "A6%20Quattro%20Sedan%20%284F2%29%20V6-3.0L%20SC%20%28CCAA%29"), # A6 Quattro Sedan (4F2) V6-3.0L SC (CCAA)
+    ("Audi", "2010", "A6%20Quattro%20Sedan%20%284F2%29%20V8-4.2L%20%28BVJ%29"), # A6 Quattro Sedan (4F2) V8-4.2L (BVJ)
+    ("Audi", "2010", "A6%20Quattro%20Wagon%20%284F5%29%20V6-3.0L%20SC%20%28CCAA%29"), # A6 Quattro Wagon (4F5) V6-3.0L SC (CCAA)
+    ("Audi", "2010", "A6%20Sedan%20%284F2%29%20V6-3.2L%20%28CALA%29"), # A6 Sedan (4F2) V6-3.2L (CALA)
+    ("Audi", "2010", "A8%20Quattro%20Sedan%20%284E2%29%20V8-4.2L%20%28BVJ%29"), # A8 Quattro Sedan (4E2) V8-4.2L (BVJ)
+    ("Audi", "2010", "A8L%20Quattro%20Sedan%20%284E8%29%20V8-4.2L%20%28BVJ%29"), # A8L Quattro Sedan (4E8) V8-4.2L (BVJ)
+    ("Audi", "2010", "Q5%20Quattro%20%288RB%29%20V6-3.2L%20%28CALB%29"), # Q5 Quattro (8RB) V6-3.2L (CALB)
+    ("Audi", "2010", "Q7%20Quattro%20%284LB%29%20V6-3.0L%20DSL%20Turbo%20%28CATA%29"), # Q7 Quattro (4LB) V6-3.0L DSL Turbo (CATA)
+    ("Audi", "2010", "Q7%20Quattro%20%284LB%29%20V6-3.6L%20%28BHK%29"), # Q7 Quattro (4LB) V6-3.6L (BHK)
+    ("Audi", "2010", "Q7%20Quattro%20%284LB%29%20V8-4.2L%20%28BAR%29"), # Q7 Quattro (4LB) V8-4.2L (BAR)
+    ("Audi", "2010", "S4%20Quattro%20Sedan%20%288K2%29%20V6-3.0L%20SC%20%28CCBA%29"), # S4 Quattro Sedan (8K2) V6-3.0L SC (CCBA)
+    ("Audi", "2010", "S5%20Quattro%20Cabriolet%20%288F7%29%20V6-3.0L%20SC%20%28CCBA%29"), # S5 Quattro Cabriolet (8F7) V6-3.0L SC (CCBA)
+    ("Audi", "2010", "TT%20Quattro%20Coupe%20%288J3%29%20L4-2.0L%20Turbo%20%28CCTA%29"), # TT Quattro Coupe (8J3) L4-2.0L Turbo (CCTA)
+    ("Audi", "2010", "TT%20Quattro%20Roadster%20%288J9%29%20L4-2.0L%20Turbo%20%28CCTA%29"), # TT Quattro Roadster (8J9) L4-2.0L Turbo (CCTA)
+    ("Audi", "2011", "A3%20%288PA%29%20L4-2.0L%20Turbo%20%28CCTA%29"), # A3 (8PA) L4-2.0L Turbo (CCTA)
+    ("Audi", "2011", "A3%20Quattro%20%288PA%29%20L4-2.0L%20Turbo%20%28CCTA%29"), # A3 Quattro (8PA) L4-2.0L Turbo (CCTA)
+    ("Audi", "2011", "A4%20Quattro%20Sedan%20%288K2%29%20L4-2.0L%20Turbo%20%28CAEB%29"), # A4 Quattro Sedan (8K2) L4-2.0L Turbo (CAEB)
+    ("Audi", "2011", "A4%20Quattro%20Wagon%20%288K5%29%20L4-2.0L%20Turbo%20%28CAEB%29"), # A4 Quattro Wagon (8K5) L4-2.0L Turbo (CAEB)
+    ("Audi", "2011", "A4%20Sedan%20%288K2%29%20L4-2.0L%20Turbo%20%28CAEB%29"), # A4 Sedan (8K2) L4-2.0L Turbo (CAEB)
+    ("Audi", "2011", "A5%20Cabriolet%20%288F7%29%20L4-2.0L%20Turbo%20%28CAEB%29"), # A5 Cabriolet (8F7) L4-2.0L Turbo (CAEB)
+    ("Audi", "2011", "A5%20Quattro%20Cabriolet%20%288F7%29%20L4-2.0L%20Turbo%20%28CAEB%29"), # A5 Quattro Cabriolet (8F7) L4-2.0L Turbo (CAEB)
+    ("Audi", "2011", "A5%20Quattro%20Coupe%20%288T3%29%20L4-2.0L%20Turbo%20%28CAEB%29"), # A5 Quattro Coupe (8T3) L4-2.0L Turbo (CAEB)
+    ("Audi", "2011", "A6%20Quattro%20Sedan%20%284F2%29%20V6-3.0L%20SC%20%28CCAA%29"), # A6 Quattro Sedan (4F2) V6-3.0L SC (CCAA)
+    ("Audi", "2011", "A6%20Quattro%20Sedan%20%284F2%29%20V8-4.2L%20%28BVJ%29"), # A6 Quattro Sedan (4F2) V8-4.2L (BVJ)
+    ("Audi", "2011", "A6%20Quattro%20Wagon%20%284F5%29%20V6-3.0L%20SC%20%28CCAA%29"), # A6 Quattro Wagon (4F5) V6-3.0L SC (CCAA)
+    ("Audi", "2011", "A6%20Sedan%20%284F2%29%20V6-3.2L%20%28CALA%29"), # A6 Sedan (4F2) V6-3.2L (CALA)
+    ("Audi", "2011", "A8%20Quattro%20Sedan%20%284H2%29%20V8-4.2L%20%28CDRA%29"), # A8 Quattro Sedan (4H2) V8-4.2L (CDRA)
+    ("Audi", "2011", "A8L%20Quattro%20Sedan%20%284H8%29%20V8-4.2L%20%28CDRA%29"), # A8L Quattro Sedan (4H8) V8-4.2L (CDRA)
+    ("Audi", "2011", "Q5%20Quattro%20%288RB%29%20L4-2.0L%20Turbo%20%28CAEB%29"), # Q5 Quattro (8RB) L4-2.0L Turbo (CAEB)
+    ("Audi", "2011", "Q5%20Quattro%20%288RB%29%20V6-3.2L%20%28CALB%29"), # Q5 Quattro (8RB) V6-3.2L (CALB)
+    ("Audi", "2011", "Q7%20Quattro%20%284LB%29%20V6-3.0L%20DSL%20Turbo%20%28CATA%29"), # Q7 Quattro (4LB) V6-3.0L DSL Turbo (CATA)
+    ("Audi", "2011", "Q7%20Quattro%20%284LB%29%20V6-3.0L%20SC%20%28CJWB%29"), # Q7 Quattro (4LB) V6-3.0L SC (CJWB)
+    ("Audi", "2011", "Q7%20Quattro%20%284LB%29%20V6-3.0L%20SC%20%28CJWC%29"), # Q7 Quattro (4LB) V6-3.0L SC (CJWC)
+    ("Audi", "2011", "S4%20Quattro%20Sedan%20%288K2%29%20V6-3.0L%20SC%20%28CCBA%29"), # S4 Quattro Sedan (8K2) V6-3.0L SC (CCBA)
+    ("Audi", "2011", "S5%20Quattro%20Cabriolet%20%288F7%29%20V6-3.0L%20SC%20%28CCBA%29"), # S5 Quattro Cabriolet (8F7) V6-3.0L SC (CCBA)
+    ("Audi", "2012", "A3%20%288PA%29%20L4-2.0L%20Turbo%20%28CCTA%29"), # A3 (8PA) L4-2.0L Turbo (CCTA)
+    ("Audi", "2012", "A3%20Quattro%20%288PA%29%20L4-2.0L%20Turbo%20%28CCTA%29"), # A3 Quattro (8PA) L4-2.0L Turbo (CCTA)
+    ("Audi", "2012", "A4%20Quattro%20Sedan%20%288K2%29%20L4-2.0L%20Turbo%20%28CAEB%29"), # A4 Quattro Sedan (8K2) L4-2.0L Turbo (CAEB)
+    ("Audi", "2012", "A4%20Quattro%20Wagon%20%288K5%29%20L4-2.0L%20Turbo%20%28CAEB%29"), # A4 Quattro Wagon (8K5) L4-2.0L Turbo (CAEB)
+    ("Audi", "2012", "A4%20Sedan%20%288K2%29%20L4-2.0L%20Turbo%20%28CAEB%29"), # A4 Sedan (8K2) L4-2.0L Turbo (CAEB)
+    ("Audi", "2012", "A5%20Cabriolet%20%288F7%29%20L4-2.0L%20Turbo%20%28CAEB%29"), # A5 Cabriolet (8F7) L4-2.0L Turbo (CAEB)
+    ("Audi", "2012", "A5%20Quattro%20Cabriolet%20%288F7%29%20L4-2.0L%20Turbo%20%28CAEB%29"), # A5 Quattro Cabriolet (8F7) L4-2.0L Turbo (CAEB)
+    ("Audi", "2012", "A5%20Quattro%20Coupe%20%288T3%29%20L4-2.0L%20Turbo%20%28CAEB%29"), # A5 Quattro Coupe (8T3) L4-2.0L Turbo (CAEB)
+    ("Audi", "2012", "A6%20Quattro%20Sedan%20%284G2%29%20V6-3.0L%20SC%20%28CGXB%29"), # A6 Quattro Sedan (4G2) V6-3.0L SC (CGXB)
+    ("Audi", "2012", "A6%20Sedan%20%284G2%29%20L4-2.0L%20Turbo%20%28CAEB%29"), # A6 Sedan (4G2) L4-2.0L Turbo (CAEB)
+    ("Audi", "2012", "A8%20Quattro%20Sedan%20%284H2%29%20V8-4.2L%20%28CDRA%29"), # A8 Quattro Sedan (4H2) V8-4.2L (CDRA)
+    ("Audi", "2012", "A8L%20Quattro%20Sedan%20%284H8%29%20V8-4.2L%20%28CDRA%29"), # A8L Quattro Sedan (4H8) V8-4.2L (CDRA)
+    ("Audi", "2012", "A8L%20Quattro%20Sedan%20%284H8%29%20W12-6.3L%20%28CEJA%29"), # A8L Quattro Sedan (4H8) W12-6.3L (CEJA)
+    ("Audi", "2012", "Q5%20Quattro%20%288RB%29%20L4-2.0L%20Turbo%20%28CAEB%29"), # Q5 Quattro (8RB) L4-2.0L Turbo (CAEB)
+    ("Audi", "2012", "Q5%20Quattro%20%288RB%29%20V6-3.2L%20%28CALB%29"), # Q5 Quattro (8RB) V6-3.2L (CALB)
+    ("Audi", "2012", "Q7%20Quattro%20%284LB%29%20V6-3.0L%20DSL%20Turbo%20%28CATA%29"), # Q7 Quattro (4LB) V6-3.0L DSL Turbo (CATA)
+    ("Audi", "2012", "Q7%20Quattro%20%284LB%29%20V6-3.0L%20SC%20%28CJWB%29"), # Q7 Quattro (4LB) V6-3.0L SC (CJWB)
+    ("Audi", "2012", "Q7%20Quattro%20%284LB%29%20V6-3.0L%20SC%20%28CJWC%29"), # Q7 Quattro (4LB) V6-3.0L SC (CJWC)
+    ("Audi", "2012", "S4%20Quattro%20Sedan%20%288K2%29%20V6-3.0L%20SC%20%28CCBA%29"), # S4 Quattro Sedan (8K2) V6-3.0L SC (CCBA)
+    ("Audi", "2012", "S5%20Quattro%20Cabriolet%20%288F7%29%20V6-3.0L%20SC%20%28CCBA%29"), # S5 Quattro Cabriolet (8F7) V6-3.0L SC (CCBA)
+    ("Audi", "2013", "A3%20%288PA%29%20L4-2.0L%20Turbo%20%28CCTA%29"), # A3 (8PA) L4-2.0L Turbo (CCTA)
+    ("Audi", "2013", "A3%20Quattro%20%288PA%29%20L4-2.0L%20Turbo%20%28CCTA%29"), # A3 Quattro (8PA) L4-2.0L Turbo (CCTA)
+    ("Audi", "2013", "A4%20Quattro%20Allroad%20%288KH%29%20L4-2.0L%20Turbo%20%28CPMA%29%20Flex%20Fuel"), # A4 Quattro Allroad (8KH) L4-2.0L Turbo (CPMA) Flex Fuel
+    ("Audi", "2013", "A4%20Quattro%20Sedan%20%288K2%29%20L4-2.0L%20Turbo%20%28CAEB%29"), # A4 Quattro Sedan (8K2) L4-2.0L Turbo (CAEB)
+    ("Audi", "2013", "A4%20Quattro%20Sedan%20%288K2%29%20L4-2.0L%20Turbo%20%28CPMA%29%20Flex%20Fuel"), # A4 Quattro Sedan (8K2) L4-2.0L Turbo (CPMA) Flex Fuel
+    ("Audi", "2013", "A4%20Sedan%20%288K2%29%20L4-2.0L%20Turbo%20%28CAEB%29"), # A4 Sedan (8K2) L4-2.0L Turbo (CAEB)
+    ("Audi", "2013", "A5%20Cabriolet%20%288F7%29%20L4-2.0L%20Turbo%20%28CAEB%29"), # A5 Cabriolet (8F7) L4-2.0L Turbo (CAEB)
+    ("Audi", "2013", "A5%20Quattro%20Cabriolet%20%288F7%29%20L4-2.0L%20Turbo%20%28CAEB%29"), # A5 Quattro Cabriolet (8F7) L4-2.0L Turbo (CAEB)
+    ("Audi", "2013", "A5%20Quattro%20Cabriolet%20%288F7%29%20L4-2.0L%20Turbo%20%28CPMA%29%20Flex%20Fuel"), # A5 Quattro Cabriolet (8F7) L4-2.0L Turbo (CPMA) Flex Fuel
+    ("Audi", "2013", "A5%20Quattro%20Coupe%20%288T3%29%20L4-2.0L%20Turbo%20%28CAEB%29"), # A5 Quattro Coupe (8T3) L4-2.0L Turbo (CAEB)
+    ("Audi", "2013", "A5%20Quattro%20Coupe%20%288T3%29%20L4-2.0L%20Turbo%20%28CPMA%29%20Flex%20Fuel"), # A5 Quattro Coupe (8T3) L4-2.0L Turbo (CPMA) Flex Fuel
+    ("Audi", "2013", "A6%20Quattro%20Sedan%20%284G2%29%20L4-2.0L%20Turbo%20%28CAEB%29"), # A6 Quattro Sedan (4G2) L4-2.0L Turbo (CAEB)
+    ("Audi", "2013", "A6%20Quattro%20Sedan%20%284G2%29%20V6-3.0L%20SC%20%28CGXB%29"), # A6 Quattro Sedan (4G2) V6-3.0L SC (CGXB)
+    ("Audi", "2013", "A6%20Sedan%20%284G2%29%20L4-2.0L%20Turbo%20%28CAEB%29"), # A6 Sedan (4G2) L4-2.0L Turbo (CAEB)
+    ("Audi", "2013", "A8%20Quattro%20Sedan%20%284H2%29%20V6-3.0L%20SC%20%28CTUB%29"), # A8 Quattro Sedan (4H2) V6-3.0L SC (CTUB)
+    ("Audi", "2013", "A8%20Quattro%20Sedan%20%284H2%29%20V8-4.0L%20Turbo%20%28CEUA%29"), # A8 Quattro Sedan (4H2) V8-4.0L Turbo (CEUA)
+    ("Audi", "2013", "A8L%20Quattro%20Sedan%20%284H8%29%20V6-3.0L%20SC%20%28CTUB%29"), # A8L Quattro Sedan (4H8) V6-3.0L SC (CTUB)
+    ("Audi", "2013", "A8L%20Quattro%20Sedan%20%284H8%29%20V8-4.0L%20Turbo%20%28CEUA%29"), # A8L Quattro Sedan (4H8) V8-4.0L Turbo (CEUA)
+    ("Audi", "2013", "A8L%20Quattro%20Sedan%20%284H8%29%20W12-6.3L%20%28CEJA%29"), # A8L Quattro Sedan (4H8) W12-6.3L (CEJA)
+    ("Audi", "2013", "Q5%20Quattro%20%288RB%29%20L4-2.0L%20Turbo%20%28CHJA%29%20Hybrid"), # Q5 Quattro (8RB) L4-2.0L Turbo (CHJA) Hybrid
+    ("Audi", "2013", "Q5%20Quattro%20%288RB%29%20L4-2.0L%20Turbo%20%28CPMA%29%20Flex%20Fuel"), # Q5 Quattro (8RB) L4-2.0L Turbo (CPMA) Flex Fuel
+    ("Audi", "2013", "Q5%20Quattro%20%288RB%29%20V6-3.0L%20SC%20%28CGXD%29"), # Q5 Quattro (8RB) V6-3.0L SC (CGXD)
+    ("Audi", "2013", "Q7%20Quattro%20%284LB%29%20V6-3.0L%20DSL%20Turbo%20%28CNRB%29"), # Q7 Quattro (4LB) V6-3.0L DSL Turbo (CNRB)
+    ("Audi", "2013", "Q7%20Quattro%20%284LB%29%20V6-3.0L%20SC%20%28CJWB%29"), # Q7 Quattro (4LB) V6-3.0L SC (CJWB)
+    ("Audi", "2013", "Q7%20Quattro%20%284LB%29%20V6-3.0L%20SC%20%28CJWE%29"), # Q7 Quattro (4LB) V6-3.0L SC (CJWE)
+    ("Toyota", "2010", "Avalon%20V6-3.5L%20%282GR-FE%29"), # Avalon V6-3.5L (2GR-FE)
+    ("Toyota", "2010", "Camry%20L4-2.4L%20%282AZ-FXE%29%20Hybrid"), # Camry L4-2.4L (2AZ-FXE) Hybrid
+    ("Toyota", "2010", "Camry%20L4-2.5L%20%282AR-FE%29"), # Camry L4-2.5L (2AR-FE)
+    ("Toyota", "2010", "Camry%20V6-3.5L%20%282GR-FE%29"), # Camry V6-3.5L (2GR-FE)
+    ("Toyota", "2010", "Corolla%20L4-1.8L%20%282ZR-FE%29"), # Corolla L4-1.8L (2ZR-FE)
+    ("Toyota", "2010", "Corolla%20L4-2.4L%20%282AZ-FE%29"), # Corolla L4-2.4L (2AZ-FE)
+    ("Toyota", "2010", "Prius%20L4-1.8L%20%282ZR-FXE%29%20Hybrid"), # Prius L4-1.8L (2ZR-FXE) Hybrid
+    ("Toyota", "2010", "RAV4%202WD%20L4-2.5L%20%282AR-FE%29"), # RAV4 2WD L4-2.5L (2AR-FE)
+    ("Toyota", "2010", "RAV4%202WD%20V6-3.5L%20%282GR-FE%29"), # RAV4 2WD V6-3.5L (2GR-FE)
+    ("Toyota", "2010", "RAV4%204WD%20L4-2.5L%20%282AR-FE%29"), # RAV4 4WD L4-2.5L (2AR-FE)
+    ("Toyota", "2010", "RAV4%204WD%20V6-3.5L%20%282GR-FE%29"), # RAV4 4WD V6-3.5L (2GR-FE)
+    ("Toyota", "2010", "Sienna%20AWD%20V6-3.5L%20%282GR-FE%29"), # Sienna AWD V6-3.5L (2GR-FE)
+    ("Toyota", "2010", "Sienna%20FWD%20V6-3.5L%20%282GR-FE%29"), # Sienna FWD V6-3.5L (2GR-FE)
+    ("Toyota", "2011", "Avalon%20V6-3.5L%20%282GR-FE%29"), # Avalon V6-3.5L (2GR-FE)
+    ("Toyota", "2011", "Camry%20L4-2.4L%20%282AZ-FXE%29%20Hybrid"), # Camry L4-2.4L (2AZ-FXE) Hybrid
+    ("Toyota", "2011", "Camry%20L4-2.5L%20%282AR-FE%29"), # Camry L4-2.5L (2AR-FE)
+    ("Toyota", "2011", "Camry%20V6-3.5L%20%282GR-FE%29"), # Camry V6-3.5L (2GR-FE)
+    ("Toyota", "2011", "Corolla%20L4-1.8L%20%282ZR-FE%29"), # Corolla L4-1.8L (2ZR-FE)
+    ("Toyota", "2011", "Corolla%20L4-2.4L%20%282AZ-FE%29"), # Corolla L4-2.4L (2AZ-FE)
+    ("Toyota", "2011", "Prius%20L4-1.8L%20%282ZR-FXE%29%20Hybrid"), # Prius L4-1.8L (2ZR-FXE) Hybrid
+    ("Toyota", "2011", "RAV4%202WD%20L4-2.5L%20%282AR-FE%29"), # RAV4 2WD L4-2.5L (2AR-FE)
+    ("Toyota", "2011", "RAV4%202WD%20V6-3.5L%20%282GR-FE%29"), # RAV4 2WD V6-3.5L (2GR-FE)
+    ("Toyota", "2011", "RAV4%204WD%20L4-2.5L%20%282AR-FE%29"), # RAV4 4WD L4-2.5L (2AR-FE)
+    ("Toyota", "2011", "RAV4%204WD%20V6-3.5L%20%282GR-FE%29"), # RAV4 4WD V6-3.5L (2GR-FE)
+    ("Toyota", "2011", "Sienna%20AWD%20V6-3.5L%20%282GR-FE%29"), # Sienna AWD V6-3.5L (2GR-FE)
+    ("Toyota", "2011", "Sienna%20FWD%20L4-2.7L%20%281AR-FE%29"), # Sienna FWD L4-2.7L (1AR-FE)
+    ("Toyota", "2011", "Sienna%20FWD%20V6-3.5L%20%282GR-FE%29"), # Sienna FWD V6-3.5L (2GR-FE)
+    ("Toyota", "2012", "Avalon%20V6-3.5L%20%282GR-FE%29"), # Avalon V6-3.5L (2GR-FE)
+    ("Toyota", "2012", "Camry%20L4-2.5L%20%282AR-FE%29"), # Camry L4-2.5L (2AR-FE)
+    ("Toyota", "2012", "Camry%20L4-2.5L%20%282AR-FXE%29%20Hybrid"), # Camry L4-2.5L (2AR-FXE) Hybrid
+    ("Toyota", "2012", "Camry%20V6-3.5L%20%282GR-FE%29"), # Camry V6-3.5L (2GR-FE)
+    ("Toyota", "2012", "Corolla%20L4-1.8L%20%282ZR-FE%29"), # Corolla L4-1.8L (2ZR-FE)
+    ("Toyota", "2012", "Corolla%20L4-2.4L%20%282AZ-FE%29"), # Corolla L4-2.4L (2AZ-FE)
+    ("Toyota", "2012", "Prius%20C%20L4-1.5L%20%281NZ-FXE%29%20Hybrid"), # Prius C L4-1.5L (1NZ-FXE) Hybrid
+    ("Toyota", "2012", "Prius%20PHV%20L4-1.8L%20%282ZR-FXE%29%20Hybrid"), # Prius PHV L4-1.8L (2ZR-FXE) Hybrid
+    ("Toyota", "2012", "Prius%20V%20L4-1.8L%20%282ZR-FXE%29%20Hybrid"), # Prius V L4-1.8L (2ZR-FXE) Hybrid
+    ("Toyota", "2012", "Prius%20L4-1.8L%20%282ZR-FXE%29%20Hybrid"), # Prius L4-1.8L (2ZR-FXE) Hybrid
+    ("Toyota", "2012", "RAV4%202WD%20L4-2.5L%20%282AR-FE%29"), # RAV4 2WD L4-2.5L (2AR-FE)
+    ("Toyota", "2012", "RAV4%202WD%20V6-3.5L%20%282GR-FE%29"), # RAV4 2WD V6-3.5L (2GR-FE)
+    ("Toyota", "2012", "RAV4%204WD%20L4-2.5L%20%282AR-FE%29"), # RAV4 4WD L4-2.5L (2AR-FE)
+    ("Toyota", "2012", "RAV4%204WD%20V6-3.5L%20%282GR-FE%29"), # RAV4 4WD V6-3.5L (2GR-FE)
+    ("Toyota", "2012", "RAV4%20EV%20ELE-Electric%20Engine"), # RAV4 EV ELE-Electric Engine
+    ("Toyota", "2012", "Sienna%20AWD%20V6-3.5L%20%282GR-FE%29"), # Sienna AWD V6-3.5L (2GR-FE)
+    ("Toyota", "2012", "Sienna%20FWD%20L4-2.7L%20%281AR-FE%29"), # Sienna FWD L4-2.7L (1AR-FE)
+    ("Toyota", "2012", "Sienna%20FWD%20V6-3.5L%20%282GR-FE%29"), # Sienna FWD V6-3.5L (2GR-FE)
+    ("Toyota", "2013", "Avalon%20L4-2.5L%20%282AR-FXE%29%20Hybrid"), # Avalon L4-2.5L (2AR-FXE) Hybrid
+    ("Toyota", "2013", "Avalon%20V6-3.5L%20%282GR-FE%29"), # Avalon V6-3.5L (2GR-FE)
+    ("Toyota", "2013", "Camry%20L4-2.5L%20%282AR-FE%29"), # Camry L4-2.5L (2AR-FE)
+    ("Toyota", "2013", "Camry%20L4-2.5L%20%282AR-FXE%29%20Hybrid"), # Camry L4-2.5L (2AR-FXE) Hybrid
+    ("Toyota", "2013", "Camry%20V6-3.5L%20%282GR-FE%29"), # Camry V6-3.5L (2GR-FE)
+    ("Toyota", "2013", "Corolla%20L4-1.8L%20%282ZR-FE%29"), # Corolla L4-1.8L (2ZR-FE)
+    ("Toyota", "2013", "Corolla%20L4-2.4L%20%282AZ-FE%29"), # Corolla L4-2.4L (2AZ-FE)
+    ("Toyota", "2013", "Prius%20C%20L4-1.5L%20%281NZ-FXE%29%20Hybrid"), # Prius C L4-1.5L (1NZ-FXE) Hybrid
+    ("Toyota", "2013", "Prius%20PHV%20L4-1.8L%20%282ZR-FXE%29%20Hybrid"), # Prius PHV L4-1.8L (2ZR-FXE) Hybrid
+    ("Toyota", "2013", "Prius%20V%20L4-1.8L%20%282ZR-FXE%29%20Hybrid"), # Prius V L4-1.8L (2ZR-FXE) Hybrid
+    ("Toyota", "2013", "Prius%20L4-1.8L%20%282ZR-FXE%29%20Hybrid"), # Prius L4-1.8L (2ZR-FXE) Hybrid
+    ("Toyota", "2013", "RAV4%202WD%20L4-2.5L%20%282AR-FE%29"), # RAV4 2WD L4-2.5L (2AR-FE)
+    ("Toyota", "2013", "RAV4%204WD%20L4-2.5L%20%282AR-FE%29"), # RAV4 4WD L4-2.5L (2AR-FE)
+    ("Toyota", "2013", "RAV4%20EV%20ELE-Electric%20Engine"), # RAV4 EV ELE-Electric Engine
+    ("Toyota", "2013", "Sienna%20AWD%20V6-3.5L%20%282GR-FE%29"), # Sienna AWD V6-3.5L (2GR-FE)
+    ("Toyota", "2013", "Sienna%20FWD%20L4-2.7L%20%281AR-FE%29"), # Sienna FWD L4-2.7L (1AR-FE)
+    ("Toyota", "2013", "Sienna%20FWD%20V6-3.5L%20%282GR-FE%29"), # Sienna FWD V6-3.5L (2GR-FE)
+    ("Honda", "2010", "Accord%20L4-2.4L"), # Accord L4-2.4L
+    ("Honda", "2010", "Accord%20V6-3.5L"), # Accord V6-3.5L
+    ("Honda", "2010", "CR-V%202WD%20L4-2.4L"), # CR-V 2WD L4-2.4L
+    ("Honda", "2010", "CR-V%204WD%20L4-2.4L"), # CR-V 4WD L4-2.4L
+    ("Honda", "2010", "Civic%20Si%20L4-2.0L"), # Civic Si L4-2.0L
+    ("Honda", "2010", "Civic%20L4-1.3L%20Hybrid"), # Civic L4-1.3L Hybrid
+    ("Honda", "2010", "Civic%20L4-1.8L%20CNG"), # Civic L4-1.8L CNG
+    ("Honda", "2010", "Civic%20L4-1.8L"), # Civic L4-1.8L
+    ("Honda", "2010", "Odyssey%20V6-3.5L"), # Odyssey V6-3.5L
+    ("Honda", "2010", "Pilot%202WD%20V6-3.5L"), # Pilot 2WD V6-3.5L
+    ("Honda", "2010", "Pilot%204WD%20V6-3.5L"), # Pilot 4WD V6-3.5L
+    ("Honda", "2011", "Accord%20L4-2.4L"), # Accord L4-2.4L
+    ("Honda", "2011", "Accord%20V6-3.5L"), # Accord V6-3.5L
+    ("Honda", "2011", "CR-V%202WD%20L4-2.4L"), # CR-V 2WD L4-2.4L
+    ("Honda", "2011", "CR-V%204WD%20L4-2.4L"), # CR-V 4WD L4-2.4L
+    ("Honda", "2011", "Civic%20Si%20L4-2.0L"), # Civic Si L4-2.0L
+    ("Honda", "2011", "Civic%20L4-1.3L%20Hybrid"), # Civic L4-1.3L Hybrid
+    ("Honda", "2011", "Civic%20L4-1.8L%20CNG"), # Civic L4-1.8L CNG
+    ("Honda", "2011", "Civic%20L4-1.8L"), # Civic L4-1.8L
+    ("Honda", "2011", "Odyssey%20V6-3.5L"), # Odyssey V6-3.5L
+    ("Honda", "2011", "Pilot%202WD%20V6-3.5L"), # Pilot 2WD V6-3.5L
+    ("Honda", "2011", "Pilot%204WD%20V6-3.5L"), # Pilot 4WD V6-3.5L
+    ("Honda", "2012", "Accord%20L4-2.4L"), # Accord L4-2.4L
+    ("Honda", "2012", "Accord%20V6-3.5L"), # Accord V6-3.5L
+    ("Honda", "2012", "CR-V%202WD%20L4-2.4L"), # CR-V 2WD L4-2.4L
+    ("Honda", "2012", "CR-V%204WD%20L4-2.4L"), # CR-V 4WD L4-2.4L
+    ("Honda", "2012", "Civic%20HF%20L4-1.8L"), # Civic HF L4-1.8L
+    ("Honda", "2012", "Civic%20Hybrid%20L4-1.5L%20Hybrid"), # Civic Hybrid L4-1.5L Hybrid
+    ("Honda", "2012", "Civic%20Natural%20Gas%20L4-1.8L%20CNG"), # Civic Natural Gas L4-1.8L CNG
+    ("Honda", "2012", "Civic%20Si%20L4-2.4L"), # Civic Si L4-2.4L
+    ("Honda", "2012", "Civic%20L4-1.8L"), # Civic L4-1.8L
+    ("Honda", "2012", "Odyssey%20V6-3.5L"), # Odyssey V6-3.5L
+    ("Honda", "2012", "Pilot%202WD%20V6-3.5L"), # Pilot 2WD V6-3.5L
+    ("Honda", "2012", "Pilot%204WD%20V6-3.5L"), # Pilot 4WD V6-3.5L
+    ("Honda", "2013", "Accord%20Coupe%20L4-2.4L%20%28K24W1%29"), # Accord Coupe L4-2.4L (K24W1)
+    ("Honda", "2013", "Accord%20Coupe%20V6-3.5L%20%28J35Y1%29"), # Accord Coupe V6-3.5L (J35Y1)
+    ("Honda", "2013", "Accord%20Coupe%20V6-3.5L%20%28J35Y2%29"), # Accord Coupe V6-3.5L (J35Y2)
+    ("Honda", "2013", "Accord%20Sedan%20L4-2.4L%20%28K24W1%29"), # Accord Sedan L4-2.4L (K24W1)
+    ("Honda", "2013", "Accord%20Sedan%20V6-3.5L%20%28J35Y1%29"), # Accord Sedan V6-3.5L (J35Y1)
+    ("Honda", "2013", "CR-V%202WD%20L4-2.4L%20%28K24Z7%29"), # CR-V 2WD L4-2.4L (K24Z7)
+    ("Honda", "2013", "CR-V%204WD%20L4-2.4L%20%28K24Z7%29"), # CR-V 4WD L4-2.4L (K24Z7)
+    ("Honda", "2013", "Civic%20Coupe%20L4-1.8L%20%28R18Z1%29"), # Civic Coupe L4-1.8L (R18Z1)
+    ("Honda", "2013", "Civic%20Coupe%20L4-2.4L%20%28K24Z7%29"), # Civic Coupe L4-2.4L (K24Z7)
+    ("Honda", "2013", "Civic%20Sedan%20L4-1.5L%20%28LEA2%29%20Hybrid"), # Civic Sedan L4-1.5L (LEA2) Hybrid
+    ("Honda", "2013", "Civic%20Sedan%20L4-1.8L%20%28R18Z1%29"), # Civic Sedan L4-1.8L (R18Z1)
+    ("Honda", "2013", "Civic%20Sedan%20L4-1.8L%20CNG%20%28R18A9%29"), # Civic Sedan L4-1.8L CNG (R18A9)
+    ("Honda", "2013", "Civic%20Sedan%20L4-2.4L%20%28K24Z7%29"), # Civic Sedan L4-2.4L (K24Z7)
+    ("Honda", "2013", "Odyssey%20V6-3.5L%20%28J35Z8%29"), # Odyssey V6-3.5L (J35Z8)
+    ("Honda", "2013", "Pilot%202WD%20V6-3.5L%20%28J35Z4%29"), # Pilot 2WD V6-3.5L (J35Z4)
+    ("Honda", "2013", "Pilot%204WD%20V6-3.5L%20%28J35Z4%29"), # Pilot 4WD V6-3.5L (J35Z4)
+    ("Ford", "2010", "Escape%202WD%20L4-2.5L%20Hybrid"), # Escape 2WD L4-2.5L Hybrid
+    ("Ford", "2010", "Escape%202WD%20L4-2.5L"), # Escape 2WD L4-2.5L
+    ("Ford", "2010", "Escape%202WD%20V6-3.0L"), # Escape 2WD V6-3.0L
+    ("Ford", "2010", "Escape%204WD%20L4-2.5L%20Hybrid"), # Escape 4WD L4-2.5L Hybrid
+    ("Ford", "2010", "Escape%204WD%20L4-2.5L"), # Escape 4WD L4-2.5L
+    ("Ford", "2010", "Escape%204WD%20V6-3.0L"), # Escape 4WD V6-3.0L
+    ("Ford", "2010", "Explorer%202WD%20V6-4.0L"), # Explorer 2WD V6-4.0L
+    ("Ford", "2010", "Explorer%202WD%20V8-4.6L"), # Explorer 2WD V8-4.6L
+    ("Ford", "2010", "Explorer%204WD%20V6-4.0L"), # Explorer 4WD V6-4.0L
+    ("Ford", "2010", "Explorer%204WD%20V8-4.6L"), # Explorer 4WD V8-4.6L
+    ("Ford", "2010", "Explorer%20AWD%20V6-4.0L"), # Explorer AWD V6-4.0L
+    ("Ford", "2010", "Explorer%20AWD%20V8-4.6L"), # Explorer AWD V8-4.6L
+    ("Ford", "2010", "Explorer%20Sport%20Trac%202WD%20V6-4.0L"), # Explorer Sport Trac 2WD V6-4.0L
+    ("Ford", "2010", "Explorer%20Sport%20Trac%202WD%20V8-4.6L"), # Explorer Sport Trac 2WD V8-4.6L
+    ("Ford", "2010", "Explorer%20Sport%20Trac%204WD%20V6-4.0L"), # Explorer Sport Trac 4WD V6-4.0L
+    ("Ford", "2010", "Explorer%20Sport%20Trac%204WD%20V8-4.6L"), # Explorer Sport Trac 4WD V8-4.6L
+    ("Ford", "2010", "Explorer%20Sport%20Trac%20AWD%20V6-4.0L"), # Explorer Sport Trac AWD V6-4.0L
+    ("Ford", "2010", "Explorer%20Sport%20Trac%20AWD%20V8-4.6L"), # Explorer Sport Trac AWD V8-4.6L
+    ("Ford", "2010", "Focus%20L4-2.0L"), # Focus L4-2.0L
+    ("Ford", "2010", "Fusion%20AWD%20V6-3.0L"), # Fusion AWD V6-3.0L
+    ("Ford", "2010", "Fusion%20AWD%20V6-3.5L"), # Fusion AWD V6-3.5L
+    ("Ford", "2010", "Fusion%20FWD%20L4-2.5L%20Hybrid"), # Fusion FWD L4-2.5L Hybrid
+    ("Ford", "2010", "Fusion%20FWD%20L4-2.5L"), # Fusion FWD L4-2.5L
+    ("Ford", "2010", "Fusion%20FWD%20V6-3.0L"), # Fusion FWD V6-3.0L
+    ("Ford", "2010", "Fusion%20FWD%20V6-3.5L"), # Fusion FWD V6-3.5L
+    ("Ford", "2010", "Mustang%20V6-4.0L"), # Mustang V6-4.0L
+    ("Ford", "2010", "Mustang%20V8-4.6L"), # Mustang V8-4.6L
+    ("Ford", "2010", "Mustang%20V8-5.4L%20SC"), # Mustang V8-5.4L SC
+    ("Ford", "2010", "Taurus%20AWD%20V6-3.5L%20Turbo"), # Taurus AWD V6-3.5L Turbo
+    ("Ford", "2010", "Taurus%20AWD%20V6-3.5L"), # Taurus AWD V6-3.5L
+    ("Ford", "2010", "Taurus%20FWD%20V6-3.5L"), # Taurus FWD V6-3.5L
+    ("Ford", "2011", "Escape%202WD%20L4-2.5L%20Hybrid"), # Escape 2WD L4-2.5L Hybrid
+    ("Ford", "2011", "Escape%202WD%20L4-2.5L"), # Escape 2WD L4-2.5L
+    ("Ford", "2011", "Escape%202WD%20V6-3.0L"), # Escape 2WD V6-3.0L
+    ("Ford", "2011", "Escape%204WD%20L4-2.5L%20Hybrid"), # Escape 4WD L4-2.5L Hybrid
+    ("Ford", "2011", "Escape%204WD%20L4-2.5L"), # Escape 4WD L4-2.5L
+    ("Ford", "2011", "Escape%204WD%20V6-3.0L"), # Escape 4WD V6-3.0L
+    ("Ford", "2011", "Explorer%20AWD%20V6-3.5L"), # Explorer AWD V6-3.5L
+    ("Ford", "2011", "Explorer%20FWD%20V6-3.5L"), # Explorer FWD V6-3.5L
+    ("Ford", "2011", "Focus%20L4-2.0L"), # Focus L4-2.0L
+    ("Ford", "2011", "Fusion%20AWD%20V6-3.0L%20Flex%20Fuel"), # Fusion AWD V6-3.0L Flex Fuel
+    ("Ford", "2011", "Fusion%20AWD%20V6-3.5L"), # Fusion AWD V6-3.5L
+    ("Ford", "2011", "Fusion%20FWD%20L4-2.5L%20Hybrid"), # Fusion FWD L4-2.5L Hybrid
+    ("Ford", "2011", "Fusion%20FWD%20L4-2.5L"), # Fusion FWD L4-2.5L
+    ("Ford", "2011", "Fusion%20FWD%20V6-3.0L%20Flex%20Fuel"), # Fusion FWD V6-3.0L Flex Fuel
+    ("Ford", "2011", "Fusion%20FWD%20V6-3.5L"), # Fusion FWD V6-3.5L
+    ("Ford", "2011", "Mustang%20V6-3.7L"), # Mustang V6-3.7L
+    ("Ford", "2011", "Mustang%20V8-5.0L"), # Mustang V8-5.0L
+    ("Ford", "2011", "Mustang%20V8-5.4L%20SC"), # Mustang V8-5.4L SC
+    ("Ford", "2011", "Taurus%20AWD%20V6-3.5L%20Turbo"), # Taurus AWD V6-3.5L Turbo
+    ("Ford", "2011", "Taurus%20AWD%20V6-3.5L"), # Taurus AWD V6-3.5L
+    ("Ford", "2011", "Taurus%20FWD%20V6-3.5L"), # Taurus FWD V6-3.5L
+    ("Ford", "2012", "Escape%202WD%20L4-2.5L%20Hybrid"), # Escape 2WD L4-2.5L Hybrid
+    ("Ford", "2012", "Escape%202WD%20L4-2.5L"), # Escape 2WD L4-2.5L
+    ("Ford", "2012", "Escape%202WD%20V6-3.0L"), # Escape 2WD V6-3.0L
+    ("Ford", "2012", "Escape%204WD%20L4-2.5L%20Hybrid"), # Escape 4WD L4-2.5L Hybrid
+    ("Ford", "2012", "Escape%204WD%20L4-2.5L"), # Escape 4WD L4-2.5L
+    ("Ford", "2012", "Escape%204WD%20V6-3.0L"), # Escape 4WD V6-3.0L
+    ("Ford", "2012", "Explorer%20AWD%20V6-3.5L"), # Explorer AWD V6-3.5L
+    ("Ford", "2012", "Explorer%20FWD%20L4-2.0L%20Turbo"), # Explorer FWD L4-2.0L Turbo
+    ("Ford", "2012", "Explorer%20FWD%20V6-3.5L"), # Explorer FWD V6-3.5L
+    ("Ford", "2012", "Focus%20ELE-Electric%20Engine"), # Focus ELE-Electric Engine
+    ("Ford", "2012", "Focus%20L4-2.0L"), # Focus L4-2.0L
+    ("Ford", "2012", "Fusion%20AWD%20V6-3.0L%20Flex%20Fuel"), # Fusion AWD V6-3.0L Flex Fuel
+    ("Ford", "2012", "Fusion%20AWD%20V6-3.5L"), # Fusion AWD V6-3.5L
+    ("Ford", "2012", "Fusion%20FWD%20L4-2.5L%20Hybrid"), # Fusion FWD L4-2.5L Hybrid
+    ("Ford", "2012", "Fusion%20FWD%20L4-2.5L"), # Fusion FWD L4-2.5L
+    ("Ford", "2012", "Fusion%20FWD%20V6-3.0L%20Flex%20Fuel"), # Fusion FWD V6-3.0L Flex Fuel
+    ("Ford", "2012", "Fusion%20FWD%20V6-3.5L"), # Fusion FWD V6-3.5L
+    ("Ford", "2012", "Mustang%20V6-3.7L"), # Mustang V6-3.7L
+    ("Ford", "2012", "Mustang%20V8-5.0L%20VIN%20F"), # Mustang V8-5.0L VIN F
+    ("Ford", "2012", "Mustang%20V8-5.0L%20VIN%20U"), # Mustang V8-5.0L VIN U
+    ("Ford", "2012", "Mustang%20V8-5.4L%20SC"), # Mustang V8-5.4L SC
+    ("Ford", "2012", "Taurus%20AWD%20V6-3.5L%20Turbo"), # Taurus AWD V6-3.5L Turbo
+    ("Ford", "2012", "Taurus%20AWD%20V6-3.5L"), # Taurus AWD V6-3.5L
+    ("Ford", "2012", "Taurus%20FWD%20V6-3.5L"), # Taurus FWD V6-3.5L
+    ("Ford", "2013", "Escape%202WD%20L4-1.6L%20Turbo"), # Escape 2WD L4-1.6L Turbo
+    ("Ford", "2013", "Escape%202WD%20L4-2.0L%20Turbo"), # Escape 2WD L4-2.0L Turbo
+    ("Ford", "2013", "Escape%202WD%20L4-2.5L"), # Escape 2WD L4-2.5L
+    ("Ford", "2013", "Escape%204WD%20L4-1.6L%20Turbo"), # Escape 4WD L4-1.6L Turbo
+    ("Ford", "2013", "Escape%204WD%20L4-2.0L%20Turbo"), # Escape 4WD L4-2.0L Turbo
+    ("Ford", "2013", "Explorer%202WD%20L4-2.0L%20Turbo"), # Explorer 2WD L4-2.0L Turbo
+    ("Ford", "2013", "Explorer%202WD%20V6-3.5L"), # Explorer 2WD V6-3.5L
+    ("Ford", "2013", "Explorer%204WD%20V6-3.5L%20Turbo"), # Explorer 4WD V6-3.5L Turbo
+    ("Ford", "2013", "Explorer%204WD%20V6-3.5L"), # Explorer 4WD V6-3.5L
+    ("Ford", "2013", "Focus%20ELE-Electric%20Engine"), # Focus ELE-Electric Engine
+    ("Ford", "2013", "Focus%20L4-2.0L%20Turbo"), # Focus L4-2.0L Turbo
+    ("Ford", "2013", "Focus%20L4-2.0L"), # Focus L4-2.0L
+    ("Ford", "2013", "Fusion%20AWD%20L4-2.0L%20Turbo"), # Fusion AWD L4-2.0L Turbo
+    ("Ford", "2013", "Fusion%20FWD%20Energi%20L4-2.0L%20Hybrid"), # Fusion FWD Energi L4-2.0L Hybrid
+    ("Ford", "2013", "Fusion%20FWD%20Hybrid%20L4-2.0L%20Hybrid"), # Fusion FWD Hybrid L4-2.0L Hybrid
+    ("Ford", "2013", "Fusion%20FWD%20L4-1.6L%20Turbo"), # Fusion FWD L4-1.6L Turbo
+    ("Ford", "2013", "Fusion%20FWD%20L4-2.0L%20Turbo"), # Fusion FWD L4-2.0L Turbo
+    ("Ford", "2013", "Fusion%20FWD%20L4-2.5L"), # Fusion FWD L4-2.5L
+    ("Ford", "2013", "Mustang%20V6-3.7L"), # Mustang V6-3.7L
+    ("Ford", "2013", "Mustang%20V8-5.0L%20VIN%20F"), # Mustang V8-5.0L VIN F
+    ("Ford", "2013", "Mustang%20V8-5.0L%20VIN%20U"), # Mustang V8-5.0L VIN U
+    ("Ford", "2013", "Mustang%20V8-5.8L%20SC"), # Mustang V8-5.8L SC
+    ("Ford", "2013", "Taurus%20AWD%20V6-3.5L%20Turbo"), # Taurus AWD V6-3.5L Turbo
+    ("Ford", "2013", "Taurus%20AWD%20V6-3.5L"), # Taurus AWD V6-3.5L
+    ("Ford", "2013", "Taurus%20FWD%20L4-2.0L%20Turbo"), # Taurus FWD L4-2.0L Turbo
+    ("Ford", "2013", "Taurus%20FWD%20V6-3.5L"), # Taurus FWD V6-3.5L
+    ("Chrysler", "2010", "300%20SRT-8%20V8-6.1L"), # 300 SRT-8 V8-6.1L
+    ("Chrysler", "2010", "300%20V6-2.7L"), # 300 V6-2.7L
+    ("Chrysler", "2010", "300%20V6-3.5L"), # 300 V6-3.5L
+    ("Chrysler", "2010", "300%20V8-5.7L"), # 300 V8-5.7L
+    ("Chrysler", "2010", "Sebring%20Convertible%20L4-2.4L"), # Sebring Convertible L4-2.4L
+    ("Chrysler", "2010", "Sebring%20Convertible%20V6-2.7L%20Flex%20Fuel"), # Sebring Convertible V6-2.7L Flex Fuel
+    ("Chrysler", "2010", "Sebring%20Convertible%20V6-2.7L"), # Sebring Convertible V6-2.7L
+    ("Chrysler", "2010", "Sebring%20Convertible%20V6-3.5L"), # Sebring Convertible V6-3.5L
+    ("Chrysler", "2010", "Sebring%20Sedan%20L4-2.4L"), # Sebring Sedan L4-2.4L
+    ("Chrysler", "2010", "Sebring%20Sedan%20V6-2.7L%20Flex%20Fuel"), # Sebring Sedan V6-2.7L Flex Fuel
+    ("Chrysler", "2010", "Sebring%20Sedan%20V6-2.7L"), # Sebring Sedan V6-2.7L
+    ("Chrysler", "2010", "Sebring%20Sedan%20V6-3.5L"), # Sebring Sedan V6-3.5L
+    ("Chrysler", "2010", "Town%20%26%20Country%20V6-3.3L%20Flex%20Fuel"), # Town & Country V6-3.3L Flex Fuel
+    ("Chrysler", "2010", "Town%20%26%20Country%20V6-3.8L"), # Town & Country V6-3.8L
+    ("Chrysler", "2010", "Town%20%26%20Country%20V6-4.0L"), # Town & Country V6-4.0L
+    ("Chrysler", "2011", "200%20L4-2.4L"), # 200 L4-2.4L
+    ("Chrysler", "2011", "200%20V6-3.6L"), # 200 V6-3.6L
+    ("Chrysler", "2011", "300%20V6-3.6L"), # 300 V6-3.6L
+    ("Chrysler", "2011", "300%20V8-5.7L"), # 300 V8-5.7L
+    ("Chrysler", "2011", "Town%20%26%20Country%20V6-3.6L"), # Town & Country V6-3.6L
+    ("Chrysler", "2012", "200%20L4-2.4L"), # 200 L4-2.4L
+    ("Chrysler", "2012", "200%20V6-3.6L"), # 200 V6-3.6L
+    ("Chrysler", "2012", "300%20AWD%20V6-3.6L"), # 300 AWD V6-3.6L
+    ("Chrysler", "2012", "300%20AWD%20V8-5.7L"), # 300 AWD V8-5.7L
+    ("Chrysler", "2012", "300%20RWD%20SRT-8%20V8-6.4L"), # 300 RWD SRT-8 V8-6.4L
+    ("Chrysler", "2012", "300%20RWD%20V6-3.6L"), # 300 RWD V6-3.6L
+    ("Chrysler", "2012", "300%20RWD%20V8-5.7L"), # 300 RWD V8-5.7L
+    ("Chrysler", "2012", "Town%20%26%20Country%20V6-3.6L"), # Town & Country V6-3.6L
+    ("Chrysler", "2013", "200%20L4-2.4L"), # 200 L4-2.4L
+    ("Chrysler", "2013", "200%20V6-3.6L"), # 200 V6-3.6L
+    ("Chrysler", "2013", "300%20AWD%20V6-3.6L"), # 300 AWD V6-3.6L
+    ("Chrysler", "2013", "300%20AWD%20V8-5.7L"), # 300 AWD V8-5.7L
+    ("Chrysler", "2013", "300%20RWD%20SRT-8%20V8-6.4L"), # 300 RWD SRT-8 V8-6.4L
+    ("Chrysler", "2013", "300%20RWD%20V6-3.6L"), # 300 RWD V6-3.6L
+    ("Chrysler", "2013", "300%20RWD%20V8-5.7L"), # 300 RWD V8-5.7L
+    ("Chrysler", "2013", "Town%20%26%20Country%20V6-3.6L"), # Town & Country V6-3.6L
+    ("Jeep", "2010", "Compass%202WD%20L4-2.0L"), # Compass 2WD L4-2.0L
+    ("Jeep", "2010", "Compass%202WD%20L4-2.4L"), # Compass 2WD L4-2.4L
+    ("Jeep", "2010", "Compass%204WD%20L4-2.0L"), # Compass 4WD L4-2.0L
+    ("Jeep", "2010", "Compass%204WD%20L4-2.4L"), # Compass 4WD L4-2.4L
+    ("Jeep", "2010", "Wrangler%202WD%20V6-3.8L"), # Wrangler 2WD V6-3.8L
+    ("Jeep", "2010", "Wrangler%204WD%20V6-3.8L"), # Wrangler 4WD V6-3.8L
+    ("Jeep", "2011", "Compass%202WD%20L4-2.0L"), # Compass 2WD L4-2.0L
+    ("Jeep", "2011", "Compass%202WD%20L4-2.4L"), # Compass 2WD L4-2.4L
+    ("Jeep", "2011", "Compass%204WD%20L4-2.0L"), # Compass 4WD L4-2.0L
+    ("Jeep", "2011", "Compass%204WD%20L4-2.4L"), # Compass 4WD L4-2.4L
+    ("Jeep", "2011", "Wrangler%20V6-3.8L"), # Wrangler V6-3.8L
+    ("Jeep", "2012", "Compass%202WD%20L4-2.0L"), # Compass 2WD L4-2.0L
+    ("Jeep", "2012", "Compass%202WD%20L4-2.4L"), # Compass 2WD L4-2.4L
+    ("Jeep", "2012", "Compass%204WD%20L4-2.4L"), # Compass 4WD L4-2.4L
+    ("Jeep", "2012", "Wrangler%20V6-3.6L"), # Wrangler V6-3.6L
+    ("Jeep", "2013", "Compass%202WD%20L4-2.0L"), # Compass 2WD L4-2.0L
+    ("Jeep", "2013", "Compass%202WD%20L4-2.4L"), # Compass 2WD L4-2.4L
+    ("Jeep", "2013", "Compass%204WD%20L4-2.4L"), # Compass 4WD L4-2.4L
+    ("Jeep", "2013", "Wrangler%20V6-3.6L"), # Wrangler V6-3.6L
+    ("Lincoln", "2010", "MKS%20AWD%20V6-3.5L%20Turbo"), # MKS AWD V6-3.5L Turbo
+    ("Lincoln", "2010", "MKS%20AWD%20V6-3.7L"), # MKS AWD V6-3.7L
+    ("Lincoln", "2010", "MKS%20FWD%20V6-3.7L"), # MKS FWD V6-3.7L
+    ("Lincoln", "2010", "MKX%20AWD%20V6-3.5L"), # MKX AWD V6-3.5L
+    ("Lincoln", "2010", "MKX%20FWD%20V6-3.5L"), # MKX FWD V6-3.5L
+    ("Lincoln", "2010", "MKZ%20AWD%20V6-3.5L"), # MKZ AWD V6-3.5L
+    ("Lincoln", "2010", "MKZ%20FWD%20V6-3.5L"), # MKZ FWD V6-3.5L
+    ("Lincoln", "2010", "Town%20Car%20V8-4.6L%20Flex%20Fuel"), # Town Car V8-4.6L Flex Fuel
+    ("Lincoln", "2010", "Town%20Car%20V8-4.6L"), # Town Car V8-4.6L
+    ("Lincoln", "2011", "MKS%20AWD%20V6-3.5L%20Turbo"), # MKS AWD V6-3.5L Turbo
+    ("Lincoln", "2011", "MKS%20AWD%20V6-3.7L"), # MKS AWD V6-3.7L
+    ("Lincoln", "2011", "MKS%20FWD%20V6-3.7L"), # MKS FWD V6-3.7L
+    ("Lincoln", "2011", "MKX%20AWD%20V6-3.7L"), # MKX AWD V6-3.7L
+    ("Lincoln", "2011", "MKX%20FWD%20V6-3.7L"), # MKX FWD V6-3.7L
+    ("Lincoln", "2011", "MKZ%20AWD%20V6-3.5L"), # MKZ AWD V6-3.5L
+    ("Lincoln", "2011", "MKZ%20FWD%20L4-2.5L%20Hybrid"), # MKZ FWD L4-2.5L Hybrid
+    ("Lincoln", "2011", "MKZ%20FWD%20V6-3.5L"), # MKZ FWD V6-3.5L
+    ("Lincoln", "2011", "Town%20Car%20V8-4.6L%20Flex%20Fuel"), # Town Car V8-4.6L Flex Fuel
+    ("Lincoln", "2011", "Town%20Car%20V8-4.6L"), # Town Car V8-4.6L
+    ("Lincoln", "2012", "MKS%20AWD%20V6-3.5L%20Turbo"), # MKS AWD V6-3.5L Turbo
+    ("Lincoln", "2012", "MKS%20AWD%20V6-3.7L"), # MKS AWD V6-3.7L
+    ("Lincoln", "2012", "MKS%20FWD%20V6-3.7L"), # MKS FWD V6-3.7L
+    ("Lincoln", "2012", "MKX%20AWD%20V6-3.7L"), # MKX AWD V6-3.7L
+    ("Lincoln", "2012", "MKX%20FWD%20V6-3.7L"), # MKX FWD V6-3.7L
+    ("Lincoln", "2012", "MKZ%20AWD%20V6-3.5L"), # MKZ AWD V6-3.5L
+    ("Lincoln", "2012", "MKZ%20FWD%20L4-2.5L%20Hybrid"), # MKZ FWD L4-2.5L Hybrid
+    ("Lincoln", "2012", "MKZ%20FWD%20V6-3.5L"), # MKZ FWD V6-3.5L
+    ("Lincoln", "2013", "MKS%20AWD%20V6-3.5L%20Turbo"), # MKS AWD V6-3.5L Turbo
+    ("Lincoln", "2013", "MKS%20AWD%20V6-3.7L"), # MKS AWD V6-3.7L
+    ("Lincoln", "2013", "MKS%20FWD%20V6-3.7L"), # MKS FWD V6-3.7L
+    ("Lincoln", "2013", "MKX%20AWD%20V6-3.7L"), # MKX AWD V6-3.7L
+    ("Lincoln", "2013", "MKX%20FWD%20V6-3.7L"), # MKX FWD V6-3.7L
+    ("Lincoln", "2013", "MKZ%20AWD%20L4-2.0L%20Turbo"), # MKZ AWD L4-2.0L Turbo
+    ("Lincoln", "2013", "MKZ%20AWD%20V6-3.7L"), # MKZ AWD V6-3.7L
+    ("Lincoln", "2013", "MKZ%20FWD%20L4-2.0L%20Hybrid"), # MKZ FWD L4-2.0L Hybrid
+    ("Lincoln", "2013", "MKZ%20FWD%20L4-2.0L%20Turbo"), # MKZ FWD L4-2.0L Turbo
+    ("Lincoln", "2013", "MKZ%20FWD%20V6-3.7L"), # MKZ FWD V6-3.7L
+    ("Jaguar", "2010", "XF%20%28X250%29%20V8-4.2L"), # XF (X250) V8-4.2L
+    ("Jaguar", "2010", "XF%20%28X250%29%20V8-5.0L%20SC"), # XF (X250) V8-5.0L SC
+    ("Jaguar", "2010", "XF%20%28X250%29%20V8-5.0L"), # XF (X250) V8-5.0L
+    ("Jaguar", "2010", "XJ%20%28X351%29%20V8-5.0L%20SC"), # XJ (X351) V8-5.0L SC
+    ("Jaguar", "2010", "XJ%20%28X351%29%20V8-5.0L"), # XJ (X351) V8-5.0L
+    ("Jaguar", "2010", "XK%20%28X150%29%20V8-5.0L%20SC"), # XK (X150) V8-5.0L SC
+    ("Jaguar", "2010", "XK%20%28X150%29%20V8-5.0L"), # XK (X150) V8-5.0L
+    ("Jaguar", "2011", "XF%20%28X250%29%20V8-5.0L%20SC"), # XF (X250) V8-5.0L SC
+    ("Jaguar", "2011", "XF%20%28X250%29%20V8-5.0L"), # XF (X250) V8-5.0L
+    ("Jaguar", "2011", "XJ%20%28X351%29%20V8-5.0L%20SC"), # XJ (X351) V8-5.0L SC
+    ("Jaguar", "2011", "XJ%20%28X351%29%20V8-5.0L"), # XJ (X351) V8-5.0L
+    ("Jaguar", "2011", "XK%20%28X150%29%20V8-5.0L%20SC"), # XK (X150) V8-5.0L SC
+    ("Jaguar", "2011", "XK%20%28X150%29%20V8-5.0L"), # XK (X150) V8-5.0L
+    ("Jaguar", "2012", "XF%20%28X250%29%20V8-5.0L%20SC"), # XF (X250) V8-5.0L SC
+    ("Jaguar", "2012", "XF%20%28X250%29%20V8-5.0L"), # XF (X250) V8-5.0L
+    ("Jaguar", "2012", "XJ%20%28X351%29%20V8-5.0L%20SC"), # XJ (X351) V8-5.0L SC
+    ("Jaguar", "2012", "XJ%20%28X351%29%20V8-5.0L"), # XJ (X351) V8-5.0L
+    ("Jaguar", "2012", "XK%20%28X150%29%20V8-5.0L%20SC"), # XK (X150) V8-5.0L SC
+    ("Jaguar", "2012", "XK%20%28X150%29%20V8-5.0L"), # XK (X150) V8-5.0L
+    ("Jaguar", "2013", "XF%20AWD%20%28X250%29%20V6-3.0L%20SC"), # XF AWD (X250) V6-3.0L SC
+    ("Jaguar", "2013", "XF%20RWD%20%28X250%29%20L4-2.0L%20Turbo"), # XF RWD (X250) L4-2.0L Turbo
+    ("Jaguar", "2013", "XF%20RWD%20%28X250%29%20V6-3.0L%20SC"), # XF RWD (X250) V6-3.0L SC
+    ("Jaguar", "2013", "XF%20RWD%20%28X250%29%20V8-5.0L%20SC"), # XF RWD (X250) V8-5.0L SC
+    ("Jaguar", "2013", "XJ%20AWD%20%28X351%29%20V6-3.0L%20SC"), # XJ AWD (X351) V6-3.0L SC
+    ("Jaguar", "2013", "XJ%20RWD%20%28X351%29%20V6-3.0L%20SC"), # XJ RWD (X351) V6-3.0L SC
+    ("Jaguar", "2013", "XJ%20RWD%20%28X351%29%20V8-5.0L%20SC"), # XJ RWD (X351) V8-5.0L SC
+    ("Jaguar", "2013", "XJ%20RWD%20%28X351%29%20V8-5.0L"), # XJ RWD (X351) V8-5.0L
+    ("Jaguar", "2013", "XK%20%28X150%29%20V8-5.0L%20SC"), # XK (X150) V8-5.0L SC
+    ("Jaguar", "2013", "XK%20%28X150%29%20V8-5.0L"), # XK (X150) V8-5.0L
+    ("Mini", "2010", "Cooper%20%28R56%29%20L4-1.6L%20%28N12%29"), # Cooper (R56) L4-1.6L (N12)
+    ("Mini", "2010", "Cooper%20Clubman%20%28R55%29%20L4-1.6L%20%28N12%29"), # Cooper Clubman (R55) L4-1.6L (N12)
+    ("Mini", "2010", "Cooper%20Convertible%20%28R57%29%20L4-1.6L%20%28N12%29"), # Cooper Convertible (R57) L4-1.6L (N12)
+    ("Mini", "2010", "Cooper%20JCW%20%28R56%29%20L4-1.6L%20Turbo%20%28N14%29"), # Cooper JCW (R56) L4-1.6L Turbo (N14)
+    ("Mini", "2010", "Cooper%20JCW%20Clubman%20%28R55%29%20L4-1.6L%20Turbo%20%28N14%29"), # Cooper JCW Clubman (R55) L4-1.6L Turbo (N14)
+    ("Mini", "2010", "Cooper%20JCW%20Convertible%20%28R57%29%20L4-1.6L%20Turbo%20%28N14%29"), # Cooper JCW Convertible (R57) L4-1.6L Turbo (N14)
+    ("Mini", "2010", "Cooper%20S%20%28R56%29%20L4-1.6L%20Turbo%20%28N14%29"), # Cooper S (R56) L4-1.6L Turbo (N14)
+    ("Mini", "2010", "Cooper%20S%20Clubman%20%28R55%29%20L4-1.6L%20Turbo%20%28N14%29"), # Cooper S Clubman (R55) L4-1.6L Turbo (N14)
+    ("Mini", "2010", "Cooper%20S%20Convertible%20%28R57%29%20L4-1.6L%20Turbo%20%28N14%29"), # Cooper S Convertible (R57) L4-1.6L Turbo (N14)
+    ("Mini", "2011", "Cooper%20%28R56%29%20L4-1.6L%20%28N16%29"), # Cooper (R56) L4-1.6L (N16)
+    ("Mini", "2011", "Cooper%20Clubman%20%28R55%29%20L4-1.6L%20%28N16%29"), # Cooper Clubman (R55) L4-1.6L (N16)
+    ("Mini", "2011", "Cooper%20Convertible%20%28R57%29%20L4-1.6L%20%28N16%29"), # Cooper Convertible (R57) L4-1.6L (N16)
+    ("Mini", "2011", "Cooper%20Countryman%20%28R60%29%20L4-1.6L%20%28N16%29"), # Cooper Countryman (R60) L4-1.6L (N16)
+    ("Mini", "2011", "Cooper%20JCW%20%28R56%29%20L4-1.6L%20Turbo%20%28N14%29"), # Cooper JCW (R56) L4-1.6L Turbo (N14)
+    ("Mini", "2011", "Cooper%20JCW%20Clubman%20%28R55%29%20L4-1.6L%20Turbo%20%28N14%29"), # Cooper JCW Clubman (R55) L4-1.6L Turbo (N14)
+    ("Mini", "2011", "Cooper%20JCW%20Convertible%20%28R57%29%20L4-1.6L%20Turbo%20%28N14%29"), # Cooper JCW Convertible (R57) L4-1.6L Turbo (N14)
+    ("Mini", "2011", "Cooper%20S%20%28R56%29%20L4-1.6L%20Turbo%20%28N18%29"), # Cooper S (R56) L4-1.6L Turbo (N18)
+    ("Mini", "2011", "Cooper%20S%20Clubman%20%28R55%29%20L4-1.6L%20Turbo%20%28N18%29"), # Cooper S Clubman (R55) L4-1.6L Turbo (N18)
+    ("Mini", "2011", "Cooper%20S%20Convertible%20%28R57%29%20L4-1.6L%20Turbo%20%28N18%29"), # Cooper S Convertible (R57) L4-1.6L Turbo (N18)
+    ("Mini", "2011", "Cooper%20S%20Countryman%20%28R60%29%20L4-1.6L%20Turbo%20%28N18%29"), # Cooper S Countryman (R60) L4-1.6L Turbo (N18)
+    ("Mini", "2011", "Cooper%20S%20Countryman%20ALL4%20%28R60%29%20L4-1.6L%20Turbo%20%28N18%29"), # Cooper S Countryman ALL4 (R60) L4-1.6L Turbo (N18)
+    ("Mini", "2012", "Cooper%20%28R56%29%20L4-1.6L%20%28N16%29"), # Cooper (R56) L4-1.6L (N16)
+    ("Mini", "2012", "Cooper%20Clubman%20%28R55%29%20L4-1.6L%20%28N16%29"), # Cooper Clubman (R55) L4-1.6L (N16)
+    ("Mini", "2012", "Cooper%20Convertible%20%28R57%29%20L4-1.6L%20%28N16%29"), # Cooper Convertible (R57) L4-1.6L (N16)
+    ("Mini", "2012", "Cooper%20Countryman%20%28R60%29%20L4-1.6L%20%28N16%29"), # Cooper Countryman (R60) L4-1.6L (N16)
+    ("Mini", "2012", "Cooper%20JCW%20%28R56%29%20L4-1.6L%20Turbo%20%28N14%29"), # Cooper JCW (R56) L4-1.6L Turbo (N14)
+    ("Mini", "2012", "Cooper%20JCW%20Clubman%20%28R55%29%20L4-1.6L%20Turbo%20%28N14%29"), # Cooper JCW Clubman (R55) L4-1.6L Turbo (N14)
+    ("Mini", "2012", "Cooper%20JCW%20Convertible%20%28R57%29%20L4-1.6L%20Turbo%20%28N14%29"), # Cooper JCW Convertible (R57) L4-1.6L Turbo (N14)
+    ("Mini", "2012", "Cooper%20JCW%20Roadster%20%28R59%29%20L4-1.6L%20Turbo%20%28N14%29"), # Cooper JCW Roadster (R59) L4-1.6L Turbo (N14)
+    ("Mini", "2012", "Cooper%20Roadster%20%28R59%29%20L4-1.6L%20%28N16%29"), # Cooper Roadster (R59) L4-1.6L (N16)
+    ("Mini", "2012", "Cooper%20S%20%28R56%29%20L4-1.6L%20Turbo%20%28N18%29"), # Cooper S (R56) L4-1.6L Turbo (N18)
+    ("Mini", "2012", "Cooper%20S%20Clubman%20%28R55%29%20L4-1.6L%20Turbo%20%28N18%29"), # Cooper S Clubman (R55) L4-1.6L Turbo (N18)
+    ("Mini", "2012", "Cooper%20S%20Convertible%20%28R57%29%20L4-1.6L%20Turbo%20%28N18%29"), # Cooper S Convertible (R57) L4-1.6L Turbo (N18)
+    ("Mini", "2012", "Cooper%20S%20Countryman%20%28R60%29%20L4-1.6L%20Turbo%20%28N18%29"), # Cooper S Countryman (R60) L4-1.6L Turbo (N18)
+    ("Mini", "2012", "Cooper%20S%20Countryman%20ALL4%20%28R60%29%20L4-1.6L%20Turbo%20%28N18%29"), # Cooper S Countryman ALL4 (R60) L4-1.6L Turbo (N18)
+    ("Mini", "2012", "Cooper%20S%20Roadster%20%28R59%29%20L4-1.6L%20Turbo%20%28N18%29"), # Cooper S Roadster (R59) L4-1.6L Turbo (N18)
+    ("Mini", "2013", "Cooper%20%28R56%29%20L4-1.6L%20%28N16%29"), # Cooper (R56) L4-1.6L (N16)
+    ("Mini", "2013", "Cooper%20Clubman%20%28R55%29%20L4-1.6L%20%28N16%29"), # Cooper Clubman (R55) L4-1.6L (N16)
+    ("Mini", "2013", "Cooper%20Convertible%20%28R57%29%20L4-1.6L%20%28N16%29"), # Cooper Convertible (R57) L4-1.6L (N16)
+    ("Mini", "2013", "Cooper%20Countryman%20%28R60%29%20L4-1.6L%20%28N16%29"), # Cooper Countryman (R60) L4-1.6L (N16)
+    ("Mini", "2013", "Cooper%20JCW%20%28R56%29%20L4-1.6L%20Turbo%20%28N18%29"), # Cooper JCW (R56) L4-1.6L Turbo (N18)
+    ("Mini", "2013", "Cooper%20JCW%20Clubman%20%28R55%29%20L4-1.6L%20Turbo%20%28N18%29"), # Cooper JCW Clubman (R55) L4-1.6L Turbo (N18)
+    ("Mini", "2013", "Cooper%20JCW%20Convertible%20%28R57%29%20L4-1.6L%20Turbo%20%28N18%29"), # Cooper JCW Convertible (R57) L4-1.6L Turbo (N18)
+    ("Mini", "2013", "Cooper%20JCW%20Countryman%20%28R60%29%20L4-1.6L%20Turbo%20%28N18%29"), # Cooper JCW Countryman (R60) L4-1.6L Turbo (N18)
+    ("Mini", "2013", "Cooper%20JCW%20Paceman%20%28R61%29%20L4-1.6L%20Turbo%20%28N18%29"), # Cooper JCW Paceman (R61) L4-1.6L Turbo (N18)
+    ("Mini", "2013", "Cooper%20JCW%20Roadster%20%28R59%29%20L4-1.6L%20Turbo%20%28N18%29"), # Cooper JCW Roadster (R59) L4-1.6L Turbo (N18)
+    ("Mini", "2013", "Cooper%20Paceman%20%28R61%29%20L4-1.6L%20%28N16%29"), # Cooper Paceman (R61) L4-1.6L (N16)
+    ("Mini", "2013", "Cooper%20Roadster%20%28R59%29%20L4-1.6L%20%28N16%29"), # Cooper Roadster (R59) L4-1.6L (N16)
+    ("Mini", "2013", "Cooper%20S%20%28R56%29%20L4-1.6L%20Turbo%20%28N18%29"), # Cooper S (R56) L4-1.6L Turbo (N18)
+    ("Mini", "2013", "Cooper%20S%20Clubman%20%28R55%29%20L4-1.6L%20Turbo%20%28N18%29"), # Cooper S Clubman (R55) L4-1.6L Turbo (N18)
+    ("Mini", "2013", "Cooper%20S%20Convertible%20%28R57%29%20L4-1.6L%20Turbo%20%28N18%29"), # Cooper S Convertible (R57) L4-1.6L Turbo (N18)
+    ("Mini", "2013", "Cooper%20S%20Countryman%20%28R60%29%20L4-1.6L%20Turbo%20%28N18%29"), # Cooper S Countryman (R60) L4-1.6L Turbo (N18)
+    ("Mini", "2013", "Cooper%20S%20Countryman%20ALL4%20%28R60%29%20L4-1.6L%20Turbo%20%28N18%29"), # Cooper S Countryman ALL4 (R60) L4-1.6L Turbo (N18)
+    ("Mini", "2013", "Cooper%20S%20Paceman%20%28R61%29%20L4-1.6L%20Turbo%20%28N18%29"), # Cooper S Paceman (R61) L4-1.6L Turbo (N18)
+    ("Mini", "2013", "Cooper%20S%20Paceman%20ALL4%20%28R61%29%20L4-1.6L%20Turbo%20%28N18%29"), # Cooper S Paceman ALL4 (R61) L4-1.6L Turbo (N18)
+    ("Mini", "2013", "Cooper%20S%20Roadster%20%28R59%29%20L4-1.6L%20Turbo%20%28N18%29"), # Cooper S Roadster (R59) L4-1.6L Turbo (N18)
+    ("Lexus", "2010", "GS%20350%20AWD%20V6-3.5L%20%282GR-FSE%29"), # GS 350 AWD V6-3.5L (2GR-FSE)
+    ("Lexus", "2010", "GS%20350%20RWD%20V6-3.5L%20%282GR-FSE%29"), # GS 350 RWD V6-3.5L (2GR-FSE)
+    ("Lexus", "2010", "IS%20250%20AWD%20V6-2.5L%20%284GR-FSE%29"), # IS 250 AWD V6-2.5L (4GR-FSE)
+    ("Lexus", "2010", "IS%20250%20RWD%20V6-2.5L%20%284GR-FSE%29"), # IS 250 RWD V6-2.5L (4GR-FSE)
+    ("Lexus", "2010", "IS%20250C%20V6-2.5L%20%284GR-FSE%29"), # IS 250C V6-2.5L (4GR-FSE)
+    ("Lexus", "2010", "LS%20460%20AWD%20V8-4.6L%20%281UR-FSE%29"), # LS 460 AWD V8-4.6L (1UR-FSE)
+    ("Lexus", "2010", "LS%20460%20RWD%20V8-4.6L%20%281UR-FSE%29"), # LS 460 RWD V8-4.6L (1UR-FSE)
+    ("Lexus", "2011", "CT%20200h%20L4-1.8L%20%282ZR-FXE%29%20Hybrid"), # CT 200h L4-1.8L (2ZR-FXE) Hybrid
+    ("Lexus", "2011", "GS%20350%20AWD%20V6-3.5L%20%282GR-FSE%29"), # GS 350 AWD V6-3.5L (2GR-FSE)
+    ("Lexus", "2011", "GS%20350%20RWD%20V6-3.5L%20%282GR-FSE%29"), # GS 350 RWD V6-3.5L (2GR-FSE)
+    ("Lexus", "2011", "IS%20250%20AWD%20V6-2.5L%20%284GR-FSE%29"), # IS 250 AWD V6-2.5L (4GR-FSE)
+    ("Lexus", "2011", "IS%20250%20RWD%20V6-2.5L%20%284GR-FSE%29"), # IS 250 RWD V6-2.5L (4GR-FSE)
+    ("Lexus", "2011", "IS%20250C%20V6-2.5L%20%284GR-FSE%29"), # IS 250C V6-2.5L (4GR-FSE)
+    ("Lexus", "2011", "LS%20460%20AWD%20V8-4.6L%20%281UR-FSE%29"), # LS 460 AWD V8-4.6L (1UR-FSE)
+    ("Lexus", "2011", "LS%20460%20RWD%20V8-4.6L%20%281UR-FSE%29"), # LS 460 RWD V8-4.6L (1UR-FSE)
+    ("Lexus", "2012", "CT%20200h%20L4-1.8L%20%282ZR-FXE%29%20Hybrid"), # CT 200h L4-1.8L (2ZR-FXE) Hybrid
+    ("Lexus", "2012", "IS%20250%20AWD%20V6-2.5L%20%284GR-FSE%29"), # IS 250 AWD V6-2.5L (4GR-FSE)
+    ("Lexus", "2012", "IS%20250%20RWD%20V6-2.5L%20%284GR-FSE%29"), # IS 250 RWD V6-2.5L (4GR-FSE)
+    ("Lexus", "2012", "IS%20250C%20V6-2.5L%20%284GR-FSE%29"), # IS 250C V6-2.5L (4GR-FSE)
+    ("Lexus", "2012", "LS%20460%20AWD%20V8-4.6L%20%281UR-FSE%29"), # LS 460 AWD V8-4.6L (1UR-FSE)
+    ("Lexus", "2012", "LS%20460%20RWD%20V8-4.6L%20%281UR-FSE%29"), # LS 460 RWD V8-4.6L (1UR-FSE)
+    ("Lexus", "2013", "CT%20200h%20L4-1.8L%20%282ZR-FXE%29%20Hybrid"), # CT 200h L4-1.8L (2ZR-FXE) Hybrid
+    ("Lexus", "2013", "ES%20300h%20L4-2.5L%20%282AR-FXE%29%20Hybrid"), # ES 300h L4-2.5L (2AR-FXE) Hybrid
+    ("Lexus", "2013", "GS%20350%20AWD%20V6-3.5L%20%282GR-FSE%29"), # GS 350 AWD V6-3.5L (2GR-FSE)
+    ("Lexus", "2013", "GS%20350%20RWD%20V6-3.5L%20%282GR-FSE%29"), # GS 350 RWD V6-3.5L (2GR-FSE)
+    ("Lexus", "2013", "IS%20250%20AWD%20V6-2.5L%20%284GR-FSE%29"), # IS 250 AWD V6-2.5L (4GR-FSE)
+    ("Lexus", "2013", "IS%20250%20RWD%20V6-2.5L%20%284GR-FSE%29"), # IS 250 RWD V6-2.5L (4GR-FSE)
+    ("Lexus", "2013", "IS%20250C%20V6-2.5L%20%284GR-FSE%29"), # IS 250C V6-2.5L (4GR-FSE)
+    ("Lexus", "2013", "LS%20460%20AWD%20V8-4.6L%20%281UR-FSE%29"), # LS 460 AWD V8-4.6L (1UR-FSE)
+    ("Lexus", "2013", "LS%20460%20RWD%20V8-4.6L%20%281UR-FSE%29"), # LS 460 RWD V8-4.6L (1UR-FSE)
+    ("Volkswagen", "2010", "CC%20%28357%29%20L4-2.0L%20Turbo%20%28CCTA%29"), # CC (357) L4-2.0L Turbo (CCTA)
+    ("Volkswagen", "2010", "CC%20%28357%29%20V6-3.6L%20%28BLV%29"), # CC (357) V6-3.6L (BLV)
+    ("Volkswagen", "2010", "CC%204Motion%20%28357%29%20V6-3.6L%20%28BLV%29"), # CC 4Motion (357) V6-3.6L (BLV)
+    ("Volkswagen", "2010", "City%20Golf%20%289B3%29%20%28CANADA%29%20L4-2.0L%20%28BEV%29"), # City Golf (9B3) (CANADA) L4-2.0L (BEV)
+    ("Volkswagen", "2010", "Eos%20%281F7%29%20L4-2.0L%20Turbo%20%28CCTA%29"), # Eos (1F7) L4-2.0L Turbo (CCTA)
+    ("Volkswagen", "2010", "GTI%20%285K1%29%20L4-2.0L%20Turbo%20%28CCTA%29"), # GTI (5K1) L4-2.0L Turbo (CCTA)
+    ("Volkswagen", "2010", "Golf%20%285K1%29%20L4-2.0L%20DSL%20Turbo%20%28CJAA%29"), # Golf (5K1) L4-2.0L DSL Turbo (CJAA)
+    ("Volkswagen", "2010", "Golf%20%285K1%29%20L5-2.5L%20%28CBTA%29"), # Golf (5K1) L5-2.5L (CBTA)
+    ("Volkswagen", "2010", "Golf%20%285K1%29%20L5-2.5L%20%28CBUA%29"), # Golf (5K1) L5-2.5L (CBUA)
+    ("Volkswagen", "2010", "Golf%20Wagon%20%28AJ5%29%20%28CANADA%29%20L4-2.0L%20DSL%20Turbo%20%28CJAA%29"), # Golf Wagon (AJ5) (CANADA) L4-2.0L DSL Turbo (CJAA)
+    ("Volkswagen", "2010", "Golf%20Wagon%20%28AJ5%29%20%28CANADA%29%20L5-2.5L%20%28CBTA%29"), # Golf Wagon (AJ5) (CANADA) L5-2.5L (CBTA)
+    ("Volkswagen", "2010", "Golf%20Wagon%20%28AJ5%29%20%28CANADA%29%20L5-2.5L%20%28CBUA%29"), # Golf Wagon (AJ5) (CANADA) L5-2.5L (CBUA)
+    ("Volkswagen", "2010", "Jetta%20GLI%20%281K2%29%20L4-2.0L%20Turbo%20%28CBFA%29"), # Jetta GLI (1K2) L4-2.0L Turbo (CBFA)
+    ("Volkswagen", "2010", "Jetta%20GLI%20%281K2%29%20L4-2.0L%20Turbo%20%28CCTA%29"), # Jetta GLI (1K2) L4-2.0L Turbo (CCTA)
+    ("Volkswagen", "2010", "Jetta%20Sedan%20%281K2%29%20L4-2.0L%20DSL%20Turbo%20%28CJAA%29"), # Jetta Sedan (1K2) L4-2.0L DSL Turbo (CJAA)
+    ("Volkswagen", "2010", "Jetta%20Sedan%20%281K2%29%20L5-2.5L%20%28CBTA%29"), # Jetta Sedan (1K2) L5-2.5L (CBTA)
+    ("Volkswagen", "2010", "Jetta%20Sedan%20%281K2%29%20L5-2.5L%20%28CBUA%29"), # Jetta Sedan (1K2) L5-2.5L (CBUA)
+    ("Volkswagen", "2010", "Jetta%20SportWagen%20%28AJ5%29%20L4-2.0L%20DSL%20Turbo%20%28CJAA%29"), # Jetta SportWagen (AJ5) L4-2.0L DSL Turbo (CJAA)
+    ("Volkswagen", "2010", "Jetta%20SportWagen%20%28AJ5%29%20L5-2.5L%20%28CBTA%29"), # Jetta SportWagen (AJ5) L5-2.5L (CBTA)
+    ("Volkswagen", "2010", "Jetta%20SportWagen%20%28AJ5%29%20L5-2.5L%20%28CBUA%29"), # Jetta SportWagen (AJ5) L5-2.5L (CBUA)
+    ("Volkswagen", "2010", "New%20Beetle%20%281C1%29%20L5-2.5L%20%28BPR%29"), # New Beetle (1C1) L5-2.5L (BPR)
+    ("Volkswagen", "2010", "New%20Beetle%20%281C1%29%20L5-2.5L%20%28BPS%29"), # New Beetle (1C1) L5-2.5L (BPS)
+    ("Volkswagen", "2010", "New%20Beetle%20Convertible%20%281Y7%29%20L5-2.5L%20%28BPR%29"), # New Beetle Convertible (1Y7) L5-2.5L (BPR)
+    ("Volkswagen", "2010", "New%20Beetle%20Convertible%20%281Y7%29%20L5-2.5L%20%28BPS%29"), # New Beetle Convertible (1Y7) L5-2.5L (BPS)
+    ("Volkswagen", "2010", "Passat%20CC%20AWD%20%28357%29%20%28CANADA%29%20V6-3.6L%20%28BLV%29"), # Passat CC AWD (357) (CANADA) V6-3.6L (BLV)
+    ("Volkswagen", "2010", "Passat%20CC%20FWD%20%28357%29%20%28CANADA%29%20L4-2.0L%20Turbo%20%28CCTA%29"), # Passat CC FWD (357) (CANADA) L4-2.0L Turbo (CCTA)
+    ("Volkswagen", "2010", "Passat%20Sedan%20%283C2%29%20%28CANADA%29%20V6-3.6L%20%28BLV%29"), # Passat Sedan (3C2) (CANADA) V6-3.6L (BLV)
+    ("Volkswagen", "2010", "Passat%20Sedan%20%283C2%29%20L4-2.0L%20Turbo%20%28CBFA%29"), # Passat Sedan (3C2) L4-2.0L Turbo (CBFA)
+    ("Volkswagen", "2010", "Passat%20Sedan%20%283C2%29%20L4-2.0L%20Turbo%20%28CCTA%29"), # Passat Sedan (3C2) L4-2.0L Turbo (CCTA)
+    ("Volkswagen", "2010", "Passat%20Wagon%20%283C5%29%20%28CANADA%29%20V6-3.6L%20%28BLV%29"), # Passat Wagon (3C5) (CANADA) V6-3.6L (BLV)
+    ("Volkswagen", "2010", "Passat%20Wagon%20%283C5%29%20L4-2.0L%20Turbo%20%28CBFA%29"), # Passat Wagon (3C5) L4-2.0L Turbo (CBFA)
+    ("Volkswagen", "2010", "Passat%20Wagon%20%283C5%29%20L4-2.0L%20Turbo%20%28CCTA%29"), # Passat Wagon (3C5) L4-2.0L Turbo (CCTA)
+    ("Volkswagen", "2010", "Tiguan%20%285N1%29%20L4-2.0L%20Turbo%20%28CCTA%29"), # Tiguan (5N1) L4-2.0L Turbo (CCTA)
+    ("Volkswagen", "2010", "Tiguan%204Motion%20%285N1%29%20L4-2.0L%20Turbo%20%28CCTA%29"), # Tiguan 4Motion (5N1) L4-2.0L Turbo (CCTA)
+    ("Volkswagen", "2010", "Touareg%202%20%287L6%29%20V6-3.0L%20DSL%20Turbo%20%28CATA%29"), # Touareg 2 (7L6) V6-3.0L DSL Turbo (CATA)
+    ("Volkswagen", "2010", "Touareg%202%20%287L6%29%20V6-3.6L%20%28BHK%29"), # Touareg 2 (7L6) V6-3.6L (BHK)
+    ("Volkswagen", "2011", "CC%20%28357%29%20L4-2.0L%20Turbo%20%28CBFA%29"), # CC (357) L4-2.0L Turbo (CBFA)
+    ("Volkswagen", "2011", "CC%20%28357%29%20L4-2.0L%20Turbo%20%28CCTA%29"), # CC (357) L4-2.0L Turbo (CCTA)
+    ("Volkswagen", "2011", "CC%204Motion%20%28357%29%20V6-3.6L%20%28BLV%29"), # CC 4Motion (357) V6-3.6L (BLV)
+    ("Volkswagen", "2011", "CC%204Motion%20%28357%29%20V6-3.6L%20%28CNNA%29"), # CC 4Motion (357) V6-3.6L (CNNA)
+    ("Volkswagen", "2011", "Eos%20%281F7%29%20L4-2.0L%20Turbo%20%28CCTA%29"), # Eos (1F7) L4-2.0L Turbo (CCTA)
+    ("Volkswagen", "2011", "GTI%20%285K1%29%20L4-2.0L%20Turbo%20%28CCTA%29"), # GTI (5K1) L4-2.0L Turbo (CCTA)
+    ("Volkswagen", "2011", "Golf%20%285K1%29%20L4-2.0L%20DSL%20Turbo%20%28CJAA%29"), # Golf (5K1) L4-2.0L DSL Turbo (CJAA)
+    ("Volkswagen", "2011", "Golf%20%285K1%29%20L5-2.5L%20%28CBTA%29"), # Golf (5K1) L5-2.5L (CBTA)
+    ("Volkswagen", "2011", "Golf%20%285K1%29%20L5-2.5L%20%28CBUA%29"), # Golf (5K1) L5-2.5L (CBUA)
+    ("Volkswagen", "2011", "Golf%20Wagon%20%28AJ5%29%20%28CANADA%29%20L4-2.0L%20DSL%20Turbo%20%28CJAA%29"), # Golf Wagon (AJ5) (CANADA) L4-2.0L DSL Turbo (CJAA)
+    ("Volkswagen", "2011", "Golf%20Wagon%20%28AJ5%29%20%28CANADA%29%20L5-2.5L%20%28CBTA%29"), # Golf Wagon (AJ5) (CANADA) L5-2.5L (CBTA)
+    ("Volkswagen", "2011", "Golf%20Wagon%20%28AJ5%29%20%28CANADA%29%20L5-2.5L%20%28CBUA%29"), # Golf Wagon (AJ5) (CANADA) L5-2.5L (CBUA)
+    ("Volkswagen", "2011", "Jetta%20Sedan%20%28162%29%20L4-2.0L%20%28CBPA%29"), # Jetta Sedan (162) L4-2.0L (CBPA)
+    ("Volkswagen", "2011", "Jetta%20Sedan%20%28162%29%20L4-2.0L%20DSL%20Turbo%20%28CJAA%29"), # Jetta Sedan (162) L4-2.0L DSL Turbo (CJAA)
+    ("Volkswagen", "2011", "Jetta%20Sedan%20%28162%29%20L5-2.5L%20%28CBTA%29"), # Jetta Sedan (162) L5-2.5L (CBTA)
+    ("Volkswagen", "2011", "Jetta%20Sedan%20%28162%29%20L5-2.5L%20%28CBUA%29"), # Jetta Sedan (162) L5-2.5L (CBUA)
+    ("Volkswagen", "2011", "Jetta%20SportWagen%20%28AJ5%29%20L4-2.0L%20DSL%20Turbo%20%28CJAA%29"), # Jetta SportWagen (AJ5) L4-2.0L DSL Turbo (CJAA)
+    ("Volkswagen", "2011", "Jetta%20SportWagen%20%28AJ5%29%20L5-2.5L%20%28CBTA%29"), # Jetta SportWagen (AJ5) L5-2.5L (CBTA)
+    ("Volkswagen", "2011", "Jetta%20SportWagen%20%28AJ5%29%20L5-2.5L%20%28CBUA%29"), # Jetta SportWagen (AJ5) L5-2.5L (CBUA)
+    ("Volkswagen", "2011", "Tiguan%20%285N1%29%20L4-2.0L%20Turbo%20%28CCTA%29"), # Tiguan (5N1) L4-2.0L Turbo (CCTA)
+    ("Volkswagen", "2011", "Tiguan%204Motion%20%285N1%29%20L4-2.0L%20Turbo%20%28CCTA%29"), # Tiguan 4Motion (5N1) L4-2.0L Turbo (CCTA)
+    ("Volkswagen", "2011", "Touareg%20%287P5%29%20V6-3.0L%20DSL%20Turbo%20%28CATA%29"), # Touareg (7P5) V6-3.0L DSL Turbo (CATA)
+    ("Volkswagen", "2011", "Touareg%20%287P5%29%20V6-3.0L%20SC%20%28CGFA%29%20Hybrid"), # Touareg (7P5) V6-3.0L SC (CGFA) Hybrid
+    ("Volkswagen", "2011", "Touareg%20%287P5%29%20V6-3.6L%20%28CGRA%29"), # Touareg (7P5) V6-3.6L (CGRA)
+    ("Volkswagen", "2012", "Beetle%20%285C1%29%20L4-2.0L%20Turbo%20%28CBFA%29"), # Beetle (5C1) L4-2.0L Turbo (CBFA)
+    ("Volkswagen", "2012", "Beetle%20%285C1%29%20L4-2.0L%20Turbo%20%28CCTA%29"), # Beetle (5C1) L4-2.0L Turbo (CCTA)
+    ("Volkswagen", "2012", "Beetle%20%285C1%29%20L5-2.5L%20%28CBTA%29"), # Beetle (5C1) L5-2.5L (CBTA)
+    ("Volkswagen", "2012", "Beetle%20%285C1%29%20L5-2.5L%20%28CBUA%29"), # Beetle (5C1) L5-2.5L (CBUA)
+    ("Volkswagen", "2012", "CC%20%28357%29%20L4-2.0L%20Turbo%20%28CBFA%29"), # CC (357) L4-2.0L Turbo (CBFA)
+    ("Volkswagen", "2012", "CC%20%28357%29%20L4-2.0L%20Turbo%20%28CCTA%29"), # CC (357) L4-2.0L Turbo (CCTA)
+    ("Volkswagen", "2012", "CC%204Motion%20%28357%29%20V6-3.6L%20%28CNNA%29"), # CC 4Motion (357) V6-3.6L (CNNA)
+    ("Volkswagen", "2012", "Eos%20%281F8%29%20L4-2.0L%20Turbo%20%28CCTA%29"), # Eos (1F8) L4-2.0L Turbo (CCTA)
+    ("Volkswagen", "2012", "GTI%20%285K1%29%20L4-2.0L%20Turbo%20%28CCTA%29"), # GTI (5K1) L4-2.0L Turbo (CCTA)
+    ("Volkswagen", "2012", "Golf%20%285K1%29%20L4-2.0L%20DSL%20Turbo%20%28CJAA%29"), # Golf (5K1) L4-2.0L DSL Turbo (CJAA)
+    ("Volkswagen", "2012", "Golf%20%285K1%29%20L5-2.5L%20%28CBTA%29"), # Golf (5K1) L5-2.5L (CBTA)
+    ("Volkswagen", "2012", "Golf%20%285K1%29%20L5-2.5L%20%28CBUA%29"), # Golf (5K1) L5-2.5L (CBUA)
+    ("Volkswagen", "2012", "Golf%20R%204Motion%20%285K1%29%20L4-2.0L%20Turbo%20%28CRZA%29"), # Golf R 4Motion (5K1) L4-2.0L Turbo (CRZA)
+    ("Volkswagen", "2012", "Golf%20Wagon%20%28AJ5%29%20%28CANADA%29%20L4-2.0L%20DSL%20Turbo%20%28CJAA%29"), # Golf Wagon (AJ5) (CANADA) L4-2.0L DSL Turbo (CJAA)
+    ("Volkswagen", "2012", "Golf%20Wagon%20%28AJ5%29%20%28CANADA%29%20L5-2.5L%20%28CBTA%29"), # Golf Wagon (AJ5) (CANADA) L5-2.5L (CBTA)
+    ("Volkswagen", "2012", "Golf%20Wagon%20%28AJ5%29%20%28CANADA%29%20L5-2.5L%20%28CBUA%29"), # Golf Wagon (AJ5) (CANADA) L5-2.5L (CBUA)
+    ("Volkswagen", "2012", "Jetta%20GLI%20%28162%29%20L4-2.0L%20Turbo%20%28CBFA%29"), # Jetta GLI (162) L4-2.0L Turbo (CBFA)
+    ("Volkswagen", "2012", "Jetta%20GLI%20%28162%29%20L4-2.0L%20Turbo%20%28CCTA%29"), # Jetta GLI (162) L4-2.0L Turbo (CCTA)
+    ("Volkswagen", "2012", "Jetta%20Sedan%20%28162%29%20L4-2.0L%20%28CBPA%29"), # Jetta Sedan (162) L4-2.0L (CBPA)
+    ("Volkswagen", "2012", "Jetta%20Sedan%20%28162%29%20L4-2.0L%20DSL%20Turbo%20%28CJAA%29"), # Jetta Sedan (162) L4-2.0L DSL Turbo (CJAA)
+    ("Volkswagen", "2012", "Jetta%20Sedan%20%28162%29%20L5-2.5L%20%28CBTA%29"), # Jetta Sedan (162) L5-2.5L (CBTA)
+    ("Volkswagen", "2012", "Jetta%20Sedan%20%28162%29%20L5-2.5L%20%28CBUA%29"), # Jetta Sedan (162) L5-2.5L (CBUA)
+    ("Volkswagen", "2012", "Jetta%20SportWagen%20%28AJ5%29%20L4-2.0L%20DSL%20Turbo%20%28CJAA%29"), # Jetta SportWagen (AJ5) L4-2.0L DSL Turbo (CJAA)
+    ("Volkswagen", "2012", "Jetta%20SportWagen%20%28AJ5%29%20L5-2.5L%20%28CBTA%29"), # Jetta SportWagen (AJ5) L5-2.5L (CBTA)
+    ("Volkswagen", "2012", "Jetta%20SportWagen%20%28AJ5%29%20L5-2.5L%20%28CBUA%29"), # Jetta SportWagen (AJ5) L5-2.5L (CBUA)
+    ("Volkswagen", "2012", "Passat%20Sedan%20%28A32%29%20L4-2.0L%20DSL%20Turbo%20%28CKRA%29"), # Passat Sedan (A32) L4-2.0L DSL Turbo (CKRA)
+    ("Volkswagen", "2012", "Passat%20Sedan%20%28A32%29%20L5-2.5L%20%28CBTA%29"), # Passat Sedan (A32) L5-2.5L (CBTA)
+    ("Volkswagen", "2012", "Passat%20Sedan%20%28A32%29%20L5-2.5L%20%28CBUA%29"), # Passat Sedan (A32) L5-2.5L (CBUA)
+    ("Volkswagen", "2012", "Passat%20Sedan%20%28A32%29%20V6-3.6L%20%28CDVB%29"), # Passat Sedan (A32) V6-3.6L (CDVB)
+    ("Volkswagen", "2012", "Tiguan%20%285N2%29%20L4-2.0L%20Turbo%20%28CCTA%29"), # Tiguan (5N2) L4-2.0L Turbo (CCTA)
+    ("Volkswagen", "2012", "Tiguan%204Motion%20%285N2%29%20L4-2.0L%20Turbo%20%28CCTA%29"), # Tiguan 4Motion (5N2) L4-2.0L Turbo (CCTA)
+    ("Volkswagen", "2012", "Touareg%20%287P5%29%20V6-3.0L%20DSL%20Turbo%20%28CATA%29"), # Touareg (7P5) V6-3.0L DSL Turbo (CATA)
+    ("Volkswagen", "2012", "Touareg%20%287P5%29%20V6-3.0L%20SC%20%28CGFA%29%20Hybrid"), # Touareg (7P5) V6-3.0L SC (CGFA) Hybrid
+    ("Volkswagen", "2012", "Touareg%20%287P5%29%20V6-3.6L%20%28CGRA%29"), # Touareg (7P5) V6-3.6L (CGRA)
+    ("Volkswagen", "2013", "Beetle%20%285C1%29%20L4-2.0L%20DSL%20Turbo%20%28CJAA%29"), # Beetle (5C1) L4-2.0L DSL Turbo (CJAA)
+    ("Volkswagen", "2013", "Beetle%20%285C1%29%20L4-2.0L%20Turbo%20%28CBFA%29"), # Beetle (5C1) L4-2.0L Turbo (CBFA)
+    ("Volkswagen", "2013", "Beetle%20%285C1%29%20L4-2.0L%20Turbo%20%28CCTA%29"), # Beetle (5C1) L4-2.0L Turbo (CCTA)
+    ("Volkswagen", "2013", "Beetle%20%285C1%29%20L5-2.5L%20%28CBTA%29"), # Beetle (5C1) L5-2.5L (CBTA)
+    ("Volkswagen", "2013", "Beetle%20%285C1%29%20L5-2.5L%20%28CBUA%29"), # Beetle (5C1) L5-2.5L (CBUA)
+    ("Volkswagen", "2013", "Beetle%20Convertible%20%285C7%29%20L4-2.0L%20DSL%20Turbo%20%28CJAA%29"), # Beetle Convertible (5C7) L4-2.0L DSL Turbo (CJAA)
+    ("Volkswagen", "2013", "Beetle%20Convertible%20%285C7%29%20L4-2.0L%20Turbo%20%28CBFA%29"), # Beetle Convertible (5C7) L4-2.0L Turbo (CBFA)
+    ("Volkswagen", "2013", "Beetle%20Convertible%20%285C7%29%20L4-2.0L%20Turbo%20%28CCTA%29"), # Beetle Convertible (5C7) L4-2.0L Turbo (CCTA)
+    ("Volkswagen", "2013", "Beetle%20Convertible%20%285C7%29%20L5-2.5L%20%28CBTA%29"), # Beetle Convertible (5C7) L5-2.5L (CBTA)
+    ("Volkswagen", "2013", "Beetle%20Convertible%20%285C7%29%20L5-2.5L%20%28CBUA%29"), # Beetle Convertible (5C7) L5-2.5L (CBUA)
+    ("Volkswagen", "2013", "CC%20%28358%29%20L4-2.0L%20Turbo%20%28CBFA%29"), # CC (358) L4-2.0L Turbo (CBFA)
+    ("Volkswagen", "2013", "CC%20%28358%29%20L4-2.0L%20Turbo%20%28CCTA%29"), # CC (358) L4-2.0L Turbo (CCTA)
+    ("Volkswagen", "2013", "CC%204Motion%20%28358%29%20V6-3.6L%20%28CNNA%29"), # CC 4Motion (358) V6-3.6L (CNNA)
+    ("Volkswagen", "2013", "Eos%20%281F8%29%20L4-2.0L%20Turbo%20%28CCTA%29"), # Eos (1F8) L4-2.0L Turbo (CCTA)
+    ("Volkswagen", "2013", "GTI%20%285K1%29%20L4-2.0L%20Turbo%20%28CCTA%29"), # GTI (5K1) L4-2.0L Turbo (CCTA)
+    ("Volkswagen", "2013", "Golf%20%285K1%29%20L4-2.0L%20DSL%20Turbo%20%28CJAA%29"), # Golf (5K1) L4-2.0L DSL Turbo (CJAA)
+    ("Volkswagen", "2013", "Golf%20%285K1%29%20L5-2.5L%20%28CBTA%29"), # Golf (5K1) L5-2.5L (CBTA)
+    ("Volkswagen", "2013", "Golf%20%285K1%29%20L5-2.5L%20%28CBUA%29"), # Golf (5K1) L5-2.5L (CBUA)
+    ("Volkswagen", "2013", "Golf%20R%204Motion%20%285K1%29%20L4-2.0L%20Turbo%20%28CRZA%29"), # Golf R 4Motion (5K1) L4-2.0L Turbo (CRZA)
+    ("Volkswagen", "2013", "Golf%20Wagon%20%28AJ5%29%20%28CANADA%29%20L4-2.0L%20DSL%20Turbo%20%28CJAA%29"), # Golf Wagon (AJ5) (CANADA) L4-2.0L DSL Turbo (CJAA)
+    ("Volkswagen", "2013", "Golf%20Wagon%20%28AJ5%29%20%28CANADA%29%20L5-2.5L%20%28CBTA%29"), # Golf Wagon (AJ5) (CANADA) L5-2.5L (CBTA)
+    ("Volkswagen", "2013", "Golf%20Wagon%20%28AJ5%29%20%28CANADA%29%20L5-2.5L%20%28CBUA%29"), # Golf Wagon (AJ5) (CANADA) L5-2.5L (CBUA)
+    ("Volkswagen", "2013", "Jetta%20GLI%20%28162%29%20L4-2.0L%20Turbo%20%28CBFA%29"), # Jetta GLI (162) L4-2.0L Turbo (CBFA)
+    ("Volkswagen", "2013", "Jetta%20GLI%20%28162%29%20L4-2.0L%20Turbo%20%28CCTA%29"), # Jetta GLI (162) L4-2.0L Turbo (CCTA)
+    ("Volkswagen", "2013", "Jetta%20Sedan%20%28162%29%20L4-1.4L%20%28CNLA%29%20Hybrid"), # Jetta Sedan (162) L4-1.4L (CNLA) Hybrid
+    ("Volkswagen", "2013", "Jetta%20Sedan%20%28162%29%20L4-2.0L%20%28CBPA%29"), # Jetta Sedan (162) L4-2.0L (CBPA)
+    ("Volkswagen", "2013", "Jetta%20Sedan%20%28162%29%20L4-2.0L%20DSL%20Turbo%20%28CJAA%29"), # Jetta Sedan (162) L4-2.0L DSL Turbo (CJAA)
+    ("Volkswagen", "2013", "Jetta%20Sedan%20%28162%29%20L5-2.5L%20%28CBTA%29"), # Jetta Sedan (162) L5-2.5L (CBTA)
+    ("Volkswagen", "2013", "Jetta%20Sedan%20%28162%29%20L5-2.5L%20%28CBUA%29"), # Jetta Sedan (162) L5-2.5L (CBUA)
+    ("Volkswagen", "2013", "Jetta%20SportWagen%20%28AJ5%29%20L4-2.0L%20DSL%20Turbo%20%28CJAA%29"), # Jetta SportWagen (AJ5) L4-2.0L DSL Turbo (CJAA)
+    ("Volkswagen", "2013", "Jetta%20SportWagen%20%28AJ5%29%20L5-2.5L%20%28CBTA%29"), # Jetta SportWagen (AJ5) L5-2.5L (CBTA)
+    ("Volkswagen", "2013", "Jetta%20SportWagen%20%28AJ5%29%20L5-2.5L%20%28CBUA%29"), # Jetta SportWagen (AJ5) L5-2.5L (CBUA)
+    ("Volkswagen", "2013", "Passat%20Sedan%20%28A32%29%20L4-2.0L%20DSL%20Turbo%20%28CKRA%29"), # Passat Sedan (A32) L4-2.0L DSL Turbo (CKRA)
+    ("Volkswagen", "2013", "Passat%20Sedan%20%28A32%29%20L5-2.5L%20%28CBTA%29"), # Passat Sedan (A32) L5-2.5L (CBTA)
+    ("Volkswagen", "2013", "Passat%20Sedan%20%28A32%29%20L5-2.5L%20%28CBUA%29"), # Passat Sedan (A32) L5-2.5L (CBUA)
+    ("Volkswagen", "2013", "Passat%20Sedan%20%28A32%29%20V6-3.6L%20%28CDVB%29"), # Passat Sedan (A32) V6-3.6L (CDVB)
+    ("Volkswagen", "2013", "Tiguan%20%285N2%29%20L4-2.0L%20Turbo%20%28CCTA%29"), # Tiguan (5N2) L4-2.0L Turbo (CCTA)
+    ("Volkswagen", "2013", "Tiguan%204Motion%20%285N2%29%20L4-2.0L%20Turbo%20%28CCTA%29"), # Tiguan 4Motion (5N2) L4-2.0L Turbo (CCTA)
+    ("Volkswagen", "2013", "Touareg%20%287P5%29%20V6-3.0L%20DSL%20Turbo%20%28CNRB%29"), # Touareg (7P5) V6-3.0L DSL Turbo (CNRB)
+    ("Volkswagen", "2013", "Touareg%20%287P5%29%20V6-3.0L%20SC%20%28CGFA%29%20Hybrid"), # Touareg (7P5) V6-3.0L SC (CGFA) Hybrid
+    ("Volkswagen", "2013", "Touareg%20%287P5%29%20V6-3.6L%20%28CGRA%29"), # Touareg (7P5) V6-3.6L (CGRA)
+]

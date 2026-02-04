@@ -62,7 +62,8 @@ public class VehicleController {
      * 특정 차량의 상세 정보를 반환합니다.
      */
     @GetMapping("/{vehicleId}")
-    public ResponseEntity<ApiResponse<VehicleDto.Response>> getVehicleDetail(@PathVariable UUID vehicleId) {
+    public ResponseEntity<ApiResponse<VehicleDto.Response>> getVehicleDetail(
+            @PathVariable("vehicleId") UUID vehicleId) {
         VehicleDto.Response response = vehicleService.getVehicleDetail(vehicleId);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
@@ -73,7 +74,7 @@ public class VehicleController {
      */
     @PutMapping("/{vehicleId}")
     public ResponseEntity<ApiResponse<VehicleDto.Response>> updateVehicle(
-            @PathVariable UUID vehicleId,
+            @PathVariable("vehicleId") UUID vehicleId,
             @Valid @RequestBody VehicleDto.UpdateRequest request) {
         VehicleDto.Response response = vehicleService.updateVehicle(vehicleId, request);
         return ResponseEntity.ok(ApiResponse.success(response));
@@ -96,7 +97,7 @@ public class VehicleController {
      * 차량을 삭제 처리합니다 (Soft Delete).
      */
     @DeleteMapping("/{vehicleId}")
-    public ResponseEntity<ApiResponse<Void>> deleteVehicle(@PathVariable UUID vehicleId) {
+    public ResponseEntity<ApiResponse<Void>> deleteVehicle(@PathVariable("vehicleId") UUID vehicleId) {
         vehicleService.deleteVehicle(vehicleId);
         return ResponseEntity.ok(ApiResponse.success(null));
     }

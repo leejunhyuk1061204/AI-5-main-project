@@ -8,11 +8,15 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface VehicleRepository extends JpaRepository<Vehicle, UUID> {
-    List<Vehicle> findByUserIdAndDeletedAtIsNull(UUID userId);
+    List<Vehicle> findByUserIdAndDeletedAtIsNullOrderByCreatedAtAsc(UUID userId);
 
     Optional<Vehicle> findByVehicleIdAndDeletedAtIsNull(UUID vehicleId);
 
     Optional<Vehicle> findByUserIdAndIsPrimaryTrueAndDeletedAtIsNull(UUID userId);
 
+    Optional<Vehicle> findByVin(String vin);
+
     boolean existsByVinAndDeletedAtIsNull(String vin);
+
+    List<Vehicle> findByCloudLinkedTrueAndDeletedAtIsNull();
 }

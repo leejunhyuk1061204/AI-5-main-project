@@ -1,7 +1,6 @@
 package kr.co.himedia.service.file;
 
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -35,24 +34,18 @@ public class LocalFileStorageService implements FileStorageService {
     }
 
     @Override
-    public String uploadFile(MultipartFile file) throws IOException {
+    public String uploadFile(MultipartFile file, String folder) throws IOException {
         String fileName = UUID.randomUUID().toString() + "_" + file.getOriginalFilename();
-
         try {
-            if (fileName.contains("..")) {
-                throw new RuntimeException("Sorry! Filename contains invalid path sequence " + fileName);
-            }
+            Path folderPath = this.fileStorageLocation.resolve(folder);
+            Files.createDirectories(folderPath);
+            Path targetLocation = folderPath.resolve(fileName);
 
-            // 디렉토리가 없으면 생성 (생성 시점 보장)
-            if (Files.notExists(this.fileStorageLocation)) {
-                Files.createDirectories(this.fileStorageLocation);
-            }
-
-            Path targetLocation = this.fileStorageLocation.resolve(fileName);
             Files.copy(file.getInputStream(), targetLocation, StandardCopyOption.REPLACE_EXISTING);
 
             String fileDownloadUri = ServletUriComponentsBuilder.fromCurrentContextPath()
                     .path("/api/v1/uploads/") // WebConfig의 매핑과 일치시켜야 함
+                    .path(folder + "/")
                     .path(fileName)
                     .toUriString();
 

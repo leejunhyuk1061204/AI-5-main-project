@@ -32,51 +32,64 @@ public class AiClient {
 
     private final RestTemplate restTemplate;
 
-    @Value("${ai.server.url.visual:http://host.docker.internal:8001/api/v1/connect/predict/visual}")
+    @Value("${ai.server.url.visual:http://localhost:8001/api/v1/visual}")
     private String aiServerVisualUrl;
 
-    @Value("${ai.server.url.audio:http://host.docker.internal:8001/api/v1/connect/predict/audio}")
+    @Value("${ai.server.url.audio:http://localhost:8001/api/v1/audio}")
     private String aiServerAudioUrl;
 
-    @Value("${ai.server.url.comprehensive:http://host.docker.internal:8001/api/v1/connect/predict/comprehensive}")
+    @Value("${ai.server.url.comprehensive:http://localhost:8001/api/v1/connect/predict/comprehensive}")
     private String aiServerUnifiedUrl;
 
-    @Value("${ai.server.url.anomaly:http://host.docker.internal:8001/api/v1/connect/predict/anomaly}")
+    @Value("${ai.server.url.anomaly:http://localhost:8001/api/v1/connect/predict/anomaly}")
     private String aiServerAnomalyUrl;
 
-    @Value("${ai.server.url.wear-factor:http://host.docker.internal:8001/api/v1/connect/predict/wear-factor}")
+    @Value("${ai.server.url.wear-factor:http://localhost:8001/api/v1/connect/predict/wear-factor}")
     private String aiServerWearFactorUrl;
 
     public AiClient() {
         org.springframework.http.client.SimpleClientHttpRequestFactory factory = new org.springframework.http.client.SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(5000);
-        factory.setReadTimeout(60000); // 분석 시간이 길어질 수 있으므로 60초 설정
-        factory.setReadTimeout(60000); // 분석 시간이 길어질 수 있으므로 60초 설정
+        factory.setReadTimeout(300000); // 15분 단위 청크 데이터 처리 등 긴 분석 시간을 고려하여 5분으로 상향
         this.restTemplate = new RestTemplate(factory);
     }
 
     @Retryable(retryFor = Exception.class, maxAttempts = 3, backoff = @Backoff(delay = 2000))
-    public Map<String, Object> callVisualAnalysis(String filename) {
-        log.info("[Retryable] Requesting Visual Analysis: {}", filename);
+    public Map<String, Object> callVisualAnalysis(String imageUrl, java.util.UUID vehicleId, java.util.UUID sessionId) {
+        log.info("[Retryable] Requesting Visual Analysis - Vehicle: {}, Session: {}, URL: {}", vehicleId, sessionId,
+                imageUrl);
         try {
+            Map<String, Object> request = new java.util.HashMap<>();
+            request.put("imageUrl", imageUrl);
+            request.put("vehicleId", vehicleId != null ? vehicleId.toString() : null);
+            request.put("sessionId", sessionId != null ? sessionId.toString() : null);
+
             @SuppressWarnings("unchecked")
-            Map<String, Object> result = (Map<String, Object>) callMultipartApi(aiServerVisualUrl, filename);
+            Map<String, Object> result = restTemplate.postForObject(aiServerVisualUrl, request, Map.class);
             return result;
         } catch (Exception e) {
-            log.error("[AiClient] Visual Analysis Failed. URL: {}, Error: {}", aiServerVisualUrl, e.getMessage());
+            log.error("[AiClient] Visual Analysis Failed [Vehicle: {}, Session: {}]. URL: {}, Error: {}",
+                    vehicleId, sessionId, aiServerVisualUrl, e.getMessage());
             throw e;
         }
     }
 
     @Retryable(retryFor = Exception.class, maxAttempts = 3, backoff = @Backoff(delay = 2000))
-    public Map<String, Object> callAudioAnalysis(String filename) {
-        log.info("[Retryable] Requesting Audio Analysis: {}", filename);
+    public Map<String, Object> callAudioAnalysis(String audioUrl, java.util.UUID vehicleId, java.util.UUID sessionId) {
+        log.info("[Retryable] Requesting Audio Analysis - Vehicle: {}, Session: {}, URL: {}", vehicleId, sessionId,
+                audioUrl);
         try {
+            Map<String, Object> request = new java.util.HashMap<>();
+            request.put("audioUrl", audioUrl);
+            request.put("vehicleId", vehicleId != null ? vehicleId.toString() : null);
+            request.put("sessionId", sessionId != null ? sessionId.toString() : null);
+
             @SuppressWarnings("unchecked")
-            Map<String, Object> result = (Map<String, Object>) callMultipartApi(aiServerAudioUrl, filename);
+            Map<String, Object> result = restTemplate.postForObject(aiServerAudioUrl, request, Map.class);
             return result;
         } catch (Exception e) {
-            log.error("[AiClient] Audio Analysis Failed. URL: {}, Error: {}", aiServerAudioUrl, e.getMessage());
+            log.error("[AiClient] Audio Analysis Failed [Vehicle: {}, Session: {}]. URL: {}, Error: {}",
+                    vehicleId, sessionId, aiServerAudioUrl, e.getMessage());
             throw e;
         }
     }
@@ -105,21 +118,33 @@ public class AiClient {
         }
     }
 
-    private Object callMultipartApi(String url, String filename) {
-        Path filePath = Paths.get("uploads").toAbsolutePath().resolve(filename);
-        if (!filePath.toFile().exists()) {
-            throw new BaseException(ErrorCode.ENTITY_NOT_FOUND, "파일을 찾을 수 없습니다: " + filename);
+    @Value("${ai.server.url.embedding:http://localhost:8001/api/v1/connect/predict/embedding}")
+    private String aiServerEmbeddingUrl;
+
+    /**
+     * 텍스트 임베딩 요청 (Ollama)
+     */
+    @SuppressWarnings("unchecked")
+    @Retryable(retryFor = Exception.class, maxAttempts = 3, backoff = @Backoff(delay = 2000))
+    public double[] getEmbedding(String text) {
+        if (text == null || text.isBlank())
+            return null;
+        try {
+            Map<String, String> request = Map.of("text", text);
+            Map<String, Object> response = restTemplate.postForObject(aiServerEmbeddingUrl, request, Map.class);
+
+            if (response != null && response.containsKey("embedding")) {
+                Object embeddingObj = response.get("embedding");
+                if (embeddingObj instanceof java.util.List) {
+                    java.util.List<Double> embeddingList = (java.util.List<Double>) embeddingObj;
+                    return embeddingList.stream().mapToDouble(Double::doubleValue).toArray();
+                }
+            }
+        } catch (Exception e) {
+            log.error("[AiClient] Embedding API call failed: {}", e.getMessage());
+            throw new RuntimeException("임베딩 API 호출 실패", e);
         }
-
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.MULTIPART_FORM_DATA);
-
-        MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
-        body.add("file", new FileSystemResource(filePath.toFile()));
-
-        HttpEntity<MultiValueMap<String, Object>> requestEntity = new HttpEntity<>(body, headers);
-
-        return restTemplate.postForObject(url, requestEntity, Map.class);
+        return null;
     }
 
     /**

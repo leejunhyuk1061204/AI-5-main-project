@@ -27,15 +27,47 @@ public class MasterController {
         return ResponseEntity.ok(ApiResponse.success(manufacturers));
     }
 
-    /**
-     * [BE-VH-003] 모델 목록 조회
-     * 특정 제조사의 차량 모델 및 연식 정보를 반환합니다.
-     */
     @GetMapping("/models")
     public ResponseEntity<ApiResponse<List<CarModelDto>>> getModels(
             @RequestParam("manufacturer") String manufacturer) {
         List<CarModelDto> models = masterDataService.getModelsByManufacturer(manufacturer);
         return ResponseEntity.ok(ApiResponse.success(models));
+    }
+
+    /**
+     * [BE-VH-003] 고유 모델명 목록 조회
+     * 특정 제조사의 중복 없는 모델명 목록을 반환합니다.
+     */
+    @GetMapping("/models/names")
+    public ResponseEntity<ApiResponse<List<String>>> getModelNames(
+            @RequestParam("manufacturer") String manufacturer) {
+        List<String> names = masterDataService.getModelNamesByManufacturer(manufacturer);
+        return ResponseEntity.ok(ApiResponse.success(names));
+    }
+
+    /**
+     * [BE-VH-003] 모델별 연식 목록 조회
+     * 특정 제조사 및 모델명의 중복 없는 연식 목록을 반환합니다.
+     */
+    @GetMapping("/models/years")
+    public ResponseEntity<ApiResponse<List<Integer>>> getModelYears(
+            @RequestParam("manufacturer") String manufacturer,
+            @RequestParam("modelName") String modelName) {
+        List<Integer> years = masterDataService.getModelYears(manufacturer, modelName);
+        return ResponseEntity.ok(ApiResponse.success(years));
+    }
+
+    /**
+     * [BE-VH-003] 모델별 연료 타입 목록 조회
+     * 특정 제조사, 모델명, 연식에 따른 가용한 연료 타입 목록을 반환합니다.
+     */
+    @GetMapping("/models/fuels")
+    public ResponseEntity<ApiResponse<List<String>>> getFuelTypes(
+            @RequestParam("manufacturer") String manufacturer,
+            @RequestParam("modelName") String modelName,
+            @RequestParam("modelYear") Integer modelYear) {
+        List<String> fuels = masterDataService.getFuelTypes(manufacturer, modelName, modelYear);
+        return ResponseEntity.ok(ApiResponse.success(fuels));
     }
 
     /**

@@ -39,6 +39,9 @@ public class VehicleConsumable {
     @Column(name = "wear_factor", nullable = false)
     private Double wearFactor = 1.0; // AI 마모 가중치
 
+    @Column(name = "is_inferred", nullable = false)
+    private Boolean isInferred = false; // 시스템 추론 데이터 여부
+
     @Column(name = "remaining_life")
     private Double remainingLife; // 잔존 수명 (%) (캐싱용)
 

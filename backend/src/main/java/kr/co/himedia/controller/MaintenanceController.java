@@ -18,18 +18,32 @@ public class MaintenanceController {
 
     private final MaintenanceService maintenanceService;
 
+    /**
+     * 정비 이력 등록 (리스트로 다중 등록 지원)
+     */
     @PostMapping("/{vehicleId}/maintenance")
-    public ApiResponse<MaintenanceHistoryResponse> registerMaintenance(
-            @PathVariable UUID vehicleId,
-            @jakarta.validation.Valid @RequestBody MaintenanceHistoryRequest request) {
+    public ApiResponse<List<MaintenanceHistoryResponse>> registerMaintenance(
+            @PathVariable("vehicleId") UUID vehicleId,
+            @jakarta.validation.Valid @RequestBody List<MaintenanceHistoryRequest> requests) {
 
-        MaintenanceHistoryResponse response = maintenanceService.registerMaintenance(vehicleId, request);
-        return ApiResponse.success(response);
+        List<MaintenanceHistoryResponse> responses = maintenanceService.registerMaintenanceList(vehicleId, requests);
+        return ApiResponse.success(responses);
+    }
+
+    /**
+     * 정비 이력 조회
+     */
+    @GetMapping("/{vehicleId}/maintenance")
+    public ApiResponse<List<MaintenanceHistoryResponse>> getMaintenanceHistory(
+            @PathVariable("vehicleId") UUID vehicleId) {
+
+        List<MaintenanceHistoryResponse> responses = maintenanceService.getMaintenanceHistory(vehicleId);
+        return ApiResponse.success(responses);
     }
 
     @GetMapping("/{vehicleId}/consumables")
     public ApiResponse<List<ConsumableStatusResponse>> getConsumables(
-            @PathVariable UUID vehicleId) {
+            @PathVariable("vehicleId") UUID vehicleId) {
 
         List<ConsumableStatusResponse> response = maintenanceService.getConsumableStatus(vehicleId);
         return ApiResponse.success(response);

@@ -1,0 +1,221 @@
+package kr.co.himedia.service;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import kr.co.himedia.dto.maintenance.OcrAnalysisResponse;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
+import org.springframework.web.multipart.MultipartFile;
+
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class ReceiptAnalyzerService {
+
+    @Value("${ocr.naver.invoke-url}")
+    private String naverInvokeUrl;
+
+    @Value("${ocr.naver.secret-key}")
+    private String naverSecretKey;
+
+    @Value("${ocr.openai.api-key}")
+    private String openAiApiKey;
+
+    private final RestTemplate restTemplate = new RestTemplate();
+    private final ObjectMapper objectMapper;
+    private final MasterDataService masterDataService;
+
+    /**
+     * 영수증 분석 통합 메서드
+     */
+    public OcrAnalysisResponse analyze(MultipartFile file) {
+        log.info("Starting receipt analysis for file: {}", file.getOriginalFilename());
+        log.info("Config Check - URL: {}, Key: {}", naverInvokeUrl,
+                (naverSecretKey != null && !naverSecretKey.isEmpty() ? "PRESENT" : "MISSING"));
+
+        // 1. Naver OCR 호출 (텍스트 추출)
+        String rawText = extractText(file);
+        if (rawText.isEmpty()) {
+            return OcrAnalysisResponse.builder()
+                    .ocrText("텍스트 추출 실패")
+                    .build();
+        }
+
+        // 2. OpenAI 호출 (데이터 파싱)
+        OcrAnalysisResponse response = parseWithAi(rawText);
+        response.setOcrText(rawText);
+
+        // 3. 소모품 이름 매핑 (DB 기반)
+        if (response.getConsumableItemCode() != null) {
+            kr.co.himedia.dto.master.ConsumableItemDto item = masterDataService
+                    .getConsumableByCode(response.getConsumableItemCode());
+            if (item != null) {
+                response.setConsumableItemName(item.getName());
+            } else if ("UNKNOWN".equals(response.getConsumableItemCode())) {
+                response.setConsumableItemName("미분류 항목");
+            }
+        }
+
+        // 4. ocrData에 원본 텍스트 포함 (JSON 구조)
+        try {
+            java.util.Map<String, String> ocrDataMap = new java.util.HashMap<>();
+            ocrDataMap.put("text", rawText); // 원본 텍스트 저장
+            response.setOcrData(objectMapper.writeValueAsString(ocrDataMap));
+        } catch (Exception e) {
+            log.error("Failed to serialize ocrData", e);
+            response.setOcrData("{\"text\": \"" + rawText.replace("\"", "\\\"").replace("\n", "\\n") + "\"}");
+        }
+
+        return response;
+    }
+
+    private String extractText(MultipartFile file) {
+        if (naverInvokeUrl == null || naverInvokeUrl.isEmpty() || naverSecretKey == null || naverSecretKey.isEmpty()) {
+            log.error("Naver OCR configuration is missing");
+            return "";
+        }
+
+        try {
+            // Naver OCR API는 application/json으로 Base64 이미지를 전송해야 함
+            org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
+            headers.setContentType(org.springframework.http.MediaType.APPLICATION_JSON);
+            headers.set("X-OCR-SECRET", naverSecretKey.trim());
+            log.info("OCR Request - Header: X-OCR-SECRET, KeyPrefix: {}",
+                    naverSecretKey.substring(0, Math.min(naverSecretKey.length(), 5)));
+
+            // 이미지를 Base64로 인코딩
+            String base64Image = java.util.Base64.getEncoder().encodeToString(file.getBytes());
+
+            // 파일 포맷 추출
+            String filename = file.getOriginalFilename();
+            String format = "jpg";
+            if (filename != null && filename.contains(".")) {
+                format = filename.substring(filename.lastIndexOf(".") + 1).toLowerCase();
+            }
+
+            // Request Body JSON 구성
+            java.util.Map<String, Object> requestBody = new java.util.HashMap<>();
+            requestBody.put("version", "V2");
+            requestBody.put("requestId", java.util.UUID.randomUUID().toString());
+            requestBody.put("timestamp", System.currentTimeMillis());
+
+            java.util.Map<String, Object> imageMap = new java.util.HashMap<>();
+            imageMap.put("format", format);
+            imageMap.put("name", "receipt");
+            imageMap.put("data", base64Image); // Base64 이미지 데이터
+            requestBody.put("images", java.util.Collections.singletonList(imageMap));
+
+            String requestJson = objectMapper.writeValueAsString(requestBody);
+            log.info("OCR Request Body size: {} bytes", requestJson.length());
+
+            org.springframework.http.HttpEntity<String> requestEntity = new org.springframework.http.HttpEntity<>(
+                    requestJson, headers);
+
+            org.springframework.http.ResponseEntity<String> response = restTemplate.exchange(
+                    naverInvokeUrl, org.springframework.http.HttpMethod.POST, requestEntity, String.class);
+            log.info("Naver OCR Response Status: {}", response.getStatusCode());
+            log.info("Naver OCR Response Body: {}", response.getBody());
+
+            if (response.getStatusCode() == org.springframework.http.HttpStatus.OK) {
+                com.fasterxml.jackson.databind.JsonNode root = objectMapper.readTree(response.getBody());
+                StringBuilder sb = new StringBuilder();
+                com.fasterxml.jackson.databind.JsonNode images = root.path("images");
+                if (images.isArray()) {
+                    for (com.fasterxml.jackson.databind.JsonNode image : images) {
+                        com.fasterxml.jackson.databind.JsonNode fields = image.path("fields");
+                        if (fields.isArray()) {
+                            for (com.fasterxml.jackson.databind.JsonNode field : fields) {
+                                sb.append(field.path("inferText").asText()).append(" ");
+                            }
+                        }
+                    }
+                }
+                String result = sb.toString().trim();
+                return result;
+            } else {
+                log.error("Naver OCR API returned error status: {}", response.getStatusCode());
+                return "";
+            }
+
+        } catch (Exception e) {
+            log.error("Failed to call Naver OCR API", e);
+        }
+        return "";
+    }
+
+    private OcrAnalysisResponse parseWithAi(String rawText) {
+        if (openAiApiKey == null || openAiApiKey.isEmpty()) {
+            log.error("OpenAI API key is missing");
+            return OcrAnalysisResponse.builder().consumableItemCode("UNKNOWN").build();
+        }
+
+        try {
+            String apiUrl = "https://api.openai.com/v1/chat/completions";
+
+            org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
+            headers.setContentType(org.springframework.http.MediaType.APPLICATION_JSON);
+            headers.setBearerAuth(openAiApiKey);
+
+            String prompt = "You are a professional receipt parser. Extract the following information from the provided Korean receipt text and return ONLY a single JSON object. "
+                    +
+                    "Fields: " +
+                    "- shopName: string (Name of the business) " +
+                    "- maintenanceDate: string (ISO format YYYY-MM-DD) " +
+                    "- cost: number (Total amount, integer only) " +
+                    "- mileageAtMaintenance: number (Odometer/mileage value if present, otherwise null) " +
+                    "- consumableItemCode: string (Match one of: ENGINE_OIL, TIRES, BRAKE_PADS, WIPER, BATTERY, UNKNOWN) "
+                    +
+                    "If a value is missing, use null for shopName/maintenanceDate/cost/mileageAtMaintenance, and UNKNOWN for consumableItemCode. "
+                    +
+                    "Text: \n" + rawText;
+
+            java.util.Map<String, Object> requestBody = new java.util.HashMap<>();
+            requestBody.put("model", "gpt-4o-mini");
+            requestBody.put("messages", java.util.Collections.singletonList(
+                    java.util.Map.of("role", "user", "content", prompt)));
+            requestBody.put("temperature", 0);
+
+            org.springframework.http.HttpEntity<String> requestEntity = new org.springframework.http.HttpEntity<>(
+                    objectMapper.writeValueAsString(requestBody), headers);
+
+            org.springframework.http.ResponseEntity<String> response = restTemplate.postForEntity(apiUrl, requestEntity,
+                    String.class);
+
+            if (response.getStatusCode() == org.springframework.http.HttpStatus.OK) {
+                com.fasterxml.jackson.databind.JsonNode root = objectMapper.readTree(response.getBody());
+                String content = root.path("choices").path(0).path("message").path("content").asText();
+
+                // Markdown block 제거
+                if (content.contains("```json")) {
+                    content = content.substring(content.indexOf("```json") + 7);
+                    content = content.substring(0, content.lastIndexOf("```"));
+                } else if (content.contains("```")) {
+                    content = content.substring(content.indexOf("```") + 3);
+                    content = content.substring(0, content.lastIndexOf("```"));
+                }
+
+                com.fasterxml.jackson.databind.JsonNode parsedJson = objectMapper.readTree(content.trim());
+
+                return OcrAnalysisResponse.builder()
+                        .shopName(parsedJson.path("shopName").asText(null))
+                        .maintenanceDate(
+                                parsedJson.has("maintenanceDate") && !parsedJson.path("maintenanceDate").isNull()
+                                        ? java.time.LocalDate.parse(parsedJson.path("maintenanceDate").asText())
+                                        : null)
+                        .cost(parsedJson.path("cost").asInt(0))
+                        .mileageAtMaintenance(parsedJson.has("mileageAtMaintenance")
+                                && !parsedJson.path("mileageAtMaintenance").isNull()
+                                        ? parsedJson.path("mileageAtMaintenance").asDouble()
+                                        : null)
+                        .consumableItemCode(parsedJson.path("consumableItemCode").asText("UNKNOWN"))
+                        .ocrData(response.getBody())
+                        .build();
+            }
+        } catch (Exception e) {
+            log.error("OpenAI Parsing Error", e);
+        }
+        return OcrAnalysisResponse.builder().consumableItemCode("UNKNOWN").build();
+    }
+}

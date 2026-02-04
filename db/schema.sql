@@ -8,42 +8,41 @@ CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;
 CREATE EXTENSION IF NOT EXISTS vector;
 
 -- 2. ENUM 타입 정의
-DO $$ BEGIN
-    CREATE TYPE user_level AS ENUM ('FREE', 'PREMIUM', 'ADMIN');
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'user_level') THEN CREATE TYPE user_level AS ENUM ('FREE', 'PREMIUM', 'ADMIN');
 
-CREATE TYPE fuel_type AS ENUM ('GASOLINE', 'DIESEL', 'EV', 'HEV', 'LPG');
-
-CREATE TYPE registration_source AS ENUM ('MANUAL', 'OBD', 'CLOUD');
-
-CREATE TYPE charging_status AS ENUM ('DISCONNECTED', 'CHARGING', 'FULL', 'ERROR');
-
-CREATE TYPE diag_trigger_type AS ENUM ('MANUAL', 'DTC', 'ANOMALY', 'ROUTINE');
-
-CREATE TYPE diag_status AS ENUM ('PENDING', 'PROCESSING', 'DONE', 'FAILED');
-
-CREATE TYPE risk_level AS ENUM ('LOW', 'MID', 'HIGH', 'CRITICAL');
-
-CREATE TYPE media_type AS ENUM ('AUDIO', 'IMAGE', 'SNAPSHOT');
-
-CREATE TYPE evidence_status AS ENUM ('REQUESTED', 'UPLOADED', 'FAILED');
-
-CREATE TYPE dtc_type AS ENUM ('STORED', 'PENDING', 'PERMANENT');
-
-CREATE TYPE dtc_status AS ENUM ('ACTIVE', 'RESOLVED', 'CLEARED');
-
-CREATE TYPE dtc_resolution_type AS ENUM ('AUTO', 'MANUAL', 'OBD_CLEAR');
-
-CREATE TYPE noti_type AS ENUM ('ALARM', 'RECALL', 'INFO', 'REPORT');
-
-CREATE TYPE insight_category AS ENUM ('ECO_DRIVING', 'SAFETY', 'MAINTENANCE');
-
-CREATE TYPE recall_status AS ENUM ('OPEN', 'CLOSED');
-
-CREATE TYPE inspection_type AS ENUM ('REGULAR', 'TOTAL');
-
-EXCEPTION WHEN duplicate_object THEN null;
+END IF;
 
 END $$;
+
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'fuel_type') THEN CREATE TYPE fuel_type AS ENUM ('GASOLINE', 'DIESEL', 'EV', 'HEV', 'LPG'); END IF; END $$;
+
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'registration_source') THEN CREATE TYPE registration_source AS ENUM ('MANUAL', 'OBD', 'CLOUD'); END IF; END $$;
+
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'charging_status') THEN CREATE TYPE charging_status AS ENUM ('DISCONNECTED', 'CHARGING', 'FULL', 'ERROR'); END IF; END $$;
+
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'diag_trigger_type') THEN CREATE TYPE diag_trigger_type AS ENUM ('AUTO', 'DATA', 'VISUAL', 'AUDIO','DTC','ROUTINE'); END IF; END $$;
+
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'diag_status') THEN CREATE TYPE diag_status AS ENUM ('PENDING', 'PROCESSING', 'REPLY_PROCESSING', 'DONE', 'FAILED'); END IF; END $$;
+
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'risk_level') THEN CREATE TYPE risk_level AS ENUM ('LOW', 'MID', 'HIGH', 'CRITICAL'); END IF; END $$;
+
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'media_type') THEN CREATE TYPE media_type AS ENUM ('AUDIO', 'IMAGE', 'SNAPSHOT'); END IF; END $$;
+
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'evidence_status') THEN CREATE TYPE evidence_status AS ENUM ('REQUESTED', 'UPLOADED', 'FAILED'); END IF; END $$;
+
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'dtc_type') THEN CREATE TYPE dtc_type AS ENUM ('STORED', 'PENDING', 'PERMANENT'); END IF; END $$;
+
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'dtc_status') THEN CREATE TYPE dtc_status AS ENUM ('ACTIVE', 'RESOLVED', 'CLEARED'); END IF; END $$;
+
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'dtc_resolution_type') THEN CREATE TYPE dtc_resolution_type AS ENUM ('AUTO', 'MANUAL', 'OBD_CLEAR'); END IF; END $$;
+
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'noti_type') THEN CREATE TYPE noti_type AS ENUM ('ALARM', 'RECALL', 'INFO', 'REPORT'); END IF; END $$;
+
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'insight_category') THEN CREATE TYPE insight_category AS ENUM ('ECO_DRIVING', 'SAFETY', 'MAINTENANCE'); END IF; END $$;
+
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'recall_status') THEN CREATE TYPE recall_status AS ENUM ('OPEN', 'CLOSED'); END IF; END $$;
+
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'inspection_type') THEN CREATE TYPE inspection_type AS ENUM ('REGULAR', 'TOTAL'); END IF; END $$;
 
 -- 3. 테이블 생성 (Core)
 
@@ -65,7 +64,7 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS user_settings (
     user_id UUID PRIMARY KEY REFERENCES users (user_id),
     noti_maintenance BOOLEAN DEFAULT TRUE,
-    noti_anomaly BOOLEAN DEFAULT TRUE,
+    noti_anomaly BOOLEAN DEFAULT TRUE, -- AI 진단 리포트 알림 (Post-Trip report) 수신 여부
     noti_recall BOOLEAN DEFAULT TRUE,
     noti_marketing BOOLEAN DEFAULT FALSE,
     night_push_allowed BOOLEAN DEFAULT FALSE
@@ -104,8 +103,10 @@ CREATE TABLE IF NOT EXISTS vehicles (
 -- 차량 모델 마스터 (2.1.5 - Track B Reference)
 CREATE TABLE IF NOT EXISTS car_model_master (
     model_id SERIAL PRIMARY KEY,
-    manufacturer VARCHAR(50),
-    model_name VARCHAR(100),
+    manufacturer_ko VARCHAR(50),
+    manufacturer_en VARCHAR(50),
+    model_name_ko VARCHAR(100),
+    model_name_en VARCHAR(100),
     model_year INT,
     fuel_type VARCHAR(20),
     displacement INT,
@@ -125,6 +126,11 @@ CREATE TABLE IF NOT EXISTS obd_logs (
     engine_load FLOAT,
     fuel_trim_short FLOAT,
     fuel_trim_long FLOAT,
+    intake_temp FLOAT,
+    map FLOAT,
+    maf FLOAT,
+    throttle_pos FLOAT,
+    engine_runtime INT,
     json_extra JSONB
 );
 -- 시계열 테이블로 변환
@@ -138,13 +144,32 @@ SELECT add_retention_policy (
 
 -- 클라우드 동기화 데이터 (2.2.2)
 CREATE TABLE IF NOT EXISTS cloud_telemetry (
-    last_synced_at TIMESTAMPTZ NOT NULL,
+    telemetry_id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
+    last_synced_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     vehicles_id UUID NOT NULL REFERENCES vehicles (vehicles_id),
-    odometer FLOAT,
-    fuel_level FLOAT,
-    battery_soc FLOAT,
-    charging_status charging_status,
-    PRIMARY KEY (last_synced_at, vehicles_id)
+
+-- 진단 (Diagnostics)
+odometer FLOAT, -- 주행거리 (km)
+fuel_level FLOAT, -- 연료 잔량 (%)
+battery_soc FLOAT, -- 배터리 잔량 (%)
+battery_capacity FLOAT, -- EV 배터리 전체 용량 (kWh)
+charge_limit FLOAT, -- EV 충전 제한 (%)
+engine_oil_life FLOAT, -- 엔진오일 수명 (%)
+tire_pressure_fl FLOAT, -- 타이어 공기압 (앞왼쪽)
+tire_pressure_fr FLOAT, -- 타이어 공기압 (앞오른쪽)
+tire_pressure_rl FLOAT, -- 타이어 공기압 (뒤왼쪽)
+tire_pressure_rr FLOAT, -- 타이어 공기압 (뒤오른쪽)
+
+-- 위치 및 환경 (Location & Climate)
+latitude FLOAT, -- 위도
+longitude FLOAT, -- 경도
+inside_temp FLOAT, -- 실내 온도
+outside_temp FLOAT, -- 실외 온도
+
+-- 상태 (Status)
+door_lock_status VARCHAR(20),    -- 문 잠금 상태 (LOCKED/UNLOCKED)
+    window_open_status VARCHAR(20),  -- 창문 열림 상태 (CLOSED/OPEN/PARTIAL)
+    charging_status charging_status
 );
 
 -- 주행 요약 (2.2.3)
@@ -158,6 +183,19 @@ CREATE TABLE IF NOT EXISTS trip_summaries (
     average_speed FLOAT,
     top_speed FLOAT,
     fuel_consumed FLOAT,
+    min_battery_voltage FLOAT,
+    max_coolant_temp FLOAT,
+    avg_fuel_trim FLOAT,
+    max_engine_load FLOAT,
+    idle_time INT,
+    hard_accel_count INT,
+    hard_brake_count INT,
+    avg_rpm FLOAT,
+    avg_engine_load FLOAT,
+    avg_maf FLOAT,
+    avg_throttle_pos FLOAT,
+    overheat_duration_sec INT,
+    json_extra JSONB, -- 추가적인 주행 데이터 (경로 등)
     PRIMARY KEY (start_time, vehicles_id)
 );
 
@@ -170,6 +208,7 @@ CREATE TABLE IF NOT EXISTS diag_sessions (
     trip_id UUID, -- trip_summaries.trip_id
     trigger_type diag_trigger_type,
     status diag_status,
+    progress_message VARCHAR(1000),
     created_at TIMESTAMP DEFAULT NOW()
 );
 
@@ -178,9 +217,11 @@ CREATE TABLE IF NOT EXISTS diag_results (
     diag_result_id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
     diag_session_id UUID REFERENCES diag_sessions (diag_session_id),
     final_report TEXT,
-    confidence FLOAT,
+    confidence_level VARCHAR(20), -- HIGH | MEDIUM | LOW
+    summary TEXT,
     detected_issues JSONB,
     actions_json JSONB,
+    requested_actions JSONB,
     risk_level risk_level
 );
 
@@ -197,17 +238,32 @@ CREATE TABLE IF NOT EXISTS ai_evidences (
 
 -- 6. 상태 관리 및 히스토리 (Status & History)
 
+-- DTC 고장 코드 마스터 (2.4.0)
+CREATE TABLE IF NOT EXISTS dtc_codes (
+    code VARCHAR(10),
+    manufacturer VARCHAR(50) DEFAULT 'GENERIC',
+    description_ko TEXT,
+    description_en TEXT,
+    summary_ko TEXT,
+    summary_en TEXT,
+    tts_phrase TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (code, manufacturer)
+);
+
 -- DTC 고장 코드 이력 (2.4.1)
 CREATE TABLE IF NOT EXISTS dtc_history (
     dtc_id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
     vehicles_id UUID REFERENCES vehicles (vehicles_id),
     dtc_code VARCHAR(10),
+    dtc_manufacturer VARCHAR(50) DEFAULT 'GENERIC',
     description TEXT,
     dtc_type dtc_type,
     status dtc_status,
     resolution_type dtc_resolution_type,
     discovered_at TIMESTAMP,
-    resolved_at TIMESTAMP
+    resolved_at TIMESTAMP,
+    FOREIGN KEY (dtc_code, dtc_manufacturer) REFERENCES dtc_codes (code, manufacturer)
 );
 
 -- DTC 고장 시점 스냅샷 (2.4.2)
@@ -241,6 +297,7 @@ CREATE TABLE IF NOT EXISTS vehicle_consumables (
     wear_factor FLOAT DEFAULT 1.0, -- AI 계산 마모율 (1.0 = 표준)
     last_replaced_at TIMESTAMP,
     last_replaced_mileage FLOAT, -- 교체 시점의 주행거리
+    is_inferred BOOLEAN DEFAULT FALSE NOT NULL, -- 시스템 추론 데이터 여부
     remaining_life FLOAT, -- (캐싱용) 잔존 수명 %
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP,
@@ -280,10 +337,9 @@ CREATE TABLE IF NOT EXISTS user_notifications (
 -- 지식 베이스 벡터 (2.5.2)
 CREATE TABLE IF NOT EXISTS knowledge_vectors (
     knowledge_id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
-    category VARCHAR(20),
     content TEXT,
     metadata JSONB, -- { manufacturer, model, year, source, page, dtc_code }
-    embedding VECTOR (1024), -- 로컬 AI (mxbai-embed-large) 임베딩 벡터
+    embedding VECTOR (768), -- nomic-embed-text (768차원) 대응
     content_hash VARCHAR(64) UNIQUE -- 중복 방지용 해시
 );
 
@@ -305,7 +361,9 @@ CREATE TABLE IF NOT EXISTS vehicle_specs (
     tire_size_front VARCHAR(50),
     tire_size_rear VARCHAR(50),
     official_fuel_economy FLOAT,
-    last_updated TIMESTAMP
+    spec_source VARCHAR(20) DEFAULT 'MASTER', -- MASTER, CLOUD, MANUAL
+    extra_specs JSONB DEFAULT '{}', -- 가변적인 브랜드별 상세 제원
+    last_updated TIMESTAMP DEFAULT NOW()
 );
 
 -- 리콜 상세 정보 (2.6.2)
@@ -368,11 +426,3 @@ CREATE TABLE IF NOT EXISTS user_insights (
     created_at TIMESTAMP DEFAULT NOW(),
     is_read BOOLEAN DEFAULT FALSE
 );
-
--- RAG 지식 벡터 저장소 (2.5 - AI/RAG)
--- (Cleaned up duplicate definition)
-
--- knowledge_vectors 인덱스
-CREATE INDEX IF NOT EXISTS idx_knowledge_category ON knowledge_vectors (category);
-
-CREATE INDEX IF NOT EXISTS idx_knowledge_metadata ON knowledge_vectors USING GIN (metadata);

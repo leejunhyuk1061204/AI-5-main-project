@@ -1,5 +1,14 @@
 import 'react-native-gesture-handler';
 import { registerRootComponent } from 'expo';
+import { LogBox, Platform } from 'react-native';
+// Firebase는 안드로이드 네이티브(google-services 플러그인)를 통해 자동으로 초기화되므로
+// 자바스크립트 단에서의 명시적 초기화는 제거했습니다.
+
+// 개발 모드에서 처리된 네비게이션 에러 경고 숨기기 (ErrorBoundary에서 처리됨)
+LogBox.ignoreLogs([
+    "Couldn't find a navigation context",
+    "navigation context",
+]);
 
 import App from './App';
 
