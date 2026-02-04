@@ -1,0 +1,214 @@
+﻿### 3. Anomaly Detection (LSTM-AE + Rule Domains)
+
+- 3.1 **POST `/predict/anomaly`**
+  - **Description**: 최근 일정 시간(기본 60초 윈도우) 동안 누적된 시계열 OBD 데이터 배열을 입력으로 받아, Core(엔진 ML) + 도메인별 Rule 기반 이상 여부를 분석합니다.
+  - **Response 기본 정책**: `summary`
+  - **응답 구조 원칙**:
+    - `extensions` 래퍼는 사용하지 않습니다.
+    - `domains + events[]` 중심으로 반환합니다.
+    - 이상 이벤트 발생 시 `events[].feature`를 반드시 포함합니다.
+
+#### Request (JSON)
+```json
+{
+  "vehicle_id": "UUID-or-string",
+  "trip_id": "UUID-or-string",
+  "mode": "DRIVING",
+  "duration_sec": 900,
+  "sampling_hz": 1,
+  "timestamp_unit": "s",
+  "data": [
+    {
+      "t": 0,
+      "features": {
+        "engine_coolant_temp_c": 86.2,
+        "imap_kpa": 41.8,
+        "engine_rpm": 2100,
+        "vehicle_speed_kmh": 32.1,
+        "intake_air_temp_c": 29.0,
+        "maf_gps": 12.7,
+        "throttle_pos_pct": 18.0,
+        "ambient_air_temp_c": 27.0,
+        "acc_pedal_pos_d_pct": 14.0,
+        "acc_pedal_pos_e_pct": 14.0,
+
+        "battery_voltage_v": 12.6,
+
+        "brake_pressure_kpa": 0.0,
+        "abs_active": 0,
+        "wheel_speed_fl_kmh": 32.0,
+        "wheel_speed_fr_kmh": 32.1,
+        "wheel_speed_rl_kmh": 31.9,
+        "wheel_speed_rr_kmh": 32.0,
+
+        "tire_pressure_fl_kpa": 230.0,
+        "tire_pressure_fr_kpa": 230.0,
+        "tire_pressure_rl_kpa": 225.0,
+        "tire_pressure_rr_kpa": 225.0
+      }
+    }
+  ],
+  "options": {
+    "top_signals": "on_anomaly",
+    "top_k": 3,
+    "domains": ["engine", "electrical", "brake", "tire", "idle"],
+    "return": "summary",
+    "window_sec": 60,
+    "stride_sec": 60
+  }
+}
+```
+
+#### Request Field Rules
+- `mode`: `DRIVING | IDLE`
+- `timestamp_unit`: `s | ms` (기본 `s`)
+- `options.return`: `summary | raw` (기본 `summary`)
+- `options.top_signals`: `off | always | on_anomaly`
+- `options.top_k`: `1 <= top_k <= 20`
+- `options.domains`: 분석 대상 도메인 목록
+- **Deprecated (입력)**: `options.extensions` (하위 호환용 임시 허용)
+
+---
+
+#### Response (JSON, summary)
+```json
+{
+  "meta": {
+    "vehicle_id": "UUID-or-string",
+    "trip_id": "UUID-or-string",
+    "timestamp_unit": "s",
+    "total_duration_sec": 900,
+    "window_sec": 60,
+    "stride_sec": 60,
+    "num_windows": 15
+  },
+  "is_anomaly": true,
+  "anomaly_score": 0.85,
+  "domains": {
+    "engine": {
+      "domain": "engine",
+      "status": "PROCESSED",
+      "score": 0.85,
+      "threshold": 0.70,
+      "is_anomaly": true,
+      "top_signals": [
+        { "feature": "engine_rpm", "contribution": 0.41 },
+        { "feature": "maf_gps", "contribution": 0.27 },
+        { "feature": "throttle_pos_pct", "contribution": 0.18 }
+      ]
+    },
+    "electrical": {
+      "domain": "electrical",
+      "status": "PROCESSED",
+      "score": 0.0,
+      "threshold": 11.8,
+      "is_anomaly": false
+    },
+    "brake": {
+      "domain": "brake",
+      "status": "PROCESSED",
+      "score": 0.0,
+      "threshold": 20000.0,
+      "is_anomaly": false
+    },
+    "tire": {
+      "domain": "tire",
+      "status": "PROCESSED",
+      "score": 1.0,
+      "threshold": 200.0,
+      "is_anomaly": true
+    },
+    "idle": {
+      "domain": "idle",
+      "status": "SKIPPED",
+      "score": null,
+      "threshold": null,
+      "is_anomaly": false
+    }
+  },
+  "events": [
+    {
+      "type": "TIRE_PRESSURE_LOW",
+      "domain": "tire",
+      "feature": "tire_pressure_rl_kpa",
+      "value": 185.0,
+      "threshold": 200.0,
+      "window_index": 8,
+      "severity": "WARNING",
+      "message": "Rear-left tire pressure is low."
+    }
+  ],
+  "window_results": []
+}
+```
+
+---
+
+- 3.2 **Domain Result Schema**
+
+```json
+{
+  "domain": "string",
+  "status": "PROCESSED | SKIPPED | UNSUPPORTED | ERROR",
+  "score": "number | null",
+  "threshold": "number | null",
+  "is_anomaly": "boolean",
+  "top_signals": [
+    {
+      "feature": "string",
+      "contribution": "number(0~1)"
+    }
+  ]
+}
+```
+
+- `domain (string)`: 예) `engine` (코어 결과 도메인)
+- `status (string)`: `PROCESSED | SKIPPED | UNSUPPORTED | ERROR`
+  - `PROCESSED`: 정상 분석 완료
+  - `SKIPPED`: 조건 불충족으로 미수행 (예: `mode=DRIVING`에서 `idle`)
+  - `UNSUPPORTED`: 차량/데이터 상 지원하지 않는 도메인
+  - `ERROR`: 분석 중 오류 발생
+- `score (float|null)`: 이상 점수(0~1). 값이 클수록 정상 패턴과의 차이가 큼
+- `threshold (float|null)`: 이상 판단 기준값
+- `is_anomaly (bool)`: `score >= threshold`인 경우 `true`
+- `top_signals (array<object>, optional)`:
+  - 이상판단에 크게 기여한 센서(feature) Top-k
+  - `feature (string)`: 센서(feature) 이름
+  - `contribution (float)`: 상대 기여 비중(0~1)
+  - **최대 `top_k`개 반환** (항상 `top_k`개 고정 아님)
+  - 주로 ML 도메인(예: engine)에서 제공, Rule 도메인은 생략 가능 또는 빈 배열 가능
+
+---
+
+- 3.3 **Event Schema**
+
+```json
+{
+  "type": "string",
+  "domain": "string",
+  "feature": "string",
+  "value": "number | string | null",
+  "threshold": "number | null",
+  "window_index": "number | null",
+  "severity": "INFO | WARNING | CRITICAL",
+  "message": "string"
+}
+```
+
+- 이상 이벤트는 `feature` 필드 포함 필수
+- 백엔드 전달/알림/로그/후속 리포트 생성은 `events[]`를 표준으로 사용
+
+---
+
+- 3.4 **Raw Response Policy**
+
+- `options.return = "summary"`: `window_results`는 빈 배열 또는 생략
+- `options.return = "raw"`: `window_results` 포함 (디버깅/분석용)
+
+---
+
+- 3.5 **Compatibility & Deprecation**
+
+- **Deprecated (응답)**: `core`, `extensions`, `details.rules` 중심 중첩 구조
+- **Deprecated (입력)**: `options.extensions`
+- **권장 표준 (응답)**: `is_anomaly + anomaly_score + domains + events[]`
