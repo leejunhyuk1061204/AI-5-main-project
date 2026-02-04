@@ -36,7 +36,7 @@ def trim_silence_rms(audio: np.ndarray, sr: int, top_db: int = 20) -> np.ndarray
 # =============================================================================
 def apply_bandpass_filter(
     audio: np.ndarray, sr: int, 
-    low_freq: int = 80, high_freq: int = 7500, order: int = 3
+    low_freq: int = 200, high_freq: int = 7500, order: int = 3
 ) -> np.ndarray:
     """
     차량 결함음 주파수 대역(80Hz~7.5kHz)만 통과시키는 Band-pass 필터.

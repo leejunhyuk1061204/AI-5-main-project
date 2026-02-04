@@ -186,8 +186,9 @@ def filter_audio_list(data_list, desc="Data", backbone="ast"):
             ratio, _ = calculate_speech_ratio(y, sr)
             
             if ratio < SPEECH_SKIP_THRESHOLD:
-                skipped[item.get("label", "unknown")] += 1
-                continue
+                print(f"[Warning] {item['audio']} has low speech ratio ({ratio:.2%}) but kept (Defense Mode)")
+                # skipped[item.get("label", "unknown")] += 1  # ❌ Do not skip!
+                # continue
             filtered.append(item)
         except Exception:
             skipped["error"] += 1
@@ -357,7 +358,7 @@ class BasicArch:
         
         return evaluate_simple(res.label_ids, preds, LABEL_LIST, "basic", "ast", baseline_type)
     
-    def train(self, train_data, test_data, epochs) -> BaselineResult:
+    def train(self, train_data, test_data, epochs, batch_size=4, grad_accum=4) -> BaselineResult:
         print(f"\n{'='*60}\n[Basic] 4-Class 학습\n{'='*60}")
         
         t_data, v_data = train_test_split(train_data, test_size=0.1, stratify=[x['label'] for x in train_data], random_state=42)
@@ -378,17 +379,19 @@ class BasicArch:
         ).to(device)
         
         class WTrainer(Trainer):
-            def compute_loss(self, mdl, inputs, return_outputs=False):
+            def compute_loss(self, mdl, inputs, return_outputs=False, **kwargs):
                 lbl = inputs.get("labels")
                 out = mdl(**inputs)
                 loss = nn.CrossEntropyLoss(weight=weights.to(mdl.device))(out.logits.view(-1, 4), lbl.view(-1))
                 return (loss, out) if return_outputs else loss
         
         args = TrainingArguments(
-            output_dir=self.output_dir, per_device_train_batch_size=8, num_train_epochs=epochs,
+            output_dir=self.output_dir, per_device_train_batch_size=batch_size, num_train_epochs=epochs,
+            gradient_accumulation_steps=grad_accum,
             learning_rate=3e-5, eval_strategy="epoch", save_strategy="epoch",
             load_best_model_at_end=True, metric_for_best_model="recall", greater_is_better=True,
-            fp16=torch.cuda.is_available()
+            fp16=torch.cuda.is_available(),
+            save_total_limit=1  # ✅ 디스크 절약: 최신 1개만 저장
         )
         
         def metrics(ep):
@@ -448,13 +451,13 @@ class TwoStageArch:
         
         return {"s1": s1_res, "s2": s2_res} if s2_res else {"s1": s1_res}
     
-    def train(self, train_data, test_data, epochs) -> Dict[str, BaselineResult]:
+    def train(self, train_data, test_data, epochs, batch_size=4, grad_accum=4) -> Dict[str, BaselineResult]:
         print(f"\n{'='*60}\n[2-Stage] 학습\n{'='*60}")
-        s1_res = self._train_stage(train_data, test_data, epochs, 1)
-        s2_res = self._train_stage(train_data, test_data, epochs, 2)
+        s1_res = self._train_stage(train_data, test_data, epochs, 1, batch_size, grad_accum)
+        s2_res = self._train_stage(train_data, test_data, epochs, 2, batch_size, grad_accum)
         return {"s1": s1_res, "s2": s2_res}
     
-    def _train_stage(self, train_data, test_data, epochs, stage) -> Optional[BaselineResult]:
+    def _train_stage(self, train_data, test_data, epochs, stage, batch_size=4, grad_accum=4) -> Optional[BaselineResult]:
         if stage == 1:
             label_key, label2id_map, labels_list, save_path, num_labels = "stage1_label", stage1_label2id, STAGE1_LABELS, self.s1_path, 2
             train_f, test_f = train_data, test_data
@@ -484,17 +487,19 @@ class TwoStageArch:
         model = ASTForAudioClassification.from_pretrained(self.model_id, num_labels=num_labels, ignore_mismatched_sizes=True).to(device)
         
         class WTrainer(Trainer):
-            def compute_loss(self, mdl, inputs, return_outputs=False):
+            def compute_loss(self, mdl, inputs, return_outputs=False, **kwargs):
                 lbl = inputs.get("labels")
                 out = mdl(**inputs)
                 loss = nn.CrossEntropyLoss(weight=weights.to(mdl.device))(out.logits.view(-1, num_labels), lbl.view(-1))
                 return (loss, out) if return_outputs else loss
         
         args = TrainingArguments(
-            output_dir=f"./ai/runs/audio_s{stage}", per_device_train_batch_size=8, num_train_epochs=epochs,
+            output_dir=f"./ai/runs/audio_s{stage}", per_device_train_batch_size=batch_size, num_train_epochs=epochs,
+            gradient_accumulation_steps=grad_accum,
             learning_rate=3e-5, eval_strategy="epoch", save_strategy="epoch",
             load_best_model_at_end=True, metric_for_best_model="recall", greater_is_better=True,
-            fp16=torch.cuda.is_available()
+            fp16=torch.cuda.is_available(),
+            save_total_limit=1  # ✅ 디스크 절약
         )
         
         def metrics(ep):
@@ -618,12 +623,12 @@ class HybridArch:
         
         return evaluate_simple(all_labels, all_preds, LABEL_LIST, "hybrid", "ensemble", baseline_type)
     
-    def train(self, train_data, test_data, epochs, ast_weight=0.6) -> BaselineResult:
+    def train(self, train_data, test_data, epochs, ast_weight=0.6, batch_size=4, grad_accum=4) -> BaselineResult:
         print(f"\n{'='*60}\n[Hybrid] 학습\n{'='*60}")
         
         # AST 학습
         print("\n--- AST 학습 ---")
-        self._train_ast(train_data, test_data, epochs)
+        self._train_ast(train_data, test_data, epochs, batch_size, grad_accum)
         
         # CNN 학습
         print("\n--- CNN14 학습 ---")
@@ -634,7 +639,7 @@ class HybridArch:
         ds = prepare_dataset(test_data, "label", label2id, self.model_id, "Test(Ens)")
         return self._evaluate_trained_ensemble(ds, ast_weight)
     
-    def _train_ast(self, train_data, test_data, epochs):
+    def _train_ast(self, train_data, test_data, epochs, batch_size=4, grad_accum=4):
         t, v = train_test_split(train_data, test_size=0.1, stratify=[x['label'] for x in train_data], random_state=42)
         
         train_ds = prepare_dataset(t, "label", label2id, self.model_id, "Train(AST)")
@@ -646,10 +651,12 @@ class HybridArch:
         model = ASTForAudioClassification.from_pretrained(self.model_id, num_labels=4, ignore_mismatched_sizes=True).to(device)
         
         args = TrainingArguments(
-            output_dir="./ai/runs/hybrid_ast", per_device_train_batch_size=8, num_train_epochs=epochs,
+            output_dir="./ai/runs/hybrid_ast", per_device_train_batch_size=batch_size, num_train_epochs=epochs,
+            gradient_accumulation_steps=grad_accum,
             learning_rate=3e-5, eval_strategy="epoch", save_strategy="epoch",
             load_best_model_at_end=True, metric_for_best_model="recall", greater_is_better=True,
-            fp16=torch.cuda.is_available()
+            fp16=torch.cuda.is_available(),
+            save_total_limit=1  # ✅ 디스크 절약
         )
         
         def metrics(ep):
@@ -743,6 +750,8 @@ if __name__ == "__main__":
     parser.add_argument("--epochs", type=int, default=10)
     parser.add_argument("--ast-weight", type=float, default=0.6)
     parser.add_argument("--model-id", type=str, default=DEFAULT_AST_MODEL)
+    parser.add_argument("--batch-size", type=int, default=4, help="Batch size per device")
+    parser.add_argument("--grad-accum", type=int, default=4, help="Gradient accumulation steps")
     args = parser.parse_args()
     
     print(f"🚀 통합 오디오 학습 도구 v2")
@@ -751,6 +760,7 @@ if __name__ == "__main__":
     print(f"   모드: {args.mode}")
     print(f"   Baseline 타입: {args.baseline_type}")
     print(f"   에폭: {args.epochs}")
+    print(f"   Batch Size: {args.batch_size}, Grad Accum: {args.grad_accum}")
     
     train_data = load_data_from_dir(TRAIN_DATA_DIR)
     test_data = load_data_from_dir(TEST_DATA_DIR)
@@ -793,9 +803,9 @@ if __name__ == "__main__":
             
             if args.mode in ["train", "all"]:
                 if name == "hybrid":
-                    m = arch.train(train_data, test_data, args.epochs, args.ast_weight)
+                    m = arch.train(train_data, test_data, args.epochs, args.ast_weight, args.batch_size, args.grad_accum)
                 else:
-                    m = arch.train(train_data, test_data, args.epochs)
+                    m = arch.train(train_data, test_data, args.epochs, args.batch_size, args.grad_accum)
                 
                 if name == "2stage":
                     add_result_to_summary(final_summary, m["s1"])

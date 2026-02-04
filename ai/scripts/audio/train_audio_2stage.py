@@ -203,7 +203,7 @@ def train_stage1(train_data, test_data, epochs=10, batch_size=4, grad_accum=4):
     
     # Trainer
     class WeightedTrainer(Trainer):
-        def compute_loss(self, model, inputs, return_outputs=False):
+        def compute_loss(self, model, inputs, return_outputs=False, **kwargs):
             labels = inputs.get("labels")
             outputs = model(**inputs)
             loss_fct = nn.CrossEntropyLoss(weight=weights.to(model.device))
@@ -301,7 +301,7 @@ def train_stage2(train_data, test_data, epochs=10, batch_size=4, grad_accum=4):
     ).to(device)
     
     class WeightedTrainer(Trainer):
-        def compute_loss(self, model, inputs, return_outputs=False):
+        def compute_loss(self, model, inputs, return_outputs=False, **kwargs):
             labels = inputs.get("labels")
             outputs = model(**inputs)
             loss_fct = nn.CrossEntropyLoss(weight=weights.to(model.device))
