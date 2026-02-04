@@ -56,7 +56,7 @@ export const useVehicleStore = create<VehicleState>((set, get) => ({
             return data;
         } catch (e) {
             console.error('Failed to fetch vehicles', e);
-            return [];
+            throw e; // 에러를 상위로 전파하여 App.tsx가 로그인 화면으로 이동할 수 있게 함
         } finally {
             set({ isLoading: false });
         }
