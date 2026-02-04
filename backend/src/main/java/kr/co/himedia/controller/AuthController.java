@@ -79,6 +79,16 @@ public class AuthController {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
     }
 
+    // BE-AU-006 로그아웃
+    @PostMapping("/logout")
+    public ResponseEntity<ApiResponse<String>> logout(Authentication auth) {
+        if (auth != null && auth.getPrincipal() instanceof kr.co.himedia.security.CustomUserDetails userDetails) {
+            userService.logout(userDetails.getUserId());
+            return ResponseEntity.ok(ApiResponse.success("Successfully logged out"));
+        }
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+    }
+
     // BE-AU-007 회원 탈퇴
     @DeleteMapping("/me")
     public ResponseEntity<ApiResponse<String>> deleteUser(Authentication auth) {
