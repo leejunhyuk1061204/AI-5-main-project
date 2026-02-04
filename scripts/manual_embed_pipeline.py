@@ -16,7 +16,7 @@ DEST_DIR = "data/manuals/embedded"
 OUTPUT_SQL_PATH = "db/seed_knowledge_vectors.sql"
 LOG_FILE = "logs/embed_pipeline.log"
 
-MODEL_NAME = "bge-m3"  # 1024차원, 8192 컨텍스트 지원
+MODEL_NAME = "nomic-embed-text"  # 768차원, 고속 모델
 OLLAMA_API_URL = "http://localhost:11434/api/embeddings"
 
 def log(message):
@@ -46,11 +46,8 @@ def get_ollama_embedding(text):
     try:
         response = requests.post(OLLAMA_API_URL, json={
             "model": MODEL_NAME,
-            "prompt": text,
-            "options": {
-                "num_ctx": 8192  # BGE-M3의 최대 컨텍스트 활용
-            }
-        }, timeout=60) # 타임아웃 60초로 상향
+            "prompt": text
+        }, timeout=90) # 타임아웃 90초로 상향
         
         if response.status_code == 200:
             return response.json().get("embedding")
@@ -130,8 +127,8 @@ def process_file(filepath):
                 raw_content = item.get("content", item.get("original_context", ""))
                 if not raw_content: continue
                 
-                # 매우 보수적인 청킹 (300자)
-                chunk_size = 300
+                # 최적화된 청킹 (1000자)
+                chunk_size = 1000
                 content_chunks = [raw_content[i:i+chunk_size] for i in range(0, len(raw_content), chunk_size)]
                 
                 for idx, chunk in enumerate(content_chunks):
@@ -175,34 +172,53 @@ def main():
     
     if not os.path.exists(OUTPUT_SQL_PATH):
         with open(OUTPUT_SQL_PATH, 'w', encoding='utf-8') as f:
-            f.write("-- Vector Knowledge Seed Data (Manuals - 1024 Dim)\n\n")
+            f.write("-- Vector Knowledge Seed Data (Manuals - 768 Dim)\n\n")
 
     log("="*60)
     log(f"Manual Embedding Pipeline Started (Model: {MODEL_NAME})")
     log("="*60)
 
     while True:
-        files = [f for f in os.listdir(SOURCE_DIR) if f.endswith('.json')]
+        # data/manuals/parsed에서 .json 파일 목록 가져오기
+        all_files = os.listdir(SOURCE_DIR)
+        json_files = [f for f in all_files if f.endswith('.json')]
         
-        if not files:
-            time.sleep(15)
+        if not json_files:
+            log("No files to process. Waiting...")
+            time.sleep(60)
             continue
             
-        for filename in files:
-            src_path = os.path.join(SOURCE_DIR, filename)
-            dest_path = os.path.join(DEST_DIR, filename)
+        json_files.sort()
+        
+        for file in json_files:
+            src_path = os.path.join(SOURCE_DIR, file)
+            processing_path = src_path + ".processing"
             
-            if process_file(src_path):
-                try:
-                    shutil.move(src_path, dest_path)
-                    log(f"  [MOVE] Moved {filename} to {DEST_DIR}")
-                except Exception as e:
-                    log(f"  [ERROR] Failed to move {filename}: {e}")
-            else:
-                log(f"  [RETRY] Fatal error for {filename}, will retry.")
-                time.sleep(10)
+            if not os.path.exists(src_path):
+                continue
                 
-        time.sleep(10)
+            try:
+                # Atomic Lock 시도
+                os.rename(src_path, processing_path)
+                log(f"[LOCK] Acquired: {file}")
+            except Exception:
+                continue
+                
+            # 처리 수행
+            if process_file(processing_path):
+                dest_path = os.path.join(DEST_DIR, file)
+                try:
+                    shutil.move(processing_path, dest_path)
+                    log(f"[FINISH] {file} (Done & Moved)")
+                except Exception as e:
+                    log(f"[ERROR] Move failed for {file}: {e}")
+            else:
+                # 실패 시 락 해제
+                os.rename(processing_path, src_path)
+                log(f"[RETRY] Restored {file}")
+                time.sleep(5)
+                
+        time.sleep(5)
 
 if __name__ == "__main__":
     main()
