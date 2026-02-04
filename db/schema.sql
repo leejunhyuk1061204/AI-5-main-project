@@ -339,7 +339,7 @@ CREATE TABLE IF NOT EXISTS knowledge_vectors (
     knowledge_id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
     content TEXT,
     metadata JSONB, -- { manufacturer, model, year, source, page, dtc_code }
-    embedding VECTOR (1024), -- 로컬 AI (mxbai-embed-large) 임베딩 벡터
+    embedding VECTOR (768), -- nomic-embed-text (768차원) 대응
     content_hash VARCHAR(64) UNIQUE -- 중복 방지용 해시
 );
 
