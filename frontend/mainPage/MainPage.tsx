@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import Svg, { Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
+
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import tripApi from '../api/tripApi';
 import Header from '../header/Header';
@@ -10,15 +11,30 @@ import BaseScreen from '../components/layout/BaseScreen';
 import { useVehicleStore } from '../store/useVehicleStore';
 import ObdService from '../services/ObdService';
 import NotificationOnboardingModal from '../components/NotificationOnboardingModal';
+import { useUserStore } from '../store/useUserStore';
 
 export default function MainPage() {
     const navigation = useNavigation<any>();
     const { primaryVehicle, fetchVehicles } = useVehicleStore();
+    const { nickname, membership, loadUser } = useUserStore();
     const [maintenanceScore, setMaintenanceScore] = useState(100);
     const [drivingScore, setDrivingScore] = useState(0);
 
     // Consumables State (Hoisted)
     const [consumables, setConsumables] = useState<any[]>([]);
+    const [masterConsumables, setMasterConsumables] = useState<any[]>([]);
+
+    useEffect(() => {
+        const loadMasterData = async () => {
+            try {
+                const data = await require('../api/masterApi').getAllConsumableItems();
+                setMasterConsumables(data || []);
+            } catch (e) {
+                console.log('Failed to load master consumables', e);
+            }
+        };
+        loadMasterData();
+    }, []);
 
     // Auto-connect OBD on mount
     useEffect(() => {
@@ -31,11 +47,15 @@ export default function MainPage() {
         initObd();
     }, []);
 
-    useEffect(() => {
-        fetchVehicles();
-        const unsubscribe = navigation.addListener('focus', fetchVehicles);
-        return unsubscribe;
-    }, [navigation]);
+    // 화면이 포커스될 때마다 사용자 정보 및 차량 정보 갱신
+    useFocusEffect(
+        React.useCallback(() => {
+            console.log('MainPage focused - reloading user data');
+            fetchVehicles();
+            loadUser();
+        }, [])
+    );
+
 
     // Vehicle ID Sync & Initial Load
     useEffect(() => {
@@ -98,13 +118,13 @@ export default function MainPage() {
         }
 
         // 1. Calculate Consumable Health (Average %)
-        // Filter out non-critical or informational items if needed
-        const criticalItems = ['ENGINE_OIL', 'BATTERY', 'BATTERY_12V', 'TIRE', 'TIRE_FRONT', 'TIRE_REAR', 'BRAKE_PAD', 'BRAKE_PAD_FRONT', 'BRAKE_PAD_REAR', 'COOLANT', 'BRAKE_FLUID'];
-        const validConsumables = consumables.filter(c => criticalItems.includes(c.item) || c.item.includes('TIRE') || c.item.includes('BRAKE'));
+        // Use dynamic master list for filtering
+        const criticalCodes = masterConsumables.map(m => m.code);
+        const validConsumables = consumables.filter(c => c?.item && criticalCodes.includes(c.item));
 
         let maintenanceScore = 100;
         if (validConsumables.length > 0) {
-            const totalLife = validConsumables.reduce((sum, c) => sum + c.remainingLifePercent, 0);
+            const totalLife = validConsumables.reduce((sum, c) => sum + (c.remainingLifePercent || 0), 0);
             maintenanceScore = Math.round(totalLife / validConsumables.length);
         }
 
@@ -135,13 +155,8 @@ export default function MainPage() {
 
         if (type === 'BATTERY') {
             item = consumables.find(c => c.item === 'BATTERY_12V' || c.item === 'BATTERY');
-        } else if (type === 'TIRE') {
-            // Find worst performing tire if multiple exist, or just TIRE_FRONT
-            const tires = consumables.filter(c => c.item.includes('TIRE'));
-            if (tires.length > 0) {
-                // Return the one with lowest life
-                item = tires.reduce((prev, curr) => (prev.remainingLifePercent < curr.remainingLifePercent ? prev : curr));
-            }
+        } else if (type === 'COOLANT') {
+            item = consumables.find(c => c?.item === 'COOLANT');
         } else {
             // Default lookups (ENGINE_OIL etc)
             item = consumables.find(c => c.item === type);
@@ -166,7 +181,7 @@ export default function MainPage() {
 
     const engineStatus = getStatusFor('ENGINE_OIL');
     const batteryStatus = getStatusFor('BATTERY');
-    const tireStatus = getStatusFor('TIRE');
+    const coolantStatus = getStatusFor('COOLANT');
 
     // fallback for display
     const currentVehicle = primaryVehicle || {
@@ -302,7 +317,7 @@ export default function MainPage() {
                     {[
                         { label: '엔진', icon: 'oil', family: 'MaterialCommunityIcons', data: engineStatus },
                         { label: '배터리', icon: 'battery-charging-full', family: 'MaterialIcons', data: batteryStatus },
-                        { label: '타이어', icon: 'tire', family: 'MaterialCommunityIcons', data: tireStatus }
+                        { label: '냉각수', icon: 'coolant-temperature', family: 'MaterialCommunityIcons', data: coolantStatus }
                     ].map((item, index) => (
                         <TouchableOpacity
                             key={index}
@@ -331,35 +346,86 @@ export default function MainPage() {
                 </View>
             </View>
 
-            {/* Membership Promotion Card */}
-            <View className="px-6 pb-3">
-                <TouchableOpacity
-                    className="relative overflow-hidden rounded-xl border border-premium/30 p-4"
-                    activeOpacity={0.9}
-                    onPress={() => navigation.navigate('Membership')}
-                >
-                    <View className="absolute inset-0 bg-premium/5" />
-                    <View className="flex-row items-center justify-between mb-2">
-                        <View className="flex-row items-center gap-2">
-                            <MaterialIcons name="workspace-premium" size={20} color="#c5a059" />
-                            <Text className="text-premium text-xs font-bold tracking-wider uppercase">Premium Membership</Text>
+            {/* Membership Card - Dynamic based on level */}
+            {membership === 'BUSINESS' ? (
+                <View className="px-6 pb-3">
+                    <TouchableOpacity
+                        className="relative overflow-hidden rounded-xl border border-premium/30 p-4"
+                        activeOpacity={0.9}
+                        onPress={() => navigation.navigate('Membership')}
+                    >
+                        <View className="absolute inset-0 bg-premium/5" />
+                        <View className="flex-row items-center justify-between mb-2">
+                            <View className="flex-row items-center gap-2">
+                                <MaterialIcons name="business-center" size={20} color="#c5a059" />
+                                <Text className="text-premium text-xs font-bold tracking-wider uppercase">Business Membership</Text>
+                            </View>
+                            <MaterialIcons name="arrow-forward-ios" size={14} color="#c5a059" />
                         </View>
-                        <MaterialIcons name="arrow-forward-ios" size={14} color="#78716c" />
-                    </View>
-                    <Text className="text-white text-base font-bold mb-1">프리미엄 멤버십 혜택</Text>
-                    <Text className="text-text-secondary text-xs mb-3 leading-relaxed">
-                        AI 기반 정밀 진단과 무제한 리포트, 더 많은 혜택을 누려보세요.
-                    </Text>
-                    <View className="flex-row gap-2">
-                        <View className="bg-premium/10 px-2 py-1 rounded border border-premium/20">
-                            <Text className="text-premium text-xs font-medium">AI 정밀 진단</Text>
+                        <Text className="text-white text-base font-bold mb-1">비즈니스 멤버십 혜택</Text>
+                        <Text className="text-text-secondary text-xs mb-3 leading-relaxed">
+                            다중 차량 관리와 전담 매니저 서비스 등 강력한 비즈니스 전용 기능을 이용 중입니다.
+                        </Text>
+                        <View className="flex-row gap-2">
+                            <View className="bg-premium/10 px-2 py-1 rounded border border-premium/20">
+                                <Text className="text-premium text-xs font-medium">다중 차량 관리</Text>
+                            </View>
+                            <View className="bg-premium/10 px-2 py-1 rounded border border-premium/20">
+                                <Text className="text-premium text-xs font-medium">정비소 연동</Text>
+                            </View>
                         </View>
-                        <View className="bg-premium/10 px-2 py-1 rounded border border-premium/20">
-                            <Text className="text-premium text-xs font-medium">무제한 리포트</Text>
+                    </TouchableOpacity>
+                </View>
+            ) : membership === 'PREMIUM' ? (
+                <View className="px-6 pb-3">
+                    <TouchableOpacity
+                        className="relative overflow-hidden rounded-xl border border-primary/30 p-4"
+                        activeOpacity={0.9}
+                        onPress={() => navigation.navigate('Membership')}
+                    >
+                        <View className="absolute inset-0 bg-primary/5" />
+                        <View className="flex-row items-center justify-between mb-2">
+                            <View className="flex-row items-center gap-2">
+                                <MaterialIcons name="workspace-premium" size={20} color="#0d7ff2" />
+                                <Text className="text-primary text-xs font-bold tracking-wider uppercase">Premium Membership</Text>
+                            </View>
+                            <MaterialIcons name="arrow-forward-ios" size={14} color="#0d7ff2" />
                         </View>
-                    </View>
-                </TouchableOpacity>
-            </View>
+                        <Text className="text-white text-base font-bold mb-1">프리미엄 멤버십 혜택</Text>
+                        <Text className="text-text-secondary text-xs mb-3 leading-relaxed">
+                            AI 기반 정밀 진단과 무제한 리포트 등 모든 프리미엄 기능을 이용 중입니다.
+                        </Text>
+                        <View className="flex-row gap-2">
+                            <View className="bg-primary/10 px-2 py-1 rounded border border-primary/20">
+                                <Text className="text-primary text-xs font-medium">AI 정밀 진단</Text>
+                            </View>
+                            <View className="bg-primary/10 px-2 py-1 rounded border border-primary/20">
+                                <Text className="text-primary text-xs font-medium">무제한 리포트</Text>
+                            </View>
+                        </View>
+                    </TouchableOpacity>
+                </View>
+            ) : (
+                <View className="px-6 pb-3">
+                    <TouchableOpacity
+                        className="relative overflow-hidden rounded-xl border border-white/10 p-4 bg-white/5"
+                        activeOpacity={0.9}
+                        onPress={() => navigation.navigate('Membership')}
+                    >
+                        <View className="flex-row items-center justify-between mb-2">
+                            <View className="flex-row items-center gap-2">
+                                <MaterialIcons name="stars" size={20} color="#6b7280" />
+                                <Text className="text-gray-400 text-xs font-bold tracking-wider uppercase">Upgrade Membership</Text>
+                            </View>
+                            <MaterialIcons name="arrow-forward-ios" size={14} color="#6b7280" />
+                        </View>
+                        <Text className="text-white text-base font-bold mb-1">멤버십 업그레이드</Text>
+                        <Text className="text-text-secondary text-xs mb-3 leading-relaxed">
+                            AI 기반 정밀 진단과 더 많은 혜택을 위해 멤버십을 업그레이드해보세요.
+                        </Text>
+                    </TouchableOpacity>
+                </View>
+            )}
             {/* Notification Onboarding Modal */}
             <NotificationOnboardingModal
                 visible={showNotiOnboarding}

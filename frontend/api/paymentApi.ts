@@ -41,7 +41,13 @@ const approve = async (pgToken: string, orderId: string): Promise<KakaoApproveRe
     return response.data.data;
 };
 
+// 멤버십 초기화 (FREE로 변경)
+const resetMembership = async (): Promise<void> => {
+    await api.post('/api/v1/payment/reset');
+};
+
 export default {
     ready,
-    approve
+    approve,
+    resetMembership
 };

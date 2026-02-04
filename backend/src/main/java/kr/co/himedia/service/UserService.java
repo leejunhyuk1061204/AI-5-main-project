@@ -8,7 +8,6 @@ import kr.co.himedia.entity.User;
 import kr.co.himedia.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,7 +16,6 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Base64;
 import java.util.UUID;
@@ -58,9 +56,11 @@ public class UserService {
         User saved = userRepository.save(user);
 
         return UserResponse.builder()
-                .userId(saved.getUserId())
+                .id(saved.getUserId())
                 .email(saved.getEmail())
                 .nickname(saved.getNickname())
+                .membership(saved.getUserLevel() != null ? saved.getUserLevel().name() : "FREE")
+                .membershipExpiry(saved.getMembershipExpiry())
                 .build();
     }
 
@@ -215,9 +215,11 @@ public class UserService {
                 .orElseThrow(() -> new BaseException(ErrorCode.USER_NOT_FOUND));
 
         return UserResponse.builder()
-                .userId(user.getUserId())
+                .id(user.getUserId())
                 .email(user.getEmail())
                 .nickname(user.getNickname())
+                .membership(user.getUserLevel() != null ? user.getUserLevel().name() : "FREE")
+                .membershipExpiry(user.getMembershipExpiry())
                 .profileImageBase64(
                         user.getProfileImage() != null ? Base64.getEncoder().encodeToString(user.getProfileImage())
                                 : null)

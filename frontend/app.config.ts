@@ -48,6 +48,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
         "@react-native-firebase/messaging",
         "expo-font",
         "expo-sqlite",
+        "expo-web-browser",
 
         [
             "expo-camera",

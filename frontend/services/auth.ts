@@ -22,6 +22,8 @@ export interface UserResponse {
     email: string;
     nickname: string;
     role: string;
+    membership: string;
+    membershipExpiry: string | null;
 }
 
 export interface ApiResponse<T> {

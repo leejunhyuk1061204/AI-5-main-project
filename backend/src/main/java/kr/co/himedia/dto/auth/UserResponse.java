@@ -12,8 +12,10 @@ import java.util.UUID;
 @AllArgsConstructor
 @Builder
 public class UserResponse {
-    private UUID userId;
+    private UUID id;
     private String email;
     private String nickname;
+    private String membership;
+    private java.time.LocalDateTime membershipExpiry;
     private String profileImageBase64;
 }

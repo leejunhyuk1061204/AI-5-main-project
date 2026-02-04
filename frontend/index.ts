@@ -1,3 +1,6 @@
+import { Buffer } from 'buffer';
+global.Buffer = global.Buffer || Buffer;
+
 import 'react-native-gesture-handler';
 import { registerRootComponent } from 'expo';
 import { LogBox, Platform } from 'react-native';

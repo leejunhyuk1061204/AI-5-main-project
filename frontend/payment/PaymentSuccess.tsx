@@ -19,14 +19,15 @@ export default function PaymentSuccess() {
         const processPayment = async () => {
             try {
                 // URL 파라미터에서 pg_token 추출 (Deep Link로 전달됨)
-                const { pg_token } = route.params || {};
+                const { pg_token, order_id } = route.params || {};
 
                 if (!pg_token) {
                     throw new Error('결제 토큰이 없습니다.');
                 }
 
-                // 저장해둔 orderId 가져오기
-                const orderId = await AsyncStorage.getItem('temp_order_id');
+                // 저장해둔 orderId 가져오기 (URL 파라미터 우선, 없으면 AsyncStorage)
+                const orderId = order_id || await AsyncStorage.getItem('temp_order_id');
+
                 if (!orderId) {
                     throw new Error('주문 정보를 찾을 수 없습니다.');
                 }
@@ -39,6 +40,12 @@ export default function PaymentSuccess() {
 
                 setSuccess(true);
                 await AsyncStorage.removeItem('temp_order_id'); // cleanup
+
+                // 승인 완료 후 자동으로 홈으로 이동
+                navigation.reset({
+                    index: 0,
+                    routes: [{ name: 'MainPage' }],
+                });
             } catch (error: any) {
                 console.error('Payment Approve Error:', error);
                 setErrorMsg(error.response?.data?.error?.message || error.message || '결제 승인 중 오류가 발생했습니다.');
@@ -79,7 +86,12 @@ export default function PaymentSuccess() {
                         </View>
                         <TouchableOpacity
                             className="bg-[#0d7ff2] px-8 py-3 rounded-xl mt-4"
-                            onPress={() => navigation.navigate('MyPage')}
+                            onPress={() => {
+                                navigation.reset({
+                                    index: 0,
+                                    routes: [{ name: 'MainPage' }],
+                                });
+                            }}
                         >
                             <Text className="text-white font-bold text-base">확인</Text>
                         </TouchableOpacity>

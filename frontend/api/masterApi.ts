@@ -61,12 +61,16 @@ export const getAllConsumableItems = async (): Promise<ConsumableMaster[]> => {
         // console.warn('Fallback to local consumable list');
         // Sorted by Replacement Cycle (Shortest First)
         return [
-            { code: 'WIPER', name: '와이퍼', category: 'EXTERIOR', icon: 'wiper', replacementCycleKm: 0, replacementCycleMonth: 6 },
             { code: 'ENGINE_OIL', name: '엔진 오일', category: 'ENGINE', icon: 'oil-barrel', replacementCycleKm: 10000, replacementCycleMonth: 12 },
-            { code: 'AIR_FILTER', name: '에어컨 필터', category: 'AIR', icon: 'air', replacementCycleKm: 15000, replacementCycleMonth: 6 },
-            { code: 'BRAKE_PAD', name: '브레이크 패드', category: 'BRAKE', icon: 'disc-full', replacementCycleKm: 30000, replacementCycleMonth: 0 },
-            { code: 'TIRE', name: '타이어', category: 'WHEEL', icon: 'tire', replacementCycleKm: 50000, replacementCycleMonth: 0 },
-            { code: 'BATTERY', name: '배터리', category: 'ELEC', icon: 'battery-charging-full', replacementCycleKm: 60000, replacementCycleMonth: 36 },
+            { code: 'TIRE_FRONT', name: '앞 타이어', category: 'WHEEL', icon: 'tire', replacementCycleKm: 40000, replacementCycleMonth: 0 },
+            { code: 'TIRE_REAR', name: '뒤 타이어', category: 'WHEEL', icon: 'tire', replacementCycleKm: 50000, replacementCycleMonth: 0 },
+            { code: 'BRAKE_PAD_FRONT', name: '앞 브레이크 패드', category: 'BRAKE', icon: 'disc-full', replacementCycleKm: 30000, replacementCycleMonth: 0 },
+            { code: 'BRAKE_PAD_REAR', name: '뒤 브레이크 패드', category: 'BRAKE', icon: 'disc-full', replacementCycleKm: 40000, replacementCycleMonth: 0 },
+            { code: 'BATTERY_12V', name: '12V 배터리', category: 'ELEC', icon: 'battery-charging-full', replacementCycleKm: 60000, replacementCycleMonth: 36 },
+            { code: 'CABIN_FILTER', name: '에어컨 필터', category: 'AIR', icon: 'air', replacementCycleKm: 15000, replacementCycleMonth: 6 },
+            { code: 'COOLANT', name: '냉각수', category: 'ENGINE', icon: 'coolant-temperature', replacementCycleKm: 40000, replacementCycleMonth: 0 },
+            { code: 'BRAKE_FLUID', name: '브레이크 오일', category: 'BRAKE', icon: 'oil', replacementCycleKm: 40000, replacementCycleMonth: 0 },
+            { code: 'SPARK_PLUG', name: '점화 플러그', category: 'ENGINE', icon: 'flash', replacementCycleKm: 100000, replacementCycleMonth: 0 }
         ];
     }
 };

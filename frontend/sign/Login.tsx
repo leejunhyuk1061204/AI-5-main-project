@@ -8,6 +8,29 @@ import { useUserStore } from '../store/useUserStore';
 import { useAlertStore } from '../store/useAlertStore';
 import BaseScreen from '../components/layout/BaseScreen';
 import NotificationService from '../services/NotificationService';
+import Svg, { Path } from 'react-native-svg';
+
+// 정석 다색 구글 로고 SVG 컴포넌트
+const GoogleLogo = () => (
+    <Svg width={18} height={18} viewBox="0 0 24 24">
+        <Path
+            d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31l3.59 2.79c2.1-1.94 3.3-4.8 3.3-8.11z"
+            fill="#4285F4"
+        />
+        <Path
+            d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.59-2.79c-1 .67-2.26 1.07-3.69 1.07-2.84 0-5.25-1.92-6.11-4.51H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+            fill="#34A853"
+        />
+        <Path
+            d="M5.89 14.11c-.22-.67-.35-1.39-.35-2.11s.13-1.44.35-2.11V7.05H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.95l3.71-2.84z"
+            fill="#FBBC05"
+        />
+        <Path
+            d="M12 5.38c1.62 0 3.06.56 4.21 1.66l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.05l3.71 2.84c.86-2.59 3.27-4.51 6.11-4.51z"
+            fill="#EA4335"
+        />
+    </Svg>
+);
 
 // Kakao Login Import (Platform check)
 let login: () => Promise<any>;
@@ -248,24 +271,23 @@ export default function Login() {
 
                 {/* Social Login Options */}
                 <View className="gap-3 w-full">
-                    {/* Custom Google Login Button */}
+                    {/* Custom Google Login Button - Perfectly matched */}
                     <TouchableOpacity
                         onPress={onGoogleButtonPress}
-                        className="w-full flex-row items-center justify-center gap-3 rounded-xl bg-white border border-border-light px-4 py-3 shadow-sm active:bg-gray-50"
+                        activeOpacity={0.8}
+                        className="w-full flex-row items-center justify-center gap-3 rounded-xl bg-white border border-border-light py-3.5 shadow-sm active:bg-gray-50"
                     >
-                        <View className="w-5 h-5 items-center justify-center">
-                            {/* Simple G logo using Text or Icon if SVG not available */}
-                            <Text className="text-lg font-bold text-blue-600">G</Text>
-                        </View>
+                        <GoogleLogo />
                         <Text className="text-sm font-bold text-gray-700">Google 계정으로 로그인</Text>
                     </TouchableOpacity>
 
-                    {/* Kakao Login Button */}
+                    {/* Custom Kakao Login Button - Perfectly matched */}
                     <TouchableOpacity
                         onPress={onKakaoButtonPress}
-                        className="w-full flex-row items-center justify-center gap-3 rounded-xl bg-kakao-yellow border border-kakao-yellow px-4 py-3 active:bg-yellow-400"
+                        activeOpacity={0.8}
+                        className="w-full flex-row items-center justify-center gap-3 rounded-xl bg-kakao-yellow border border-kakao-yellow py-3.5 shadow-sm active:bg-yellow-400"
                     >
-                        <Ionicons name="chatbubble-ellipses" size={20} color="#000000" />
+                        <Ionicons name="chatbubble" size={18} color="#000000" />
                         <Text className="text-sm font-bold text-[#000000]">카카오 로그인</Text>
                     </TouchableOpacity>
                 </View>
