@@ -129,8 +129,9 @@ brain/
 # Security & Firebase
 # ==================================================
 **/firebase-service-account.json
-backend/google-services.json
-frontend/google-services.json
+**/google-services.json
+.env
+.env.local
 
 # ==================================================
 # AI Large Files (Models / Weights / Runs / Data)
