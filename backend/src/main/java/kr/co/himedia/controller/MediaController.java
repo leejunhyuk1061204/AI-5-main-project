@@ -22,7 +22,16 @@ public class MediaController {
      */
     @PostMapping("/upload")
     public ApiResponse<Map<String, String>> uploadMedia(@RequestParam("file") MultipartFile file) throws IOException {
-        String mediaUrl = aiMediaService.uploadMedia(file);
+        String contentType = file.getContentType();
+        String folder = "test_uploads";
+        if (contentType != null) {
+            if (contentType.startsWith("image/"))
+                folder = "image";
+            else if (contentType.startsWith("audio/"))
+                folder = "audio";
+        }
+
+        String mediaUrl = aiMediaService.uploadMedia(file, folder);
 
         Map<String, String> data = new HashMap<>();
         data.put("mediaUrl", mediaUrl);

@@ -42,4 +42,12 @@ public class CloudAccount extends BaseEntity {
 
     @Column(name = "last_synced_at")
     private LocalDateTime lastSyncedAt;
+
+    /**
+     * 연동 상태 (기본값: DISCONNECTED)
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    @Builder.Default
+    private CloudConnectionStatus status = CloudConnectionStatus.DISCONNECTED;
 }

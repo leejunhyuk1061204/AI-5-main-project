@@ -11,6 +11,7 @@ public class MaintenanceHistoryRequest {
     private LocalDate maintenanceDate;
     private Double mileageAtMaintenance;
     private Long consumableItemId;
+    private String consumableItemCode;
     private Boolean isStandardized;
     private String shopName;
     private Integer cost;

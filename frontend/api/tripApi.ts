@@ -1,0 +1,62 @@
+import api from './axios';
+import { ApiResponse } from './axios';
+
+export interface TripSummary {
+    startTime: string; // ISO string
+    vehicleId: string;
+    tripId: string;
+    endTime: string; // ISO string
+    distance: number;
+    driveScore: number;
+    averageSpeed: number;
+    topSpeed: number;
+    fuelConsumed: number;
+}
+
+const tripApi = {
+    // [BE-TD-005] 주행 이력 목록 조회
+    getTrips: async (vehicleId: string): Promise<ApiResponse<TripSummary[]>> => {
+        try {
+            const response = await api.get(`/api/v1/trips?vehicleId=${vehicleId}`);
+            return response.data;
+        } catch (error) {
+            console.error('Error fetching trips:', error);
+            throw error;
+        }
+    },
+
+    // [BE-TD-005] 주행 이력 상세 조회
+    getTripDetail: async (tripId: string): Promise<ApiResponse<TripSummary>> => {
+        try {
+            const response = await api.get(`/api/v1/trips/${tripId}`);
+            return response.data;
+        } catch (error) {
+            console.error('Error fetching trip detail:', error);
+            throw error;
+        }
+    },
+
+    // [BE-TD-001] 주행 세션 시작
+    startTrip: async (vehicleId: string): Promise<ApiResponse<TripSummary>> => {
+        try {
+            const response = await api.post('/api/v1/trips/start', { vehicleId });
+            return response.data;
+        } catch (error) {
+            console.error('Error starting trip:', error);
+            throw error;
+        }
+    },
+
+    // [BE-TD-004] 주행 세션 종료
+    endTrip: async (tripId: string): Promise<ApiResponse<TripSummary>> => {
+        try {
+            const response = await api.post('/api/v1/trips/end', { tripId });
+            return response.data;
+        } catch (error) {
+            console.error('Error ending trip:', error);
+            throw error;
+        }
+    }
+};
+
+export default tripApi;

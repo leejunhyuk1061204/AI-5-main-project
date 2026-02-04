@@ -1,0 +1,3 @@
+fill_policy: ffill          # infer 기본은 ffill (bfill 금지 권장)
+min_coverage: 0.8           # 60개 중 48개 이상이면 처리 같은 기준
+resample: nearest_grid      # t를 grid에 매핑하는 방식

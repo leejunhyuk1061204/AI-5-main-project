@@ -4,8 +4,10 @@ import api from './axios';
 export interface VehicleResponse {
     vehicleId: string;
     userId: string;
-    manufacturer: string;
-    modelName: string;
+    manufacturerKo: string;
+    manufacturerEn: string;
+    modelNameKo: string;
+    modelNameEn: string;
     modelYear: number;
     fuelType: 'GASOLINE' | 'DIESEL' | 'LPG' | 'EV' | 'HEV' | null;
     totalMileage: number;
@@ -15,6 +17,22 @@ export interface VehicleResponse {
     isPrimary: boolean;
     registrationSource: 'MANUAL' | 'OBD' | 'CLOUD';
     obdDeviceId: string | null;
+    cloudLinked: boolean;
+
+    // Spec info
+    length?: number;
+    width?: number;
+    height?: number;
+    displacement?: number;
+    engineType?: string;
+    maxPower?: number;
+    maxTorque?: number;
+    tireSizeFront?: string;
+    tireSizeRear?: string;
+    officialFuelEconomy?: number;
+
+    // Added
+    vin: string | null;
 }
 
 // OBD 기반 차량 등록 요청
@@ -24,8 +42,10 @@ export interface ObdRegistrationRequest {
 
 // 수동 차량 등록 요청
 export interface ManualRegistrationRequest {
-    manufacturer: string;
-    modelName: string;
+    manufacturerKo: string;
+    manufacturerEn?: string;
+    modelNameKo: string;
+    modelNameEn?: string;
     modelYear: number;
     fuelType: 'GASOLINE' | 'DIESEL' | 'LPG' | 'EV' | 'HEV';
     totalMileage?: number;
@@ -33,12 +53,19 @@ export interface ManualRegistrationRequest {
     nickname?: string;
     memo?: string;
     obdDeviceId?: string;
+    consumables?: {
+        code: string;
+        maintenanceDate?: string;
+        lastReplacedMileage?: number;
+    }[];
 }
 
 // 차량 정보 수정 요청
 export interface VehicleUpdateRequest {
     nickname?: string;
     memo?: string;
+    carNumber?: string;
+    vin?: string;
 }
 
 /**
@@ -47,7 +74,12 @@ export interface VehicleUpdateRequest {
 export const getVehicleList = async (): Promise<VehicleResponse[]> => {
     try {
         const response = await api.get('/api/v1/vehicles');
-        console.log('[vehicleApi] Vehicle list fetched:', response.data);
+
+        if (!response || !response.data) {
+            console.error('[vehicleApi] Invalid response structure:', response);
+            return [];
+        }
+
         return response.data.data || [];
     } catch (error) {
         console.error('[vehicleApi] Failed to fetch vehicle list:', error);
@@ -100,7 +132,7 @@ export const updateVehicle = async (vehicleId: string, request: VehicleUpdateReq
 export const setPrimaryVehicle = async (vehicleId: string): Promise<void> => {
     try {
         console.log('[vehicleApi] Setting primary vehicle:', vehicleId);
-        await api.patch(`/api/v1/vehicles/${vehicleId}/primary`);
+        await api.patch('/api/v1/vehicles/primary', { vehicleId });
         console.log('[vehicleApi] Primary vehicle set successfully');
     } catch (error) {
         console.error('[vehicleApi] Failed to set primary vehicle:', error);

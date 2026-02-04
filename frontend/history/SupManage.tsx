@@ -1,172 +1,312 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Modal, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import maintenanceApi, { VehicleConsumable } from '../api/maintenanceApi';
+import { useVehicleStore } from '../store/useVehicleStore';
+import { VehicleResponse } from '../api/vehicleApi';
 
 export default function SupManage() {
     const navigation = useNavigation();
+    const { vehicles, primaryVehicle } = useVehicleStore();
 
-    const consumables = [
-        {
-            title: "브레이크 패드",
-            status: "즉시 교체 요망",
-            percentage: 12,
-            icon: "disc-full",
-            iconFamily: "MaterialIcons",
-            color: "#ef4444", // Danger
-            message: "안전을 위해 지금 정비소를 예약하세요.",
-            messageIcon: "smart-toy",
-            glow: "shadow-red-500/20"
-        },
-        {
-            title: "타이어",
-            status: "마모 진행 중 · 점검 권장",
-            percentage: 45,
-            icon: "car-tire-alert",
-            iconFamily: "MaterialCommunityIcons",
-            color: "#f59e0b", // Warning
-            message: "예상 교체 시기: 6개월 이내 (AI 예측)",
-            messageIcon: "smart-toy",
-            glow: "shadow-amber-500/20"
-        },
-        {
-            title: "엔진 오일",
-            status: "상태 양호",
-            percentage: 78,
-            icon: "oil",
-            iconFamily: "MaterialCommunityIcons",
-            color: "#0d7ff2", // Primary
-            message: "교체까지 약 8,200km 남음",
-            messageIcon: "smart-toy",
-            glow: "shadow-blue-500/20"
-        },
-        {
-            title: "에어 필터",
-            status: "상태 매우 좋음",
-            percentage: 90,
-            icon: "air-filter",
-            iconFamily: "MaterialCommunityIcons",
-            color: "#0d7ff2", // Primary
-            message: "다음 엔진 오일 교체 시 함께 점검하세요.",
-            messageIcon: "smart-toy",
-            glow: "shadow-blue-500/20"
-        },
-        {
-            title: "배터리",
-            status: "전압 안정적",
-            percentage: 95,
-            icon: "battery-charging-full",
-            iconFamily: "MaterialIcons",
-            color: "#0d7ff2", // Primary
-            message: "최근 충전 효율이 98%로 매우 높습니다.",
-            messageIcon: "smart-toy",
-            glow: "shadow-blue-500/20"
-        }
-    ];
+    // 로컬 상태: 현재 조회 중인 차량
+    const [selectedVehicle, setSelectedVehicle] = useState<Partial<VehicleResponse> | null>(null);
+    const [consumables, setConsumables] = useState<VehicleConsumable[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [modalVisible, setModalVisible] = useState(false);
 
-    const renderIcon = (item: any) => {
-        if (item.iconFamily === "MaterialCommunityIcons") {
-            return <MaterialCommunityIcons name={item.icon as any} size={24} color={item.color} />;
+    // 초기 진입 시 대표 차량 또는 첫 번째 차량 선택
+    useEffect(() => {
+        if (primaryVehicle) {
+            setSelectedVehicle(primaryVehicle);
+        } else if (vehicles.length > 0) {
+            setSelectedVehicle(vehicles[0]);
         }
-        return <MaterialIcons name={item.icon as any} size={24} color={item.color} />;
+    }, [primaryVehicle, vehicles]);
+
+    // 선택된 차량이 변경되면 소모품 조회
+    useEffect(() => {
+        if (selectedVehicle?.vehicleId) {
+            loadConsumables(selectedVehicle.vehicleId);
+        } else {
+            console.log("No vehicleId available in SupManage", selectedVehicle);
+        }
+    }, [selectedVehicle]);
+
+    const loadConsumables = async (vehicleId: string) => {
+        try {
+            setLoading(true);
+            const response = await maintenanceApi.getConsumableStatus(vehicleId);
+            if (response.success && response.data) {
+                setConsumables(response.data);
+            } else {
+                setConsumables([]);
+            }
+        } catch (e) {
+            console.error("Failed to load consumables:", e);
+            setConsumables([]);
+        } finally {
+            setLoading(false);
+        }
     };
+
+    // Helper to determine color based on remaining life
+    const getStatusColor = (percentage: number) => {
+        if (percentage <= 20) return '#ff6b6b'; // Error
+        if (percentage <= 50) return '#f59e0b'; // Warning
+        return '#0d7ff2'; // Primary
+    };
+
+    // Helper to determine status text
+    const getStatusText = (percentage: number) => {
+        if (percentage <= 20) return "즉시 교체 요망";
+        if (percentage <= 50) return "점검 권장";
+        return "상태 양호";
+    };
+
+    // Helper to map item code to icon
+    const getIconInfo = (code: string) => {
+        const map: Record<string, { icon: string, family: string }> = {
+            'ENGINE_OIL': { icon: 'oil', family: 'MaterialCommunityIcons' },
+            'WIPER': { icon: 'wiper', family: 'MaterialCommunityIcons' },
+            'AIR_FILTER': { icon: 'air-filter', family: 'MaterialCommunityIcons' },
+            'TIRE': { icon: 'tire', family: 'MaterialCommunityIcons' },
+            'TIRES': { icon: 'tire', family: 'MaterialCommunityIcons' },
+            'TIRE_FRONT': { icon: 'tire', family: 'MaterialCommunityIcons' },
+            'TIRE_REAR': { icon: 'tire', family: 'MaterialCommunityIcons' },
+            'BRAKE_PAD': { icon: 'disc-full', family: 'MaterialIcons' },
+            'BRAKE_PAD_FRONT': { icon: 'disc-full', family: 'MaterialIcons' },
+            'BRAKE_PAD_REAR': { icon: 'disc-full', family: 'MaterialIcons' },
+            'BATTERY': { icon: 'battery-charging-full', family: 'MaterialIcons' },
+            'BATTERY_12V': { icon: 'battery-charging-full', family: 'MaterialIcons' },
+            'SPARK_PLUG': { icon: 'engine', family: 'MaterialCommunityIcons' },
+            'BRAKE_FLUID': { icon: 'water-drop', family: 'MaterialIcons' },
+            'COOLANT': { icon: 'thermostat', family: 'MaterialIcons' },
+            'TRANSMISSION_FLUID': { icon: 'cog-transfer', family: 'MaterialCommunityIcons' },
+            'OTHER': { icon: 'construction', family: 'MaterialIcons' }
+        };
+        return map[code] || { icon: 'settings', family: 'MaterialIcons' };
+    };
+
+    const renderIcon = (item: VehicleConsumable, color: string) => {
+        const { icon, family } = getIconInfo(item.item);
+        if (family === "MaterialCommunityIcons") {
+            return <MaterialCommunityIcons name={icon as any} size={24} color={color} />;
+        }
+        return <MaterialIcons name={icon as any} size={24} color={color} />;
+    };
+
+    // 차량 선택 핸들러
+    const handleSelectVehicle = (vehicle: VehicleResponse) => {
+        setSelectedVehicle(vehicle);
+        setModalVisible(false);
+    };
+
+    if (loading && !selectedVehicle) {
+        return (
+            <SafeAreaView className="flex-1 bg-background-dark items-center justify-center">
+                <ActivityIndicator size="large" color="#0d7ff2" />
+            </SafeAreaView>
+        );
+    }
 
     return (
         <SafeAreaView className="flex-1 bg-background-dark">
             <StatusBar style="light" />
 
-            {/* Background Gradients Removed */}
-
             {/* Header */}
-            <View className="flex-row items-center justify-between px-4 py-3 border-b border-gray-800 bg-[#101922]/95">
+            <View className="flex-row items-center justify-between px-4 py-3 border-b border-white/5 bg-surface-dark/95">
                 <TouchableOpacity
                     onPress={() => navigation.goBack()}
-                    className="w-10 h-10 items-center justify-center rounded-full active:bg-gray-800"
+                    className="w-10 h-10 items-center justify-center rounded-full active:bg-white/10"
                 >
                     <MaterialIcons name="arrow-back-ios" size={20} color="white" />
                 </TouchableOpacity>
-                <Text className="text-white text-lg font-bold">소모품 관리</Text>
-                <TouchableOpacity className="w-10 h-10 items-center justify-center rounded-full active:bg-gray-800">
+
+                {/* 차량 선택 타이틀 */}
+                <TouchableOpacity
+                    className="flex-row items-center gap-1 active:opacity-70"
+                    onPress={() => setModalVisible(true)}
+                >
+                    <View className="items-center">
+                        <Text className="text-white text-base font-bold">소모품 관리</Text>
+                        <View className="flex-row items-center gap-1">
+                            <Text className="text-xs text-text-dim">
+                                {selectedVehicle ? `${selectedVehicle.manufacturerKo} ${selectedVehicle.modelNameKo}` : '차량 선택'}
+                            </Text>
+                            <MaterialIcons name="arrow-drop-down" size={16} color="#94a3b8" />
+                        </View>
+                    </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity className="w-10 h-10 items-center justify-center rounded-full active:bg-white/10">
                     <MaterialIcons name="more-vert" size={24} color="white" />
                 </TouchableOpacity>
             </View>
 
-            <ScrollView className="flex-1 px-6 pt-2" contentContainerStyle={{ paddingBottom: 100 }}>
-                <View className="gap-4">
-                    {consumables.map((item, index) => (
-                        <View
-                            key={index}
-                            className="bg-[#ffffff05] border border-white/10 rounded-2xl p-4 overflow-hidden relative"
-                        >
-                            {/* Side Color Bar */}
-                            <View
-                                className="absolute left-0 top-0 bottom-0 w-1.5"
-                                style={{ backgroundColor: item.color, shadowColor: item.color, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.5, shadowRadius: 10, elevation: 5 }}
-                            />
-
-                            {/* Top Section */}
-                            <View className="flex-row justify-between items-start mb-4 pl-3">
-                                <View className="flex-row items-center gap-3">
-                                    <View
-                                        className="w-12 h-12 rounded-xl items-center justify-center border"
-                                        style={{ backgroundColor: `${item.color}15`, borderColor: `${item.color}30` }}
-                                    >
-                                        {renderIcon(item)}
-                                    </View>
-                                    <View>
-                                        <Text className="text-base font-bold text-white mb-0.5">
-                                            {item.title}
-                                        </Text>
-                                        <Text
-                                            className="text-xs font-medium"
-                                            style={{ color: item.percentage <= 20 ? item.color : '#9ca3af' }}
-                                        >
-                                            {item.status}
-                                        </Text>
-                                    </View>
-                                </View>
-                                <Text
-                                    className="text-xl font-bold"
-                                    style={{ color: item.percentage <= 20 || item.percentage <= 50 ? item.color : 'white' }}
-                                >
-                                    {item.percentage}%
-                                </Text>
-                            </View>
-
-                            {/* Progress Bar & Message */}
-                            <View className="pl-3">
-                                <View className="w-full bg-gray-800/50 rounded-full h-1.5 mb-3 overflow-hidden">
-                                    <View
-                                        className="h-1.5 rounded-full"
-                                        style={{
-                                            width: `${item.percentage}%`,
-                                            backgroundColor: item.color,
-                                            shadowColor: item.color,
-                                            shadowOffset: { width: 0, height: 0 },
-                                            shadowOpacity: 0.5,
-                                            shadowRadius: 8
-                                        }}
-                                    />
-                                </View>
-                                <View className="flex-row items-center gap-2 bg-black/20 p-3 rounded-xl border border-white/5">
-                                    <MaterialIcons
-                                        name={item.messageIcon as any}
-                                        size={16}
-                                        color={item.color}
-                                    />
-                                    <Text className="text-xs text-gray-400 flex-1">
-                                        {item.message}
-                                    </Text>
-                                </View>
-                            </View>
+            <ScrollView className="flex-1 px-6 pt-4" contentContainerStyle={{ paddingBottom: 100 }}>
+                {loading ? (
+                    <View className="py-20">
+                        <ActivityIndicator size="large" color="#0d7ff2" />
+                    </View>
+                ) : consumables.length === 0 ? (
+                    <View className="items-center justify-center py-20 gap-4">
+                        <View className="w-16 h-16 rounded-full bg-gray-800 items-center justify-center mb-2">
+                            <MaterialIcons name="inventory" size={32} color="#64748b" />
                         </View>
-                    ))}
-                </View>
+                        <Text className="text-gray-400 text-base font-medium text-center">
+                            등록된 소모품 정보가 없습니다.
+                        </Text>
+                        <TouchableOpacity
+                            onPress={() => selectedVehicle?.vehicleId && loadConsumables(selectedVehicle.vehicleId)}
+                            className="px-4 py-2 bg-[#1e293b] rounded-lg border border-white/10 active:bg-[#334155]"
+                        >
+                            <Text className="text-primary font-bold text-sm">다시 불러오기</Text>
+                        </TouchableOpacity>
+                    </View>
+                ) : (
+                    <View className="gap-4">
+                        {consumables.map((item, index) => {
+                            const life = Math.round(item.remainingLifePercent);
+                            const color = getStatusColor(life);
+                            const statusAvailable = getStatusText(life);
+
+                            return (
+                                <View
+                                    key={index}
+                                    className="bg-white/5 border border-white/10 rounded-2xl p-4 overflow-hidden relative"
+                                >
+                                    {/* Side Color Bar */}
+                                    <View
+                                        className="absolute left-0 top-0 bottom-0 w-1.5"
+                                        style={{ backgroundColor: color, shadowColor: color, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.5, shadowRadius: 10, elevation: 5 }}
+                                    />
+
+                                    {/* Top Section */}
+                                    <View className="flex-row justify-between items-start mb-4 pl-3">
+                                        <View className="flex-row items-center gap-3">
+                                            <View
+                                                className="w-12 h-12 rounded-xl items-center justify-center border"
+                                                style={{ backgroundColor: `${color}15`, borderColor: `${color}30` }}
+                                            >
+                                                {renderIcon(item, color)}
+                                            </View>
+                                            <View>
+                                                <Text className="text-base font-bold text-white mb-0.5">
+                                                    {item.itemDescription}
+                                                </Text>
+                                                <Text
+                                                    className="text-xs font-medium"
+                                                    style={{ color: life <= 20 ? color : '#9ca3af' }}
+                                                >
+                                                    {statusAvailable}
+                                                </Text>
+                                                {/* Tire Specific Warning */}
+                                                {(item.item === 'TIRE' || item.item === 'TIRES') && item.unevenWearDetected && (
+                                                    <View className="bg-red-500/20 px-2 py-0.5 rounded mt-1 self-start">
+                                                        <Text className="text-red-400 text-[10px] font-bold">⚠️ 편마모 감지됨</Text>
+                                                    </View>
+                                                )}
+                                            </View>
+                                        </View>
+                                        <Text
+                                            className="text-xl font-bold"
+                                            style={{ color: life <= 20 || life <= 50 ? color : 'white' }}
+                                        >
+                                            {life}%
+                                        </Text>
+                                    </View>
+
+                                    {/* Progress Bar & Message */}
+                                    <View className="pl-3">
+                                        <View className="w-full bg-white/10 rounded-full h-1.5 mb-3 overflow-hidden">
+                                            <View
+                                                className="h-1.5 rounded-full"
+                                                style={{
+                                                    width: `${Math.max(life, 5)}%`, // Minimum visual width
+                                                    backgroundColor: color,
+                                                    shadowColor: color,
+                                                    shadowOffset: { width: 0, height: 0 },
+                                                    shadowOpacity: 0.5,
+                                                    shadowRadius: 8
+                                                }}
+                                            />
+                                        </View>
+                                        <View className="flex-row items-center gap-2 bg-black/20 p-3 rounded-xl border border-white/5">
+                                            <MaterialIcons
+                                                name="smart-toy"
+                                                size={16}
+                                                color={color}
+                                            />
+                                            <Text className="text-xs text-text-muted flex-1">
+                                                {item.predictedReplacementDate
+                                                    ? `교체 예정일: ${item.predictedReplacementDate} (예측)`
+                                                    : "주행 데이터를 분석 중입니다."}
+                                            </Text>
+                                        </View>
+                                    </View>
+                                </View>
+                            );
+                        })}
+                    </View>
+                )}
             </ScrollView>
-
-
-        </SafeAreaView>
+            {/* 차량 선택 모달 */}
+            <Modal
+                animationType="fade"
+                transparent={true}
+                visible={modalVisible}
+                onRequestClose={() => setModalVisible(false)}
+            >
+                <Pressable
+                    className="flex-1 bg-black/70 justify-center items-center px-6"
+                    onPress={() => setModalVisible(false)}
+                >
+                    <Pressable
+                        className="w-full bg-surface-dark border border-white/10 rounded-3xl overflow-hidden"
+                        onPress={(e) => e.stopPropagation()}
+                    >
+                        <View className="px-6 py-5 border-b border-white/10 flex-row items-center justify-between">
+                            <Text className="text-lg font-bold text-white">차량 선택</Text>
+                            <TouchableOpacity
+                                className="w-8 h-8 items-center justify-center rounded-full bg-white/5 active:bg-white/10"
+                                onPress={() => setModalVisible(false)}
+                            >
+                                <MaterialIcons name="close" size={20} color="#94a3b8" />
+                            </TouchableOpacity>
+                        </View>
+                        <ScrollView className="max-h-80">
+                            {vehicles.map((vehicle, index) => {
+                                const isSelected = selectedVehicle?.vehicleId === vehicle.vehicleId;
+                                const isLast = index === vehicles.length - 1;
+                                return (
+                                    <TouchableOpacity
+                                        key={vehicle.vehicleId}
+                                        className={`flex-row items-center gap-4 px-6 py-4 active:bg-white/5 ${!isLast ? 'border-b border-white/5' : ''} ${isSelected ? 'bg-primary/10' : ''}`}
+                                        onPress={() => handleSelectVehicle(vehicle)}
+                                    >
+                                        <View className={`w-10 h-10 items-center justify-center rounded-xl ${isSelected ? 'bg-primary/20 border border-primary/30' : 'bg-white/5 border border-white/10'}`}>
+                                            <MaterialIcons name="directions-car" size={20} color={isSelected ? '#0d7ff2' : '#94a3b8'} />
+                                        </View>
+                                        <View className="flex-1">
+                                            <Text className={`text-base font-semibold ${isSelected ? 'text-primary' : 'text-white'}`}>
+                                                {vehicle.manufacturerKo} {vehicle.modelNameKo}
+                                            </Text>
+                                            <Text className="text-text-dim text-xs">{vehicle.carNumber}</Text>
+                                        </View>
+                                        {isSelected && (
+                                            <MaterialIcons name="check" size={20} color="#0d7ff2" />
+                                        )}
+                                    </TouchableOpacity>
+                                );
+                            })}
+                        </ScrollView>
+                    </Pressable>
+                </Pressable>
+            </Modal>
+        </SafeAreaView >
     );
 }

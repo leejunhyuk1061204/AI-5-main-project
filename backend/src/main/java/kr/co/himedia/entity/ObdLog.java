@@ -64,6 +64,21 @@ public class ObdLog implements Persistable<ObdLog.ObdLogId> {
     @Column(name = "fuel_trim_long")
     private Double fuelTrimLong;
 
+    @Column(name = "intake_temp")
+    private Double intakeTemp;
+
+    @Column(name = "map")
+    private Double map;
+
+    @Column(name = "maf")
+    private Double maf;
+
+    @Column(name = "throttle_pos")
+    private Double throttlePos;
+
+    @Column(name = "engine_runtime")
+    private Integer engineRuntime;
+
     @Column(name = "json_extra")
     @JdbcTypeCode(SqlTypes.JSON)
     private String jsonExtra;

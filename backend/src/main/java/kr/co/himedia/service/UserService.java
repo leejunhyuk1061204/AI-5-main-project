@@ -8,18 +8,29 @@ import kr.co.himedia.entity.User;
 import kr.co.himedia.repository.RefreshTokenRepository;
 import kr.co.himedia.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import kr.co.himedia.security.JwtTokenProvider;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Base64;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
+import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
+import com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier;
+import com.google.api.client.http.javanet.NetHttpTransport;
+import com.google.api.client.json.gson.GsonFactory;
+import java.util.Collections;
+
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional
@@ -28,7 +39,9 @@ public class UserService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
-    private final RefreshTokenRepository refreshTokenRepository;
+    private final StringRedisTemplate redisTemplate;
+
+    private static final String RT_PREFIX = "RT:";
 
     // 사용자 회원가입
     public UserResponse createUser(SignupRequest req) {
@@ -68,16 +81,13 @@ public class UserService {
         String accessToken = jwtTokenProvider.createAccessToken(user.getUserId().toString());
         String refreshToken = jwtTokenProvider.createRefreshToken(user.getUserId().toString());
 
-        // Create refresh token (Upsert: Update if exists, else Insert)
-        RefreshToken refreshTokenEntity = refreshTokenRepository.findByUser(user)
-                .orElse(RefreshToken.builder()
-                        .user(user)
-                        .build());
+        // Redis에 Refresh Token 저장 (Key: RT:userId, TTL: 7Days)
+        redisTemplate.opsForValue().set(
+                RT_PREFIX + user.getUserId(),
+                refreshToken,
+                7,
+                TimeUnit.DAYS);
 
-        refreshTokenEntity.setToken(refreshToken);
-        refreshTokenEntity.setExpiryDate(java.time.Instant.now().plusMillis(604800000)); // 7 days
-
-        refreshTokenRepository.save(refreshTokenEntity);
         user.setLastLoginAt(LocalDateTime.now());
         userRepository.save(user);
 
@@ -88,29 +98,115 @@ public class UserService {
     }
 
     public TokenResponse refresh(TokenRefreshRequest req) {
-        RefreshToken refreshToken = refreshTokenRepository.findByToken(req.getRefreshToken())
-                .orElseThrow(() -> new BaseException(ErrorCode.INVALID_REFRESH_TOKEN));
+        String oldToken = req.getRefreshToken();
 
-        if (refreshToken.getExpiryDate().isBefore(java.time.Instant.now())) {
-            refreshTokenRepository.delete(refreshToken);
+        // 1. 토큰 자체의 유효성 검증 (서명 및 만료 체크)
+        if (!jwtTokenProvider.validateToken(oldToken)) {
             throw new BaseException(ErrorCode.REFRESH_TOKEN_EXPIRED);
         }
 
-        User user = refreshToken.getUser();
+        // 2. 토큰에서 유저 ID 추출
+        String userId = jwtTokenProvider.getUserId(oldToken);
+        String redisKey = RT_PREFIX + userId;
 
-        // Token Rotation: Update existing token
-        String newAccessToken = jwtTokenProvider.createAccessToken(user.getUserId().toString());
-        String newRefreshToken = jwtTokenProvider.createRefreshToken(user.getUserId().toString());
+        // 3. Redis에 저장된 토큰과 비교 (RTR 재사용 감지 핵심)
+        String savedToken = redisTemplate.opsForValue().get(redisKey);
 
-        refreshToken.setToken(newRefreshToken);
-        refreshToken.setExpiryDate(java.time.Instant.now().plusMillis(604800000));
+        if (savedToken == null || !savedToken.equals(oldToken)) {
+            // [재사용 감지!] 이미 회전되었거나 비정상적인 접근
+            log.error("[RTR Detection] Potential reuse attack for user: {}. Invalidating all sessions.", userId);
+            redisTemplate.delete(redisKey); // 해당 유저의 모든 세션 무효화
+            throw new BaseException(ErrorCode.INVALID_REFRESH_TOKEN);
+        }
 
-        refreshTokenRepository.save(refreshToken);
+        // 4. 새로운 토큰 쌍 발급 (Rotation)
+        String newAccessToken = jwtTokenProvider.createAccessToken(userId);
+        String newRefreshToken = jwtTokenProvider.createRefreshToken(userId);
+
+        // 5. Redis 업데이트 (기존 토큰 무효화 및 새 토큰 저장)
+        redisTemplate.opsForValue().set(redisKey, newRefreshToken, 7, TimeUnit.DAYS);
+
+        log.info("[RTR Success] Rotated tokens for user: {}", userId);
 
         return TokenResponse.builder()
                 .accessToken(newAccessToken)
                 .refreshToken(newRefreshToken)
                 .build();
+    }
+
+    // 소셜 로그인 (Google)
+    public TokenResponse socialLogin(SocialLoginRequest req) {
+        String email = "";
+        String nickname = "";
+
+        // 1. 소셜 제공자에 따른 토큰 검증
+        try {
+            if ("google".equalsIgnoreCase(req.getProvider())) {
+                // Google ID Token 검증 (Frontend가 Firebase Auth를 사용하지 않으므로 직접 검증)
+                GoogleIdToken.Payload payload = verifyGoogleIdToken(req.getToken());
+                email = payload.getEmail();
+                nickname = (String) payload.get("name");
+
+                if (nickname == null) {
+                    nickname = "Google User";
+                }
+            } else if ("kakao".equalsIgnoreCase(req.getProvider())) {
+                // 카카오 토큰 검증
+                KakaoProfile kakaoProfile = verifyKakaoToken(req.getToken());
+                email = kakaoProfile.getEmail();
+                nickname = kakaoProfile.getNickname();
+            } else {
+                throw new BaseException(ErrorCode.INVALID_INPUT_VALUE, "Unsupported provider: " + req.getProvider());
+            }
+        } catch (Exception e) {
+            // 검증 실패 시 예외 처리
+            e.printStackTrace();
+            throw new BaseException(ErrorCode.INVALID_CREDENTIALS,
+                    "Token Verification Failed: " + (e.getMessage() != null ? e.getMessage() : e.toString()));
+        }
+
+        try {
+            // 2. 이메일로 사용자 조회 또는 자동 회원가입
+            String finalEmail = email;
+            String finalNickname = nickname;
+
+            User user = userRepository.findByEmail(email).orElseGet(() -> {
+                // 신규 회원이면 자동 가입 처리
+                User newUser = User.builder()
+                        .userId(UUID.randomUUID())
+                        .email(finalEmail)
+                        .passwordHash(passwordEncoder.encode(UUID.randomUUID().toString())) // 임의의 비밀번호 생성
+                        .nickname(finalNickname)
+                        .build();
+                return userRepository.save(newUser);
+            });
+
+            if (user.getDeletedAt() != null) {
+                throw new BaseException(ErrorCode.INVALID_CREDENTIALS, "User is deleted.");
+            }
+
+            // 3. 토큰 발급 (로그인 처리)
+            String accessToken = jwtTokenProvider.createAccessToken(user.getUserId().toString());
+            String refreshToken = jwtTokenProvider.createRefreshToken(user.getUserId().toString());
+
+            redisTemplate.opsForValue().set(
+                    RT_PREFIX + user.getUserId(),
+                    refreshToken,
+                    7,
+                    TimeUnit.DAYS);
+            user.setLastLoginAt(LocalDateTime.now());
+            userRepository.save(user);
+
+            return TokenResponse.builder()
+                    .accessToken(accessToken)
+                    .refreshToken(refreshToken)
+                    .build();
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            throw new BaseException(ErrorCode.INTERNAL_SERVER_ERROR,
+                    "Social Login Failed: " + (e.getMessage() != null ? e.getMessage() : e.toString()));
+        }
     }
 
     // 사용자 프로필 조회
@@ -172,6 +268,15 @@ public class UserService {
 
         user.setDeletedAt(LocalDateTime.now());
         userRepository.save(user);
+
+        // RTR: 탈퇴 시 리프레시 토큰도 즉시 폐기
+        redisTemplate.delete(RT_PREFIX + userId);
+    }
+
+    // 로그아웃 처리
+    public void logout(UUID userId) {
+        log.info("[Logout] Invalidating refresh token for user: {}", userId);
+        redisTemplate.delete(RT_PREFIX + userId);
     }
 
     // 사용자 프로필 이미지 업로드
@@ -186,5 +291,79 @@ public class UserService {
         } catch (IOException e) {
             throw new BaseException(ErrorCode.INTERNAL_SERVER_ERROR, "이미지 업로드에 실패했습니다.");
         }
+    }
+
+    // Kakao Access Token 검증
+    private KakaoProfile verifyKakaoToken(String accessToken) {
+        String reqURL = "https://kapi.kakao.com/v2/user/me";
+        try {
+            java.net.URL url = new java.net.URL(reqURL);
+            java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("GET");
+            conn.setRequestProperty("Authorization", "Bearer " + accessToken);
+
+            int responseCode = conn.getResponseCode();
+            if (responseCode != 200) {
+                throw new BaseException(ErrorCode.INVALID_CREDENTIALS, "Kakao API Error: " + responseCode);
+            }
+
+            java.io.BufferedReader br = new java.io.BufferedReader(
+                    new java.io.InputStreamReader(conn.getInputStream(), "UTF-8"));
+            String line;
+            StringBuilder result = new StringBuilder();
+            while ((line = br.readLine()) != null) {
+                result.append(line);
+            }
+            br.close();
+
+            // Jackson ObjectMapper (Spring Boot Default)
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            com.fasterxml.jackson.databind.JsonNode root = mapper.readTree(result.toString());
+
+            long id = root.path("id").asLong();
+            String email = root.path("kakao_account").path("email").asText(null);
+            String nickname = root.path("kakao_account").path("profile").path("nickname").asText("Kakao User");
+
+            if (email == null || email.isEmpty()) {
+                // 이메일 동의를 안 한 경우, 임의의 이메일 생성 (kakao_id@kakao.login)
+                email = id + "@kakao.login";
+            }
+
+            return new KakaoProfile(id, email, nickname);
+
+        } catch (IOException e) {
+            throw new BaseException(ErrorCode.INVALID_CREDENTIALS, "Failed to connect to Kakao API");
+        }
+    }
+
+    // Google ID Token 검증 (Frontend에서 Firebase Auth 미사용 시)
+    private GoogleIdToken.Payload verifyGoogleIdToken(String tokenString) {
+        // Web Client ID (from frontend/sign/Login.tsx or google-services.json)
+        final String CLIENT_ID = "540652803257-cl4t2p9tsvd0lbffrck17rq2sjs7i0k1.apps.googleusercontent.com";
+
+        GoogleIdTokenVerifier verifier = new GoogleIdTokenVerifier.Builder(new NetHttpTransport(), new GsonFactory())
+                .setAudience(Collections.singletonList(CLIENT_ID))
+                .build();
+
+        try {
+            GoogleIdToken idToken = verifier.verify(tokenString);
+            if (idToken != null) {
+                return idToken.getPayload();
+            } else {
+                throw new BaseException(ErrorCode.INVALID_CREDENTIALS, "Invalid Google ID Token.");
+            }
+        } catch (Exception e) {
+            throw new BaseException(ErrorCode.INVALID_CREDENTIALS,
+                    "Google Token Verification Error: " + e.getMessage());
+        }
+    }
+
+    // Inner class for Kakao Profile
+    @lombok.Data
+    @lombok.AllArgsConstructor
+    private static class KakaoProfile {
+        private long id;
+        private String email;
+        private String nickname;
     }
 }

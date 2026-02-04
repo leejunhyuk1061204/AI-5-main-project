@@ -1,41 +1,136 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, ScrollView, Platform } from 'react-native';
+import React, { useEffect } from 'react';
+import { View, Text, TouchableOpacity, ScrollView, Platform, Linking, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { StatusBar } from 'expo-status-bar';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import BaseScreen from '../components/layout/BaseScreen';
+
+import { useUserStore } from '../store/useUserStore';
 
 export default function RegisterMain() {
     const insets = useSafeAreaInsets();
     const navigation = useNavigation<any>();
+    const logout = useUserStore(state => state.logout);
+
+    const handleLogout = async () => {
+        Alert.alert(
+            "로그아웃",
+            "정말 로그아웃 하시겠습니까?",
+            [
+                { text: "취소", style: "cancel" },
+                {
+                    text: "로그아웃",
+                    style: "destructive",
+                    onPress: async () => {
+                        await logout();
+                        navigation.reset({
+                            index: 0,
+                            routes: [{ name: 'Login' }],
+                        });
+                    }
+                }
+            ]
+        );
+    };
+
+    useEffect(() => {
+        const handleDeepLink = async (event: { url: string }) => {
+            const { url } = event;
+            if (url && url.includes('smartcar/callback')) {
+                // Extract access token from URL
+                const regex = /[?&]accessToken=([^&#]*)/;
+                const match = regex.exec(url);
+                const accessToken = match && match[1];
+
+                if (accessToken) {
+                    try {
+                        const jwtToken = await AsyncStorage.getItem('accessToken');
+                        // Use the configured backend URL if possible, or fallback to localhost for dev
+                        const backendUrl = 'http://localhost:8080';
+
+                        // 단순 조회가 아닌 백엔드 sync API 호출 (POST)
+                        const response = await fetch(`${backendUrl}/api/smartcar/sync?accessToken=${accessToken}`, {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': `Bearer ${jwtToken}`
+                            }
+                        });
+
+                        if (response.ok) {
+                            const syncData = await response.json();
+                            const results = syncData.results || [];
+
+                            let detailMessage = `총 ${syncData.totalCount}대의 차량 정보가 성공적으로 최신화되었습니다.\n\n`;
+                            results.forEach((res: any) => {
+                                const statusText = res.status === 'CONNECTED' ? '기존 차량 연결' : '신규 차량 등록';
+                                detailMessage += `• ${res.manufacturerKo} ${res.modelNameKo}: ${statusText}\n`;
+                            });
+
+                            Alert.alert(
+                                "연동 완료",
+                                detailMessage,
+                                [{ text: "확인", onPress: () => navigation.navigate('MainPage') }]
+                            );
+                        } else {
+                            const errorData = await response.text();
+                            throw new Error(errorData || "동기화 실패");
+                        }
+                    } catch (error) {
+                        Alert.alert("연동 오류", "차량 정보를 동기화하는 중 오류가 발생했습니다.");
+                        console.error("[Smartcar Sync Error]", error);
+                    }
+                }
+            }
+        };
+
+        // Add event listener
+        const subscription = Linking.addEventListener('url', handleDeepLink);
+
+        // Check if app was opened by a link
+        Linking.getInitialURL().then((url) => {
+            if (url) handleDeepLink({ url });
+        });
+
+        return () => {
+            subscription.remove();
+        };
+    }, []);
+
+    // Custom Header for BaseScreen
+    const renderHeader = () => (
+        <View
+            className="bg-background-dark/95 backdrop-blur-md z-50 border-b border-white/5"
+            style={{ paddingTop: 10, paddingBottom: 16 }} // BaseScreen handles safe area, just add internal padding
+        >
+            <View className="flex-row items-center justify-between px-4">
+                <TouchableOpacity
+                    className="w-10 h-10 items-center justify-center rounded-full active:bg-white/10"
+                    activeOpacity={0.7}
+                    onPress={() => navigation.goBack()}
+                >
+                    <MaterialIcons name="arrow-back" size={24} color="white" />
+                </TouchableOpacity>
+                <Text className="text-white text-lg font-bold">차량 등록</Text>
+
+                <TouchableOpacity
+                    onPress={handleLogout}
+                    className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 active:bg-white/10"
+                >
+                    <Text className="text-xs text-slate-300 font-medium">로그아웃</Text>
+                </TouchableOpacity>
+            </View>
+        </View>
+    );
 
     return (
-        <View className="flex-1 bg-background-dark">
-            <StatusBar style="light" />
-
-            {/* Top Header - Sticky effect manually handled */}
-            <View
-                className="bg-background-dark/95 backdrop-blur-md z-50 sticky top-0 border-b border-[#ffffff05]"
-                style={{ paddingTop: insets.top }}
-            >
-                <View className="flex-row items-center justify-between px-4 py-3 pb-4">
-                    <TouchableOpacity
-                        className="w-10 h-10 items-center justify-center rounded-full active:bg-white/10"
-                        activeOpacity={0.7}
-                        onPress={() => navigation.goBack()}
-                    >
-                        <MaterialIcons name="arrow-back" size={24} color="white" />
-                    </TouchableOpacity>
-                    <Text className="text-white text-lg font-bold">차량 등록</Text>
-                    <View className="w-10" />
-                </View>
-            </View>
-
-            <ScrollView
-                className="flex-1 px-5"
-                contentContainerStyle={{ paddingBottom: 40 }}
-                showsVerticalScrollIndicator={false}
-            >
+        <BaseScreen
+            header={renderHeader()}
+            scrollable={true}
+            padding={false} // Custom padding handling in ScrollView
+            bgColor="#101922"
+        >
+            <View className="px-5 pb-10">
                 {/* Page Title */}
                 <View className="mt-4 mb-8">
                     <Text className="text-2xl font-bold text-white leading-tight mb-2">
@@ -50,7 +145,7 @@ export default function RegisterMain() {
                 <View className="gap-4">
                     {/* Card 1: Manual Entry */}
                     <TouchableOpacity
-                        className="group relative flex flex-col items-start gap-4 rounded-2xl border border-[#ffffff14] bg-[#ffffff08] p-6 active:bg-[#ffffff10] active:scale-[0.98]"
+                        className="group relative flex flex-col items-start gap-4 rounded-2xl border border-white/10 bg-white/5 p-6 active:bg-white/10 active:scale-[0.98]"
                         activeOpacity={0.9}
                         onPress={() => navigation.navigate('PassiveReg')}
                     >
@@ -63,15 +158,15 @@ export default function RegisterMain() {
                                 차량 등록증을 보고{'\n'}연식, 모델명 등을 직접 입력합니다.
                             </Text>
                         </View>
-                        {/* Arrow Icon - Visible for consistency on mobile */}
+                        {/* Arrow Icon */}
                         <View className="absolute top-6 right-6 opacity-50">
                             <MaterialIcons name="arrow-forward" size={24} color="#0d7ff2" />
                         </View>
                     </TouchableOpacity>
 
-                    {/* Card 2: OBD-II Auto Connect */}
+                    {/* Card 2: SmartCar Connection (Bluetooth) - Previously OBD Auto */}
                     <TouchableOpacity
-                        className="relative flex flex-col items-start gap-4 rounded-2xl border border-primary/30 bg-[#ffffff08] p-6 shadow-lg shadow-blue-500/10 active:bg-[#ffffff10] active:border-primary active:scale-[0.98]"
+                        className="relative flex flex-col items-start gap-4 rounded-2xl border border-primary/30 bg-white/5 p-6 shadow-lg shadow-blue-500/10 active:bg-white/10 active:border-primary active:scale-[0.98]"
                         activeOpacity={0.9}
                         onPress={() => navigation.navigate('ActiveReg')}
                     >
@@ -84,10 +179,13 @@ export default function RegisterMain() {
                             <MaterialIcons name="bluetooth" size={32} color="#0d7ff2" />
                         </View>
                         <View>
-                            <Text className="text-lg font-bold text-white mb-1">OBD-II 자동 연결</Text>
+                            <Text className="text-lg font-bold text-white mb-1">SmartCar 연결</Text>
                             <Text className="text-sm text-slate-400 leading-relaxed">
-                                블루투스 스캐너를 연결하여{'\n'}차량 제원을 자동으로 불러옵니다.
+                                SmartCar 어댑터(블루투스)를 연결하여{'\n'}차량 제원을 자동으로 불러옵니다.
                             </Text>
+                        </View>
+                        <View className="absolute top-6 right-6 opacity-50">
+                            <MaterialIcons name="arrow-forward" size={24} color="#0d7ff2" />
                         </View>
                     </TouchableOpacity>
                 </View>
@@ -106,7 +204,7 @@ export default function RegisterMain() {
                 </View>
 
                 <View className="h-10" />
-            </ScrollView>
-        </View>
+            </View>
+        </BaseScreen>
     );
 }

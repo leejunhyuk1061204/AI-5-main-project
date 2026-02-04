@@ -88,12 +88,12 @@ pyserial==3.5           # 시리얼 포트 통신용
 pyreadline3==3.5.4      # 윈도우 터미널 인터페이스 지원
 python-daemon==3.1.2    # 백그라운드 프로세스 실행 지원
 
-
 # ==================================================
-# 14. Anomaly Detection / Offline Experiment (추가)
+# 14. Anomaly Detection / Offline Experiment
 # ==================================================
 tqdm                    # 학습/평가 진행률 표시
 joblib                  # 스케일러/모델 직렬화
 pyyaml                  # config, threshold 로드
 pytest                  # 회귀 테스트 및 검증
 kaggle                  # Kaggle 데이터셋 다운로드
+

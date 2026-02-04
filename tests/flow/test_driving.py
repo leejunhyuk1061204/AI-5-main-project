@@ -2,25 +2,25 @@ import requests
 import json
 import time
 import os
+import sys
+import random
 from datetime import datetime
 
 # 설정
 BASE_URL = "http://localhost:8080/api/v1"
-VEHICLE_ID = "b05431f5-311a-47fe-9ac1-1f182d6147b4"
-ACCESS_TOKEN = "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiIxZDRkZjFiNy02ZTBiLTQyYWYtOTE0Ni1jOTQyOTc5ZGRiNDkiLCJpYXQiOjE3Njg4OTI4MjYsImV4cCI6MTc2ODg5NjQyNn0.l05cC3xZ2efFCxMZLcACSSzL1o_kE6CJmPowt_AvQrI6TgHr_JwcZHLBCmt1nrMyrU2WuFbv1usoy4sZaYAlWg"
+VEHICLE_ID = "9db0e652-a852-4fdb-bda4-a86adeb3778b"
+ACCESS_TOKEN = "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJlNmQ5ODU5MS04ZTRlLTRlMTEtOTI5YS1jZDg3NDk3MDdmYWIiLCJpYXQiOjE3NzAxMDgxMTYsImV4cCI6MTc3MDExMTcxNn0.mOVLrnD-69MA95wvXA_VNtYAHLV7uKdbQdjLYMcYhFzm2IMmAOtHYPvMDh0dVRR03vlGTHYvaJWN2kVak7ItEA"
 
 def get_headers():
-    # 1. 파일이 있으면 파일 우선
     if os.path.exists("token.json"):
         with open("token.json", "r") as f:
             data = json.load(f)
             return {"Authorization": f"Bearer {data['accessToken']}"}
     
-    # 2. 파일 없으면 소스코드 내 변수 사용
-    if ACCESS_TOKEN != "YOUR_ACCESS_TOKEN_HERE":
+    if ACCESS_TOKEN:
         return {"Authorization": f"Bearer {ACCESS_TOKEN}"}
         
-    print("[-] 토큰이 없습니다. token.json을 만들거나 소스코드의 ACCESS_TOKEN 변수를 채워주세요.")
+    print("[-] 토큰이 없습니다.")
     return None
 
 def start_trip(vehicle_id):
@@ -29,70 +29,81 @@ def start_trip(vehicle_id):
 
     print(f"[*] Trip Starting... Vehicle: {vehicle_id}")
     res = requests.post(f"{BASE_URL}/trips/start", json={"vehicleId": vehicle_id}, headers=headers)
-    if res.status_code == 200 or res.status_code == 201:
+    if res.status_code in [200, 201]:
         data = res.json()['data']
         print(f"[+] Trip Started! ID: {data['tripId']}")
         return data['tripId']
     else:
-        print(f"[-] Trip Start Failed: {res.text}")
+        print(f"[-] Trip Start Failed (Status: {res.status_code}): {res.text}")
         return None
 
-def send_bulk_logs(vehicle_id):
-    import random
-    
+def send_bulk_logs(vehicle_id, target_duration_min):
     headers = get_headers()
     if not headers: return
     
-    LOG_COUNT = 200
-    print(f"[*] Sending Bulk Logs ({LOG_COUNT} EA / Aggressive Mode)...")
+    # 1 log = 1 sec
+    log_count = int(target_duration_min * 60)
+    
+    print(f"[*] Sending Bulk Logs ({log_count} EA / Duration ~{target_duration_min}min)...")
     
     logs = []
-    # [Active] 현재 시간 기준으로 +0.1초씩 증가 (sleep 사용)
     base_time = time.time()
+    # 과거 시간부터 시작해서 현재에 끝나도록 (Backend가 미래 데이터를 거부할 수 있으므로) -> 아니면 그냥 현재부터 미래로? 
+    # 보통 DB 저장시 문제 없으므로 현재 시간(base_time)부터 +i 초로 생성
     
-    # 초기 속도/RPM
     current_speed = 0.0
     current_rpm = 800.0
     
-    for i in range(LOG_COUNT):
-        # 0.1초 간격 타임스탬프 (현실적인 주행)
-        ts = datetime.fromtimestamp(base_time + (i * 0.1)).isoformat()
+    for i in range(log_count):
+        # 타임스탬프 (Backend counts 1 log = 1 sec driving distance)
+        ts = datetime.fromtimestamp(base_time + i).isoformat()
         
-        # 난폭 운전 (점수 깎기: 속도 > 140 또는 RPM > 5000)
-        if i % 5 == 0: # 5번마다 급발진
-            current_speed = random.uniform(145.0, 160.0) # 과속 (점수 감점 트리거)
-            current_rpm = random.uniform(5200.0, 6500.0) # 고RPM (점수 감점 트리거)
-        else:
-            # 평소에도 좀 거칠게
-            current_speed = random.uniform(80.0, 130.0)
-            current_rpm = random.uniform(2000.0, 4500.0)
+        # 자연스러운 주행 시뮬레이션 (가속/감속 트렌드)
+        if current_speed < 100: # 가속 구간
+            current_speed += random.uniform(0.5, 2.0)
+            current_rpm = current_speed * 30 + random.uniform(500, 1000)
+        elif current_speed > 130: # 과속 구간 제어
+            current_speed -= random.uniform(0.1, 1.0)
+            current_rpm = current_speed * 25 + random.uniform(200, 500)
+        else: # 정속 주행 구간
+            current_speed += random.uniform(-1.5, 1.5)
+            current_rpm = current_speed * 25 + random.uniform(-100, 300)
+
+        # 간헐적 과속/고RPM (이벤트 발생)
+        if random.random() < 0.01: # 1% 확률로 급가속
+            current_speed = random.uniform(145.0, 160.0)
+            current_rpm = random.uniform(5500.0, 6500.0)
 
         log = {
             "timestamp": ts,
             "vehicleId": vehicle_id,
-            "rpm": round(current_rpm, 1),
-            "speed": round(current_speed, 1),
+            "rpm": round(max(800, current_rpm), 1),
+            "speed": round(max(0, current_speed), 1),
             "voltage": round(13.5 + random.uniform(-0.2, 0.2), 1),
             "coolantTemp": round(90.0 + random.uniform(-2, 5), 1),
             "engineLoad": round(45.0 + random.uniform(-10, 10), 1),
             "fuelTrimShort": 2.5,
-            "fuelTrimLong": 1.0
+            "fuelTrimLong": 1.0,
+            "intakeTemp": round(25.0 + random.uniform(0, 5), 1),
+            "map": round(30.0 + random.uniform(5, 70), 1),
+            "maf": round(15.0 + random.uniform(2, 40), 1),
+            "throttlePos": round(15.0 + random.uniform(0, 80), 1),
+            "engineRuntime": 3600
         }
         logs.append(log)
 
-    chunk_size = 100
+    chunk_size = 200 # 전송 속도 향상을 위해 청크 크기 확대
     for i in range(0, len(logs), chunk_size):
         chunk = logs[i:i + chunk_size]
         res = requests.post(f"{BASE_URL}/telemetry/batch", json=chunk, headers=headers)
         if res.status_code == 200:
-             print(f"   [+] Batch {i//chunk_size + 1} sent ({len(chunk)} logs)")
+             if (i // chunk_size) % 10 == 0: 
+                print(f"   [+] Sent {min(i+chunk_size, log_count)}/{log_count} logs...")
         else:
              print(f"   [-] Batch failed: {res.text}")
         
-        # [KEY] 서버가 '시간 흐름'을 인지하도록 실제로 10초(100개 * 0.1s) 대기
-        # 한 배치(100개)가 10초 분량 데이터임.
-        print("   ...Waiting 10s for realistic simulation...")
-        time.sleep(10)
+        # 고속 전송을 위해 sleep 최소화
+        time.sleep(0.01)
 
 def end_trip(trip_id):
     headers = get_headers()
@@ -107,17 +118,41 @@ def end_trip(trip_id):
         print(f"    - Trip ID: {data.get('tripId')}")
         print(f"    - Distance: {data.get('distance')} km")
         print(f"    - Avg Speed: {data.get('averageSpeed')} km/h")
+        print(f"    - Avg RPM: {data.get('avgRpm')}")
+        print(f"    - Avg Engine Load: {data.get('avgEngineLoad')}")
+        print(f"    - Overheat Duration: {data.get('overheatDurationSec')} sec")
+        print(f"    - Hard Accel Count: {data.get('hardAccelCount')}")
         print(f"    - Score: {data.get('driveScore')}")
         print("="*30)
     else:
         print(f"[-] Trip End Failed: {res.text}")
 
-if __name__ == "__main__":
-    if VEHICLE_ID == "YOUR_VEHICLE_UUID_HERE":
-        print("❌ 스크립트 파일(test_driving.py)을 열어서 VEHICLE_ID를 먼저 설정해주세요!")
-    else:
-        tid = start_trip(VEHICLE_ID)
-        if tid:
-            send_bulk_logs(VEHICLE_ID)
-            # time.sleep(1) 
+import argparse
+
+def main():
+    parser = argparse.ArgumentParser(description="Driving Data Simulation Test")
+    parser.add_argument("--duration", type=float, default=5, help="주행 시간 (분)")
+    parser.add_argument("--interval", type=int, default=1, help="데이터 생성 간격 (초)")
+    parser.add_argument("--batch", type=int, default=60, help="배치 전송 단위 (초)")
+    
+    args = parser.parse_args()
+    
+    print(f"[*] Starting simulation for {args.duration} minutes...")
+    print(f"[*] Config: Interval={args.interval}s, Batch={args.batch}s")
+    
+    tid = start_trip(VEHICLE_ID)
+    if tid:
+        try:
+            # send_bulk_logs 내부 로직을 args에 맞춰 수정하고 싶으나, 
+            # 일단 기존 함수를 호출 (필요시 send_bulk_logs 시그니처 수정)
+            send_bulk_logs(VEHICLE_ID, args.duration)
             end_trip(tid)
+        except KeyboardInterrupt:
+            print("\n[!] 테스트가 중단되었습니다. 주행을 종료합니다.")
+            end_trip(tid)
+        except Exception as e:
+            print(f"\n[!] 오류 발생: {e}")
+            end_trip(tid)
+
+if __name__ == "__main__":
+    main()
