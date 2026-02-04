@@ -5,7 +5,7 @@ from ai.app.services.audio.audio_service import AudioService
 # 1. URL: /predict/audio 설정
 router = APIRouter(tags=["Audio Analysis"])
 
-@router.post("/audio", response_model=AudioResponse)
+@router.post("/predict/audio", response_model=AudioResponse)
 async def analyze_audio(
     request_body: AudioRequest,  # Request Body로 변경
     request: Request,

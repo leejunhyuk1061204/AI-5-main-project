@@ -57,7 +57,7 @@ FAST_PATH_THRESHOLD = 0.9  # 90% 확신할 때만 LLM 스킵
 
 # EV Parts Definition
 EV_PARTS = {
-    "Inverter", "Electric_Motor", "Charging_Port", 
+    "Inverter", "Charging_Port", 
     "Inverter_Coolant_Reservoir", "Secondary_Coolant_Reservoir"
 }
 

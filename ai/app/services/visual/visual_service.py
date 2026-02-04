@@ -25,7 +25,6 @@ from PIL import Image
 from urllib.parse import urlparse
 
 from ai.app.services.visual.router_service import RouterService, SceneType, get_router_service
-from ai.app.services.visual.router_service import RouterService, SceneType, get_router_service
 from ai.app.services.common.llm_service import analyze_general_image, generate_training_labels
 from ai.app.services.common.llm_guard import validate_llm_label_result, sanitize_confidence
 from ai.app.services.visual.domains.dashboard_service import analyze_dashboard_image

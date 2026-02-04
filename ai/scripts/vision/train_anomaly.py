@@ -31,11 +31,10 @@ ENGINE_PARTS = [
     "Windshield_Wiper_Fluid", "Fuse_Box", "Power_Steering_Reservoir",
     "Brake_Fluid", "Engine_Oil_Fill_Cap", "Engine_Oil_Dip_Stick",
     "Air_Filter_Cover", "ABS_Unit", "Alternator", "Engine_Coolant_Reservoir",
-    "Radiator", "Air_Filter", "Engine_Cover", "Cold_Air_Intake",
-    "Clutch_Fluid_Reservoir", "Transmission_Oil_Dip_Stick",
+    "Radiator", "Engine_Cover", "Cold_Air_Intake",
+    "Transmission_Oil_Dip_Stick",
     "Intercooler_Coolant_Reservoir", "Oil_Filter_Housing", "ATF_Oil_Reservoir",
-    "Cabin_Air_Filter_Housing", "Secondary_Coolant_Reservoir",
-    "Electric_Motor", "Oil_Filter",
+    "Secondary_Coolant_Reservoir", "Oil_Filter",
     "engine_bay"  # 전체 엔진룸 통합 학습용
 ]
 
