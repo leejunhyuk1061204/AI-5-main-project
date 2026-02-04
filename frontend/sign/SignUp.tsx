@@ -35,16 +35,10 @@ export default function SignUp() {
             return;
         }
 
-        if (password.length < 8) {
-            showAlert("비밀번호 오류", "비밀번호는 8자 이상이어야 합니다.", "WARNING");
-            return;
-        }
-
-        // 영문+숫자 포함 검증
-        const hasLetter = /[a-zA-Z]/.test(password);
-        const hasNumber = /[0-9]/.test(password);
-        if (!hasLetter || !hasNumber) {
-            showAlert("비밀번호 오류", "비밀번호는 영문과 숫자를 포함해야 합니다.", "WARNING");
+        // 영문 + 숫자 + 특수문자 포함 검증 (8자 이상)
+        const passwordRegex = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[@$!%*#?&])[A-Za-z\d@$!%*#?&]{8,}$/;
+        if (!passwordRegex.test(password)) {
+            showAlert("비밀번호 오류", "비밀번호는 영문, 숫자, 특수문자를 포함하여 8자 이상이어야 합니다.", "WARNING");
             return;
         }
 
@@ -147,7 +141,7 @@ export default function SignUp() {
                             <View className="relative justify-center">
                                 <TextInput
                                     value={email}
-                                    onChangeText={setEmail}
+                                    onChangeText={(t) => setEmail(t.trim())}
                                     className="w-full bg-surface-dark border border-border-muted/50 rounded-xl px-4 py-3.5 text-base text-white placeholder:text-text-dim focus:outline-none focus:border-primary pr-12"
                                     placeholder="example@email.com"
                                     placeholderTextColor="#64748b"
@@ -174,7 +168,7 @@ export default function SignUp() {
                                     value={password}
                                     onChangeText={setPassword}
                                     className="w-full bg-surface-dark border border-white/10 rounded-xl px-4 py-3.5 text-base text-white placeholder:text-text-dim focus:outline-none focus:border-primary pr-12"
-                                    placeholder="영문, 숫자 포함 8자 이상"
+                                    placeholder="영문, 숫자, 특수문자 포함 8자 이상"
                                     placeholderTextColor="#64748b"
                                     secureTextEntry={!showPassword}
                                 />

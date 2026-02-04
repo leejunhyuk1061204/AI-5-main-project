@@ -93,15 +93,10 @@ export default function MyPage() {
                 console.error(e);
             }
         } else if (modalType === 'password') {
-            if (!tempInput || tempInput.length < 8) {
-                showAlert('오류', '비밀번호는 8자리 이상이어야 합니다.', () => setModalType('password'));
-                return;
-            }
-            // 영문+숫자 포함 검증
-            const hasLetter = /[a-zA-Z]/.test(tempInput);
-            const hasNumber = /[0-9]/.test(tempInput);
-            if (!hasLetter || !hasNumber) {
-                showAlert('오류', '비밀번호는 영문과 숫자를 포함해야 합니다.', () => setModalType('password'));
+            // 영문 + 숫자 + 특수문자 포함 검증 (8자 이상)
+            const passwordRegex = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[@$!%*#?&])[A-Za-z\d@$!%*#?&]{8,}$/;
+            if (!passwordRegex.test(tempInput)) {
+                showAlert('오류', '비밀번호는 영문, 숫자, 특수문자를 포함하여 8자 이상이어야 합니다.', () => setModalType('password'));
                 return;
             }
             if (tempInput !== tempInputConfirm) {
@@ -331,7 +326,7 @@ export default function MyPage() {
                                         value={tempInput}
                                         onChangeText={setTempInput}
                                         className="w-full bg-black/30 text-white rounded-xl px-4 py-3 border border-white/10 mb-3"
-                                        placeholder="영문, 숫자 포함 8자리 이상"
+                                        placeholder="영문, 숫자, 특수문자 포함 8자리 이상"
                                         placeholderTextColor="#6b7280"
                                         secureTextEntry
                                         autoFocus
