@@ -44,7 +44,12 @@ export default function CarManage() {
 
     // Primary Vehicle Derived State
     const primaryVehicle = vehicles.find(v => v.isPrimary) || vehicles[0];
-    const otherVehicles = vehicles.filter(v => v.vehicleId !== primaryVehicle?.vehicleId);
+    // 전체 차량 목록 정렬 (대표 차량이 맨 위로)
+    const sortedVehicles = [...vehicles].sort((a, b) => {
+        if (a.isPrimary) return -1;
+        if (b.isPrimary) return 1;
+        return 0;
+    });
 
     // 차량 목록 불러오기 (초기 선택 로직 제거, 단순히 리스트만 로드)
     const loadVehicles = async () => {
@@ -188,15 +193,15 @@ export default function CarManage() {
                 ) : null}
 
                 {/* Other Vehicle List */}
-                {otherVehicles.length > 0 && (
+                {sortedVehicles.length > 0 && (
                     <View className="mb-8">
                         <Text className="px-2 text-[13px] font-semibold text-text-dim uppercase tracking-widest mb-3">내 차량 목록</Text>
                         <View className="bg-surface-card/60 border border-white/5 rounded-2xl overflow-hidden backdrop-blur-md">
-                            {otherVehicles.map((vehicle, index) => {
+                            {sortedVehicles.map((vehicle, index) => {
                                 return (
                                     <TouchableOpacity
                                         key={vehicle.vehicleId}
-                                        className={`flex-row items-center gap-4 px-5 py-4 active:bg-white/5 ${index !== otherVehicles.length - 1 ? 'border-b border-white/5' : ''}`}
+                                        className={`flex-row items-center gap-4 px-5 py-4 active:bg-white/5 ${index !== sortedVehicles.length - 1 ? 'border-b border-white/5' : ''}`}
                                         onPress={() => navigation.navigate('CarEdit', { vehicleId: vehicle.vehicleId })}
                                     >
                                         {/* Icon */}
@@ -210,20 +215,26 @@ export default function CarManage() {
 
                                         {/* Info */}
                                         <View className="flex-1">
+                                            <Text className={`text-base font-medium mb-0.5 text-white`}>
+                                                {vehicle.manufacturerKo} {vehicle.modelNameKo}
+                                            </Text>
                                             <View className="flex-row items-center gap-2">
-                                                <Text className={`text-base font-medium mb-0.5 text-white`}>
-                                                    {vehicle.manufacturerKo} {vehicle.modelNameKo}
+                                                <Text className="text-text-dim text-xs">
+                                                    {vehicle.carNumber || '번호판 미등록'}
                                                 </Text>
+                                                {vehicle.isPrimary && (
+                                                    <View className="bg-primary/20 px-2 py-0.5 rounded border border-primary/30 flex-row items-center gap-1">
+                                                        <View className="w-1 h-1 bg-primary rounded-full" />
+                                                        <Text className="text-[9px] font-bold text-primary uppercase tracking-wider">대표차량</Text>
+                                                    </View>
+                                                )}
                                                 {vehicle.cloudLinked && (
-                                                    <View className="bg-green-500/20 px-1.5 py-0.5 rounded flex-row items-center gap-0.5">
-                                                        <MaterialIcons name="bolt" size={10} color="#4ade80" />
-                                                        <Text className="text-[10px] text-green-400 font-bold">Linked</Text>
+                                                    <View className="bg-green-500/20 px-2 py-0.5 rounded border border-green-500/30 flex-row items-center gap-1">
+                                                        <MaterialIcons name="bolt" size={9} color="#4ade80" />
+                                                        <Text className="text-[9px] font-bold text-green-400 uppercase tracking-wider">Linked</Text>
                                                     </View>
                                                 )}
                                             </View>
-                                            <Text className="text-text-dim text-xs">
-                                                {vehicle.carNumber || '번호판 미등록'}
-                                            </Text>
                                         </View>
 
                                         {/* Star Button (Primary Toggle) */}
@@ -232,9 +243,9 @@ export default function CarManage() {
                                             onPress={(e) => handleTogglePrimary(vehicle, e)}
                                         >
                                             <MaterialIcons
-                                                name="star-outline"
+                                                name={vehicle.isPrimary ? "star" : "star-outline"}
                                                 size={28}
-                                                color="#475569"
+                                                color={vehicle.isPrimary ? "#fbbf24" : "#475569"}
                                             />
                                         </TouchableOpacity>
                                     </TouchableOpacity>
