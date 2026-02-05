@@ -22,6 +22,12 @@ public class AiMediaService {
      * 미디어 파일 업로드 및 URL 반환
      */
     public String uploadMedia(MultipartFile file, String folder) throws IOException {
+        // null 또는 빈 파일이면 null 반환
+        if (file == null || file.isEmpty()) {
+            log.debug("No file provided for folder: {}", folder);
+            return null;
+        }
+
         String fileUrl = fileStorageService.uploadFile(file, folder);
         log.info("Media uploaded successfully [Folder: {}]: {}", folder, fileUrl);
         return fileUrl;
