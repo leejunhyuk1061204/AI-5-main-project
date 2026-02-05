@@ -30,10 +30,10 @@ public class AiEvidence {
     @Column(name = "evidence_type", length = 20)
     private EvidenceType evidenceType; // IMAGE, AUDIO
 
-    @Column(name = "file_path", nullable = false)
+    @Column(name = "file_path", columnDefinition = "TEXT", nullable = false)
     private String filePath;
 
-    @Column(name = "inference_label")
+    @Column(name = "inference_label", columnDefinition = "TEXT")
     private String inferenceLabel; // AI가 판단한 라벨 (예: "정상 소음", "벨트 마모")
 
     @Column(name = "confidence")

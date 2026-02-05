@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
-import { View, Text, TouchableOpacity, ImageBackground, Dimensions } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { View, Text, TouchableOpacity, ImageBackground, Dimensions, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { CommonActions, useRoute, RouteProp } from '@react-navigation/native';
@@ -14,7 +15,9 @@ import Animated, {
     Easing
 } from 'react-native-reanimated';
 
-import ObdService from '../services/ObdService';
+import EventSource, { EventSourceListener } from "react-native-sse";
+import { BASE_URL } from '../api/axios';
+import { useAiDiagnosisStore } from '../store/useAiDiagnosisStore';
 
 const { width } = Dimensions.get('window');
 
@@ -27,63 +30,110 @@ export default function ObdDiagLoading({ navigation }: any) {
     const insets = useSafeAreaInsets();
     const route = useRoute<RouteProp<{ ObdDiagLoading: ActiveLoadingParams }, 'ObdDiagLoading'>>();
     const vehicleId = route.params?.vehicleId;
+    const { currentSessionId } = useAiDiagnosisStore();
+
+    // SSE State
+    const [progress, setProgress] = React.useState(0.0);
+    const [statusMessage, setStatusMessage] = React.useState("서버 연결 대기 중...");
+    const [token, setToken] = React.useState<string | null>(null);
 
     // Animations
     const scanLineY = useSharedValue(0);
     const particleOpacity = useSharedValue(0.3);
     const rotate = useSharedValue(0);
 
+    // 1. Get Token
     useEffect(() => {
-        // vehicleId가 있으면 ObdService에 설정 (배치 업로드에 필요)
-        if (vehicleId) {
-            console.log(`[ObdDiagLoading] Setting vehicleId: ${vehicleId}`);
-            ObdService.setVehicleId(vehicleId);
-        } else {
-            console.warn('[ObdDiagLoading] No vehicleId provided - batch upload will be disabled');
+        AsyncStorage.getItem('accessToken').then(t => {
+            if (t) {
+                setToken(t);
+            } else {
+                console.error("[ObdDiagLoading] No Access Token found!");
+                setStatusMessage("인증 정보를 찾을 수 없습니다.");
+            }
+        });
+    }, []);
+
+    // 2. Connect SSE
+    useEffect(() => {
+        if (!currentSessionId) {
+            console.error("[ObdDiagLoading] No Session ID found!");
+            setStatusMessage("세션 정보를 찾을 수 없습니다.");
+            return;
         }
 
-        // 1. Start Background Polling
-        console.log("Starting Background OBD Polling...");
-        ObdService.startPolling(1000);
+        if (!token) {
+            // Wait for token
+            return;
+        }
 
-        // 2. 데이터 수신 여부와 관계없이 5초 후 자동 이동 (더미 결과 화면)
-        const autoNavigateTimer = setTimeout(() => {
-            console.log("[ObdDiagLoading] Auto-navigating to ObdDiagResult after timeout...");
-            navigation.replace('ObdDiagResult');
-        }, 5000);
+        const url = `${BASE_URL}/api/v1/ai/diagnose/session/${currentSessionId}/sse`;
+        console.log(`[ObdDiagLoading] Connecting SSE: ${url}`);
 
-        // 3. Data Listener for Early Transition (데이터 받으면 즉시 이동)
-        const unsubscribe = ObdService.onData((data) => {
-            // Check if we received valid data (any primary field)
-            if (data.rpm !== undefined || data.speed !== undefined || data.voltage !== undefined) {
-                console.log("[ObdDiagLoading] Valid data received! Transitioning to Result...");
-
-                // Clear the auto-navigate timer since we're navigating early
-                clearTimeout(autoNavigateTimer);
-
-                // Unsubscribe to avoid double triggers
-                unsubscribe();
-
-                // Navigate immediately - DO NOT stop polling (Keep connection alive)
-                navigation.replace('ObdDiagResult', {
-                    // Pass some dummy or real diagnosis summary if available
-                    result: {
-                        dtcCount: 0,
-                        status: 'NORMAL',
-                        description: '모든 시스템이 정상입니다.'
-                    }
-                });
+        // IMPORTANT: Pass Authorization Header for secured endpoint
+        const es = new EventSource(url, {
+            headers: {
+                Authorization: `Bearer ${token}`
             }
         });
 
-        // 4. Scanner Line Animation
+        const handleOpen = () => {
+            console.log("[SSE] Connected!");
+            setStatusMessage("서버 연결 성공 (진단 시작)");
+            setProgress(0.1);
+        };
+
+        const handleStep1 = (event: any) => {
+            console.log("[SSE] Step 1:", event.data);
+            setStatusMessage("진단 요청 접수 완료");
+            setProgress(0.2);
+        };
+        const handleStep2 = (event: any) => {
+            console.log("[SSE] Step 2:", event.data);
+            setStatusMessage("멀티미디어 데이터 전처리 완료");
+            setProgress(0.4);
+        };
+        const handleStep3 = (event: any) => {
+            console.log("[SSE] Step 3:", event.data);
+            setStatusMessage("AI 정밀 분석 완료 (시각/청각/OBD)");
+            setProgress(0.6);
+        };
+        const handleStep4 = (event: any) => {
+            console.log("[SSE] Step 4:", event.data);
+            setStatusMessage("결함 원인 추론 및 지식 검색 완료");
+            setProgress(0.8);
+        };
+        const handleStep5 = (event: any) => {
+            console.log("[SSE] Step 5:", event.data);
+            setStatusMessage("최종 진단 리포트 생성 완료");
+            setProgress(1.0);
+
+            // Auto navigate after short delay
+            setTimeout(() => {
+                navigation.replace('ObdDiagResult');
+            }, 1000);
+        };
+
+        const handleError = (error: any) => {
+            // console.error("[SSE] Error:", error);
+            // Ignore simple connection errors/retries for now, or handle specifically
+        };
+
+        // Cast custom event names to any to avoid TS errors
+        es.addEventListener("open" as any, handleOpen);
+        es.addEventListener("step1" as any, handleStep1);
+        es.addEventListener("step2" as any, handleStep2);
+        es.addEventListener("step3" as any, handleStep3);
+        es.addEventListener("step4" as any, handleStep4);
+        es.addEventListener("step5" as any, handleStep5);
+        es.addEventListener("error" as any, handleError);
+
+        // Animations start
         scanLineY.value = withRepeat(
             withTiming(1, { duration: 3000, easing: Easing.linear }),
             -1,
             true
         );
-
-        // 5. Particle Pulse
         particleOpacity.value = withRepeat(
             withSequence(
                 withTiming(1, { duration: 800 }),
@@ -92,8 +142,6 @@ export default function ObdDiagLoading({ navigation }: any) {
             -1,
             true
         );
-
-        // 6. Slow rotation
         rotate.value = withRepeat(
             withTiming(360, { duration: 20000, easing: Easing.linear }),
             -1,
@@ -101,12 +149,10 @@ export default function ObdDiagLoading({ navigation }: any) {
         );
 
         return () => {
-            clearTimeout(autoNavigateTimer);
-            unsubscribe();
-            // NOTE: Do NOT call ObdService.stopPolling() here!
-            // We want the connection to persist to the next screen.
+            es.close();
+            // Optional: reset animations if needed
         };
-    }, []);
+    }, [currentSessionId, token]);
 
     const animatedScanLineStyle = useAnimatedStyle(() => ({
         top: `${scanLineY.value * 100}%`,
@@ -230,16 +276,17 @@ export default function ObdDiagLoading({ navigation }: any) {
                             <View className="flex-row items-center gap-2">
                                 {/* Simple spin animation replacement just with icon for now or reusable spin */}
                                 <MaterialIcons name="sync" size={14} color="#9cabba" className="animate-spin" />
-                                <Text className="text-[#9cabba] text-sm font-medium">DTC 고장 코드 스캔 중...</Text>
+                                {/** No duplicate icon needed, removed duplicate from previous bad view */}
+                                <Text className="text-[#9cabba] text-sm font-medium">{statusMessage}</Text>
                             </View>
                         </View>
-                        <Text className="text-white text-3xl font-bold tracking-tighter">67%</Text>
+                        <Text className="text-white text-3xl font-bold tracking-tighter">{Math.round(progress * 100)}%</Text>
                     </View>
 
                     {/* Progress Bar Container */}
                     <View className="h-1.5 w-full bg-[#2a3848] rounded-full overflow-hidden relative">
                         {/* Fill */}
-                        <View className="h-full bg-primary w-[67%] shadow-[0_0_10px_rgba(13,127,242,0.6)]" />
+                        <View className="h-full bg-primary shadow-[0_0_10px_rgba(13,127,242,0.6)]" style={{ width: `${progress * 100}%` }} />
                     </View>
                 </View>
 

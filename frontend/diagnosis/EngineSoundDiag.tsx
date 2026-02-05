@@ -254,7 +254,7 @@ export default function EngineSoundDiag() {
             if (sessionId) {
                 // INTERACTIVE 모드 답변인 경우
                 result = await replyToDiagnosisSession(sessionId as string, {
-                    userResponse: "엔진 소리를 녹음했습니다.",
+                    userResponse: "소리를 녹음했습니다.",
                     vehicleId: vehicleId as string
                 }, undefined, uri);
 
@@ -263,7 +263,7 @@ export default function EngineSoundDiag() {
                 // 신규 진단인 경우
                 useAiDiagnosisStore.setState({
                     status: 'PROCESSING',
-                    loadingMessage: '엔진 소리를 분석하고 있습니다...',
+                    loadingMessage: '소리를 분석하고 있습니다...',
                     messages: [],
                     diagResult: null,
                     currentSessionId: null
@@ -365,7 +365,7 @@ export default function EngineSoundDiag() {
             >
                 <MaterialIcons name="arrow-back-ios" size={20} color="white" />
             </TouchableOpacity>
-            <Text className="text-white text-lg font-bold">엔진 소리 진단</Text>
+            <Text className="text-white text-lg font-bold">소리 진단</Text>
             <View className="w-10" />
         </View>
     );

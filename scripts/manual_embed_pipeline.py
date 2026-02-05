@@ -6,6 +6,8 @@ import requests
 import shutil
 from datetime import datetime
 from dotenv import load_dotenv
+import re
+import urllib.parse
 
 # .env 파일 로드
 load_dotenv()
@@ -18,6 +20,8 @@ LOG_FILE = "logs/embed_pipeline.log"
 
 MODEL_NAME = "nomic-embed-text"  # 768차원, 고속 모델
 OLLAMA_API_URL = "http://localhost:11434/api/embeddings"
+CHUNK_SIZE = 1000
+CHUNK_OVERLAP = 200
 
 def log(message):
     timestamp = datetime.now().strftime("[%Y-%m-%d %H:%M:%S]")
@@ -29,17 +33,115 @@ def log(message):
 def get_hash(text):
     return hashlib.sha256(text.encode('utf-8')).hexdigest()
 
-import re
-
 def clean_text(text):
     if not text: return ""
     # 1. SQL 이스케이프 및 NULL 문자 제거
     text = text.replace('\x00', '').replace("'", "''")
-    # 2. 제어 문자 및 비인쇄 문자 제거 (Regex)
-    text = re.sub(r'[\x00-\x1f\x7f-\xad]', ' ', text)
-    # 3. 연속된 공백 및 줄바꿈을 단일 공백으로 치환
-    text = " ".join(text.split())
+    # 2. 제어 문자 제거 (줄바꿈/탭은 보존)
+    text = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\xad]', '', text)
+    # 3. 과도한 공백 정규화 (3개 이상 줄바꿈 -> 2개로)
+    text = re.sub(r'\n{3,}', '\n\n', text)
     return text.strip()
+
+# --- Smart Chunking Logic (Recursive) ---
+class SmartTextSplitter:
+    def __init__(self, chunk_size=1000, chunk_overlap=200):
+        self.chunk_size = chunk_size
+        self.chunk_overlap = chunk_overlap
+        # 우선순위: 문단 -> 줄 -> 문장 -> 공백 -> 글자
+        self.separators = ["\n\n", "\n", ". ", " ", ""]
+
+    def split_text(self, text):
+        final_chunks = []
+        self._split_recursive(text, self.separators, final_chunks)
+        return final_chunks
+
+    def _split_recursive(self, text, separators, final_chunks):
+        # 1. Base case: Fits in chunk size
+        if len(text) <= self.chunk_size:
+            final_chunks.append(text)
+            return
+
+        # 2. Select separator
+        separator = ""
+        next_separators = []
+        
+        for i, sep in enumerate(separators):
+            if sep in text:
+                separator = sep
+                next_separators = separators[i+1:]
+                break
+        
+        # If no separator found (and text is too big), force split by char (fallback)
+        if not separator and not next_separators:
+             # Just hard split
+             for i in range(0, len(text), self.chunk_size - self.chunk_overlap):
+                 final_chunks.append(text[i:i+self.chunk_size])
+             return
+
+        # 3. Split
+        # if separator is empty string (character split), split works differently
+        if separator == "":
+             splits = list(text)
+        else:
+             splits = text.split(separator)
+
+        # 4. Process Splits (Merge small ones, recurse big ones)
+        good_splits = []
+        for s in splits:
+            if separator != "": s = s.strip()
+            if not s: continue
+            
+            if len(s) < self.chunk_size:
+                good_splits.append(s)
+            else:
+                if next_separators:
+                    # Recurse on this big segment
+                    sub_chunks = []
+                    self._split_recursive(s, next_separators, sub_chunks)
+                    good_splits.extend(sub_chunks)
+                else:
+                    # Should not happen given separators logic, but safe fallback
+                    good_splits.append(s)
+
+        # 5. Merge 'good_splits' into chunks with overlap
+        self._merge_splits(good_splits, separator, final_chunks)
+
+    def _merge_splits(self, splits, separator, final_chunks):
+        current_doc = []
+        current_len = 0
+        
+        for s in splits:
+            s_len = len(s)
+            sep_len = len(separator) if current_len > 0 else 0
+            
+            if current_len + s_len + sep_len > self.chunk_size:
+                # Flush current chunk
+                if current_doc:
+                    chunk_text = separator.join(current_doc)
+                    final_chunks.append(chunk_text)
+                    
+                    # Create Overlap for next chunk
+                    # Keep trailing segments that fit in overlap
+                    overlap_doc = []
+                    overlap_len = 0
+                    for seg in reversed(current_doc):
+                        seg_len = len(seg)
+                        s_sep = len(separator) if overlap_len > 0 else 0
+                        if overlap_len + seg_len + s_sep > self.chunk_overlap:
+                            break
+                        overlap_doc.insert(0, seg)
+                        overlap_len += seg_len + s_sep
+                    
+                    current_doc = overlap_doc
+                    current_len = overlap_len
+            
+            current_doc.append(s)
+            current_len += s_len + (len(separator) if current_len > 0 else 0)
+        
+        if current_doc:
+            final_chunks.append(separator.join(current_doc))
+
 
 def get_ollama_embedding(text):
     """Ollama API를 통해 텍스트 임베딩 생성"""
@@ -47,7 +149,7 @@ def get_ollama_embedding(text):
         response = requests.post(OLLAMA_API_URL, json={
             "model": MODEL_NAME,
             "prompt": text
-        }, timeout=90) # 타임아웃 90초로 상향
+        }, timeout=90)
         
         if response.status_code == 200:
             return response.json().get("embedding")
@@ -55,44 +157,29 @@ def get_ollama_embedding(text):
             log(f"  [ERROR] Ollama API Error: {response.status_code} - {response.text}")
             return None
     except requests.exceptions.Timeout:
-        log(f"  [ERROR] Ollama Timeout: API request timed out (60s)")
-        return None
-    except requests.exceptions.ConnectionError:
-        log(f"  [ERROR] Ollama Connection Error: Failed to connect to Ollama server")
+        log(f"  [ERROR] Ollama Timeout (90s)")
         return None
     except Exception as e:
-        log(f"  [ERROR] Unexpected Embedding Error: {e}")
+        log(f"  [ERROR] Embedding Error: {e}")
         return None
 
 def format_sql(content, metadata, embedding, content_hash):
     emb_str = str(embedding)
     meta_str = json.dumps(metadata).replace("'", "''")
-    return f"INSERT INTO knowledge_vectors (content, metadata, embedding, content_hash) VALUES ('{content}', '{meta_str}', '{emb_str}', '{content_hash}') ON CONFLICT (content_hash) DO NOTHING;\n"
-
-import urllib.parse
+    # content도 escape
+    content_esc = content.replace("'", "''") 
+    return f"INSERT INTO knowledge_vectors (content, metadata, embedding, content_hash) VALUES ('{content_esc}', '{meta_str}', '{emb_str}', '{content_hash}') ON CONFLICT (content_hash) DO NOTHING;\n"
 
 def extract_metadata_from_filename(filename):
-    """
-    파일명에서 제조사, 연식, 모델명을 추출합니다.
-    예: Audi_2010_A3_%288PA%29_L4-2.0L_Turbo_%28CCTA%29_full.json
-    """
-    # URL 인코딩 제거 (예: %20 -> space)
+    """파일명에서 제조사, 연식, 모델명을 추출"""
     decoded_name = urllib.parse.unquote(filename)
-    
-    # 확장자 제거 및 _full 접미사 제거
     base_name = decoded_name.replace(".json", "").replace("_full", "")
-    
-    # 패턴: Manufacturer_Year_Model_Rest
-    # 연식을 기준으로 분리 시도 (4자리 숫자)
     match = re.search(r'^([^_]+)_(\d{4})_(.+)$', base_name)
     
     if match:
         manufacturer = match.group(1)
         year = match.group(2)
         model_part = match.group(3)
-        
-        # 모델명은 보통 연식 이후 첫 번째 또는 두 번째 섹션까지
-        # 너무 길어지지 않게 적절히 자름 (보통 _L4, _V6 등 엔진 정보 전까지)
         model_name = re.split(r'_(?:[LV]\d|Hybrid|Electric|AWD|FWD|Quattro)', model_part)[0]
         model_name = model_name.replace("_", " ").strip()
         
@@ -101,22 +188,25 @@ def extract_metadata_from_filename(filename):
             "year": year,
             "model_name": model_name
         }
-    
     return {}
+
+splitter = SmartTextSplitter(CHUNK_SIZE, CHUNK_OVERLAP)
 
 def process_file(filepath):
     filename = os.path.basename(filepath)
-    log(f"Starting embedding for {filename}...")
+    log(f"Starting Smart Embedding for {filename}...")
     
-    # 파일명에서 메타데이터 미리 추출
     file_metadata = extract_metadata_from_filename(filename)
-    
+    context_header = ""
+    if file_metadata:
+        context_header = f"[Context: {file_metadata.get('manufacturer')} {file_metadata.get('year')} {file_metadata.get('model_name')}]\n"
+
     try:
         with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
             data_list = json.load(f)
             
         if not isinstance(data_list, list):
-            log(f"  [SKIP] {filename} is not a valid list format.")
+            log(f"  [SKIP] Invalid format.")
             return False
 
         success_count = 0
@@ -125,44 +215,45 @@ def process_file(filepath):
         with open(OUTPUT_SQL_PATH, 'a', encoding='utf-8') as sql_f:
             for item_idx, item in enumerate(data_list):
                 raw_content = item.get("content", item.get("original_context", ""))
-                if not raw_content: continue
+                # 먼저 Clean
+                cleaned_content = clean_text(raw_content)
+                if not cleaned_content: continue
                 
-                # 최적화된 청킹 (1000자)
-                chunk_size = 1000
-                content_chunks = [raw_content[i:i+chunk_size] for i in range(0, len(raw_content), chunk_size)]
+                # Smart Splitting
+                chunks = splitter.split_text(cleaned_content)
                 
-                for idx, chunk in enumerate(content_chunks):
-                    chunk = clean_text(chunk)
-                    if not chunk: continue
+                for idx, chunk in enumerate(chunks):
+                    if not chunk.strip(): continue
                     
-                    embedding = get_ollama_embedding(chunk)
+                    # Context Injection
+                    final_text = context_header + chunk
+                    
+                    embedding = get_ollama_embedding(final_text)
                     
                     if not embedding:
                         error_count += 1
                         continue
                     
                     metadata = {k: v for k, v in item.items() if k not in ["content", "original_context"]}
-                    
-                    # 파일명에서 추출한 메타데이터 병합
                     metadata.update(file_metadata)
-                    
                     metadata["source_file"] = filename
                     metadata["chunk_index"] = idx
-                    metadata["item_index"] = item_idx
+                    metadata["chunk_method"] = "smart_recursive_v1"
                     
-                    content_hash = get_hash(f"{chunk}_{item_idx}_{idx}_{filename}")
+                    # Hash calculation (Include context header to be safe)
+                    content_hash = get_hash(f"{final_text}_{filename}_{item_idx}_{idx}")
                     
-                    sql_line = format_sql(chunk, metadata, embedding, content_hash)
+                    sql_line = format_sql(final_text, metadata, embedding, content_hash)
                     sql_f.write(sql_line)
                     success_count += 1
                 
                 if item_idx % 50 == 0:
-                    log(f"  Progress: {item_idx}/{len(data_list)} items processed (Current Success: {success_count}, Error: {error_count})")
+                    log(f"  Progress: {item_idx}/{len(data_list)} items processed (Success: {success_count})")
 
-        log(f"  [FINISH] {filename}: Success {success_count} segments, Failed {error_count}")
+        log(f"  [FINISH] {filename}: Success {success_count} chunks")
         return True 
     except Exception as e:
-        log(f"  [FATAL ERROR] Failed to process {filename}: {e}")
+        log(f"  [FATAL ERROR] {filename}: {e}")
         return False
 
 def main():
@@ -172,19 +263,18 @@ def main():
     
     if not os.path.exists(OUTPUT_SQL_PATH):
         with open(OUTPUT_SQL_PATH, 'w', encoding='utf-8') as f:
-            f.write("-- Vector Knowledge Seed Data (Manuals - 768 Dim)\n\n")
+            f.write("-- Vector Knowledge Seed Data (Manuals - 768 Dim - Smart Chunking)\n\n")
 
     log("="*60)
-    log(f"Manual Embedding Pipeline Started (Model: {MODEL_NAME})")
+    log(f"Smart Embedding Pipeline Started (Model: {MODEL_NAME})")
     log("="*60)
 
     while True:
-        # data/manuals/parsed에서 .json 파일 목록 가져오기
         all_files = os.listdir(SOURCE_DIR)
         json_files = [f for f in all_files if f.endswith('.json')]
         
         if not json_files:
-            log("No files to process. Waiting...")
+            # log("No files to process. Waiting...") # 로그 너무 많이 쌓임 방지
             time.sleep(60)
             continue
             
@@ -198,22 +288,19 @@ def main():
                 continue
                 
             try:
-                # Atomic Lock 시도
                 os.rename(src_path, processing_path)
                 log(f"[LOCK] Acquired: {file}")
             except Exception:
                 continue
                 
-            # 처리 수행
             if process_file(processing_path):
                 dest_path = os.path.join(DEST_DIR, file)
                 try:
                     shutil.move(processing_path, dest_path)
-                    log(f"[FINISH] {file} (Done & Moved)")
+                    log(f"[FINISH] Moved to {dest_path}")
                 except Exception as e:
-                    log(f"[ERROR] Move failed for {file}: {e}")
+                    log(f"[ERROR] Move failed: {e}")
             else:
-                # 실패 시 락 해제
                 os.rename(processing_path, src_path)
                 log(f"[RETRY] Restored {file}")
                 time.sleep(5)
