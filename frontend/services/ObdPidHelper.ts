@@ -95,6 +95,118 @@ export const OBD_PIDS: { [key: string]: PidDefinition } = {
         unit: 'V',
         decoder: (bytes) => ((bytes[0] * 256) + bytes[1]) / 1000
     },
+    // 01 11: Absolute Throttle Position
+    THROTTLE: {
+        mode: '01',
+        pid: '11',
+        name: 'Throttle Position',
+        description: 'Absolute Throttle Position',
+        bytes: 1,
+        min: 0,
+        max: 100,
+        unit: '%',
+        decoder: (bytes) => (bytes[0] * 100) / 255
+    },
+    // 01 0B: Intake Manifold Absolute Pressure
+    MAP: {
+        mode: '01',
+        pid: '0B',
+        name: 'Intake MAP',
+        description: 'Intake Manifold Absolute Pressure',
+        bytes: 1,
+        min: 0,
+        max: 255,
+        unit: 'kPa',
+        decoder: (bytes) => bytes[0]
+    },
+    // 01 10: MAF Air Flow Rate
+    MAF: {
+        mode: '01',
+        pid: '10',
+        name: 'MAF Flow Rate',
+        description: 'Mass Air Flow Rate',
+        bytes: 2,
+        min: 0,
+        max: 655.35,
+        unit: 'g/s',
+        decoder: (bytes) => ((bytes[0] * 256) + bytes[1]) / 100
+    },
+    // 01 0F: Intake Air Temperature
+    INTAKE_TEMP: {
+        mode: '01',
+        pid: '0F',
+        name: 'Intake Temp',
+        description: 'Intake Air Temperature',
+        bytes: 1,
+        min: -40,
+        max: 215,
+        unit: '°C',
+        decoder: (bytes) => bytes[0] - 40
+    },
+    // 01 01: Monitor Status since DTCs cleared
+    DTC_STATUS: {
+        mode: '01',
+        pid: '01',
+        name: 'DTC Status',
+        description: 'Monitor Status since DTCs cleared (includes MIL status)',
+        bytes: 4,
+        decoder: (bytes) => {
+            // A7 = MIL status (1: ON, 0: OFF)
+            const milOn = (bytes[0] & 0x80) > 0;
+            const dtcCount = bytes[0] & 0x7F;
+            return milOn ? `MIL ON (${dtcCount} DTCs)` : `MIL OFF (${dtcCount} DTCs)`;
+        }
+    },
+    // 01 1F: Run time since engine start
+    ENGINE_RUNTIME: {
+        mode: '01',
+        pid: '1F',
+        name: 'Engine Runtime',
+        description: 'Run time since engine start',
+        bytes: 2,
+        unit: 'sec',
+        decoder: (bytes) => (bytes[0] * 256) + bytes[1]
+    },
+    // Mode 03: Request trouble codes
+    GET_DTCS: {
+        mode: '03',
+        pid: '',
+        name: 'Stored DTCs',
+        description: 'Request stored trouble codes (Mode 03)',
+        bytes: 2, // 최소 2바이트 (DTC 하나당 2바이트)
+        decoder: (bytes) => {
+            const dtcs = [];
+            for (let i = 0; i < bytes.length; i += 2) {
+                const b1 = bytes[i];
+                const b2 = bytes[i + 1];
+                if (b1 === 0 && b2 === 0) continue; // No DTC
+
+                // 첫 2비트로 P, C, B, U 구분
+                const typeCode = (b1 & 0xC0) >> 6;
+                const prefix = ['P', 'C', 'B', 'U'][typeCode];
+                const code = prefix +
+                    ((b1 & 0x3F).toString(16).padStart(2, '0')) +
+                    (b2.toString(16).padStart(2, '0'));
+                dtcs.push(code.toUpperCase());
+            }
+            return dtcs.join(', ');
+        }
+    },
+    // Mode 02 PID 02: DTC that caused freeze frame
+    FREEZE_DTC: {
+        mode: '02',
+        pid: '0200', // PID 02, Frame 00
+        name: 'Freeze Frame DTC',
+        description: 'DTC that caused freeze frame storage',
+        bytes: 2,
+        decoder: (bytes) => {
+            const b1 = bytes[0];
+            const b2 = bytes[1];
+            const typeCode = (b1 & 0xC0) >> 6;
+            const prefix = ['P', 'C', 'B', 'U'][typeCode];
+            return (prefix + ((b1 & 0x3F).toString(16).padStart(2, '0')) + (b2.toString(16).padStart(2, '0'))).toUpperCase();
+        }
+    },
     // 09 02: VIN (Vehicle Identification Number)
     VIN: {
         mode: '09',
@@ -122,12 +234,15 @@ export const parseObdResponse = (hexResponse: string, pidDef: PidDefinition): nu
     // Basic cleaning of response (remove spaces, newlines, prompt '>')
     const cleanResponse = hexResponse.replace(/[\s\r\n>]/g, '');
 
-    // Check if valid response (usually starts with 41 + PID for Mode 01)
-    // Mode 01 request -> 41 response
-    const expectedPrefix = (parseInt(pidDef.mode, 16) + 0x40).toString(16).toUpperCase() + pidDef.pid;
+    // Check if valid response
+    // Mode XX -> (XX + 0x40) response prefix
+    const modeInt = parseInt(pidDef.mode, 16);
+    const responsePrefix = (modeInt + 0x40).toString(16).toUpperCase();
+
+    // Mode 03은 PID가 없으므로 prefix만 확인, 다른 모드는 PID까지 확인
+    const expectedPrefix = pidDef.mode === '03' ? responsePrefix : responsePrefix + pidDef.pid.substring(0, 2);
 
     if (!cleanResponse.includes(expectedPrefix)) {
-        // console.warn(`Invalid response for PID ${pidDef.pid}: ${hexResponse}`);
         return null;
     }
 

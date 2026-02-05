@@ -1,5 +1,6 @@
 package kr.co.himedia.dto.obd;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.time.LocalDateTime;
 import java.util.UUID;
 import lombok.Getter;
@@ -22,6 +23,9 @@ public class ObdLogDto {
     private Double intakeTemp;
     private Double map;
     private Double maf;
+
+    @JsonProperty("throttle")
     private Double throttlePos;
+
     private Integer engineRuntime;
 }

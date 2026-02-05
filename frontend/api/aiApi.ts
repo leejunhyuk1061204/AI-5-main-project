@@ -188,6 +188,33 @@ export const predictComprehensive = async (data: {
         throw error;
     }
 };
+// DTC 보고 데이터 타입 (백엔드 DtcDto 매칭)
+export interface DtcReportRequest {
+    vehicleId: string;
+    dtcCode: string;
+    descriptionKo?: string;
+    descriptionEn?: string;
+    summaryKo?: string;
+    summaryEn?: string;
+    severity?: 'CRITICAL' | 'WARNING' | 'INFO';
+    status?: 'ACTIVE' | 'STORED' | 'PENDING';
+}
+
+/**
+ * DTC(고장 코드) 보고
+ * @param data DTC 보고 요청 데이터
+ */
+export const sendDtcReport = async (data: DtcReportRequest): Promise<void> => {
+    try {
+        console.log('[aiApi] Sending DTC report:', data.dtcCode);
+        await api.post('/api/v1/ai/dtc', data);
+        console.log('[aiApi] DTC report sent successfully');
+    } catch (error) {
+        console.error('[aiApi] Failed to send DTC report:', error);
+        throw error;
+    }
+};
+
 /**
  * 차량별 진단 목록 조회
  */
