@@ -234,7 +234,7 @@ export const useRegistrationStore = create<RegistrationState>((set, get) => ({
             fuelType: '',
             totalMileage: '',
             maintenanceRecords: [],
-            manufacturers: [],
+            // manufacturers: [],  // Keep cached - 제조사 목록은 캐싱 유지
             models: [],
             years: [],
             availableFuels: []
