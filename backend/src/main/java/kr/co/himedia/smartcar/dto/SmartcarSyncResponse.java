@@ -28,5 +28,6 @@ public class SmartcarSyncResponse {
         private String vin;
         private String status; // "CONNECTED" (Existing) or "REGISTERED" (New)
         private java.util.UUID vehicleId;
+        private String carNumber;
     }
 }
