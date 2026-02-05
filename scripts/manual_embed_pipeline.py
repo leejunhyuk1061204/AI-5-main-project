@@ -4,6 +4,7 @@ import hashlib
 import time
 import requests
 import shutil
+import sys
 from datetime import datetime
 from dotenv import load_dotenv
 import re
@@ -12,11 +13,18 @@ import urllib.parse
 # .env 파일 로드
 load_dotenv()
 
-# --- 설정 ---
-SOURCE_DIR = "data/manuals/parsed"
-DEST_DIR = "data/manuals/embedded"
+# --- 설정 (기본값) ---
+SOURCE_DIR = os.path.abspath("data/manuals/parsed")
+DEST_DIR = os.path.abspath("data/manuals/embedded")
 OUTPUT_SQL_PATH = "db/seed_knowledge_vectors.sql"
 LOG_FILE = "logs/embed_pipeline.log"
+
+# 명령행 인자가 있으면 (예: v1, v2, v3) 파일명에 추가
+suffix = ""
+if len(sys.argv) > 1:
+    suffix = f"_{sys.argv[1]}"
+    OUTPUT_SQL_PATH = f"db/seed_knowledge_vectors{suffix}.sql"
+    LOG_FILE = f"logs/embed_pipeline{suffix}.log"
 
 MODEL_NAME = "nomic-embed-text"  # 768차원, 고속 모델
 OLLAMA_API_URL = "http://localhost:11434/api/embeddings"
@@ -258,8 +266,8 @@ def process_file(filepath):
 
 def main():
     os.makedirs(DEST_DIR, exist_ok=True)
-    os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
-    os.makedirs(os.path.dirname(OUTPUT_SQL_PATH), exist_ok=True)
+    os.makedirs(os.path.dirname(os.path.abspath(LOG_FILE)), exist_ok=True)
+    os.makedirs(os.path.dirname(os.path.abspath(OUTPUT_SQL_PATH)), exist_ok=True)
     
     if not os.path.exists(OUTPUT_SQL_PATH):
         with open(OUTPUT_SQL_PATH, 'w', encoding='utf-8') as f:
