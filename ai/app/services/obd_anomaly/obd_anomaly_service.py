@@ -179,6 +179,21 @@ class ObdAnomalyService:
         selected_domains: List[str],
     ) -> List[AnomalyEvent]:
         out: List[AnomalyEvent] = []
+        seen: set[tuple[str, str, str, str, str, str]] = set()
+
+        def add_event_once(event: AnomalyEvent) -> None:
+            key = (
+                event.type,
+                event.domain,
+                event.feature,
+                str(event.window_index),
+                str(event.value),
+                str(event.threshold),
+            )
+            if key in seen:
+                return
+            seen.add(key)
+            out.append(event)
 
         for domain in selected_domains:
             env = summary_envs.get(domain)
@@ -194,7 +209,7 @@ class ObdAnomalyService:
                     feature = rule.get("feature")
                     if not isinstance(feature, str) or not feature:
                         continue
-                    out.append(
+                    add_event_once(
                         AnomalyEvent(
                             type=str(rule.get("id", "RULE_TRIGGERED")),
                             domain=domain,
@@ -219,7 +234,7 @@ class ObdAnomalyService:
                             feature = "engine_reconstruction_error"
                         else:
                             continue
-                    out.append(
+                    add_event_once(
                         AnomalyEvent(
                             type=str(event.get("type", "ANOMALY_EVENT")),
                             domain=domain,
