@@ -231,11 +231,11 @@ CREATE TABLE IF NOT EXISTS diag_results (
 CREATE TABLE IF NOT EXISTS ai_evidences (
     evidence_id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
     diag_session_id UUID REFERENCES diag_sessions (diag_session_id),
-    media_type media_type,
-    s3_key TEXT,
-    ai_analysis JSONB,
-    status evidence_status DEFAULT 'UPLOADED',
-    request_text TEXT
+    evidence_type VARCHAR(20), -- IMAGE, AUDIO, DATA
+    file_path TEXT NOT NULL,
+    inference_label TEXT,
+    confidence FLOAT,
+    created_at TIMESTAMP DEFAULT NOW()
 );
 
 -- 6. 상태 관리 및 히스토리 (Status & History)
