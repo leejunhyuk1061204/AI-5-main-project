@@ -31,7 +31,7 @@ public class SmartcarService {
     private final CloudTelemetryRepository cloudTelemetryRepository;
     private final EncryptionUtils encryptionUtils;
 
-    public String getAuthUrl() {
+    public String getAuthUrl(String state) {
         // 모든 필요한 데이터 요청 권한 포함
         String[] scope = {
                 "read_vehicle_info",
@@ -47,7 +47,11 @@ public class SmartcarService {
                 "control_security",
                 "control_charge"
         };
-        return authClient.authUrlBuilder(scope).build();
+        com.smartcar.sdk.AuthClient.AuthUrlBuilder builder = authClient.authUrlBuilder(scope);
+        if (state != null && !state.isEmpty()) {
+            builder.state(state);
+        }
+        return builder.build();
     }
 
     public Auth exchangeCodeForToken(String code) throws SmartcarException {
@@ -87,20 +91,38 @@ public class SmartcarService {
 
     /**
      * Smartcar 계정에 연동된 차량들을 우리 DB와 동기화합니다.
-     * VIN이 일치하는 기존 차량은 CLOUD 상태로 업데이트하고, 없는 차량은 신규 등록합니다.
+     * 1. targetVehicleId가 있으면: 해당 DB 차량을 특정하여 SmartCar 정보(VIN 등)로 덮어씌웁니다. (강제 연동)
+     * 2. targetVehicleId가 없으면: VIN이 일치하는 기존 차량을 찾거나 신규 등록합니다. (일반 동기화)
      * 
      * @return 동기화 결과 리스트
      */
     @Transactional
-    public List<SmartcarSyncResponse.VehicleSyncResult> syncVehicles(UUID userId, String accessToken)
+    public List<SmartcarSyncResponse.VehicleSyncResult> syncVehicles(UUID userId, String accessToken,
+            UUID targetVehicleId)
             throws SmartcarException {
-        log.info("[SmartcarService] 차량 동기화 시작 - userId: {}", userId);
+        log.info("[SmartcarService] 차량 동기화 시작 - userId: {}, targetVehicleId: {}", userId, targetVehicleId);
         VehicleIds vehicleIds = getVehicles(accessToken);
         String[] ids = vehicleIds.getVehicleIds();
 
         List<SmartcarSyncResponse.VehicleSyncResult> syncResults = new java.util.ArrayList<>();
         List<kr.co.himedia.entity.Vehicle> userVehicles = vehicleRepository
                 .findByUserIdAndDeletedAtIsNullOrderByCreatedAtAsc(userId);
+
+        // Targeted Linking인 경우, 대상 차량 조회
+        kr.co.himedia.entity.Vehicle targetVehicle = null;
+        if (targetVehicleId != null) {
+            targetVehicle = vehicleRepository.findById(targetVehicleId)
+                    .filter(v -> v.getUserId().equals(userId))
+                    .orElse(null);
+
+            if (targetVehicle == null) {
+                log.warn("[SmartcarService] Targeted Linking 대상 차량을 찾을 수 없음 - ID: {}", targetVehicleId);
+                // 대상이 없으면 일반 로직으로 진행할지, 에러를 낼지 결정. 여기서는 에러보다는 일반 로직 수행 또는 스킵.
+                // 하지만 사용자가 명시적으로 '이 차 연동해' 했으므로, 실패 처리가 맞을 수 있음.
+                // 일단은 WARN 로그만 남기고, 아래 로직에서 targetVehicle이 null이므로 일반 로직이 돌게 됨.
+                // 또는 명확하게 리턴하는게 나을 수 있음.
+            }
+        }
 
         for (String vid : ids) {
             try {
@@ -112,50 +134,82 @@ public class SmartcarService {
                 log.info("[SmartcarService] Smartcar 차량 발견 - VIN: {}, Make: {}, Model: {}",
                         smartcarVin, attrs.getMake(), attrs.getModel());
 
-                // 2. 스마트카 정보와 우리 DB 정보 비교
-                log.info("[SmartcarService] Smartcar 수신 VIN: {}", smartcarVin);
+                UUID matchedVehicleId = null;
+                String status = "FAILED";
 
-                // VIN 비교 (복호화 후 트림 및 대소문자 무시)
-                Optional<kr.co.himedia.entity.Vehicle> existingVehicle = userVehicles.stream()
-                        .filter(v -> v.getVin() != null
-                                && smartcarVin.trim().equalsIgnoreCase(encryptionUtils.decrypt(v.getVin()).trim()))
-                        .findFirst();
+                // CASE A: Targeted Linking (특정 차량 지정 연동)
+                // SmartCar에서 가져온 차량이 여러 대일 수도 있지만, Targeted Linking은
+                // "지금 내 차(앱)에 방금 로그인한 SmartCar 계정의 차량 중 하나를 연결"하는 시나리오.
+                // 만약 SmartCar에 차량이 여러 대 있다면... 어떤 걸 연결해야 할지 모름.
+                // 보통 Targeted Linking은 1:1 매칭을 기대함.
+                // 여기서는, SmartCar 차량 목록 루프를 돌고 있으므로,
+                // "첫 번째 SmartCar 차량"을 타겟 차량에 매핑하거나,
+                // "VIN이 일치하면" 매핑하는 등의 로직이 필요.
+                // 하지만 앱쪽 로직: "SmartCar 연동하기" -> SmartCar Login -> 차량 선택(SmartCar UI) -> 목록 리턴.
+                // 사용자가 SmartCar UI에서 정확히 그 차를 선택했다고 가정하면, 리턴된 목록(보통 1개)을 타겟 차량에 매핑.
 
-                UUID matchedVehicleId;
-                String status;
-                if (existingVehicle.isPresent()) {
-                    // [기존 차량 있음] -> 상태 업데이트
-                    kr.co.himedia.entity.Vehicle v = existingVehicle.get();
-                    v.updateCloudLinkStatus(true);
-                    matchedVehicleId = v.getVehicleId();
-                    log.info("[SmartcarService] 기존 차량 매칭 성공 (VIN 일치) - vehicleId: {}", v.getVehicleId());
+                String responseCarNumber = null;
 
-                    // 실시간 데이터 수집 및 저장
-                    syncTelemetry(v, vehicle);
-                    status = "CONNECTED";
+                if (targetVehicle != null) {
+                    // 이미 다른 SmartCar 차량과 매핑되었는지 확인 (중복 방지)
+                    boolean alreadyMapped = syncResults.stream()
+                            .anyMatch(r -> r.getVehicleId().equals(targetVehicleId));
+
+                    if (!alreadyMapped) {
+                        // 타겟 차량에 SmartCar 정보 업데이트
+                        targetVehicle.updateVin(encryptionUtils.encrypt(smartcarVin));
+                        targetVehicle.updateCloudLinkStatus(true);
+
+                        matchedVehicleId = targetVehicle.getVehicleId();
+                        responseCarNumber = targetVehicle.getCarNumber();
+                        log.info("[SmartcarService] Targeted Linking 성공 - vehicleId: {}", matchedVehicleId);
+
+                        syncTelemetry(targetVehicle, vehicle);
+                        status = "CONNECTED";
+                    } else {
+                        log.info("[SmartcarService] 이미 매핑된 차량이 있어 스킵 (SmartCar Multi-Vehicle Case)");
+                        continue;
+                    }
                 } else {
-                    // [기존 차량 없음] -> 신규 등록
-                    kr.co.himedia.entity.Vehicle newVehicle = kr.co.himedia.entity.Vehicle.builder()
-                            .userId(userId)
-                            .vin(encryptionUtils.encrypt(smartcarVin))
-                            .manufacturerKo(attrs.getMake()) // 스마트카에서 온 정보를 일단 한글 필드에도 저장 (임시)
-                            .manufacturerEn(attrs.getMake())
-                            .modelNameKo(attrs.getModel())
-                            .modelNameEn(attrs.getModel())
-                            .modelYear(attrs.getYear())
-                            .registrationSource(RegistrationSource.CLOUD)
-                            .nickname(attrs.getMake() + " " + attrs.getModel())
-                            .isPrimary(userVehicles.isEmpty() && syncResults.isEmpty())
-                            .build();
+                    // CASE B: General Sync (일반 동기화 - VIN 매칭)
+                    Optional<kr.co.himedia.entity.Vehicle> existingVehicle = userVehicles.stream()
+                            .filter(v -> v.getVin() != null
+                                    && smartcarVin.trim().equalsIgnoreCase(encryptionUtils.decrypt(v.getVin()).trim()))
+                            .findFirst();
 
-                    newVehicle.updateCloudLinkStatus(true);
-                    kr.co.himedia.entity.Vehicle savedVehicle = vehicleRepository.save(newVehicle);
-                    matchedVehicleId = savedVehicle.getVehicleId();
-                    log.info("[SmartcarService] 신규 차량 등록 완료 (일치하는 VIN 없음) - VIN: {}", smartcarVin);
+                    if (existingVehicle.isPresent()) {
+                        kr.co.himedia.entity.Vehicle v = existingVehicle.get();
+                        v.updateCloudLinkStatus(true);
+                        matchedVehicleId = v.getVehicleId();
+                        responseCarNumber = v.getCarNumber();
+                        log.info("[SmartcarService] 기존 차량 매칭 성공 (VIN 일치) - vehicleId: {}", v.getVehicleId());
 
-                    // 실시간 데이터 수집 및 저장
-                    syncTelemetry(savedVehicle, vehicle);
-                    status = "REGISTERED";
+                        syncTelemetry(v, vehicle);
+                        status = "CONNECTED";
+                    } else {
+                        // 신규 등록
+                        kr.co.himedia.entity.Vehicle newVehicle = kr.co.himedia.entity.Vehicle.builder()
+                                .userId(userId)
+                                .vin(encryptionUtils.encrypt(smartcarVin))
+                                .manufacturerKo(attrs.getMake())
+                                .manufacturerEn(attrs.getMake())
+                                .modelNameKo(attrs.getModel())
+                                .modelNameEn(attrs.getModel())
+                                .modelYear(attrs.getYear())
+                                .registrationSource(RegistrationSource.CLOUD)
+                                .nickname(attrs.getMake() + " " + attrs.getModel())
+                                .isPrimary(userVehicles.isEmpty() && syncResults.isEmpty())
+                                .build();
+
+                        newVehicle.updateCloudLinkStatus(true);
+                        kr.co.himedia.entity.Vehicle savedVehicle = vehicleRepository.save(newVehicle);
+                        matchedVehicleId = savedVehicle.getVehicleId();
+                        responseCarNumber = savedVehicle.getCarNumber();
+                        log.info("[SmartcarService] 신규 차량 등록 완료 (일치하는 VIN 없음) - VIN: {}", smartcarVin);
+
+                        syncTelemetry(savedVehicle, vehicle);
+                        status = "REGISTERED";
+                    }
                 }
 
                 syncResults.add(SmartcarSyncResponse.VehicleSyncResult.builder()
@@ -164,6 +218,7 @@ public class SmartcarService {
                         .vin(smartcarVin)
                         .status(status)
                         .vehicleId(matchedVehicleId)
+                        .carNumber(responseCarNumber)
                         .build());
 
             } catch (Exception e) {

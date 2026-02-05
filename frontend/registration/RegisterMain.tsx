@@ -39,12 +39,20 @@ export default function RegisterMain() {
 
     useEffect(() => {
         const handleDeepLink = async (event: { url: string }) => {
+            // 화면이 포커스된 상태에서만 딥링크 처리 (중복 처리 방지)
+            if (!navigation.isFocused()) return;
+
             const { url } = event;
             if (url && url.includes('smartcar/callback')) {
-                // Extract access token from URL
-                const regex = /[?&]accessToken=([^&#]*)/;
-                const match = regex.exec(url);
-                const accessToken = match && match[1];
+                // Extract params from URL
+                const regexAccessToken = /[?&]accessToken=([^&#]*)/;
+                const regexVehicleId = /[?&]vehicleId=([^&#]*)/;
+
+                const accessToken = regexAccessToken.exec(url)?.[1];
+                const targetedVehicleId = regexVehicleId.exec(url)?.[1];
+
+                // 특정 차량 지정 연동(Targeted Linking)인 경우 RegisterMain(배경)에서는 무시
+                if (targetedVehicleId) return;
 
                 if (accessToken) {
                     try {
@@ -73,11 +81,16 @@ export default function RegisterMain() {
                                 detailMessage,
                                 "SUCCESS",
                                 () => {
-                                    // 연동된 차량이 있으면 바로 수정 페이지로 이동 (차량 번호 입력 유도)
-                                    if (targetVehicleId) {
-                                        navigation.navigate('CarEdit', { vehicleId: targetVehicleId });
+                                    // 연동된 차량이 1대이고 번호판 정보가 있으면 관리 목록으로, 없으면 수정 페이지로 이동
+                                    if (results.length === 1 && results[0].vehicleId) {
+                                        const hasCarNumber = results[0].carNumber && results[0].carNumber.trim() !== '';
+                                        if (hasCarNumber) {
+                                            navigation.navigate('CarManage');
+                                        } else {
+                                            navigation.navigate('CarEdit', { vehicleId: results[0].vehicleId });
+                                        }
                                     } else {
-                                        navigation.navigate('MainPage');
+                                        navigation.navigate('CarManage');
                                     }
                                 }
                             );
