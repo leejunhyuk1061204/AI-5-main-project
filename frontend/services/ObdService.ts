@@ -144,6 +144,9 @@ class ObdService {
     // [11단계] 업로드 동시 실행 방지 (Concurrency)
     private isUploading: boolean = false;
 
+    // [11단계 개선] 오프라인 큐 처리 동시성 제어
+    private isProcessingOfflineQueue: boolean = false;
+
     constructor() {
         if (Platform.OS !== 'web') {
             const BleManagerModule = NativeModules.BleManager;
@@ -187,12 +190,47 @@ class ObdService {
         }
     }
 
+    /**
+     * [11단계 개선] 연결 상태 클린업 함수 (단일화)
+     * 구독 해제, 타이머 클리어, 폴링 플래그 리셋 등을 통합 관리
+     */
+    private cleanupConnectionState() {
+        // 구독 해제
+        if (this.classicDataSubscription) {
+            this.classicDataSubscription.remove();
+            this.classicDataSubscription = null;
+        }
+
+        // 타이머 클리어
+        if (this.reconnectTimer) {
+            clearTimeout(this.reconnectTimer);
+            this.reconnectTimer = null;
+        }
+
+        if (this.samplingTimer) {
+            clearTimeout(this.samplingTimer);
+            this.samplingTimer = null;
+        }
+
+        // 폴링 플래그 리셋
+        this.isPolling = false;
+        this.isProcessingQueue = false;
+    }
+
     // ===== Classic Bluetooth 설정 =====
     async setClassicDevice(device: BluetoothDevice) {
+        // [11단계 개선] 멱등성 보장: 동일 디바이스 재설정 시 no-op
+        if (this.connectionType === 'classic' && this.classicDevice?.address === device.address) {
+            console.log('[ObdService] Classic BT device already set, skipping');
+            return;
+        }
+
+        // [11단계 개선] 기존 연결 상태 클린업
+        this.cleanupConnectionState();
+
         this.connectionType = 'classic';
         this.classicDevice = device;
         this.currentData = { timestamp: new Date().toISOString() };
-        this.isPolling = false;
         this.isDisconnectRequested = false;
         this.reconnectAttempts = 0;
         useBleStore.getState().setConnectedDeviceName(device.name || 'Classic Device');
@@ -227,10 +265,18 @@ class ObdService {
             return;
         }
 
+        // [11단계 개선] 멱등성 보장: 동일 디바이스 재설정 시 no-op
+        if (this.connectionType === 'ble' && this.currentDeviceId === deviceId) {
+            console.log('[ObdService] BLE device already set, skipping');
+            return;
+        }
+
+        // [11단계 개선] 기존 연결 상태 클린업
+        this.cleanupConnectionState();
+
         this.connectionType = 'ble';
         this.currentDeviceId = deviceId;
         this.currentData = { timestamp: new Date().toISOString() };
-        this.isPolling = false;
         useBleStore.getState().setStatus('connecting');
 
         try {
@@ -1134,21 +1180,33 @@ class ObdService {
     }
 
     private async processOfflineQueue() {
-        const queue = await OfflineStorage.getQueue();
-        if (queue.length === 0) return;
+        // [11단계 개선] 중복 실행 방지
+        if (this.isProcessingOfflineQueue) {
+            console.log('[ObdService] processOfflineQueue already running, skipping');
+            return;
+        }
 
-        for (const req of queue) {
-            if (!NetworkService.IsConnected) break;
-            try {
-                await api.request({
-                    url: req.url,
-                    method: req.method,
-                    data: req.body ? JSON.parse(req.body) : undefined,
-                });
-                if (req.id) await OfflineStorage.removeFromQueue(req.id);
-            } catch (e) {
-                break;
+        this.isProcessingOfflineQueue = true;
+        try {
+            const queue = await OfflineStorage.getQueue();
+            if (queue.length === 0) return;
+
+            for (const req of queue) {
+                if (!NetworkService.IsConnected) break;
+                try {
+                    await api.request({
+                        url: req.url,
+                        method: req.method,
+                        data: req.body ? JSON.parse(req.body) : undefined,
+                    });
+                    if (req.id) await OfflineStorage.removeFromQueue(req.id);
+                } catch (e) {
+                    break;
+                }
             }
+        } finally {
+            // [11단계 개선] 에러 발생 시에도 플래그 해제 보장
+            this.isProcessingOfflineQueue = false;
         }
     }
 
