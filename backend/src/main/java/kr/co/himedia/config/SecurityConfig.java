@@ -36,14 +36,24 @@ public class SecurityConfig {
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
                 .csrf(AbstractHttpConfigurer::disable)
-                .cors(cors -> cors.configurationSource(corsConfigurationSource())) // ✅ 명시적 설정 사용
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
-                        .requestMatchers("/api/v1/auth/**", "/api/v1/telemetry/**", "/api/smartcar/login",
-                                "/api/smartcar/callback", "/api/v1/ocr/**", "/api/v1/master/**", "/api/v1/payment/**",
-                                "/error")
-                        .permitAll()
+                        // ✅ Swagger 관련 경로 및 기존 허용 경로 통합
+                        .requestMatchers(
+                                "/api/v1/auth/**",
+                                "/api/v1/telemetry/**",
+                                "/api/smartcar/login",
+                                "/api/smartcar/callback",
+                                "/api/v1/ocr/**",
+                                "/api/v1/master/**",
+                                "/api/v1/payment/**",
+                                "/error",
+                                "/v3/api-docs/**", // Swagger API Docs
+                                "/swagger-ui/**", // Swagger UI 자원
+                                "/swagger-ui.html" // Swagger UI 메인 페이지
+                        ).permitAll()
                         .anyRequest().authenticated())
                 .addFilterBefore(new JwtAuthenticationFilter(jwtTokenProvider),
                         UsernamePasswordAuthenticationFilter.class);
@@ -54,7 +64,6 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        // 실제 운영 환경에서는 허용할 도메인을 명확히 기술해야 합니다.
         configuration.setAllowedOriginPatterns(List.of("*"));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(Arrays.asList("*"));

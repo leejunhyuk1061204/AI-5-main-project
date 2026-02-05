@@ -1,7 +1,7 @@
 plugins {
-	id 'java'
-	id 'org.springframework.boot' version '3.5.9'
-	id 'io.spring.dependency-management' version '1.1.7'
+    id 'java'
+    id 'org.springframework.boot' version '3.5.9'
+    id 'io.spring.dependency-management' version '1.1.7'
 }
 
 group = 'kr.co.himedia'
@@ -9,74 +9,76 @@ version = '0.0.1-SNAPSHOT'
 description = 'AI기반 차량 예비 정비 시스템 백엔드'
 
 java {
-	toolchain {
-		languageVersion = JavaLanguageVersion.of(17)
-	}
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
 }
 
 configurations {
-	compileOnly {
-		extendsFrom annotationProcessor
-	}
+    compileOnly {
+        extendsFrom annotationProcessor
+    }
 }
 
 repositories {
-	mavenCentral()
+    mavenCentral()
 }
 
 dependencies {
-	implementation 'org.springframework.boot:spring-boot-starter-amqp'
-	implementation 'org.springframework.boot:spring-boot-starter-batch'
-	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
-	implementation 'org.springframework.boot:spring-boot-starter-data-redis'
-	implementation 'org.springframework.boot:spring-boot-starter-security'
-	implementation 'org.springframework.boot:spring-boot-starter-validation'
-	implementation 'org.springframework.boot:spring-boot-starter-web'
-	compileOnly 'org.projectlombok:lombok'
-	// developmentOnly 'org.springframework.boot:spring-boot-devtools'
-	runtimeOnly 'org.postgresql:postgresql'
-	annotationProcessor 'org.projectlombok:lombok'
-	testImplementation 'org.springframework.boot:spring-boot-starter-test'
-	testImplementation 'org.springframework.amqp:spring-rabbit-test'
-	testImplementation 'org.springframework.batch:spring-batch-test'
-	// AWS S3
-	implementation 'io.awspring.cloud:spring-cloud-aws-starter-s3:3.1.1'
+    // Web & Core
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'org.springframework.boot:spring-boot-starter-aop'
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    
+    // Swagger (OpenAPI 3) - 추가된 부분
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.5'
 
-	// Dotenv (Read .env files)
-	implementation 'me.paulschwarz:spring-dotenv:5.0.1'
+    // Database & Redis
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+    runtimeOnly 'org.postgresql:postgresql'
+    
+    // Messaging & Batch
+    implementation 'org.springframework.boot:spring-boot-starter-amqp'
+    implementation 'org.springframework.boot:spring-boot-starter-batch'
+    implementation 'org.springframework.retry:spring-retry'
 
-	// JWT
-	implementation 'io.jsonwebtoken:jjwt-api:0.12.6'
-	runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.6'
-	runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.6'
+    // Lombok
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
 
-	// QueryDSL
-	implementation 'com.querydsl:querydsl-jpa:5.0.0:jakarta'
-	annotationProcessor "com.querydsl:querydsl-apt:5.0.0:jakarta"
-	annotationProcessor "jakarta.annotation:jakarta.annotation-api"
-	annotationProcessor "jakarta.persistence:jakarta.persistence-api"
+    // AWS & External Services
+    implementation 'io.awspring.cloud:spring-cloud-aws-starter-s3:3.1.1'
+    implementation 'com.smartcar.sdk:java-sdk:4.8.1'
+    implementation 'com.google.cloud:google-cloud-vision:3.32.0'
+    implementation 'com.google.firebase:firebase-admin:9.2.0'
+    implementation 'com.google.api-client:google-api-client:2.0.0'
 
-	// Smartcar SDK
-	implementation 'com.smartcar.sdk:java-sdk:4.8.1'
-	// OkHttp for High Mobility
-	testImplementation 'org.springframework.security:spring-security-test'
-	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    // Dotenv (Read .env files)
+    implementation 'me.paulschwarz:spring-dotenv:5.0.1'
 
-	// Google Cloud Vision
-	implementation 'com.google.cloud:google-cloud-vision:3.32.0'
+    // JWT
+    implementation 'io.jsonwebtoken:jjwt-api:0.12.6'
+    runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.6'
+    runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.6'
 
-	// Firebase Admin SDK
-	implementation 'com.google.firebase:firebase-admin:9.2.0'
-	// Google API Client (For Google ID Token Verification)
-	implementation 'com.google.api-client:google-api-client:2.0.0'
+    // QueryDSL
+    implementation 'com.querydsl:querydsl-jpa:5.0.0:jakarta'
+    annotationProcessor "com.querydsl:querydsl-apt:5.0.0:jakarta"
+    annotationProcessor "jakarta.annotation:jakarta.annotation-api"
+    annotationProcessor "jakarta.persistence:jakarta.persistence-api"
 
-	// Retry & AOP
-	implementation 'org.springframework.retry:spring-retry'
-	implementation 'org.springframework.boot:spring-boot-starter-aop'
+    // Test
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.amqp:spring-rabbit-test'
+    testImplementation 'org.springframework.batch:spring-batch-test'
+    testImplementation 'org.springframework.security:spring-security-test'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
 tasks.named('test') {
-	useJUnitPlatform()
+    useJUnitPlatform()
 }
 
 // 루트 폴더의 .env 파일을 환경 변수로 주입
@@ -99,7 +101,6 @@ tasks.withType(JavaExec) {
 bootRun {
     systemProperty "dotenv.location", "../"
     
-    // .env 파일에서 환경변수 직접 주입
     if (file("../.env").exists()) {
         file("../.env").readLines().each { line ->
             if (!line.trim().isEmpty() && !line.startsWith("#")) {
@@ -107,7 +108,6 @@ bootRun {
                 if (parts.length == 2) {
                     def key = parts[0].trim()
                     def value = parts[1].trim()
-                    // 주석 제거 (값 뒤의 # 이후 내용)
                     if (value.contains("#")) {
                         value = value.split("#")[0].trim()
                     }
