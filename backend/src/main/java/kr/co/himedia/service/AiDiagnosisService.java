@@ -3,6 +3,7 @@ package kr.co.himedia.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import kr.co.himedia.domain.DiagAction;
 import kr.co.himedia.dto.ai.*;
+import kr.co.himedia.common.SseEmitters;
 import kr.co.himedia.entity.*;
 import kr.co.himedia.entity.DiagSession.DiagStatus;
 import kr.co.himedia.entity.DiagSession.DiagTriggerType;
@@ -46,6 +47,7 @@ public class AiDiagnosisService {
     private final FcmService fcmService;
     private final UserService userService;
     private final AiMediaService aiMediaService;
+    private final SseEmitters sseEmitters;
 
     // 글로벌 AI 리소스 통합 제어 (RTX 3090 안정성을 위해 최대 6개 요청 제한)
     private final java.util.concurrent.Semaphore globalAiSemaphore = new java.util.concurrent.Semaphore(6);
@@ -63,7 +65,8 @@ public class AiDiagnosisService {
             ObjectMapper objectMapper,
             FcmService fcmService,
             UserService userService,
-            AiMediaService aiMediaService) {
+            AiMediaService aiMediaService,
+            SseEmitters sseEmitters) {
         this.dtcHistoryRepository = dtcHistoryRepository;
         this.rabbitTemplate = rabbitTemplate;
         this.knowledgeService = knowledgeService;
@@ -78,6 +81,7 @@ public class AiDiagnosisService {
         this.fcmService = fcmService;
         this.userService = userService;
         this.aiMediaService = aiMediaService;
+        this.sseEmitters = sseEmitters;
     }
 
     @Value("${app.storage.type:local}")
@@ -94,6 +98,10 @@ public class AiDiagnosisService {
 
     @Value("${ai.server.url.anomaly:http://localhost:8001/api/v1/connect/predict/anomaly}")
     private String aiServerAnomalyUrl;
+
+    public org.springframework.web.servlet.mvc.method.annotation.SseEmitter subscribe(UUID sessionId) {
+        return sseEmitters.add(sessionId.toString());
+    }
 
     /**
      * DTC 이력 저장 및 즉시 AI 분석/알림 (비동기 아님 - 외부 API 포함)
@@ -252,6 +260,17 @@ public class AiDiagnosisService {
         String imageFile = taskMessage.getImageUrl();
         String audioFile = taskMessage.getAudioUrl();
 
+        // 0. SSE 연결 대기 (Frontend Navigation & Connect 시간 확보)
+        try {
+            log.info("[Diagnosis] Waiting for SSE connection... (2s)");
+            Thread.sleep(2000);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+
+        // [Step 1] 진단 시작 (RabbitMQ Consumer 진입)
+        sseEmitters.send(sessionId.toString(), "step1", "[Step 1/5] 진단 요청이 시스템에 접수되었습니다.");
+
         // 0. 세션별 통합 리소스 관리 (인당 최대 3개 슬롯 공유)
         java.util.concurrent.Semaphore sessionSemaphore = new java.util.concurrent.Semaphore(3);
 
@@ -318,12 +337,18 @@ public class AiDiagnosisService {
             return performAnomalyDetection(requestDto, session.getTriggerType(), sessionSemaphore, sessionId);
         });
 
+        // [Step 2] 전처리 및 분석 준비 완료 (이미지/오디오 로드됨, 태스크 생성됨)
+        sseEmitters.send(sessionId.toString(), "step2", "[Step 2/5] 멀티미디어 및 주행 데이터 전처리 완료");
+
         // 모든 결과 대기 (15분 단위 청크 처리 등 대량 데이터 분석을 고려하여 10분으로 상향)
         CompletableFuture.allOf(visualTask, audioTask, anomalyTask).get(600, TimeUnit.SECONDS);
 
         Map<String, Object> visualResult = visualTask.join();
         Map<String, Object> audioResult = audioTask.join();
         Map<String, Object> anomalyResult = anomalyTask.join();
+
+        // [Step 3] AI 병렬 분석 완료
+        sseEmitters.send(sessionId.toString(), "step3", "[Step 3/5] AI 정밀 분석 완료 (시각/청각/데이터)");
 
         // [Filter Logic] LLM 전송용 데이터 필터링 (토큰 절약)
         // 1. 이상(Anomaly)이 있는 청크만 우선 수집
@@ -365,6 +390,9 @@ public class AiDiagnosisService {
             aiRequestBuilder.knowledgeData(knowledgeResults);
         }
 
+        // [Step 4] RAG 검색 완료
+        sseEmitters.send(sessionId.toString(), "step4", "[Step 4/5] 결함 원인 추론 및 정비 매뉴얼 매칭 완료");
+
         // 3. 최종 통합 진단 요청 (Phase 1: 6대 항목)
         AiUnifiedRequestDto aiRequest = aiRequestBuilder.build();
         @SuppressWarnings("unchecked")
@@ -377,6 +405,9 @@ public class AiDiagnosisService {
         session.updateStatus(finalStatus, finalStatus == DiagStatus.DONE ? "[Step 5/5] 진단 완료 및 저장 성공"
                 : "[Step 5/5] 추가 정보 요청됨 (ACTION_REQUIRED)");
         diagSessionRepository.save(session);
+
+        // [Step 5] 최종 완료
+        sseEmitters.send(sessionId.toString(), "step5", "[Step 5/5] 최종 진단 리포트 생성 완료");
 
         // 5. 알림 발송 (DTC/AUTO만)
         DiagTriggerType triggerType = session.getTriggerType();
