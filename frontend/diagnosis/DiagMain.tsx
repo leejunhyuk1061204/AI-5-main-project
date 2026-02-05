@@ -58,6 +58,8 @@ export default function DiagMain() {
     }, [status, currentSessionId]);
 
     // Polling Effect (메인에서 진단 시작 시)
+    // Polling Effect 제거: SSE는 ObdDiagLoading에서 처리함
+    /*
     useEffect(() => {
         let intervalId: NodeJS.Timeout;
         if (status === 'PROCESSING' && currentSessionId) {
@@ -69,6 +71,7 @@ export default function DiagMain() {
             if (intervalId) clearInterval(intervalId);
         };
     }, [status, currentSessionId]);
+    */
 
     const handleVehicleSelect = async (vehicle: any) => {
         setVehicleSelectVisible(false);
@@ -76,13 +79,8 @@ export default function DiagMain() {
         setVehicleId(vehicle.vehicleId);
 
         if (pendingAction === 'OBD') {
+            await startDiagnosis(vehicle.vehicleId);
             navigation.navigate('ObdDiagLoading', { vehicleId: vehicle.vehicleId });
-            // await startDiagnosis(vehicle.vehicleId); // Loading page handles logic? Or both?
-            // Since ObdDiagLoading does polling, we might just let it handle it.
-            // But if startDiagnosis creates a session, we should keep it.
-            // Let's call startDiagnosis, but maybe ObdDiagLoading calls it too?
-            // ObdDiagLoading interacts with ObdService directly.
-            // For now, let's navigate first.
         } else if (pendingAction === 'SOUND') {
             navigation.navigate('EngineSoundDiag', { from: 'professional', vehicleId: vehicle.vehicleId });
         } else if (pendingAction === 'PHOTO') {
@@ -123,7 +121,9 @@ export default function DiagMain() {
                         reset();
                         const { selectedVehicleId } = useAiDiagnosisStore.getState();
                         if (selectedVehicleId) {
-                            navigation.navigate('ObdDiagLoading', { vehicleId: selectedVehicleId });
+                            startDiagnosis(selectedVehicleId).then(() => {
+                                navigation.navigate('ObdDiagLoading', { vehicleId: selectedVehicleId });
+                            });
                         }
                         else { setPendingAction('OBD'); setVehicleSelectVisible(true); }
                     }}
@@ -193,7 +193,8 @@ export default function DiagMain() {
                 description="진단을 진행할 차량을 선택해주세요."
             />
 
-            {/* Global Loading Overlay (Processing) */}
+            {/* Global Loading Overlay Removed (Using ObdDiagLoading Screen Instead) */}
+            {/* 
             {status === 'PROCESSING' && (
                 <View className="absolute inset-0 bg-[#101922]/90 items-center justify-center z-[100]">
                     <ActivityIndicator size="large" color="#0d7ff2" className="mb-4" />
@@ -201,6 +202,7 @@ export default function DiagMain() {
                     <Text className="text-slate-400 text-center px-10">AI 전문 분석가가 데이터를 검토 중입니다.</Text>
                 </View>
             )}
+            */}
         </BaseScreen>
     );
 }
