@@ -79,4 +79,13 @@ public class AiController {
             @RequestPart(value = "data", required = false) kr.co.himedia.dto.ai.ReplyRequestDto replyDto) {
         return ApiResponse.success(aiDiagnosisService.replyToSession(sessionId, replyDto, image, audio));
     }
+
+    /**
+     * 진단 진행상황 SSE 구독 (BE-AI-009)
+     */
+    @GetMapping(value = "/diagnose/session/{sessionId}/sse", produces = org.springframework.http.MediaType.TEXT_EVENT_STREAM_VALUE)
+    public org.springframework.web.servlet.mvc.method.annotation.SseEmitter subscribe(
+            @PathVariable("sessionId") UUID sessionId) {
+        return aiDiagnosisService.subscribe(sessionId);
+    }
 }
