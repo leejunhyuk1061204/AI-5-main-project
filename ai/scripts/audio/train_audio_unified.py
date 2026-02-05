@@ -64,8 +64,13 @@ BACKBONE_CONFIGS = {
 }
 
 DEFAULT_AST_MODEL = "MIT/ast-finetuned-audioset-10-10-0.4593"
-TRAIN_DATA_DIR = "./ai/data/audio/train"
-TEST_DATA_DIR = "./ai/data/audio/test"
+# [Path Config] RunPod과 로컬 환경 자동 감지
+RUNPOD_DATA_PATH = "/workspace/large_data"
+LOCAL_DATA_PATH = "./ai/data"
+DATA_ROOT = RUNPOD_DATA_PATH if os.path.exists(RUNPOD_DATA_PATH) else LOCAL_DATA_PATH
+
+TRAIN_DATA_DIR = os.path.join(DATA_ROOT, "audio/train")
+TEST_DATA_DIR = os.path.join(DATA_ROOT, "audio/test")
 
 LABEL_LIST = ["normal", "engine", "brake", "starter"]
 STAGE1_LABELS = ["normal", "abnormal"]
@@ -291,16 +296,25 @@ def evaluate(model, dataloader, label_names, arch, component, baseline_type) -> 
 
 def evaluate_simple(labels, preds, label_names, arch, component, baseline_type) -> BaselineResult:
     """간단한 평가 (이미 예측값이 있을 때)"""
+    # np.int64 등 지저분한 타입 클리닝
+    labels = np.array(labels).astype(int)
+    preds = np.array(preds).astype(int)
+    
     acc = accuracy_score(labels, preds)
     p, r, f1, _ = precision_recall_fscore_support(labels, preds, average='macro', zero_division=0)
     
-    print(f"\n📊 {arch}/{component}/{baseline_type}:")
-    print(f" - Accuracy: {acc:.4f}, Macro F1: {f1:.4f}, Recall: {r:.4f}")
+    print(f"\n📊 {arch}/{component}/{baseline_type} 결과:")
+    print(f"{'-'*40}")
+    print(f"✅ Accuracy: {acc:.4f}")
+    print(f"🎯 Macro F1: {f1:.4f}, Recall: {r:.4f}")
+    print(f"{'-'*40}")
     
     cm = confusion_matrix(labels, preds)
-    print(f"   Confusion Matrix: {label_names}")
+    print(f"🖼️ Confusion Matrix:")
+    print(f"{'':<10} | {' '.join([f'{n:<8}' for n in label_names])}")
     for i, row in enumerate(cm):
-        print(f"   {label_names[i]:>8}: {list(row)}")
+        print(f"{label_names[i]:<10} | {' '.join([f'{int(v):<8}' for v in row])}")
+    print(f"{'-'*40}")
     
     return BaselineResult(arch=arch, component=component, baseline_type=baseline_type, acc=acc, f1=f1, recall=r)
 
@@ -323,11 +337,44 @@ class CNN14(nn.Module):
             nn.AvgPool2d(2, 2)
         )
     
-    def forward(self, x):
+    def forward(self, x, return_features=False):
         if len(x.shape) == 3: x = x.unsqueeze(1)
         x = self.conv(x)
-        x = torch.mean(x, dim=(2, 3))
-        return self.fc(x)
+        features = torch.mean(x, dim=(2, 3))
+        if return_features:
+            return features
+        return self.fc(features)
+
+# =============================================================================
+# Fusion 모델 (AST + CNN14 Combo)
+# =============================================================================
+class HybridFusionModel(nn.Module):
+    def __init__(self, ast_model, cnn_model, num_labels=4):
+        super().__init__()
+        self.ast = ast_model
+        self.cnn = cnn_model
+        
+        # AST hidden size (768) + CNN feature size (2048)
+        self.fusion_head = nn.Sequential(
+            nn.Linear(768 + 2048, 512),
+            nn.ReLU(),
+            nn.Dropout(0.1),
+            nn.Linear(512, num_labels)
+        )
+
+    def forward(self, input_values, cnn_input):
+        # 1. AST Features
+        ast_outputs = self.ast.ast(input_values)
+        ast_feats = ast_outputs.last_hidden_state[:, 0, :] # [CLS] token
+        
+        # 2. CNN Features
+        cnn_feats = self.cnn(cnn_input, return_features=True)
+        
+        # 3. Concatenate & Fusion
+        combined = torch.cat((ast_feats, cnn_feats), dim=1)
+        logits = self.fusion_head(combined)
+        
+        return logits
 
 # =============================================================================
 # BASIC 아키텍처
@@ -587,8 +634,6 @@ class HybridArch:
     
     def _ensemble_baseline(self, ds, baseline_type, ast_weight=0.6) -> BaselineResult:
         """AST(pretrained/trained) + CNN(random) ensemble"""
-        # ... logic truncated for brevity but essentially switching to DataLoader ...
-        # [Full replacement needed below]
         assert 0.0 <= ast_weight <= 1.0, f"ast_weight must be 0-1, got {ast_weight}"
         print(f"[Ensemble Baseline] AST weight = {ast_weight:.0%}, CNN weight = {1-ast_weight:.0%}")
         print("  ⚠️ Note: Raw logit sum (no temperature scaling)")
@@ -624,20 +669,90 @@ class HybridArch:
         return evaluate_simple(all_labels, all_preds, LABEL_LIST, "hybrid", "ensemble", baseline_type)
     
     def train(self, train_data, test_data, epochs, ast_weight=0.6, batch_size=4, grad_accum=4) -> BaselineResult:
-        print(f"\n{'='*60}\n[Hybrid] 학습\n{'='*60}")
+        print(f"\n{'='*60}\n[Hybrid] Fusion 학습 (Full Fine-tuning)\n{'='*60}")
         
-        # AST 학습
-        print("\n--- AST 학습 ---")
-        self._train_ast(train_data, test_data, epochs, batch_size, grad_accum)
+        t, v = train_test_split(train_data, test_size=0.1, stratify=[x['label'] for x in train_data], random_state=42)
         
-        # CNN 학습
-        print("\n--- CNN14 학습 ---")
-        self._train_cnn(train_data, test_data, epochs)
+        train_ds = prepare_dataset(t, "label", label2id, self.model_id, "Train(Fusion)")
+        val_ds = prepare_dataset(v, "label", label2id, self.model_id, "Valid(Fusion)")
+        test_ds = prepare_dataset(test_data, "label", label2id, self.model_id, "Test(Fusion)")
+
+        train_loader = torch.utils.data.DataLoader(train_ds, batch_size=batch_size, shuffle=True)
+        val_loader = torch.utils.data.DataLoader(val_ds, batch_size=batch_size)
+        test_loader = torch.utils.data.DataLoader(test_ds, batch_size=batch_size)
+
+        # 1. Backbones 로드
+        ast_base = ASTForAudioClassification.from_pretrained(self.model_id, num_labels=4, ignore_mismatched_sizes=True)
+        cnn_base = CNN14(num_classes=4)
+        if os.path.exists(os.path.join(self.cnn_path, "cnn14.pt")):
+            cnn_base.load_state_dict(torch.load(os.path.join(self.cnn_path, "cnn14.pt")))
+
+        # 2. Fusion 모델 구성
+        model = HybridFusionModel(ast_base, cnn_base).to(device)
+        save_file = os.path.join(self.ast_path, "fusion_model.pt")
+
+        # [Weight Management] 기존 가중치 백업
+        if os.path.exists(save_file):
+            old_save = save_file.replace(".pt", "_old.pt")
+            import shutil
+            shutil.copy(save_file, old_save)
+            print(f"📦 기존 Fusion 모델을 백업했습니다: {old_save}")
         
-        # Ensemble 평가
-        print("\n--- 앙상블 평가 ---")
-        ds = prepare_dataset(test_data, "label", label2id, self.model_id, "Test(Ens)")
-        return self._evaluate_trained_ensemble(ds, ast_weight)
+        # 3. 가중치 설정 (Brake, Engine 보정)
+        labels_all = [x['label'] for x in train_data]
+        counts = [labels_all.count(l) for l in LABEL_LIST]
+        weights = torch.tensor([sum(counts) / (len(LABEL_LIST) * c + 1e-8) for c in counts]).to(device)
+        # Brake(2), Engine(1)에 추가 가중치 (User Request)
+        weights[1] *= 1.5 # engine
+        weights[2] *= 2.0 # brake
+        criterion = nn.CrossEntropyLoss(weight=weights)
+        
+        optimizer = torch.optim.AdamW(model.parameters(), lr=2e-5)
+        
+        best_f1 = 0
+        for epoch in range(epochs):
+            model.train()
+            total_loss = 0
+            for batch in train_loader:
+                ast_in = batch["input_values"].to(device)
+                cnn_in = batch["cnn_input"].to(device)
+                labels = batch["labels"].to(device)
+                
+                optimizer.zero_grad()
+                logits = model(ast_in, cnn_in)
+                loss = criterion(logits, labels)
+                loss.backward()
+                optimizer.step()
+                total_loss += loss.item()
+            
+            # Validation
+            model.eval()
+            all_p, all_l = [], []
+            with torch.no_grad():
+                for batch in val_loader:
+                    logits = model(batch["input_values"].to(device), batch["cnn_input"].to(device))
+                    all_p.extend(torch.argmax(logits, dim=-1).cpu().numpy())
+                    all_l.extend(batch["labels"].numpy())
+            
+            _, _, f1, _ = precision_recall_fscore_support(all_l, all_p, average='macro', zero_division=0)
+            print(f"🚀 [Epoch {epoch+1}/{epochs}] Loss: {total_loss/len(train_loader):.4f}, Val F1: {f1:.4f}")
+            
+            if f1 > best_f1:
+                best_f1 = f1
+                os.makedirs(self.ast_path, exist_ok=True)
+                torch.save(model.state_dict(), save_file)
+        
+        # 4. 최종 평가
+        model.load_state_dict(torch.load(save_file))
+        model.eval()
+        all_p, all_l = [], []
+        with torch.no_grad():
+            for batch in test_loader:
+                logits = model(batch["input_values"].to(device), batch["cnn_input"].to(device))
+                all_p.extend(torch.argmax(logits, dim=-1).cpu().numpy())
+                all_l.extend(batch["labels"].numpy())
+        
+        return evaluate_simple(all_l, all_p, LABEL_LIST, "hybrid", "fusion", "trained")
     
     def _train_ast(self, train_data, test_data, epochs, batch_size=4, grad_accum=4):
         t, v = train_test_split(train_data, test_size=0.1, stratify=[x['label'] for x in train_data], random_state=42)
@@ -685,6 +800,14 @@ class HybridArch:
         
         model = CNN14(num_classes=4).to(device)
         optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
+
+        save_file = os.path.join(self.cnn_path, "cnn14.pt")
+        # [Weight Management] 기존 모델 백업
+        if os.path.exists(save_file):
+            old_save = save_file.replace(".pt", "_old.pt")
+            import shutil
+            shutil.copy(save_file, old_save)
+            print(f"📦 기존 CNN 모델을 백업했습니다: {old_save}")
         
         best_f1 = 0
         for epoch in range(epochs):
@@ -710,12 +833,13 @@ class HybridArch:
             if f1 > best_f1:
                 best_f1 = f1
                 os.makedirs(self.cnn_path, exist_ok=True)
-                torch.save(model.state_dict(), os.path.join(self.cnn_path, "cnn14.pt"))
+                torch.save(model.state_dict(), save_file)
     
     def _evaluate_trained_ensemble(self, ds, ast_weight) -> BaselineResult:
         ast_model = ASTForAudioClassification.from_pretrained(self.ast_path).to(device)
         cnn_model = CNN14(num_classes=4).to(device)
-        cnn_model.load_state_dict(torch.load(os.path.join(self.cnn_path, "cnn14.pt")))
+        save_file = os.path.join(self.cnn_path, "cnn14.pt")
+        cnn_model.load_state_dict(torch.load(save_file))
         
         ast_model.eval()
         cnn_model.eval()
