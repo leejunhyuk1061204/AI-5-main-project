@@ -8,7 +8,8 @@ if (Platform.OS !== 'web') {
 import BleService from './BleService';
 import ClassicBtService from './ClassicBtService';
 import { OBD_PIDS, parseObdResponse, PidDefinition } from './ObdPidHelper';
-import { uploadObdBatch, ObdLogRequest } from '../api/obdApi';
+import { uploadObdBatch, ObdLogRequest, ObdBatchRequest } from '../api/obdApi';
+import { sendDtcReport } from '../api/aiApi';
 import { useBleStore } from '../store/useBleStore';
 import BackgroundService from './BackgroundService';
 import { checkAndRequestBatteryOpt } from '../utils/BatteryOptConfig';
@@ -21,6 +22,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const STORAGE_KEY_LAST_DEVICE = 'last_obd_device';
 const STORAGE_KEY_LAST_TYPE = 'last_obd_type';
 
+export type ObdQualityStatus = 'OK' | 'STALE' | 'DISCONNECTED' | 'UNSUPPORTED' | 'PARSE_ERROR';
+
+/** [10단계] 주행 종료 감지 상태 */
+export type TripState = 'RUNNING' | 'SUSPECT_END' | 'ENDED';
+export type SuspectReason = 'IDLE' | 'DISCONNECT';
+
 export interface ObdData {
     timestamp: string;
     rpm?: number;
@@ -30,9 +37,37 @@ export interface ObdData {
     engine_load?: number;
     fuel_trim_short?: number;
     fuel_trim_long?: number;
+    // 신규 확장 필드
+    throttle?: number;
+    intake_temp?: number;
+    map?: number;
+    maf?: number;
+    dtc_status?: string;
+    engine_runtime?: number;
+    // 품질 메타데이터
+    status?: ObdQualityStatus;
+    stale_pids?: string[];
 }
 
 type ConnectionType = 'ble' | 'classic' | null;
+
+/**
+ * 큐 우선순위 정의 (4단계)
+ * 낮은 숫자 = 높은 우선순위
+ */
+enum QueuePriority {
+    HIGH = 1,      // 긴급 (DTC 상세 수집 등)
+    NORMAL = 2,    // 일반 텔레메트리
+    LOW = 3        // 저우선순위 (향후 확장용)
+}
+
+/**
+ * 우선순위 큐 아이템 인터페이스 (4단계)
+ */
+interface PriorityQueueItem {
+    pid: PidDefinition;
+    priority: QueuePriority;
+}
 
 class ObdService {
     private isPolling = false;
@@ -51,8 +86,8 @@ class ObdService {
     private classicDevice: BluetoothDevice | null = null;
     private classicDataSubscription: any = null;
 
-    // Command Queue
-    private commandQueue: PidDefinition[] = [];
+    // Command Queue (4단계: 우선순위 기반)
+    private commandQueue: PriorityQueueItem[] = [];
     private isProcessingQueue = false;
     private currentPid: PidDefinition | null = null;
     private responseBuffer = '';
@@ -62,11 +97,52 @@ class ObdService {
 
     // Current Snapshot
     private currentData: ObdData = { timestamp: new Date().toISOString() };
+    private lastDtcCodes: string = '';
+    private lastFreezeDtc: string = '';
+
+    // 4.5 ~ 6단계: 타이밍 및 수집 제어
+    private lastDtcStatusEnqueueAt: number = 0;
+    private lastDtcReportAt: number = 0;
+    private isReportingDtc: boolean = false;
+    private normalPidIndex: number = 0; // 6단계: 인터리빙용 인덱스
+    private samplingTimer: ReturnType<typeof setTimeout> | null = null; // 6단계: 정기 샘플링 타이머
+
+    // 7단계: 데이터 고착 방지 (Freshness Check)
+    private lastUpdatedAt: Map<string, number> = new Map(); // 각 필드의 마지막 업데이트 시각
+
+    // 9단계 보강: 정밀 지터 측정
+    private lastSnapshotTs: number = 0;
+    private maxDriftMs: number = 0;
+    private driftCheckCount: number = 0;
 
     // ===== 배치 업로드 관련 =====
     private dataBuffer: ObdData[] = [];
     private vehicleId: string | null = null;
     private readonly BATCH_SIZE = 180; // 3분 (180초)
+    private readonly BUFFER_RECOVERY_KEY = 'obd_buffer_recovery';
+
+    // [10단계] 주행 종료 자동 감지 상태 머신
+    private tripState: TripState = 'RUNNING';
+    private suspectReason: SuspectReason | null = null;
+    private suspectStartedAt: number = 0;
+    private isEndingTrip: boolean = false;
+    private ignoreResponses: boolean = false;
+
+    // [10단계] 연속 관측 카운터
+    private idleCount: number = 0; // RPM=0 && Speed=0 연속 카운트 (초)
+    private disconnectCount: number = 0; // highAgeMs > 3000 연속 카운트 (틱)
+
+    // [10단계] Grace Period
+    private readonly GRACE_PERIOD_IDLE_MS = 60000; // 60초
+    private readonly GRACE_PERIOD_DISCONNECT_MS = 30000; // 30초
+
+    // [11단계] PID 실패 관리 (Stability)
+    private pidFailCount: Map<string, number> = new Map(); // mode:pid -> 실패 카운트
+    private disabledPids: Set<string> = new Set(); // 비활성화된 PID 목록
+    private readonly MAX_PID_FAIL_COUNT = 5; // 5회 연속 실패 시 비활성화
+
+    // [11단계] 업로드 동시 실행 방지 (Concurrency)
+    private isUploading: boolean = false;
 
     constructor() {
         if (Platform.OS !== 'web') {
@@ -95,6 +171,20 @@ class ObdService {
                 this.processOfflineQueue();
             }
         });
+
+        // [9단계] 데이터 복구 로직 실행
+        this.loadRecoveredBuffer();
+
+        // [9단계] 앱 종료/비활성 시 안전망 (JS 수준)
+        // onTaskRemoved는 네이티브 구현이 필요하지만, JS에서는 AppState로 보조
+        if (Platform.OS !== 'web') {
+            const { AppState } = require('react-native');
+            AppState.addEventListener('change', (nextAppState: string) => {
+                if (nextAppState === 'background') {
+                    console.log('[ObdService] App went to background, ensuring background service is active');
+                }
+            });
+        }
     }
 
     // ===== Classic Bluetooth 설정 =====
@@ -209,23 +299,27 @@ class ObdService {
 
     // ===== ELM327 초기화 =====
     private async initializeElm327() {
-        console.log('[ObdService] Initializing ELM327...');
+        console.log('[ObdService] Initializing ELM327 with optimizations...');
 
         const initCommands = [
-            'ATZ',      // 리셋
-            'ATE0',     // 에코 끄기
-            'ATL0',     // 줄바꿈 끄기
-            'ATS0',     // 공백 끄기
-            'ATH0',     // 헤더 끄기
+            'ATZ',      // 로컬 리셋
+            'ATE0',     // 에코 오프
+            'ATL0',     // 줄바꿈 오프
+            'ATS0',     // 공백 제거 (속도 향상)
+            'ATH0',     // 헤더 오프
+            'ATAT1',    // Adaptive Timing Level 1 (응답 속도 자동 최적화)
+            //'ATST32',   // Timeout 설정 (~200ms, 기본값보다 타이트하게 설정하여 지연 방지)
+            'ATCAF0',   // CAN Auto Filtering Off (처리 속도 향상)
             'ATSP0',    // 프로토콜 자동 감지
         ];
 
         for (const cmd of initCommands) {
-            await this.sendCommand(cmd);
-            await this.delay(200);
+            const success = await this.sendCommand(cmd);
+            if (!success) console.warn(`[ObdService] Init command failed: ${cmd}`);
+            await this.delay(150); // 초기화 안정성을 위한 짧은 대기
         }
 
-        console.log('[ObdService] ELM327 initialized');
+        console.log('[ObdService] ELM327 optimization sequences completed');
     }
 
     // ===== 명령 전송 =====
@@ -261,8 +355,26 @@ class ObdService {
 
         console.log(`[ObdService] Starting polling (${this.connectionType})...`);
         this.isPolling = true;
+
+        // [10단계] 상태 머신 초기화
+        this.tripState = 'RUNNING';
+        this.suspectReason = null;
+        this.suspectStartedAt = 0;
+        this.isEndingTrip = false;
+        this.ignoreResponses = false;
+        this.idleCount = 0;
+        this.disconnectCount = 0;
+        console.log('[TripStateChange] RUNNING (trip started)');
+
+        // [11단계] PID 실패 관리 초기화 (A안: 주행 종료 시 리셋)
+        this.pidFailCount.clear();
+        this.disabledPids.clear();
+        this.isUploading = false; // [11단계] 업로드 상태 초기화
+        console.log('[ObdService] PID failure tracking & upload status reset');
+
         useBleStore.getState().setPolling(true);
         this.pollingLoop(intervalMs);
+        this.samplingLoop(1000); // 6단계: 1초 고정 샘플링 시작
 
         // [Auto Trip] 주행 시작 (Trip ID 발급)
         if (this.vehicleId) {
@@ -274,27 +386,116 @@ class ObdService {
 
         // 안드로이드 백그라운드 서비스 시작
         if (Platform.OS === 'android') {
-            BackgroundService.start();
+            (async () => {
+                try {
+                    // [9단계] Android 13+ 알림 권한 체크 (거부 시 중단)
+                    if (Platform.Version >= 33) {
+                        const { PermissionsAndroid, Alert } = require('react-native');
+                        const hasPermission = await PermissionsAndroid.check('android.permission.POST_NOTIFICATIONS');
+                        if (!hasPermission) {
+                            const result = await PermissionsAndroid.request('android.permission.POST_NOTIFICATIONS');
+                            if (result !== 'granted') {
+                                Alert.alert("알림 권한 필요", "백그라운드 수집을 위해 알림 권한이 반드시 필요합니다.");
+                                this.stopPolling();
+                                return;
+                            }
+                        }
+                    }
+
+                    // [안전망] 이미 실행 중이면 중복 start 방지
+                    if (BackgroundService.isActive()) {
+                        console.log('[ObdService] Foreground Service already running');
+                        return;
+                    }
+
+                    // [안전망] 서비스가 확실히 시작된 후에만 루프를 신뢰
+                    await BackgroundService.start();
+                    console.log('[ObdService] Foreground Service started successfully');
+                } catch (e) {
+                    console.error('[ObdService] Critical: Failed to start Foreground Service. Stopping collection.', e);
+                    this.stopPolling(); // 서비스 시작 실패 시 수집 중단 (안전 우선)
+                }
+            })();
+        }
+    }
+
+    /**
+     * [10단계] 원자적 마감 루틴
+     * 중복 호출 방지 및 응답 파편 차단 보장
+     */
+    async finalizeTrip() {
+        // 중복 마감 방지
+        if (this.tripState === 'ENDED' || this.isEndingTrip) {
+            console.log('[ObdService] finalizeTrip: Already ending/ended, skipping');
+            return;
+        }
+
+        this.isEndingTrip = true;
+        this.tripState = 'ENDED';
+        console.log('[TripStateChange] ENDED (finalizing)');
+
+        try {
+            // 1. [필수] 응답 파편 차단
+            this.ignoreResponses = true;
+
+            // 2. 폴링 중단
+            this.isPolling = false;
+            this.commandQueue = [];
+            this.isProcessingQueue = false;
+            this.currentPid = null;
+
+            if (this.samplingTimer) {
+                clearTimeout(this.samplingTimer);
+                this.samplingTimer = null;
+            }
+            useBleStore.getState().setPolling(false);
+
+            // 3. 버퍼 플러시 (비동기 업로드 대기 안 함)
+            console.log('[TripFinalize] Flushing buffer...');
+            await this.flushBuffer();
+
+            // 4. 주행 종료 (서버 포함과 무관하게 상태 ENDED 유지)
+            console.log('[TripFinalize] Ending trip...');
+            const tripId = useTripStore.getState().currentTripId; // Trip ID 미리 캡처
+            try {
+                await useTripStore.getState().endTrip();
+                console.log('[TripFinalize] endTrip=ok');
+            } catch (e) {
+                console.error('[TripFinalize] endTrip=fail, queuing to OfflineStorage', e);
+                // [10단계 보강] 서버 종료 실패 시 캡처된 tripId 사용
+                if (tripId) {
+                    const url = `/api/v1/trips/${tripId}/end`;
+                    const isQueued = await OfflineStorage.isUrlQueued(url);
+                    if (!isQueued) {
+                        await OfflineStorage.addToQueue({
+                            url: url,
+                            method: 'POST',
+                            timestamp: Date.now(),
+                            body: JSON.stringify({ endTime: new Date().toISOString() })
+                        });
+                        console.log(`[TripFinalize] Trip end event queued for ${tripId}`);
+                    } else {
+                        console.log(`[TripFinalize] Trip end event already queued for ${tripId}, skipping`);
+                    }
+                }
+            }
+
+            // 5. Foreground Service 중단
+            if (Platform.OS === 'android') {
+                BackgroundService.stop();
+            }
+
+            console.log('[TripFinalize] Trip finalized successfully');
+        } catch (e) {
+            console.error('[TripFinalize] Error during finalization', e);
+        } finally {
+            this.isEndingTrip = false;
         }
     }
 
     async stopPolling() {
-        this.isPolling = false;
-        this.commandQueue = [];
-        this.isProcessingQueue = false;
-        useBleStore.getState().setPolling(false);
-        console.log('[ObdService] Polling stopped, flushing buffer...');
-        await this.flushBuffer();
-
-        // [Auto Trip] 주행 종료 (Trip ID 리셋)
-        // 연결이 해제되거나 폴링이 멈추면 주행 종료로 간주
-        console.log('[ObdService] Auto-ending trip...');
-        await useTripStore.getState().endTrip();
-
-        // 안드로이드 백그라운드 서비스 중지
-        if (Platform.OS === 'android') {
-            BackgroundService.stop();
-        }
+        // 사용자가 수동으로 중지할 때도 마감 루틴 사용
+        await this.finalizeTrip();
     }
 
     // ===== 데이터 구독 =====
@@ -309,21 +510,230 @@ class ObdService {
         this.listeners.forEach(listener => listener(data));
     }
 
-    // ===== 폴링 루프 =====
+
+    /**
+     * 폴링 루프 시작
+     * @param intervalMs 폴링 간격 (1000ms 권장)
+     */
     private pollingLoop(intervalMs: number) {
         if (!this.isPolling) return;
 
-        const batch = [
+        // 5-6단계: PID 그룹화 및 순환 인터리빙
+        const highPids = [
             OBD_PIDS.RPM,
             OBD_PIDS.SPEED,
-            OBD_PIDS.ENGINE_LOAD,
-            OBD_PIDS.COOLANT_TEMP,
+            OBD_PIDS.THROTTLE
         ];
 
-        this.commandQueue.push(...batch);
-        this.processQueue();
+        const normalPids = [
+            OBD_PIDS.ENGINE_LOAD,
+            OBD_PIDS.MAP,
+            OBD_PIDS.MAF,
+            OBD_PIDS.COOLANT_TEMP,
+            OBD_PIDS.INTAKE_TEMP,
+            OBD_PIDS.ENGINE_RUNTIME
+        ];
+
+        // 1. HIGH 그룹전체는 매 주기에 추가 (최신성 보장)
+        // 4.5단계에서 구현된 중복 체크 로직에 의해 큐에 이미 있으면 추가되지 않음 (Backpressure)
+        // [11단계] 비활성화된 PID는 제외
+        highPids.forEach(pid => {
+            const key = `${pid.mode}:${pid.pid}`;
+            if (!this.disabledPids.has(key)) {
+                this.enqueue(pid, QueuePriority.NORMAL);
+            }
+        });
+
+        // 2. NORMAL 그룹은 매 주기마다 '하나씩' 돌아가며 추가 (인터리빙)
+        // 이 방식은 큐가 비대해지는 것을 막으면서 모든 데이터의 수집을 보장함 (Starvation 방지)
+        // [11단계] 비활성화된 PID는 제외
+        if (normalPids.length > 0) {
+            const pid = normalPids[this.normalPidIndex];
+            const key = `${pid.mode}:${pid.pid}`;
+            if (!this.disabledPids.has(key)) {
+                this.enqueue(pid, QueuePriority.LOW); // 일반 데이터는 낮은 우선순위로
+            }
+            this.normalPidIndex = (this.normalPidIndex + 1) % normalPids.length;
+        }
+
+        // 3. DTC 상태 체크 (5초 주기)
+        const now = Date.now();
+        if (now - this.lastDtcStatusEnqueueAt >= 5000) {
+            this.enqueue(OBD_PIDS.DTC_STATUS, QueuePriority.NORMAL);
+            this.lastDtcStatusEnqueueAt = now;
+        }
 
         setTimeout(() => this.pollingLoop(intervalMs), intervalMs);
+    }
+
+    /**
+     * 6단계: 1초 정기 샘플링 루프
+     * 수집 속도와 관계없이 정확히 1Hz로 데이터 스냅샷을 생성합니다.
+     */
+    private samplingLoop(intervalMs: number = 1000) {
+        if (!this.isPolling) return;
+
+        // 7단계: Freshness Check를 적용한 스냅샷 생성
+        const now = Date.now();
+        const snapshot: ObdData = { timestamp: new Date().toISOString() };
+
+        // 각 필드별 신선도 체크 (Implementation Plan 기준)
+        const freshnessThresholds: Record<string, number> = {
+            // HIGH: 3초 이내 (실시간성 중요)
+            'rpm': 3000,
+            'speed': 3000,
+            'throttle': 3000,
+            // NORMAL/MID: 10초 이내
+            'engine_load': 10000,
+            'map': 10000,
+            'maf': 10000,
+            'intake_temp': 10000,
+            'engine_runtime': 10000,
+            'dtc_status': 10000, // DTC는 MID로 상향 조정 (지적사항 반영)
+            // LOW: 30초 이내 (느리게 변하는 데이터)
+            'coolant_temp': 30000,
+            'voltage': 30000
+        };
+
+        // 각 필드별로 신선도 체크 후 스냅샷에 추가
+        Object.keys(this.currentData).forEach(key => {
+            if (key === 'timestamp') return;
+
+            const lastUpdate = this.lastUpdatedAt.get(key);
+            const threshold = freshnessThresholds[key] || 10000; // 기본 10초
+
+            // 마지막 업데이트가 없거나 임계값을 초과한 경우 null 처리
+            if (!lastUpdate || (now - lastUpdate) > threshold) {
+                (snapshot as any)[key] = null;
+            } else {
+                (snapshot as any)[key] = this.currentData[key as keyof ObdData];
+            }
+        });
+
+        // 데이터 기록 및 알림
+        this.notifyListeners(snapshot);
+        this.collectData(snapshot);
+
+        // [9단계] 정밀 드리프트 측정
+        if (this.lastSnapshotTs > 0) {
+            const expectedInterval = intervalMs;
+            const actualInterval = now - this.lastSnapshotTs;
+            const driftMs = Math.abs(actualInterval - expectedInterval);
+            this.maxDriftMs = Math.max(this.maxDriftMs, driftMs);
+            this.driftCheckCount++;
+            if (this.driftCheckCount >= 60) {
+                console.log(`[ObdService] Sampling drift (60s window): max=${this.maxDriftMs}ms`);
+                this.maxDriftMs = 0;
+                this.driftCheckCount = 0;
+            }
+        }
+        this.lastSnapshotTs = now;
+
+        this.samplingTimer = setTimeout(() => this.samplingLoop(intervalMs), intervalMs);
+
+        // [10단계] 주행 종료 자동 감지 로직 구동
+        this.checkTripTermination(snapshot, now);
+    }
+
+    /**
+     * [10단계] 주행 종료 상태 머신 체크
+     */
+    private checkTripTermination(snapshot: ObdData, now: number) {
+        if (!this.isPolling || this.isEndingTrip) return;
+
+        // highAgeMs 계산: RPM 또는 Speed 중 최근 갱신 기준
+        const rpmTs = this.lastUpdatedAt.get('rpm') || 0;
+        const speedTs = this.lastUpdatedAt.get('speed') || 0;
+        const lastHighUpdatedAt = Math.max(rpmTs, speedTs);
+        const highAgeMs = now - lastHighUpdatedAt;
+
+        const isRpmZero = snapshot.rpm !== undefined && snapshot.rpm === 0;
+        const isSpeedZero = snapshot.speed !== undefined && snapshot.speed === 0;
+
+        if (this.tripState === 'RUNNING') {
+            // Case A (IDLE): RPM=0 && Speed=0 연속 5초
+            if (isRpmZero && isSpeedZero) {
+                this.idleCount++;
+                if (this.idleCount >= 5) {
+                    console.log(`[TripStateChange] RUNNING -> SUSPECT_END (reason=IDLE, ts=${now})`);
+                    this.tripState = 'SUSPECT_END';
+                    this.suspectReason = 'IDLE';
+                    this.suspectStartedAt = now;
+                }
+            } else {
+                this.idleCount = 0; // 리셋
+            }
+
+            // Case B (DISCONNECT): highAgeMs > 3000ms 연속 3회
+            if (highAgeMs > 3000) {
+                this.disconnectCount++;
+                if (this.disconnectCount >= 3) {
+                    console.log(`[TripStateChange] RUNNING -> SUSPECT_END (reason=DISCONNECT, highAgeMs=${highAgeMs})`);
+                    this.tripState = 'SUSPECT_END';
+                    this.suspectReason = 'DISCONNECT';
+                    this.suspectStartedAt = now;
+                }
+            } else {
+                this.disconnectCount = 0; // 리셋
+            }
+        }
+        else if (this.tripState === 'SUSPECT_END') {
+            // 복귀 조건: rpm > 0 또는 speed > 0 또는 업데이트 재개
+            const isActuallyActive = (snapshot.rpm !== undefined && snapshot.rpm > 0) ||
+                (snapshot.speed !== undefined && snapshot.speed > 0) ||
+                (highAgeMs <= 1000);
+
+            if (isActuallyActive) {
+                console.log(`[TripStateChange] SUSPECT_END -> RUNNING (activity detected, rpm=${snapshot.rpm}, speed=${snapshot.speed}, highAgeMs=${Math.floor(highAgeMs)})`);
+                this.tripState = 'RUNNING';
+                this.suspectReason = null;
+                this.suspectStartedAt = 0;
+                this.idleCount = 0;
+                this.disconnectCount = 0;
+            } else {
+                // Grace Period 경과 체크
+                const elapsedSinceSuspect = now - this.suspectStartedAt;
+                const gracePeriod = this.suspectReason === 'IDLE' ?
+                    this.GRACE_PERIOD_IDLE_MS : this.GRACE_PERIOD_DISCONNECT_MS;
+
+                if (elapsedSinceSuspect >= gracePeriod) {
+                    console.warn(`[TripStateChange] SUSPECT_END -> ENDED (reason=${this.suspectReason}, elapsed=${Math.floor(elapsedSinceSuspect / 1000)}s)`);
+                    this.finalizeTrip();
+                } else {
+                    // 매 15초마다 경과 로그
+                    const elapsedSec = Math.floor(elapsedSinceSuspect / 1000);
+                    if (elapsedSec > 0 && elapsedSec % 15 === 0) {
+                        console.log(`[SuspectTick] reason=${this.suspectReason}, elapsed=${elapsedSec}s, rpm=${snapshot.rpm}, speed=${snapshot.speed}, highAge=${Math.floor(highAgeMs)}ms`);
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * PID를 우선순위와 함께 큐에 추가 (4단계)
+     * @param pid 실행할 PID 정의
+     * @param priority 우선순위 (기본값: NORMAL)
+     */
+    private enqueue(pid: PidDefinition, priority: QueuePriority = QueuePriority.NORMAL) {
+        // 4.5단계: mode:pid 조합으로 중복 체크 (더 정확)
+        const key = `${pid.mode}:${pid.pid}`;
+        if (priority >= QueuePriority.NORMAL && this.commandQueue.some(item => `${item.pid.mode}:${item.pid.pid}` === key)) {
+            return;
+        }
+
+        // 4.5단계: sort() 대신 삽입 위치 찾아 끼워넣기 (성능 개선)
+        const newItem = { pid, priority };
+        let insertIndex = this.commandQueue.findIndex(item => item.priority > priority);
+        if (insertIndex === -1) {
+            // 모든 항목보다 낮은 우선순위 → 맨 뒤에 추가
+            this.commandQueue.push(newItem);
+        } else {
+            // 찾은 위치에 끼워넣기
+            this.commandQueue.splice(insertIndex, 0, newItem);
+        }
+
+        this.processQueue();
     }
 
     private async processQueue() {
@@ -331,93 +741,119 @@ class ObdService {
 
         this.isProcessingQueue = true;
 
-        while (this.commandQueue.length > 0 && this.isPolling) {
-            const pid = this.commandQueue.shift();
-            if (!pid) break;
+        try {
+            while (this.commandQueue.length > 0 && this.isPolling) {
+                const item = this.commandQueue.shift();
+                if (!item) break;
 
-            this.currentPid = pid;
-            this.responseBuffer = '';
+                const pid = item.pid;
 
-            const command = `${pid.mode}${pid.pid}`;
-            console.log(`[ObdService] Sending: ${command}`);
+                this.currentPid = pid;
+                this.responseBuffer = '';
 
-            const success = await this.sendCommand(command);
-            if (!success) {
-                console.warn(`[ObdService] Failed to send: ${command}`);
-                this.currentPid = null;
-                continue;
-            }
+                const command = `${pid.mode}${pid.pid}`;
+                // console.log(`[ObdService] Sending: ${command}`);
 
-            // Classic BT: 응답 대기 후 버퍼에서 읽기 시도
-            if (this.connectionType === 'classic' && this.classicDevice) {
-                console.log('[ObdService] Waiting for response...');
-                await this.delay(500);
+                const success = await this.sendCommand(command);
+                if (!success) {
+                    // [11단계] sendCommand 실패 캘운팅
+                    this.incrementPidFailCount(pid, 'sendCommand failed');
+                    this.currentPid = null;
+                    continue;
+                }
 
-                // 버퍼에 데이터 있는지 확인
-                const response = await ClassicBtService.readAvailable(this.classicDevice);
-                if (response) {
-                    console.log(`[ObdService] Got response: "${response}"`);
-                    this.handleResponse(response);
+                // 응답 처리 대기
+                if (this.connectionType === 'classic' && this.classicDevice) {
+                    await this.delay(200);
+                    const response = await ClassicBtService.readAvailable(this.classicDevice);
+                    if (response) this.handleResponse(response);
+                } else {
+                    // BLE는 핸들러(onDataReceived)에서 handleResponse 호출
+                    let timeout = 0;
+                    while (this.currentPid !== null && timeout < 20) {
+                        await this.delay(50);
+                        timeout++;
+                    }
+                    // [11단계] 타임아웃 발생 시 실패 처리
+                    if (this.currentPid !== null) {
+                        this.incrementPidFailCount(pid, 'response timeout');
+                        this.currentPid = null;
+                    }
                 }
             }
+        } finally {
+            this.isProcessingQueue = false;
+            // 6단계: 기록 로직이 samplingLoop로 이동됨
         }
-
-        this.isProcessingQueue = false;
-
-        // 리스너에 알림
-        this.currentData.timestamp = new Date().toISOString();
-        console.log('[ObdService] Current data:', JSON.stringify(this.currentData));
-        this.notifyListeners({ ...this.currentData });
-
-        // 배치 업로드를 위해 데이터 수집
-        this.collectData({ ...this.currentData });
     }
 
     // ===== 응답 처리 =====
-    private handleResponse(responseStr: string) {
-        if (!responseStr) return;
+    private async handleResponse(responseStr: string) {
+        // [10단계] 마감 중 응답 파편 차단
+        if (this.ignoreResponses) {
+            return;
+        }
 
-        console.log(`[ObdService] Raw response: "${responseStr}"`);
+        if (!responseStr || !this.currentPid) return;
 
         this.responseBuffer += responseStr;
 
-        // 완전한 응답인지 확인 (> 로 끝나거나 줄바꿈 포함)
-        if (!this.responseBuffer.includes('>') && !this.responseBuffer.includes('\r')) {
-            return; // 더 많은 데이터 대기
-        }
+        // 완전한 응답인지 확인 (> 포함 시 ELM327 응답 완료)
+        if (!this.responseBuffer.includes('>')) return;
 
-        if (!this.currentPid) {
+        const result = parseObdResponse(this.responseBuffer, this.currentPid);
+        const pidKey = `${this.currentPid.mode}:${this.currentPid.pid}`;
+
+        // [11단계] 실패 감지: NO DATA, ?, 빈 응답, 파싱 null
+        const cleanResp = this.responseBuffer.trim().toUpperCase();
+        if (cleanResp.includes('NO DATA') || cleanResp.includes('?') || cleanResp === '>' || result === null) {
+            const reason = cleanResp.includes('NO DATA') ? 'NO DATA' :
+                cleanResp.includes('?') ? 'unknown error (?)' :
+                    cleanResp === '>' ? 'empty response' : 'parse failed';
+            this.incrementPidFailCount(this.currentPid, reason);
+            this.currentPid = null;
             this.responseBuffer = '';
             return;
         }
 
-        const result = parseObdResponse(this.responseBuffer, this.currentPid);
-        console.log(`[ObdService] Parsed ${this.currentPid.name}: ${result}`);
+        // [11단계] 성공적으로 파싱되면 실패 카운트 리셋
+        this.resetPidFailCount(pidKey);
 
         if (result !== null) {
-            switch (this.currentPid.pid) {
-                case OBD_PIDS.RPM.pid:
-                    this.currentData.rpm = result as number;
-                    console.log(`[ObdService] RPM: ${result}`);
+            // Mode + PID 조합으로 구분 (예: "010C", "03", "020200")
+            const key = this.currentPid.mode + this.currentPid.pid;
+
+            switch (key) {
+                // Mode 01: Real-time Data (7단계 보강: updateData 유틸리티 사용)
+                case '010C': this.updateData('rpm', result); break;
+                case '010D': this.updateData('speed', result); break;
+                case '0104': this.updateData('engine_load', result); break;
+                case '0105': this.updateData('coolant_temp', result); break;
+                case '0142': this.updateData('voltage', result); break;
+                case '0111': this.updateData('throttle', result); break;
+                case '010F': this.updateData('intake_temp', result); break;
+                case '010B': this.updateData('map', result); break;
+                case '0110': this.updateData('maf', result); break;
+                case '011F': this.updateData('engine_runtime', result); break;
+                case '0101':
+                    this.updateData('dtc_status', result);
+                    // MIL이 켜졌거나 DTC가 있을 경우 즉시 상세 수집 시작
+                    if (result.toString().includes('ON') || !result.toString().includes('0 DTCs')) {
+                        console.warn('[ObdService] DTC detected! Initiating detailed collection...');
+                        this.reportDetailedDtc(result.toString());
+                    }
                     break;
-                case OBD_PIDS.SPEED.pid:
-                    this.currentData.speed = result as number;
-                    console.log(`[ObdService] Speed: ${result}`);
+
+                // Mode 03: Stored DTCs
+                case '03':
+                    console.log(`[ObdService] Mode 03 response: ${result}`);
+                    this.lastDtcCodes = result as string;
                     break;
-                case OBD_PIDS.ENGINE_LOAD.pid:
-                    this.currentData.engine_load = result as number;
-                    break;
-                case OBD_PIDS.COOLANT_TEMP.pid:
-                    this.currentData.coolant_temp = result as number;
-                    break;
-                case OBD_PIDS.VOLTAGE.pid:
-                    this.currentData.voltage = result as number;
-                    break;
-                case OBD_PIDS.FUEL_TRIM_SHORT.pid:
-                    this.currentData.fuel_trim_short = result as number;
-                    break;
-                case OBD_PIDS.FUEL_TRIM_LONG.pid:
-                    this.currentData.fuel_trim_long = result as number;
+
+                // Mode 02: Freeze Frame DTC
+                case '020200':
+                    console.log(`[ObdService] Mode 02 response: ${result}`);
+                    this.lastFreezeDtc = result as string;
                     break;
             }
         }
@@ -426,7 +862,62 @@ class ObdService {
         this.responseBuffer = '';
     }
 
+    /**
+     * DTC 상세 수집 및 백엔드 보고 (하드코딩 제거)
+     */
+    private async reportDetailedDtc(statusSummary: string) {
+        if (!this.vehicleId) return;
+
+        // 4.5단계: 동시성 제어 및 쿨다운 (60초)
+        const now = Date.now();
+        if (this.isReportingDtc || (now - this.lastDtcReportAt < 60000)) {
+            console.log('[ObdService] DTC report skipped (cooldown or already running)');
+            return;
+        }
+
+        this.isReportingDtc = true;
+        this.lastDtcReportAt = now;
+
+        try {
+            // Mode 03, 02를 긴급(HIGH) 우선순위로 큐에 추가 (4단계)
+            this.enqueue(OBD_PIDS.GET_DTCS, QueuePriority.HIGH);
+            this.enqueue(OBD_PIDS.FREEZE_DTC, QueuePriority.HIGH);
+
+            // 데이터 수집 대기 (최대 3초)
+            let waitCount = 0;
+            this.lastDtcCodes = '';
+            this.lastFreezeDtc = '';
+
+            console.log('[ObdService] Waiting for Mode 03/02 results...');
+            while (!this.lastDtcCodes && waitCount < 30) {
+                await this.delay(100);
+                waitCount++;
+            }
+
+            await sendDtcReport({
+                vehicleId: this.vehicleId,
+                dtcCode: this.lastDtcCodes.split(',')[0].trim() || this.lastFreezeDtc || 'P0000',
+                status: 'ACTIVE',
+                summaryKo: `${statusSummary} | 상세코드: ${this.lastDtcCodes || '없음'} | 프리즈프레임: ${this.lastFreezeDtc || '없음'}`
+            });
+            console.log('[ObdService] Detailed DTC report sent successfully');
+        } catch (error) {
+            console.error('[ObdService] Failed to report detailed DTC:', error);
+        } finally {
+            this.isReportingDtc = false;
+        }
+    }
+
     // ===== 유틸리티 =====
+    /**
+     * 데이터를 업데이트하고 타임스탬프를 기록 (7단계 보강)
+     */
+    private updateData(key: keyof ObdData, value: any) {
+        if (value === null || value === undefined) return;
+        (this.currentData as any)[key] = value;
+        this.lastUpdatedAt.set(key, Date.now());
+    }
+
     private stringToBytes(str: string) {
         const array = [];
         for (let i = 0; i < str.length; i++) {
@@ -439,136 +930,244 @@ class ObdService {
         return new Promise(resolve => setTimeout(resolve, ms));
     }
 
-    // ===== 현재 데이터 가져오기 =====
+    /**
+     * [11단계] PID 실패 카운트 증가 및 비활성화 처리
+     */
+    private incrementPidFailCount(pid: PidDefinition, reason: string) {
+        const key = `${pid.mode}:${pid.pid}`;
+
+        // [11단계 피드백] RPM/Speed (High PIDs)는 비활성화 대상에서 제외
+        // 이유: 상태 머신(주행 종료 감지)의 핵심 지표이므로 통신이 불안정해도 계속 시도해야 함
+        if (key === '01:0C' || key === '01:0D') {
+            console.warn(`[PidFailIgnore] key=${key} failed but skipping disable (High PID) reason=${reason}`);
+            return;
+        }
+
+        const currentCount = (this.pidFailCount.get(key) || 0) + 1;
+        this.pidFailCount.set(key, currentCount);
+
+        if (currentCount >= this.MAX_PID_FAIL_COUNT) {
+            this.disabledPids.add(key);
+            console.warn(`[PidDisabled] key=${key} failCount=${currentCount} reason=${reason}`);
+        } else {
+            console.log(`[PidFail] key=${key} failCount=${currentCount} reason=${reason}`);
+        }
+    }
+
+    /**
+     * [11단계] PID 실패 카운트 리셋 (성공 시)
+     */
+    private resetPidFailCount(pidKey: string) {
+        if (this.pidFailCount.has(pidKey)) {
+            this.pidFailCount.set(pidKey, 0);
+        }
+    }
+
     getCurrentData(): ObdData {
         return { ...this.currentData };
     }
 
-    // ===== 차량 ID 설정 (배치 업로드에 필요) =====
     setVehicleId(id: string) {
         this.vehicleId = id;
-        console.log(`[ObdService] Vehicle ID set: ${id}`);
     }
 
-    // ===== 배치 업로드용 데이터 수집 =====
     private collectData(data: ObdData) {
+        // 안전 장치: 버퍼가 비정상적으로 커지면 정리
         if (this.dataBuffer.length >= 1000) {
-            console.warn('[ObdService] Buffer full, clearing old data to prevent OOM');
+            console.warn('[ObdService] Buffer overflow, clearing...');
             this.dataBuffer = [];
         }
-        this.dataBuffer.push(data);
-        console.log(`[ObdService] Data buffered: ${this.dataBuffer.length}/${this.BATCH_SIZE}`);
 
+        this.dataBuffer.push(data);
+
+        // [9단계] 주기적 버퍼 임시 저장 (안전망: 강제 종료 대비)
+        if (this.dataBuffer.length % 10 === 0) {
+            this.saveBufferForRecovery();
+        }
+
+        // 배치 사이즈 도달 시 업로드 실행
         if (this.dataBuffer.length >= this.BATCH_SIZE) {
-            this.uploadBatch();
+            // 8단계: 버퍼 스와핑 (데이터 누락 방지)
+            const logsToUpload = [...this.dataBuffer];
+            this.dataBuffer = [];
+            this.clearRecoveredBuffer(); // 업로드 시작 시 임시 버퍼 소거
+            this.uploadBatch(logsToUpload);
         }
     }
 
-    // ===== 배치 업로드 실행 =====
-    private async uploadBatch() {
-        if (this.dataBuffer.length === 0) return;
+    /**
+     * [9단계] 강제 종료 대비 버퍼 임시 저장 (복사본 저장 및 메타데이터 포함)
+     */
+    private async saveBufferForRecovery() {
+        try {
+            if (this.dataBuffer.length > 0) {
+                // 레이스 컨디션 방지를 위해 복사본([...]) 저장 및 메타데이터 추가
+                const recoveryData = {
+                    tripId: useTripStore.getState().currentTripId,
+                    vehicleId: this.vehicleId,
+                    lastSnapshotTs: Date.now(),
+                    logs: [...this.dataBuffer]
+                };
+                await AsyncStorage.setItem(this.BUFFER_RECOVERY_KEY, JSON.stringify(recoveryData));
+            }
+        } catch (e) {
+            console.error('[ObdService] Failed to save buffer for recovery', e);
+        }
+    }
 
-        if (!this.vehicleId) {
-            console.warn('[ObdService] Cannot upload: no vehicleId. Clearing buffer to save memory.');
-            this.dataBuffer = [];
+    /**
+     * [9단계] 임시 저장된 버퍼 복구
+     */
+    private async loadRecoveredBuffer() {
+        try {
+            const saved = await AsyncStorage.getItem(this.BUFFER_RECOVERY_KEY);
+            if (saved) {
+                const recoveryData = JSON.parse(saved);
+                if (recoveryData && Array.isArray(recoveryData.logs) && recoveryData.logs.length > 0) {
+                    console.log(`[ObdService] Recovered ${recoveryData.logs.length} logs (Trip: ${recoveryData.tripId}) from crash`);
+
+                    // 기존 버퍼와 합칠 때 중복 방지 (간단히 덮어쓰거나 합치기)
+                    // 여기서는 복구된 데이터를 기존 버퍼 앞에 배치 (순서 유지)
+                    this.dataBuffer = [...recoveryData.logs, ...this.dataBuffer];
+
+                    // 복구 성공 후 즉시 서버 idempotency 필터링을 타도록 flush 유도 가능
+                    if (this.dataBuffer.length >= 10) {
+                        this.saveBufferForRecovery(); // 현재 상태 다시 저장
+                    }
+                }
+            }
+        } catch (e) {
+            console.error('[ObdService] Failed to load recovered buffer', e);
+        }
+    }
+
+    /**
+     * [9단계] 성공적인 배치 구성 시 임시 버퍼 소거
+     */
+    private async clearRecoveredBuffer() {
+        try {
+            await AsyncStorage.removeItem(this.BUFFER_RECOVERY_KEY);
+        } catch (e) {
+            console.error('[ObdService] Failed to clear recovered buffer', e);
+        }
+    }
+
+    /**
+     * 8단계: 배치 업로드 고도화
+     * [11단계] 동시 실행 방지 및 Drain 로직 추가
+     * 버퍼를 즉시 비우고 비동기로 서버에 전송합니다.
+     */
+    private async uploadBatch(logsToUpload: ObdData[]) {
+        if (logsToUpload.length === 0 || !this.vehicleId) return;
+
+        // [11단계] 동시 실행 방지
+        if (this.isUploading) {
+            console.log('[ObdService] Upload already in progress, skipping');
             return;
         }
 
-        const logs: ObdLogRequest[] = this.dataBuffer.map(d => ({
-            timestamp: d.timestamp,
-            vehicleId: this.vehicleId!,
-            rpm: d.rpm,
-            speed: d.speed,
-            voltage: d.voltage,
-            coolantTemp: d.coolant_temp,
-            engineLoad: d.engine_load,
-            fuelTrimShort: d.fuel_trim_short,
-            fuelTrimLong: d.fuel_trim_long,
-        }));
-
-        // 1. 오프라인 상태이면 즉시 큐에 저장하고 버퍼 비움
-        if (!NetworkService.IsConnected) {
-            console.log('[ObdService] Offline detected. Queuing batch to SQLite.');
-            await OfflineStorage.addToQueue({
-                url: '/telemetry/batch',
-                method: 'POST',
-                body: JSON.stringify(logs),
-                timestamp: Date.now()
-            });
-            this.dataBuffer = [];
-            return;
-        }
+        this.isUploading = true;
 
         try {
-            console.log(`[ObdService] Uploading batch: ${logs.length} items`);
-            await uploadObdBatch(logs);
-            console.log('[ObdService] Batch upload successful!');
-            this.dataBuffer = []; // 성공 시 버퍼 비우기
-        } catch (error) {
-            console.error('[ObdService] Batch upload failed:', error);
+            // 8.5단계: batchId 생성 (차량ID + 타임스탬프 조합으로 중복 방지)
+            const batchId = `batch-${this.vehicleId}-${Date.now()}`;
+            console.log(`[ObdService] Preparing batch upload: ${batchId} (${logsToUpload.length} items)`);
 
-            // 네트워크 에러인 경우 큐에 저장 (Axios 에러 코드 확인 또는 간단히 타임아웃/연결실패 간주)
-            // 여기서는 안전하게 오프라인 큐로 보냄
-            console.log('[ObdService] Upload failed. Saving to offline queue.');
-            await OfflineStorage.addToQueue({
-                url: '/telemetry/batch',
-                method: 'POST',
-                body: JSON.stringify(logs),
-                timestamp: Date.now()
-            });
-            this.dataBuffer = [];
+            const logs: ObdLogRequest[] = logsToUpload.map(d => ({
+                timestamp: d.timestamp,
+                vehicleId: this.vehicleId!,
+                rpm: d.rpm,
+                speed: d.speed,
+                voltage: d.voltage,
+                coolantTemp: d.coolant_temp,
+                engineLoad: d.engine_load,
+                fuelTrimShort: d.fuel_trim_short,
+                fuelTrimLong: d.fuel_trim_long,
+                throttle: d.throttle,
+                map: d.map,
+                maf: d.maf,
+                intakeTemp: d.intake_temp,
+                engineRuntime: d.engine_runtime
+            }));
+
+            const batchRequest: ObdBatchRequest = {
+                batchId,
+                vehicleId: this.vehicleId,
+                logs
+            };
+
+            if (!NetworkService.IsConnected) {
+                console.log('[ObdService] Offline, saving to queue...');
+                await OfflineStorage.addToQueue({
+                    url: '/telemetry/batch',
+                    method: 'POST',
+                    body: JSON.stringify(batchRequest),
+                    timestamp: Date.now()
+                });
+                return;
+            }
+
+            try {
+                await uploadObdBatch(batchRequest);
+                console.log(`[ObdService] Batch upload success: ${batchId}`);
+            } catch (error) {
+                console.error(`[ObdService] Batch upload failed (${batchId}), saving to offline queue:`, error);
+                await OfflineStorage.addToQueue({
+                    url: '/telemetry/batch',
+                    method: 'POST',
+                    body: JSON.stringify(batchRequest),
+                    timestamp: Date.now()
+                });
+            }
+        } finally {
+            this.isUploading = false;
+
+            // [11단계] Drain: 업로드 완료 후 버퍼 잔량 확인
+            // [피드백 반영] setTimeout을 사용하여 스택 오버플로우 방지 및 비동기 흐름 분리
+            if (this.dataBuffer.length >= this.BATCH_SIZE) {
+                console.log(`[ObdService] Drain: Buffer filled again (${this.dataBuffer.length} items), scheduling next upload`);
+                const nextBatch = [...this.dataBuffer];
+                this.dataBuffer = [];
+                setTimeout(() => this.uploadBatch(nextBatch), 0);
+            }
         }
     }
 
-    // ===== 오프라인 데이터 동기화 =====
     private async processOfflineQueue() {
         const queue = await OfflineStorage.getQueue();
         if (queue.length === 0) return;
 
-        console.log(`[ObdService] Syncing ${queue.length} offline requests...`);
-
         for (const req of queue) {
-            if (!NetworkService.IsConnected) {
-                console.log('[ObdService] Network lost during sync. Pausing.');
-                break;
-            }
-
+            if (!NetworkService.IsConnected) break;
             try {
                 await api.request({
                     url: req.url,
                     method: req.method,
                     data: req.body ? JSON.parse(req.body) : undefined,
                 });
-                console.log(`[ObdService] Synced request ${req.id}`);
                 if (req.id) await OfflineStorage.removeFromQueue(req.id);
             } catch (e) {
-                console.error(`[ObdService] Failed to sync request ${req.id}`, e);
-                // 4xx 에러면 삭제해야 할 수도 있음. 일단은 유지하거나 retry count 증가 로직 필요 (OfflineStorage 개선 사항)
-                // 지금은 간단히 break (다음 연결 시 재시도)
                 break;
             }
         }
     }
 
-    // ===== 남은 버퍼 즉시 업로드 (연결 해제 시 호출) =====
     async flushBuffer() {
         if (this.dataBuffer.length > 0) {
-            console.log(`[ObdService] Flushing remaining ${this.dataBuffer.length} items...`);
-            await this.uploadBatch();
+            const logsToUpload = [...this.dataBuffer];
+            this.dataBuffer = [];
+            await this.uploadBatch(logsToUpload);
         }
     }
 
-    // ===== 연결 해제 =====
     async disconnect() {
-        this.isDisconnectRequested = true; // 의도적 해제 표시
+        this.isDisconnectRequested = true;
         if (this.reconnectTimer) {
             clearTimeout(this.reconnectTimer);
             this.reconnectTimer = null;
         }
 
         this.stopPolling();
-
-        // 남은 데이터 업로드
         await this.flushBuffer();
 
         if (this.classicDataSubscription) {
@@ -585,35 +1184,24 @@ class ObdService {
         this.currentDeviceId = null;
         this.dataBuffer = [];
         useBleStore.getState().reset();
-        console.log('[ObdService] Disconnected');
     }
 
-    // ===== 시뮬레이션 모드 =====
+    // --- Simulation ---
     private simulationTimer: ReturnType<typeof setTimeout> | null = null;
-
     startSimulation() {
-        if (this.isPolling) {
-            console.warn('[ObdService] Already polling/simulating');
-            return;
-        }
+        if (this.isPolling) return;
         this.isPolling = true;
-        console.log('[ObdService] 🚗 Simulation Mode Started');
         this.simulationLoop();
     }
-
     stopSimulation() {
         this.isPolling = false;
         if (this.simulationTimer) {
             clearTimeout(this.simulationTimer);
             this.simulationTimer = null;
         }
-        console.log('[ObdService] 🛑 Simulation Stopped');
     }
-
     private simulationLoop() {
         if (!this.isPolling) return;
-
-        // 가짜 OBD 데이터 생성
         const fakeData: ObdData = {
             timestamp: new Date().toISOString(),
             rpm: Math.floor(Math.random() * (3000 - 800) + 800),
@@ -621,161 +1209,64 @@ class ObdService {
             engine_load: Math.floor(Math.random() * 100),
             coolant_temp: Math.floor(Math.random() * (110 - 80) + 80),
             voltage: parseFloat((Math.random() * (14.5 - 12) + 12).toFixed(1)),
-            fuel_trim_short: parseFloat((Math.random() * 10 - 5).toFixed(1)),
-            fuel_trim_long: parseFloat((Math.random() * 10 - 5).toFixed(1)),
         };
-
         this.currentData = fakeData;
         this.notifyListeners(fakeData);
         this.collectData(fakeData);
-
-        // 1초 후 다음 데이터 생성
         this.simulationTimer = setTimeout(() => this.simulationLoop(), 1000);
     }
 
-    // ===== 연결 상태 확인 =====
-    isConnected(): boolean {
-        return this.connectionType !== null;
-    }
+    isConnected(): boolean { return this.connectionType !== null; }
 
-    // ===== 재연결 로직 =====
     private handleDisconnection() {
-        if (this.isDisconnectRequested) {
-            console.log('[ObdService] Disconnected by user.');
-            return;
-        }
-
-        console.warn('[ObdService] Unexpected disconnection detected!');
-        this.connectionType = null; // 일단 연결 상태 초기화
+        if (this.isDisconnectRequested) return;
+        this.connectionType = null;
         this.attemptReconnect();
     }
 
     private async attemptReconnect() {
         if (this.reconnectAttempts >= this.MAX_RECONNECT_ATTEMPTS) {
-            console.error('[ObdService] Max reconnect attempts reached. Giving up.');
             useBleStore.getState().setStatus('disconnected');
-            // 여기서 사용자에게 알림을 보낼 수 있음 (AlertStore 활용 등)
             return;
         }
-
         this.reconnectAttempts++;
-        const delayMs = 3000;
-        console.log(`[ObdService] Reconnecting attempt ${this.reconnectAttempts}/${this.MAX_RECONNECT_ATTEMPTS} in ${delayMs}ms...`);
-        useBleStore.getState().setStatus('connecting'); // 'reconnecting' is not a valid state, so fallback to 'connecting' 
-        // BleStore에 'reconnecting' 상태가 없다면 'connecting' 사용. 
-        // type BleStatus = 'disconnected' | 'scanning' | 'connecting' | 'connected' | 'error';
-        // 'connecting' 상태를 재활용하거나 store 수정을 제안해야 함. 여기서는 connecting 사용.
-
         this.reconnectTimer = setTimeout(async () => {
             try {
-                // BLE 재연결 시도
                 if (this.currentDeviceId) {
-                    console.log(`[ObdService] Retrying connection to ${this.currentDeviceId}...`);
                     await this.setTargetDevice(this.currentDeviceId);
-
-                    // 성공 여부는 setTargetDevice 내부에서 에러가 안 나고 connected 상태가 되면 성공.
-                    // 하지만 setTargetDevice는 에러 시 disconnected로 설정함.
-                    // 성공적으로 연결되면 reconnectAttempts를 0으로 초기화해야 하는데, 
-                    // setTargetDevice 함수 내에서 초기화하고 있으므로(line 131) 위에서 호출하면 됨.
-                    // 다만, setTargetDevice는 비동기로 실패 시 catch 블록으로 이동하므로 여기서 확인 어려움.
-                    // -> setTargetDevice 내에서 성공 시 reconnectAttempts = 0 설정되어 있음.
-                }
-                // Classic BT 재연결 시도
-                else if (this.classicDevice) {
-                    // Classic은 API 구조상 connect 호출 필요. setClassicDevice는 이미 연결된 객체를 받는 구조라
-                    // 재연결 로직에는 ClassicBtService.connect(address) 가 필요함.
-                    // 현재 createClassicDevice 로직이 없음. 
-                    // ClassicBtService.connect(...) 호출 후 성공하면 setClassicDevice 호출.
-                    console.log(`[ObdService] Retrying Classic connection to ${this.classicDevice.address}...`);
-                    const isConnected = await ClassicBtService.connect(this.classicDevice);
-                    if (isConnected) {
-                        await this.setClassicDevice(this.classicDevice);
-                    } else {
-                        throw new Error('Classic connect failed');
-                    }
+                } else if (this.classicDevice) {
+                    const ok = await ClassicBtService.connect(this.classicDevice);
+                    if (ok) await this.setClassicDevice(this.classicDevice);
                 }
             } catch (e) {
-                console.error('[ObdService] Reconnect failed:', e);
-                // 재귀 호출로 다음 시도
                 this.attemptReconnect();
             }
-        }, delayMs);
+        }, 3000);
     }
 
-    // --- Auto Connect Logic ---
-
-    /**
-     * 마지막 연결 장치 정보 저장
-     */
     private async saveLastDevice(type: 'classic' | 'ble', id: string, name: string) {
         try {
-            const info = {
-                type,
-                id,
-                name: name || 'Unknown Device',
-                address: id, // Classic의 경우 id가 address임
-            };
-            await AsyncStorage.setItem(STORAGE_KEY_LAST_DEVICE, JSON.stringify(info));
-            console.log('[ObdService] Saved last device:', info);
-        } catch (e) {
-            console.error('[ObdService] Failed to save device:', e);
-        }
+            await AsyncStorage.setItem(STORAGE_KEY_LAST_DEVICE, JSON.stringify({ type, id, name }));
+        } catch (e) { }
     }
 
-    /**
-     * 마지막 연결 장치 정보 로드
-     */
     private async loadLastDevice() {
         try {
             const json = await AsyncStorage.getItem(STORAGE_KEY_LAST_DEVICE);
-            if (!json) return null;
-            return JSON.parse(json);
-        } catch (e) {
-            console.error('[ObdService] Failed to load last device:', e);
-            return null;
-        }
+            return json ? JSON.parse(json) : null;
+        } catch (e) { return null; }
     }
 
-    /**
-     * 앱 시작 시 자동 연결 시도
-     */
     public async tryAutoConnect() {
-        console.log('[ObdService] tryAutoConnect initiated');
-        const lastDevice = await this.loadLastDevice();
-        if (!lastDevice) {
-            console.log('[ObdService] No last device found, skipping auto connect');
-            return;
-        }
-
-        console.log(`[ObdService] Found last device: ${lastDevice.name} (${lastDevice.id}) [${lastDevice.type}]`);
-
-        // 이미 연결됨?
-        if (this.isConnected()) {
-            console.log('[ObdService] Already connected');
-            return;
-        }
-
+        const last = await this.loadLastDevice();
+        if (!last || this.isConnected()) return;
         try {
-            if (lastDevice.type === 'ble') {
-                console.log('[ObdService] Auto-connecting to BLE device...');
-                await this.setTargetDevice(lastDevice.id);
+            if (last.type === 'ble') {
+                await this.setTargetDevice(last.id);
             } else {
-                console.log('[ObdService] Auto-connecting to Classic BT device...');
-                // setClassicDevice는 BluetoothDevice 객체를 요구하므로 가짜 객체 생성
-                const deviceToConnect: BluetoothDevice = {
-                    id: lastDevice.id,
-                    name: lastDevice.name,
-                    address: lastDevice.address || lastDevice.id,
-                    bonded: true,
-                    deviceClass: '',
-                    rssi: 0,
-                    extra: new Map<string, Object>(),
-                } as unknown as BluetoothDevice;
-                await this.setClassicDevice(deviceToConnect);
+                await this.setClassicDevice({ id: last.id, name: last.name, address: last.id } as any);
             }
-        } catch (e) {
-            console.error('[ObdService] Auto connect failed:', e);
-        }
+        } catch (e) { }
     }
 }
 

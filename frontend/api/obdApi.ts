@@ -11,17 +11,30 @@ export interface ObdLogRequest {
     engineLoad?: number;
     fuelTrimShort?: number;
     fuelTrimLong?: number;
+    throttle?: number;
+    map?: number;
+    maf?: number;
+    intakeTemp?: number;
+    engineRuntime?: number;
+}
+
+/**
+ * 8.5단계: Idempotency(중복 방지)를 위한 배치 요청 구조
+ */
+export interface ObdBatchRequest {
+    batchId: string;
+    vehicleId: string;
+    logs: ObdLogRequest[];
 }
 
 /**
  * OBD 로그 배치 업로드
- * 3분(180초) 단위로 수집된 OBD 데이터를 백엔드로 전송
- * @param logs - ObdLogRequest 배열 (최대 180개)
+ * @param data - ObdBatchRequest (batchId 포함)
  */
-export const uploadObdBatch = async (logs: ObdLogRequest[]): Promise<void> => {
+export const uploadObdBatch = async (data: ObdBatchRequest): Promise<void> => {
     try {
-        console.log(`[obdApi] Uploading ${logs.length} OBD logs...`);
-        const response = await api.post('/telemetry/batch', logs);
+        console.log(`[obdApi] Uploading batch ${data.batchId} (${data.logs.length} logs)...`);
+        const response = await api.post('/telemetry/batch', data);
         console.log('[obdApi] Batch upload successful:', response.status);
     } catch (error) {
         console.error('[obdApi] Batch upload failed:', error);

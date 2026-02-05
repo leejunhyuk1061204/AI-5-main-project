@@ -22,17 +22,19 @@ class BackgroundTaskService {
 
     private options = {
         taskName: 'ObdBackgroundService',
-        taskTitle: '차봄 OBD 실행 중',
-        taskDesc: '백그라운드에서 차량 데이터를 수집하고 있습니다.',
+        taskTitle: '차봄 OBD 데이터 수집 중',
+        taskDesc: '백그라운드에서도 차량 진단 데이터가 안전하게 기록되고 있습니다.',
         taskIcon: {
             name: 'ic_launcher',
             type: 'mipmap',
         },
         color: '#0d7ff2',
-        linkingURI: 'yourSchemeHere://chat/jane', // deep link setup if needed
+        linkingURI: 'frontend://obd', // 앱의 OBD 화면으로 연결되도록 설정 (확인 필요)
         parameters: {
-            delay: 2000,
+            delay: 5000, // 하트비트 간격 (5초)
         },
+        // [안전망] 사용자가 알림에서 서비스를 일시정지하지 못하게 설정 (UI 옵션)
+        allowPause: false,
     };
 
     async start() {
