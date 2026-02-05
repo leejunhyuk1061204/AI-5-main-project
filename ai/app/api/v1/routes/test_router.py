@@ -17,8 +17,9 @@ from ai.app.services.visual.router_service import SceneType
 from ai.app.schemas.visual_schema import VisualResponse, DetectionItem
 from ai.app.schemas.audio_schema import AudioResponse
 from ai.app.schemas.wear_factor import VehicleMetadata, DrivingSummary # 공통 메타데이터는 재사용
+from ai.app.schemas.obd_anomaly_schema import ObdAnomalyResponse
 from pydantic import BaseModel, Field
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 from PIL import Image
 import io
 import os
@@ -68,17 +69,6 @@ class OBDDataPoint(BaseModel):
     load: float
     coolant: float
     voltage: float
-
-
-class AnomalyRequest(BaseModel):
-    time_series: List[Dict]
-
-
-class AnomalyResponse(BaseModel):
-    is_anomaly: bool
-    anomaly_score: float
-    threshold: float
-    contributing_factors: List[str]
 
 
 @connect_router.post("/predict/visual", response_model=VisualResponse)
@@ -168,19 +158,77 @@ async def connect_analyze_audio_url(request: FileUrlRequest):
     return await process_audio_mock(content)
 
 
-@connect_router.post("/predict/anomaly", response_model=AnomalyResponse)
-async def connect_analyze_anomaly(request: AnomalyRequest):
+@connect_router.post("/predict/anomaly", response_model=ObdAnomalyResponse)
+async def connect_analyze_anomaly(payload: Dict[str, Any] = Body(...)):
     """
-    [사용자 - Mock] LSTM 시계열 이상 탐지 Mock 응답 반환
+    [사용자 - Mock] OBD 이상 탐지 Mock 응답 반환
+    - 신규 명세(data/options) + 구형(time_series) payload 모두 허용
     """
-    data_count = len(request.time_series)
-    
-    return AnomalyResponse(
-        is_anomaly=data_count >= 10,
-        anomaly_score=0.75 if data_count >= 10 else 0.25,
-        threshold=0.70,
-        contributing_factors=["RPM", "VOLTAGE"] if data_count >= 10 else []
-    )
+    if "time_series" in payload and isinstance(payload.get("time_series"), list):
+        # Legacy payload
+        samples = payload.get("time_series", [])
+        vehicle_id = str(payload.get("vehicle_id", "mock-vehicle"))
+        trip_id = str(payload.get("trip_id", "mock-trip"))
+        window_sec = int(payload.get("window_sec", 60))
+        stride_sec = int(payload.get("stride_sec", 60))
+    else:
+        # New payload
+        samples = payload.get("data", []) if isinstance(payload.get("data"), list) else []
+        vehicle_id = str(payload.get("vehicle_id", "mock-vehicle"))
+        trip_id = str(payload.get("trip_id", "mock-trip"))
+        options = payload.get("options", {}) if isinstance(payload.get("options"), dict) else {}
+        window_sec = int(options.get("window_sec", 60))
+        stride_sec = int(options.get("stride_sec", 60))
+
+    data_count = len(samples)
+    is_anomaly = data_count >= 10
+    anomaly_score = 0.75 if is_anomaly else 0.25
+
+    return {
+        "meta": {
+            "vehicle_id": vehicle_id,
+            "trip_id": trip_id,
+            "timestamp_unit": "s",
+            "total_duration_sec": max(data_count, window_sec),
+            "window_sec": window_sec,
+            "stride_sec": stride_sec,
+            "num_windows": 1,
+        },
+        "is_anomaly": is_anomaly,
+        "anomaly_score": anomaly_score,
+        "domains": {
+            "engine": {
+                "domain": "engine",
+                "status": "PROCESSED",
+                "score": anomaly_score,
+                "threshold": 0.70,
+                "is_anomaly": is_anomaly,
+                "top_signals": (
+                    [
+                        {"feature": "engine_rpm", "contribution": 0.6},
+                        {"feature": "battery_voltage_v", "contribution": 0.4},
+                    ]
+                    if is_anomaly else None
+                ),
+            }
+        },
+        "events": (
+            [
+                {
+                    "type": "ENGINE_ANOMALY",
+                    "domain": "engine",
+                    "feature": "engine_rpm",
+                    "value": None,
+                    "threshold": 0.70,
+                    "window_index": 0,
+                    "severity": "WARNING",
+                    "message": "Engine anomaly detected by mock route.",
+                }
+            ]
+            if is_anomaly else []
+        ),
+        "window_results": [],
+    }
 
 
 @connect_router.post("/predict/embedding")
@@ -392,7 +440,7 @@ async def connect_list_endpoints():
             {"path": "/connect/predict/audio", "method": "POST", "description": "Audio Mock (파일 업로드)"},
             {"path": "/connect/visual", "method": "POST", "description": "Visual Mock (URL 방식)"},
             {"path": "/connect/audio", "method": "POST", "description": "Audio Mock (URL 방식)"},
-            {"path": "/connect/predict/anomaly", "method": "POST", "description": "LSTM 이상탐지 Mock"},
+            {"path": "/connect/predict/anomaly", "method": "POST", "description": "OBD 이상탐지 Mock (신규 명세)"},
             {"path": "/connect/predict/comprehensive", "method": "POST", "description": "종합 진단 Mock"},
             {"path": "/connect/predict/wear-factor", "method": "POST", "description": "마모율 예측 Mock"},
             {"path": "/connect/predict/embedding", "method": "POST", "description": "임베딩 Mock"},
