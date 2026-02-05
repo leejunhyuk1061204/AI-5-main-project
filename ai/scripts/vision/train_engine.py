@@ -19,19 +19,22 @@ from ultralytics import YOLO
 
 # =============================================================================
 # [Configuration] GPU Optimized Settings
-# (RTX 4090 Optimized Settings - Commented for reference)
 # =============================================================================
-# Phase 1: YOLOv8s (빠른 프로토타입)
-# Phase 2: Hard Negative Mining 후 YOLOv8m으로 업그레이드 가능
-BASE_MODEL = "yolov8s.pt"  # s: 빠른 학습, 추후 m으로 업그레이드
-DATA_YAML_PATH = "ai/data/yolo/engine/data.yaml"
+BASE_MODEL = "yolo11m.pt"
+
+# [Path Config] RunPod과 로컬 환경 자동 감지
+RUNPOD_DATA_PATH = "/workspace/large_data"
+LOCAL_DATA_PATH = "ai/data"
+DATA_ROOT = RUNPOD_DATA_PATH if os.path.exists(RUNPOD_DATA_PATH) else LOCAL_DATA_PATH
+
+DATA_YAML_PATH = os.path.join(DATA_ROOT, "yolo/engine/data.yaml")
 OUTPUT_DIR = "ai/runs/engine_model"
 SAVE_PATH = "ai/weights/engine/best.pt"
 
 # Training Hyperparameters (RTX 3050 6GB Optimized)
 DEFAULT_EPOCHS = 100
-BATCH_SIZE = 16  # VRAM 6GB 고려 (Original 4090: 32)
-IMG_SIZE = 640
+BATCH_SIZE = 2  # 1280 + Medium 모델에는 4도 큼 -> 2로 초저하향 (OOM 방지)
+IMG_SIZE = 1280
 OPTIMIZER = "AdamW"
 LR0 = 0.001
 LRF = 0.01
@@ -70,7 +73,7 @@ def evaluate_baseline():
     model = YOLO(BASE_MODEL)
     
     print(f"[Info] Evaluating with base model ({BASE_MODEL})...")
-    metrics = model.val(data=DATA_YAML_PATH, split='val', imgsz=IMG_SIZE)
+    metrics = model.val(data=DATA_YAML_PATH, split='val', imgsz=1280)
     
     map50 = metrics.box.map50
     map50_95 = metrics.box.map
@@ -88,7 +91,7 @@ def evaluate_baseline():
 # =============================================================================
 def train_model(epochs=DEFAULT_EPOCHS):
     print("\n" + "="*60)
-    print(f"[Step 2] Training Model (YOLOv8s, {epochs} epochs, batch={BATCH_SIZE})...")
+    print(f"[Step 2] Training Model (YOLOv8m, {epochs} epochs, batch={BATCH_SIZE})...")
     print("="*60)
     
     if not os.path.exists(DATA_YAML_PATH):
@@ -97,12 +100,19 @@ def train_model(epochs=DEFAULT_EPOCHS):
     
     model = YOLO(BASE_MODEL)
     
+    # [Weight Management] 기존 가중치가 있다면 백업 (누적 방지용)
+    if os.path.exists(SAVE_PATH):
+        old_path = SAVE_PATH.replace(".pt", "_old.pt")
+        import shutil
+        shutil.copy(SAVE_PATH, old_path)
+        print(f"📦 기존 가중치를 백업했습니다: {old_path}")
+
     # Optimized Training Config
     results = model.train(
         data=DATA_YAML_PATH,
         epochs=epochs,
-        imgsz=IMG_SIZE,
-        batch=BATCH_SIZE,
+        imgsz=1280,
+        batch=32,          # 런팟 상향 조정 (기존 2)
         device=0,  # GPU 0
         project=OUTPUT_DIR,
         name="run",
@@ -126,7 +136,7 @@ def train_model(epochs=DEFAULT_EPOCHS):
         fliplr=FLIPLR,
         
         # Performance
-        workers=WORKERS,
+        workers=8,         # 리눅스 환경 상향 조정 (기존 0)
         cache=True,  # RAM으로 데이터셋 캐싱 (속도 향상)
         
         # Logging
@@ -170,7 +180,7 @@ def evaluate_final():
     model = YOLO(SAVE_PATH)
     
     print(f"[Info] Evaluating with trained model ({SAVE_PATH})...")
-    metrics = model.val(data=DATA_YAML_PATH, split='val', imgsz=IMG_SIZE)
+    metrics = model.val(data=DATA_YAML_PATH, split='val', imgsz=1280)
     
     map50 = metrics.box.map50
     map50_95 = metrics.box.map
