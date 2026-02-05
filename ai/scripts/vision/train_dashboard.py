@@ -18,14 +18,20 @@ from ultralytics import YOLO
 # =============================================================================
 # [Configuration] 
 # =============================================================================
-BASE_MODEL = "yolov8n.pt"  # 계기판은 모델이 가벼워도 충분함 (n/s 권장)
-DATA_YAML_PATH = "ai/data/yolo/dashboard/data.yaml"
+BASE_MODEL = "yolo11m.pt"
+
+# [Path Config] RunPod과 로컬 환경 자동 감지
+RUNPOD_DATA_PATH = "/workspace/large_data"
+LOCAL_DATA_PATH = "ai/data"
+DATA_ROOT = RUNPOD_DATA_PATH if os.path.exists(RUNPOD_DATA_PATH) else LOCAL_DATA_PATH
+
+DATA_YAML_PATH = os.path.join(DATA_ROOT, "yolo/dashboard/data.yaml")
 OUTPUT_DIR = "ai/runs/dashboard_model"
 SAVE_PATH = "ai/weights/dashboard/best.pt"
 
 DEFAULT_EPOCHS = 100
-BATCH_SIZE = 8  # RTX 3050 (6GB) 에 맞게 줄임
-IMG_SIZE = 640
+BATCH_SIZE = 2  # 1280 + Medium 모델에는 4도 큼 -> 2로 초저하향 (OOM 방지)
+IMG_SIZE = 1280
 WORKERS = 0  # Windows 메모리 문제 방지
 
 def train_model(epochs=DEFAULT_EPOCHS):
@@ -35,16 +41,24 @@ def train_model(epochs=DEFAULT_EPOCHS):
         return
     
     model = YOLO(BASE_MODEL)
+
+    # [Weight Management] 기존 가중치가 있다면 백업 (누적 방지용)
+    if os.path.exists(SAVE_PATH):
+        old_path = SAVE_PATH.replace(".pt", "_old.pt")
+        import shutil
+        shutil.copy(SAVE_PATH, old_path)
+        print(f"📦 기존 가중치를 백업했습니다: {old_path}")
+
     results = model.train(
         data=DATA_YAML_PATH,
         epochs=epochs,
-        imgsz=IMG_SIZE,
-        batch=BATCH_SIZE,
+        imgsz=1280,
+        batch=32,          # 런팟 상향 조정 (기존 2)
         project=OUTPUT_DIR,
         name="run",
-        exist_ok=True,
+        exist_ok=True,     # 기존 폴더 덮어쓰기 (run1, run2... 누적 방지)
         device=0,
-        workers=WORKERS  # Windows 메모리 문제 방지
+        workers=8          # 리눅스 환경 상향 조정 (기존 0)
     )
     
     # 가중치 저장 - 실제 저장 경로를 동적으로 추적
@@ -60,6 +74,52 @@ def train_model(epochs=DEFAULT_EPOCHS):
     else:
         print(f"[Warning] Best model weight file not found at: {best_path}")
 
+def evaluate_model():
+    print(f"\n[Dashboard] 테스트 시작...")
+    if not os.path.exists(SAVE_PATH):
+        print(f"[Error] 학습된 모델이 없습니다: {SAVE_PATH}")
+        return
+    
+    # Ensure output directory exists for validation plots
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    
+    model = YOLO(SAVE_PATH)
+    metrics = model.val(
+        data=DATA_YAML_PATH, 
+        split='test', 
+        imgsz=1280, 
+        project=OUTPUT_DIR, 
+        name="val_test",
+        exist_ok=True
+    )
+    
+    # Detailed Metrics Extraction
+    names = model.names
+    precision = metrics.box.p  # Array of precision per class
+    recall = metrics.box.r     # Array of recall per class
+    
+    print("\n" + "="*60)
+    print(f"🎯 Dashboard Detailed Evaluation Results:")
+    print("-" * 60)
+    print(f"{'Class Name':<25} | {'Precision':<12} | {'Recall':<12}")
+    print("-" * 60)
+    
+    for i, name in names.items():
+        p_val = precision[i] if i < len(precision) else 0.0
+        r_val = recall[i] if i < len(recall) else 0.0
+        print(f"{name:<25} | {p_val:<12.4f} | {r_val:<12.4f}")
+    
+    print("-" * 60)
+    print(f"💡 mAP50:    {metrics.box.map50:.4f}")
+    print(f"💡 mAP50-95: {metrics.box.map:.4f}")
+    print("="*60)
+    
+    print(f"\n📈 상세 분석 차트 저장 위치:")
+    print(f"   [Confusion Matrix] {os.path.join(OUTPUT_DIR, 'val_test', 'confusion_matrix.png')}")
+    print(f"   [Confidence-Recall] {os.path.join(OUTPUT_DIR, 'val_test', 'R_curve.png')} (추천)")
+    print(f"   [Precision-Recall] {os.path.join(OUTPUT_DIR, 'val_test', 'PR_curve.png')}")
+    print("="*60 + "\n")
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Dashboard Warning Light Training")
     parser.add_argument("--mode", type=str, default="train", choices=["train", "test"])
@@ -68,3 +128,5 @@ if __name__ == "__main__":
     
     if args.mode == "train":
         train_model(args.epochs)
+    elif args.mode == "test":
+        evaluate_model()
