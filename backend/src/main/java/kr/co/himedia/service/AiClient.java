@@ -35,7 +35,7 @@ public class AiClient {
     @Value("${ai.server.url.visual:http://localhost:8001/api/v1/visual}")
     private String aiServerVisualUrl;
 
-    @Value("${ai.server.url.audio:http://localhost:8001/api/v1/audio}")
+    @Value("${ai.server.url.audio:http://localhost:8001/api/v1/predict/audio}")
     private String aiServerAudioUrl;
 
     @Value("${ai.server.url.comprehensive:http://localhost:8001/api/v1/connect/predict/comprehensive}")
