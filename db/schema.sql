@@ -211,6 +211,7 @@ CREATE TABLE IF NOT EXISTS diag_sessions (
     trigger_type diag_trigger_type,
     status diag_status,
     progress_message VARCHAR(1000),
+    dtc_context_json TEXT, -- DTC 모드 진단 시 사용된 DTC 정보 저장 (JSON)
     created_at TIMESTAMP DEFAULT NOW()
 );
 
@@ -274,8 +275,16 @@ CREATE TABLE IF NOT EXISTS dtc_freeze_frames (
     dtc_id UUID UNIQUE REFERENCES dtc_history (dtc_id),
     rpm FLOAT,
     speed FLOAT,
+    voltage FLOAT,
     coolant_temp FLOAT,
     engine_load FLOAT,
+    fuel_trim_short FLOAT,
+    fuel_trim_long FLOAT,
+    intake_temp FLOAT,
+    map FLOAT,
+    maf FLOAT,
+    throttle_pos FLOAT,
+    engine_runtime INT,
     ambient_temp FLOAT,
     fuel_pressure FLOAT,
     pids_snapshot JSONB

@@ -224,8 +224,16 @@ export interface DtcBatchReportRequest {
     freezeFrame?: {
         rpm?: number;
         speed?: number;
+        voltage?: number;
         coolantTemp?: number;
         engineLoad?: number;
+        fuelTrimShort?: number;
+        fuelTrimLong?: number;
+        intakeTemp?: number;
+        map?: number;
+        maf?: number;
+        throttlePos?: number;
+        engineRuntime?: number;
         ambientTemp?: number;
         fuelPressure?: number;
         pidsSnapshot?: string;

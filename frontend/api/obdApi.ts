@@ -34,7 +34,7 @@ export interface ObdBatchRequest {
 export const uploadObdBatch = async (data: ObdBatchRequest): Promise<void> => {
     try {
         console.log(`[obdApi] Uploading batch ${data.batchId} (${data.logs.length} logs)...`);
-        const response = await api.post('/telemetry/batch', data);
+        const response = await api.post('/api/v1/telemetry/batch', data);
         console.log('[obdApi] Batch upload successful:', response.status);
     } catch (error) {
         console.error('[obdApi] Batch upload failed:', error);
@@ -47,7 +47,7 @@ export const uploadObdBatch = async (data: ObdBatchRequest): Promise<void> => {
  * @param vehicleId - 차량 UUID
  */
 export const getConnectionStatus = async (vehicleId: string) => {
-    const response = await api.get(`/telemetry/status/${vehicleId}`);
+    const response = await api.get(`/api/v1/telemetry/status/${vehicleId}`);
     return response.data;
 };
 
@@ -56,5 +56,5 @@ export const getConnectionStatus = async (vehicleId: string) => {
  * @param vehicleId - 차량 UUID
  */
 export const disconnectVehicle = async (vehicleId: string): Promise<void> => {
-    await api.post(`/telemetry/status/${vehicleId}/disconnect`);
+    await api.post(`/api/v1/telemetry/status/${vehicleId}/disconnect`);
 };
