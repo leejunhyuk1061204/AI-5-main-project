@@ -117,6 +117,33 @@ CREATE TABLE IF NOT EXISTS car_model_master (
 
 -- 4. 텔레메트리 (Telemetry)
 
+-- OBD 장치 목록 (2.2.0) - 사용자 소유 OBD 어댑터
+CREATE TABLE IF NOT EXISTS obd_devices (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
+    user_id UUID NOT NULL REFERENCES users (user_id),
+    device_id VARCHAR(255) NOT NULL,
+    device_type VARCHAR(20) NOT NULL,
+    name VARCHAR(100),
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP,
+    UNIQUE (user_id, device_id)
+);
+
+-- OBD 장치-차량 연결 히스토리 (CALID/CVN, 마지막 연결)
+CREATE TABLE IF NOT EXISTS obd_device_vehicle_history (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
+    obd_device_id UUID NOT NULL REFERENCES obd_devices (id),
+    vehicles_id UUID NOT NULL REFERENCES vehicles (vehicles_id),
+    calid VARCHAR(255),
+    cvn VARCHAR(255),
+    last_connected_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_obd_history_device_last ON obd_device_vehicle_history (obd_device_id, last_connected_at DESC);
+CREATE INDEX IF NOT EXISTS idx_obd_history_device_calid_cvn ON obd_device_vehicle_history (obd_device_id, calid, cvn);
+
 -- OBD 실시간 로그 (2.2.1) - TimescaleDB
 CREATE TABLE IF NOT EXISTS obd_logs (
     time TIMESTAMPTZ NOT NULL,
