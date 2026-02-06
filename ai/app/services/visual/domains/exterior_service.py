@@ -76,7 +76,7 @@ async def run_exterior_yolo(
 
     try:
         # YOLOv8 추론
-        results = model.predict(source=image, save=False, conf=0.25)
+        results = model.predict(source=image, save=False, conf=0.25, imgsz=1280)
         
         for r in results:
             for box in r.boxes:
