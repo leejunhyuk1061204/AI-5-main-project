@@ -16,13 +16,15 @@ Router로 장면을 분류(ENGINE/DASHBOARD/EXTERIOR/TIRE)하고,
 }
 """
 import os
-from typing import Dict, Any, Optional, Tuple
+from typing import Dict, Any, Optional, Tuple, List
 import httpx
 import io
 import re
 import base64
 from PIL import Image
 from urllib.parse import urlparse
+import numpy as np
+import cv2
 
 from ai.app.services.visual.router_service import RouterService, SceneType, get_router_service
 from ai.app.services.common.llm_service import analyze_general_image, generate_training_labels
@@ -45,12 +47,46 @@ ALLOWED_DOMAINS = [
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
 
 
+def check_image_quality(image: Image.Image) -> List[str]:
+    """
+    이미지 품질 문제 감지
+    
+    Args:
+        image: PIL Image 객체
+    
+    Returns:
+        품질 문제 리스트 (예: ["TOO_DARK", "BLURRY"])
+    """
+    issues = []
+    img_array = np.array(image)
+    
+    # 1. 밝기 체크
+    if len(img_array.shape) == 3:  # RGB
+        brightness = np.mean(img_array)
+    else:  # Grayscale
+        brightness = np.mean(img_array)
+    
+    if brightness < 50:
+        issues.append("TOO_DARK")
+    elif brightness > 200:
+        issues.append("TOO_BRIGHT")
+    
+    # 2. 흐림 체크 (Laplacian variance)
+    gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY) if len(img_array.shape) == 3 else img_array
+    blur_score = cv2.Laplacian(gray, cv2.CV_64F).var()
+    
+    if blur_score < 100:
+        issues.append("BLURRY")
+    
+    return issues
 
-async def _safe_load_image(url: str) -> Tuple[Image.Image, bytes]:
+
+async def _safe_load_image(url: str) -> Tuple[Image.Image, bytes, List[str]]:
     """
     S3 URL 이미지를 안전하게 로드
     1. SSRF 방지 (URL 검증)
     2. 중복 다운로드 방지 (한 번만 다운로드하여 반환)
+    3. 이미지 품질 검증 (밝기, 흐림 체크)
     """
     # 0. Data URL 처리 (테스트용 base64)
     if url.startswith("data:"):
@@ -59,7 +95,8 @@ async def _safe_load_image(url: str) -> Tuple[Image.Image, bytes]:
             header, encoded = url.split(",", 1)
             content = base64.b64decode(encoded)
             image = Image.open(io.BytesIO(content)).convert("RGB")
-            return image, content
+            quality_warnings = check_image_quality(image)
+            return image, content, quality_warnings
         except Exception as e:
             raise ValueError(f"Invalid Data URL format: {e}")
 
@@ -107,7 +144,11 @@ async def _safe_load_image(url: str) -> Tuple[Image.Image, bytes]:
                 raise ValueError("Image too large")
                 
             image = Image.open(io.BytesIO(content)).convert("RGB")
-            return image, content
+            
+            # 3. 품질 검증
+            quality_warnings = check_image_quality(image)
+            
+            return image, content, quality_warnings
             
         except Exception as e:
             raise ValueError(f"Failed to load image from URL: {e}")
@@ -137,7 +178,7 @@ async def get_smart_visual_diagnosis(
     
     # Step 0: 이미지 안전 로드 (전처리)
     try:
-        image, image_bytes = await _safe_load_image(s3_url)
+        image, image_bytes, quality_warnings = await _safe_load_image(s3_url)
     except Exception as e:
         print(f"[Visual Service] 이미지 로드 실패: {e}")
         return {
@@ -307,21 +348,41 @@ async def get_smart_visual_diagnosis(
         if scene_type == SceneType.SCENE_ENGINE:
             # ENGINE: 기존 EngineAnomalyPipeline 사용
             from ai.app.services.visual.domains.engine.engine_anomaly_service import EngineAnomalyPipeline
+            from ai.app.services.visual.domains.engine.anomaly_detector_service import get_anomaly_detector_service
             
-            pipeline = EngineAnomalyPipeline(anomaly_detector=models.get("anomaly_detector"))
+            # ENGINE: YOLO (부품 탐지) → PatchCore (이상 탐지) → LLM (결함 해석)
             engine_yolo = models.get("engine_yolo")
+            anomaly_detector = models.get("anomaly_detector") or get_anomaly_detector_service()
             
+            pipeline = EngineAnomalyPipeline(anomaly_detector=anomaly_detector)
             try:
-                result_data = await pipeline.analyze(s3_url, image=image, image_bytes=image_bytes, yolo_model=engine_yolo)
-                # API 명세서 형식으로 바로 반환 (content 래핑 제거)
+                # PatchCore 분석 파이프라인 호출
+                result_data = await pipeline.analyze(
+                    s3_url=s3_url,
+                    image=image,
+                    image_bytes=image_bytes,
+                    yolo_model=engine_yolo,
+                    anomaly_detector=anomaly_detector
+                )
+                
+                # quality_warnings 추가
+                if quality_warnings:
+                    result_data["quality_warnings"] = quality_warnings
+                
+                # API 명세서 형식으로 바로 반환
                 return result_data
             finally:
                 await pipeline.close()
         
         elif scene_type == SceneType.SCENE_DASHBOARD:
-            # DASHBOARD: YOLO(10종) → LLM
+            # DASHBOARD: YOLO (경고등 탐지) → LLM Fallback
             dashboard_yolo = models.get("dashboard_yolo")
             result_data = await analyze_dashboard_image(image, s3_url, dashboard_yolo)
+            
+            # quality_warnings 추가
+            if quality_warnings:
+                result_data["quality_warnings"] = quality_warnings
+            
             # API 명세서 형식으로 바로 반환
             return result_data
         
@@ -329,6 +390,11 @@ async def get_smart_visual_diagnosis(
             # EXTERIOR: Unified YOLO (22 classes)
             exterior_yolo = models.get("exterior_yolo")
             result_data = await analyze_exterior_image(image, s3_url, exterior_yolo)
+            
+            # quality_warnings 추가
+            if quality_warnings:
+                result_data["quality_warnings"] = quality_warnings
+            
             # API 명세서 형식으로 바로 반환
             return result_data
         
@@ -336,6 +402,11 @@ async def get_smart_visual_diagnosis(
             # TIRE: YOLO → LLM
             tire_yolo = models.get("tire_yolo")
             result_data = await analyze_tire_image(image, s3_url, tire_yolo)
+            
+            # quality_warnings 추가
+            if quality_warnings:
+                result_data["quality_warnings"] = quality_warnings
+            
             # API 명세서 형식으로 바로 반환
             return result_data
         
@@ -344,12 +415,22 @@ async def get_smart_visual_diagnosis(
             print(f"[Visual Fallback] 정의되지 않은 장면: {scene_type} -> LLM으로 전환 요청")
             llm_result = await analyze_general_image(s3_url)
             print(f"[Visual Fallback] LLM 응답: {llm_result}")
+            
+            # quality_warnings 추가
+            if quality_warnings:
+                llm_result["quality_warnings"] = quality_warnings
+            
             return llm_result
             
     except Exception as e:
         print(f"[Visual Fallback] 분석 오류 발생, LLM으로 전환: {e}")
         llm_result = await analyze_general_image(s3_url)
         print(f"[Visual Fallback] LLM 응답: {llm_result}")
+        
+        # quality_warnings 추가
+        if quality_warnings:
+            llm_result["quality_warnings"] = quality_warnings
+        
         return llm_result
     
     finally:
