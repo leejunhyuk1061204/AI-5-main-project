@@ -38,8 +38,9 @@ public class OcrController {
     @PostMapping("/{vehicleId}/analyze-save")
     public ApiResponse<MaintenanceHistoryResponse> analyzeAndSave(
             @PathVariable("vehicleId") UUID vehicleId,
-            @RequestParam("file") MultipartFile file) {
-        MaintenanceHistoryResponse response = maintenanceService.analyzeAndSave(vehicleId, file);
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "manualData", required = false) String manualDataJson) {
+        MaintenanceHistoryResponse response = maintenanceService.analyzeAndSave(vehicleId, file, manualDataJson);
         return ApiResponse.success(response);
     }
 }

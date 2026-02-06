@@ -47,15 +47,23 @@ public class ReceiptAnalyzerService {
         OcrAnalysisResponse response = parseWithAi(rawText);
         response.setOcrText(rawText);
 
-        // 3. 소모품 이름 매핑 (DB 기반)
-        if (response.getConsumableItemCode() != null) {
+        // 3. 소모품 이름 매핑 및 카테고리 분류 (DB 기반)
+        if (response.getReceiptType() == null) {
+            response.setReceiptType("MAINTENANCE"); // 기본값
+        }
+
+        if (response.getConsumableItemCode() != null && !"UNKNOWN".equals(response.getConsumableItemCode())) {
             kr.co.himedia.dto.master.ConsumableItemDto item = masterDataService
                     .getConsumableByCode(response.getConsumableItemCode());
             if (item != null) {
                 response.setConsumableItemName(item.getName());
-            } else if ("UNKNOWN".equals(response.getConsumableItemCode())) {
-                response.setConsumableItemName("미분류 항목");
+                response.setReceiptType("MAINTENANCE");
             }
+        }
+
+        // 주유 정보가 있으면 FUELING으로 분류
+        if (response.getFuelType() != null || response.getFuelAmount() != null) {
+            response.setReceiptType("FUELING");
         }
 
         // 4. ocrData에 원본 텍스트 포함 (JSON 구조)
@@ -158,18 +166,27 @@ public class ReceiptAnalyzerService {
             headers.setContentType(org.springframework.http.MediaType.APPLICATION_JSON);
             headers.setBearerAuth(openAiApiKey);
 
-            String prompt = "You are a professional receipt parser. Extract the following information from the provided Korean receipt text and return ONLY a single JSON object. "
-                    +
-                    "Fields: " +
-                    "- shopName: string (Name of the business) " +
-                    "- maintenanceDate: string (ISO format YYYY-MM-DD) " +
-                    "- cost: number (Total amount, integer only) " +
-                    "- mileageAtMaintenance: number (Odometer/mileage value if present, otherwise null) " +
-                    "- consumableItemCode: string (Match one of: ENGINE_OIL, TIRES, BRAKE_PADS, WIPER, BATTERY, UNKNOWN) "
-                    +
-                    "If a value is missing, use null for shopName/maintenanceDate/cost/mileageAtMaintenance, and UNKNOWN for consumableItemCode. "
-                    +
-                    "Text: \n" + rawText;
+            // DB에서 소모품 목록 가져오기 (Prompt 동적화)
+            String itemsList = masterDataService.getAllConsumables().stream()
+                    .map(item -> item.getCode())
+                    .collect(java.util.stream.Collectors.joining(", "));
+
+            String prompt = "You are a professional receipt parser. Analyze the provided Korean receipt text and return ONLY a single JSON object.\n\n"
+                    + "First, determine if this is a 'MAINTENANCE' receipt or a 'FUELING' receipt.\n"
+                    + "- receiptType: string ('MAINTENANCE' or 'FUELING')\n\n"
+                    + "Common Fields:\n"
+                    + "- shopName: string (Business name)\n"
+                    + "- maintenanceDate: string (ISO format YYYY-MM-DD)\n"
+                    + "- cost: number (Total amount, integer only)\n"
+                    + "- mileageAtMaintenance: number (Odometer value if present, otherwise null)\n\n"
+                    + "For MAINTENANCE receipts (General repairs or consumable replacement):\n"
+                    + "- consumableItemCode: string (Match one of: " + itemsList + ", or UNKNOWN)\n\n"
+                    + "For FUELING receipts (Gas station, EV charging):\n"
+                    + "- fuelType: string ('GASOLINE', 'DIESEL', 'EV', 'LPG', 'premium_gasoline')\n"
+                    + "- unitPrice: number (Price per unit)\n"
+                    + "- fuelAmount: number (Amount of fuel/charge, e.g., 30.30)\n\n"
+                    + "If a value is missing, use null. Be precise.\n\n"
+                    + "Text: \n" + rawText;
 
             java.util.Map<String, Object> requestBody = new java.util.HashMap<>();
             requestBody.put("model", "gpt-4o-mini");
@@ -210,6 +227,14 @@ public class ReceiptAnalyzerService {
                                         ? parsedJson.path("mileageAtMaintenance").asDouble()
                                         : null)
                         .consumableItemCode(parsedJson.path("consumableItemCode").asText("UNKNOWN"))
+                        .receiptType(parsedJson.path("receiptType").asText("MAINTENANCE"))
+                        .fuelType(parsedJson.path("fuelType").asText(null))
+                        .unitPrice(parsedJson.has("unitPrice") && !parsedJson.path("unitPrice").isNull()
+                                ? parsedJson.path("unitPrice").asInt()
+                                : null)
+                        .fuelAmount(parsedJson.has("fuelAmount") && !parsedJson.path("fuelAmount").isNull()
+                                ? parsedJson.path("fuelAmount").asDouble()
+                                : null)
                         .ocrData(response.getBody())
                         .build();
             }

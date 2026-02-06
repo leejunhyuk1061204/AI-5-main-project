@@ -6,17 +6,28 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useAlertStore } from '../store/useAlertStore';
 import ocrApi, { OcrAnalysisResponse } from '../api/ocrApi';
 
-// 소모품 항목 목록
+// 소모품 항목 목록 (DB 동기화)
 const CONSUMABLE_ITEMS = [
     { code: 'ENGINE_OIL', name: '엔진 오일' },
+    { code: 'AIR_FILTER', name: '에어클리너' },
+    { code: 'CABIN_FILTER', name: '에어컨 필터' },
+    { code: 'BRAKE_FLUID', name: '브레이크 오일' },
+    { code: 'MISSION_OIL', name: '미션 오일' },
+    { code: 'FUEL_FILTER', name: '연료 필터' },
+    { code: 'COOLANT', name: '냉각수' },
+    { code: 'TIRES', name: '타이어 (전체)' },
     { code: 'TIRE_FRONT', name: '앞 타이어' },
     { code: 'TIRE_REAR', name: '뒤 타이어' },
+    { code: 'BRAKE_PADS', name: '브레이크 패드 (전체)' },
     { code: 'BRAKE_PAD_FRONT', name: '앞 브레이크 패드' },
     { code: 'BRAKE_PAD_REAR', name: '뒤 브레이크 패드' },
+    { code: 'SPARK_PLUG', name: '점화 플러그' },
+    { code: 'DRIVE_BELT', name: '구동 벨트 (겉벨트)' },
+    { code: 'WHEEL_ALIGNMENT', name: '휠 얼라인먼트' },
     { code: 'BATTERY_12V', name: '12V 배터리' },
-    { code: 'CABIN_FILTER', name: '에어컨 필터' },
-    { code: 'COOLANT', name: '냉각수' },
-    { code: 'OTHER', name: '기타' },
+    { code: 'WIPER', name: '와이퍼' },
+    { code: 'AIR_CON_REFRIGERANT', name: '에어컨 가스' },
+    { code: 'OTHER', name: '기타 정비' },
 ];
 
 export default function ReceiptResult({ navigation, route }: { navigation?: any; route?: any }) {
@@ -32,6 +43,20 @@ export default function ReceiptResult({ navigation, route }: { navigation?: any;
     const [memo, setMemo] = useState('');
     const [isSaving, setIsSaving] = useState(false);
     const [showItemPicker, setShowItemPicker] = useState(false);
+
+    // 콤마 포맷팅 유틸리티
+    const addCommas = (num: string | number) => {
+        if (num === null || num === undefined || num === '') return '';
+        const stringVal = num.toString();
+        const parts = stringVal.split('.');
+        parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+        return parts.length > 1 ? `${parts[0]}.${parts[1]}` : parts[0];
+    };
+
+    const removeCommas = (str: string) => {
+        if (!str) return '';
+        return str.toString().replace(/,/g, '');
+    };
 
     // 저장 처리
     const handleSave = async () => {
@@ -50,7 +75,17 @@ export default function ReceiptResult({ navigation, route }: { navigation?: any;
                 name: 'receipt.jpg',
             } as any);
 
-            // API 호출 (analyze-save)
+            // API 호출 (analyze-save) - 사용자 수정값(manualData) 포함
+            const manualData = {
+                shopName,
+                maintenanceDate,
+                cost: parseInt(removeCommas(cost) || '0'),
+                mileageAtMaintenance: parseFloat(removeCommas(mileage) || '0'),
+                consumableItemCode: selectedItem,
+                memo
+            };
+            formData.append('manualData', JSON.stringify(manualData));
+
             await ocrApi.analyzeAndSaveReceipt(vehicleId, formData);
 
             useAlertStore.getState().showAlert(
@@ -158,8 +193,8 @@ export default function ReceiptResult({ navigation, route }: { navigation?: any;
                                 <Text className="text-text-dim text-xs mb-2">비용</Text>
                                 <TextInput
                                     className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white"
-                                    value={cost}
-                                    onChangeText={setCost}
+                                    value={addCommas(cost)}
+                                    onChangeText={(val) => setCost(removeCommas(val).replace(/[^0-9]/g, ''))}
                                     placeholder="정비 비용"
                                     placeholderTextColor="#64748b"
                                     keyboardType="numeric"
@@ -171,8 +206,8 @@ export default function ReceiptResult({ navigation, route }: { navigation?: any;
                                 <Text className="text-text-dim text-xs mb-2">주행거리 (km)</Text>
                                 <TextInput
                                     className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white"
-                                    value={mileage}
-                                    onChangeText={setMileage}
+                                    value={addCommas(mileage)}
+                                    onChangeText={(val) => setMileage(removeCommas(val).replace(/[^0-9]/g, ''))}
                                     placeholder="주행거리"
                                     placeholderTextColor="#64748b"
                                     keyboardType="numeric"
