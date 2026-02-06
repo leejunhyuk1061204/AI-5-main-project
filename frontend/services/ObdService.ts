@@ -8,7 +8,7 @@ if (Platform.OS !== 'web') {
 import BleService from './BleService';
 import ClassicBtService from './ClassicBtService';
 import { OBD_PIDS, parseObdResponse, PidDefinition } from './ObdPidHelper';
-import { uploadObdBatch, ObdLogRequest, ObdBatchRequest } from '../api/obdApi';
+import { uploadObdBatch, ObdLogRequest, ObdBatchRequest, obdDeviceApi } from '../api/obdApi';
 import { sendDtcReport, sendDtcBatchReport } from '../api/aiApi';
 import { useBleStore } from '../store/useBleStore';
 import BackgroundService from './BackgroundService';
@@ -21,11 +21,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const STORAGE_KEY_LAST_DEVICE = 'last_obd_device';
 const STORAGE_KEY_LAST_TYPE = 'last_obd_type';
+const STORAGE_KEY_OBD_DEVICES = 'obd_devices_cache';
 
 export type ObdQualityStatus = 'OK' | 'STALE' | 'DISCONNECTED' | 'UNSUPPORTED' | 'PARSE_ERROR';
 
-/** [10단계] 주행 종료 감지 상태 */
-export type TripState = 'RUNNING' | 'SUSPECT_END' | 'ENDED';
+/** [10단계] 주행 종료 감지 상태 (WAITING_START: 연결됐으나 RPM+전압 조건 미충족) */
+export type TripState = 'WAITING_START' | 'RUNNING' | 'SUSPECT_END' | 'ENDED';
 export type SuspectReason = 'IDLE' | 'DISCONNECT';
 
 export interface ObdData {
@@ -98,6 +99,9 @@ class ObdService {
     // Current Snapshot
     private currentData: ObdData = { timestamp: new Date().toISOString() };
     private vin: string | null = null;
+    private calid: string | null = null;
+    private cvn: string | null = null;
+    private resolveVehicleTimer: ReturnType<typeof setTimeout> | null = null;
     private lastDtcCodes: string = '';
     private lastFreezeDtc: string = '';
 
@@ -134,6 +138,9 @@ class ObdService {
     // [10단계] 연속 관측 카운터
     private idleCount: number = 0; // RPM=0 && Speed=0 연속 카운트 (초)
     private disconnectCount: number = 0; // highAgeMs > 3000 연속 카운트 (틱)
+    // 주행 시작 조건: RPM > 300, 전압 12.7~13.3V 연속 3~5초 후 startTrip 1회 호출
+    private tripStartConditionCount: number = 0;
+    private tripStartTriggered: boolean = false;
 
     // [10단계] Grace Period
     private readonly GRACE_PERIOD_IDLE_MS = 60000; // 60초
@@ -214,10 +221,47 @@ class ObdService {
             clearTimeout(this.samplingTimer);
             this.samplingTimer = null;
         }
+        if (this.resolveVehicleTimer) {
+            clearTimeout(this.resolveVehicleTimer);
+            this.resolveVehicleTimer = null;
+        }
 
         // 폴링 플래그 리셋
         this.isPolling = false;
         this.isProcessingQueue = false;
+    }
+
+    private getDeviceId(): string | null {
+        if (this.connectionType === 'classic' && this.classicDevice) return this.classicDevice.address;
+        if (this.connectionType === 'ble' && this.currentDeviceId) return this.currentDeviceId;
+        return null;
+    }
+
+    private async doResolveAndConnect() {
+        this.resolveVehicleTimer = null;
+        const deviceId = this.getDeviceId();
+        if (!deviceId || !this.vin) {
+            console.warn('[ObdService] resolve-vehicle skipped: no deviceId or VIN');
+            return;
+        }
+        try {
+            const res = await obdDeviceApi.resolveVehicle({
+                deviceId,
+                vin: this.vin || undefined,
+                calid: this.calid || undefined,
+                cvn: this.cvn || undefined
+            });
+            if (!res.success || !res.data?.vehicleId) {
+                console.warn('[ObdService] resolve-vehicle returned no vehicleId');
+                return;
+            }
+            const vehicleId = res.data.vehicleId;
+            await obdDeviceApi.recordConnect(deviceId, { vehicleId });
+            this.setVehicleId(vehicleId);
+            console.log('[ObdService] Resolved vehicle and recorded connect:', vehicleId);
+        } catch (e) {
+            console.error('[ObdService] resolve-vehicle or recordConnect failed', e);
+        }
     }
 
     // ===== Classic Bluetooth 설정 =====
@@ -410,15 +454,16 @@ class ObdService {
         console.log(`[ObdService] Starting polling (${this.connectionType})...`);
         this.isPolling = true;
 
-        // [10단계] 상태 머신 초기화
-        this.tripState = 'RUNNING';
+        // [10단계] 주행 시작 전 대기 (RPM+전압 조건 충족 시 startTrip 1회 호출)
+        this.tripState = 'WAITING_START';
         this.suspectReason = null;
         this.suspectStartedAt = 0;
         this.isEndingTrip = false;
         this.ignoreResponses = false;
         this.idleCount = 0;
         this.disconnectCount = 0;
-        console.log('[TripStateChange] RUNNING (trip started)');
+        this.tripStartConditionCount = 0;
+        this.tripStartTriggered = false;
 
         // [11단계] PID 실패 관리 초기화 (A안: 주행 종료 시 리셋)
         this.pidFailCount.clear();
@@ -429,14 +474,6 @@ class ObdService {
         useBleStore.getState().setPolling(true);
         this.pollingLoop(intervalMs);
         this.samplingLoop(1000); // 6단계: 1초 고정 샘플링 시작
-
-        // [Auto Trip] 주행 시작 (Trip ID 발급)
-        if (this.vehicleId) {
-            console.log('[ObdService] Auto-starting trip for vehicle:', this.vehicleId);
-            useTripStore.getState().startTrip(this.vehicleId);
-        } else {
-            console.warn('[ObdService] Cannot auto-start trip: Vehicle ID not set');
-        }
 
         // 안드로이드 백그라운드 서비스 시작
         if (Platform.OS === 'android') {
@@ -698,7 +735,24 @@ class ObdService {
 
         this.samplingTimer = setTimeout(() => this.samplingLoop(intervalMs), intervalMs);
 
-        // [10단계] 주행 종료 자동 감지 로직 구동
+        // [10단계] 주행 시작 조건: RPM > 300, 전압 12.7~13.3V 연속 4초 후 startTrip 1회
+        if (this.tripState === 'WAITING_START' && this.vehicleId && !useTripStore.getState().isDriving && !this.tripStartTriggered) {
+            const rpmOk = snapshot.rpm !== undefined && snapshot.rpm > 300;
+            const voltOk = snapshot.voltage !== undefined && snapshot.voltage >= 12.7 && snapshot.voltage <= 13.3;
+            if (rpmOk && voltOk) {
+                this.tripStartConditionCount++;
+                if (this.tripStartConditionCount >= 4) {
+                    console.log('[ObdService] Trip start condition met (RPM+voltage 4s), calling startTrip');
+                    this.tripStartTriggered = true;
+                    this.tripState = 'RUNNING';
+                    useTripStore.getState().startTrip(this.vehicleId);
+                }
+            } else {
+                this.tripStartConditionCount = 0;
+            }
+        }
+
+        // [10단계] 주행 종료 자동 감지 로직 (이미 주행 시작된 경우만)
         this.checkTripTermination(snapshot, now);
     }
 
@@ -706,7 +760,7 @@ class ObdService {
      * [10단계] 주행 종료 상태 머신 체크
      */
     private checkTripTermination(snapshot: ObdData, now: number) {
-        if (!this.isPolling || this.isEndingTrip) return;
+        if (!this.isPolling || this.isEndingTrip || this.tripState !== 'RUNNING') return;
 
         // highAgeMs 계산: RPM 또는 Speed 중 최근 갱신 기준
         const rpmTs = this.lastUpdatedAt.get('rpm') || 0;
@@ -934,11 +988,22 @@ class ObdService {
                     this.lastFreezeDtc = result as string;
                     break;
 
-                // Mode 09 02: VIN
+                // Mode 09 02: VIN → 차량 특정용 09 04/06 수집 후 resolve-vehicle
                 case '0902':
                     console.log(`[ObdService] Mode 09 02 response (VIN): ${result}`);
                     this.vin = result as string;
-                    // VIN이 확보되면 차량 이미지 연동 등에 활용 가능 (추후 확장)
+                    this.enqueue(OBD_PIDS.CALID, QueuePriority.NORMAL);
+                    this.enqueue(OBD_PIDS.CVN, QueuePriority.NORMAL);
+                    if (this.resolveVehicleTimer) clearTimeout(this.resolveVehicleTimer);
+                    this.resolveVehicleTimer = setTimeout(() => this.doResolveAndConnect(), 2500);
+                    break;
+                case '0904':
+                    this.calid = (result as string)?.toString() || null;
+                    if (this.calid) console.log(`[ObdService] CALID: ${this.calid}`);
+                    break;
+                case '0906':
+                    this.cvn = (result as string)?.toString() || null;
+                    if (this.cvn) console.log(`[ObdService] CVN: ${this.cvn}`);
                     break;
             }
         }
@@ -1425,6 +1490,66 @@ class ObdService {
                 await this.setClassicDevice({ id: last.id, name: last.name, address: last.id } as any);
             }
         } catch (e) { }
+    }
+
+    /** 서버에서 OBD 장치 목록 조회 후 캐시 저장 (앱 시작 시 1회 호출) */
+    public async loadAndCacheDevices(): Promise<void> {
+        try {
+            const res = await obdDeviceApi.getDevices();
+            if (res.success && res.data) {
+                await AsyncStorage.setItem(STORAGE_KEY_OBD_DEVICES, JSON.stringify(res.data));
+            }
+        } catch (e) {
+            console.warn('[ObdService] loadAndCacheDevices failed', e);
+        }
+    }
+
+    /** 캐시된 OBD 장치 목록 반환 (재연결 등에서 사용) */
+    public async getCachedDevices(): Promise<Array<{ deviceId: string; deviceType: string; name: string }>> {
+        try {
+            const json = await AsyncStorage.getItem(STORAGE_KEY_OBD_DEVICES);
+            if (!json) return [];
+            const list = JSON.parse(json);
+            return Array.isArray(list) ? list.map((d: any) => ({
+                deviceId: d.deviceId,
+                deviceType: d.deviceType || 'classic',
+                name: d.name || d.deviceId
+            })) : [];
+        } catch (e) {
+            return [];
+        }
+    }
+
+    /** 주기 재연결 간격(ms): 다중 장치 1분, 단일 2분 */
+    public async getReconnectIntervalMs(): Promise<number> {
+        const list = await this.getCachedDevices();
+        return list.length > 1 ? 60000 : 120000;
+    }
+
+    private cacheRoundRobinIndex = 0;
+
+    /** 캐시된 장치 목록 기준 라운드로빈으로 1대 직접 연결 시도 (스캔 없음) */
+    public async tryAutoConnectFromCache(): Promise<void> {
+        if (this.isConnected()) return;
+        const list = await this.getCachedDevices();
+        if (list.length === 0) return;
+        const index = this.cacheRoundRobinIndex % list.length;
+        this.cacheRoundRobinIndex = index + 1;
+        const device = list[index];
+        try {
+            if (device.deviceType === 'ble') {
+                await this.setTargetDevice(device.deviceId);
+            } else {
+                const bonded = await ClassicBtService.getBondedDevices();
+                const match = bonded.find((d: { address: string }) => d.address === device.deviceId);
+                if (match) {
+                    const ok = await ClassicBtService.connect(match);
+                    if (ok) await this.setClassicDevice(match);
+                }
+            }
+        } catch (e) {
+            console.warn('[ObdService] tryAutoConnectFromCache failed for', device.deviceId, e);
+        }
     }
 }
 

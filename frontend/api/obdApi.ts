@@ -1,4 +1,49 @@
 import api from './axios';
+import { ApiResponse } from './axios';
+
+export interface ObdDeviceDto {
+    id: string;
+    deviceId: string;
+    deviceType: string;
+    name: string;
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface ObdDeviceRegisterRequest {
+    deviceId: string;
+    deviceType: 'ble' | 'classic';
+    name?: string;
+}
+
+export interface ConnectHistoryRequest {
+    vehicleId: string;
+}
+
+export interface ResolveVehicleRequest {
+    deviceId: string;
+    vin?: string;
+    calid?: string;
+    cvn?: string;
+}
+
+const obdDeviceApi = {
+    getDevices: async (): Promise<ApiResponse<ObdDeviceDto[]>> => {
+        const response = await api.get('/api/v1/obd/devices');
+        return response.data;
+    },
+    registerDevice: async (request: ObdDeviceRegisterRequest): Promise<ApiResponse<ObdDeviceDto>> => {
+        const response = await api.post('/api/v1/obd/devices', request);
+        return response.data;
+    },
+    recordConnect: async (deviceId: string, request: ConnectHistoryRequest): Promise<void> => {
+        await api.put(`/api/v1/obd/devices/${encodeURIComponent(deviceId)}/connect`, request);
+    },
+    resolveVehicle: async (request: ResolveVehicleRequest): Promise<ApiResponse<{ vehicleId: string }>> => {
+        const response = await api.post('/api/v1/obd/resolve-vehicle', request);
+        return response.data;
+    }
+};
 
 // OBD 로그 요청 인터페이스 (백엔드 ObdLogDto와 매칭)
 export interface ObdLogRequest {
@@ -58,3 +103,5 @@ export const getConnectionStatus = async (vehicleId: string) => {
 export const disconnectVehicle = async (vehicleId: string): Promise<void> => {
     await api.post(`/api/v1/telemetry/status/${vehicleId}/disconnect`);
 };
+
+export { obdDeviceApi };

@@ -148,6 +148,7 @@ export default function App() {
           try {
             await loadUser(); // 사용자 정보 미리 로드
             const vehicles = await fetchVehicles();
+            ObdService.loadAndCacheDevices().catch(() => {});
 
             // FCM 토큰 발급 및 서버 동기화 (자동 로그인 시)
             await NotificationService.registerFcmToken();

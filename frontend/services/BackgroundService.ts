@@ -1,22 +1,35 @@
 import BackgroundService from 'react-native-background-actions';
 import { Platform } from 'react-native';
+import ObdService from './ObdService';
 
 const sleep = (time: number) => new Promise<void>((resolve) => setTimeout(() => resolve(), time));
+
+const HEARTBEAT_MS = 5000;
 
 class BackgroundTaskService {
     private isRunning = false;
 
-    // 백그라운드에서 실행될 작업 (무한 루프)
-    private obdBackgroundTask = async (taskDataArguments?: any) => {
-        const { delay } = taskDataArguments || { delay: 1000 };
+    private obdBackgroundTask = async () => {
+        let intervalMs = 120000;
+        try {
+            intervalMs = await ObdService.getReconnectIntervalMs();
+        } catch (e) {
+            console.warn('[BackgroundService] getReconnectIntervalMs failed, using 2min', e);
+        }
+        const reconnectEveryTicks = Math.max(1, Math.floor(intervalMs / HEARTBEAT_MS));
+        let tick = 0;
 
         while (BackgroundService.isRunning()) {
-            // ObdService의 Polling은 별도의 Timer(setInterval/setTimeout)로 동작하지만,
-            // 이 무한 루프가 돌아가야 Android Foreground Service가 유지됨.
-            // 필요하다면 여기서 ObdService의 상태를 체크하거나 특정 작업을 수행할 수 있음.
-
-            // console.log('[BackgroundService] Heartbeat...');
-            await sleep(delay);
+            await sleep(HEARTBEAT_MS);
+            tick++;
+            if (tick >= reconnectEveryTicks) {
+                tick = 0;
+                try {
+                    await ObdService.tryAutoConnectFromCache();
+                } catch (e) {
+                    console.warn('[BackgroundService] tryAutoConnectFromCache failed', e);
+                }
+            }
         }
     };
 
@@ -30,9 +43,7 @@ class BackgroundTaskService {
         },
         color: '#0d7ff2',
         linkingURI: 'frontend://obd', // 앱의 OBD 화면으로 연결되도록 설정 (확인 필요)
-        parameters: {
-            delay: 5000, // 하트비트 간격 (5초)
-        },
+        parameters: {},
         // [안전망] 사용자가 알림에서 서비스를 일시정지하지 못하게 설정 (UI 옵션)
         allowPause: false,
     };

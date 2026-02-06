@@ -216,16 +216,42 @@ export const OBD_PIDS: { [key: string]: PidDefinition } = {
         bytes: 20, // VIN은 여러 프레임으로 응답됨
         unit: '',
         decoder: (bytes) => {
-            // VIN은 ASCII 문자로 변환
-            // 첫 번째 바이트는 메시지 카운트이므로 건너뜀
             const vinBytes = bytes.slice(1);
             let vin = '';
             for (const byte of vinBytes) {
-                if (byte >= 0x20 && byte <= 0x7E) { // 출력 가능한 ASCII
+                if (byte >= 0x20 && byte <= 0x7E) {
                     vin += String.fromCharCode(byte);
                 }
             }
             return vin.trim();
+        }
+    },
+    // 09 04: Calibration ID (CALID)
+    CALID: {
+        mode: '09',
+        pid: '04',
+        name: 'Calibration ID',
+        description: 'ECU calibration/software ID',
+        bytes: 4,
+        unit: '',
+        decoder: (bytes) => {
+            const data = bytes.slice(1);
+            const ascii = data.map((b) => (b >= 0x20 && b <= 0x7E) ? String.fromCharCode(b) : '').join('').trim();
+            if (ascii.length > 0) return ascii;
+            return data.map((b) => b.toString(16).padStart(2, '0')).join('');
+        }
+    },
+    // 09 06: Calibration Verification Number (CVN)
+    CVN: {
+        mode: '09',
+        pid: '06',
+        name: 'CVN',
+        description: 'Calibration Verification Number',
+        bytes: 4,
+        unit: '',
+        decoder: (bytes) => {
+            const data = bytes.slice(1);
+            return data.map((b) => b.toString(16).padStart(2, '0')).join('');
         }
     }
 };
