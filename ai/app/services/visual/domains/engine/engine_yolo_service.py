@@ -81,7 +81,7 @@ async def run_yolo_inference(
 
     # YOLO 추론
     try:
-        results = model.predict(source=source, save=False, conf=0.25)
+        results = model.predict(source=source, save=False, conf=0.25, imgsz=1280)
     except Exception as e:
         print(f"[YOLO Service] Inference Error: {e}")
         return VisualResponse(
