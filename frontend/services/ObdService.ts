@@ -238,7 +238,6 @@ class ObdService {
         this.reconnectAttempts = 0;
         useBleStore.getState().setConnectedDeviceName(device.name || 'Classic Device');
         useBleStore.getState().setConnectedDevice(device.address);
-        useBleStore.getState().setConnectedDevice(device.address);
         useBleStore.getState().setStatus('connected');
 
         // Save for auto-connect
@@ -329,10 +328,10 @@ class ObdService {
                 console.log('[ObdService] BLE Notifications enabled');
                 useBleStore.getState().setStatus('connected');
                 useBleStore.getState().setConnectedDevice(this.currentDeviceId);
-                useBleStore.getState().setConnectedDeviceName(this.currentDeviceId);
+                // BLE에서는 현재 deviceId만 알 수 있으므로 임시로 ID를 이름으로 사용
                 useBleStore.getState().setConnectedDeviceName(this.currentDeviceId);
 
-                // Save for auto-connect
+                // Save for auto-connect (이름 정보가 없으므로 id를 그대로 사용)
                 this.saveLastDevice('ble', this.currentDeviceId, this.currentDeviceId);
 
                 await this.initializeElm327();
@@ -1023,8 +1022,16 @@ class ObdService {
                 freezeFrame: {
                     rpm: this.currentData.rpm,
                     speed: this.currentData.speed,
+                    voltage: this.currentData.voltage,
                     coolantTemp: this.currentData.coolant_temp,
                     engineLoad: this.currentData.engine_load,
+                    fuelTrimShort: this.currentData.fuel_trim_short,
+                    fuelTrimLong: this.currentData.fuel_trim_long,
+                    intakeTemp: this.currentData.intake_temp,
+                    map: this.currentData.map,
+                    maf: this.currentData.maf,
+                    throttlePos: this.currentData.throttle,
+                    engineRuntime: this.currentData.engine_runtime,
                     pidsSnapshot: JSON.stringify(this.currentData)
                 }
             });
@@ -1230,7 +1237,7 @@ class ObdService {
             if (!NetworkService.IsConnected) {
                 console.log('[ObdService] Offline, saving to queue...');
                 await OfflineStorage.addToQueue({
-                    url: '/telemetry/batch',
+                    url: '/api/v1/telemetry/batch',
                     method: 'POST',
                     body: JSON.stringify(batchRequest),
                     timestamp: Date.now()
@@ -1244,7 +1251,7 @@ class ObdService {
             } catch (error) {
                 console.error(`[ObdService] Batch upload failed (${batchId}), saving to offline queue:`, error);
                 await OfflineStorage.addToQueue({
-                    url: '/telemetry/batch',
+                    url: '/api/v1/telemetry/batch',
                     method: 'POST',
                     body: JSON.stringify(batchRequest),
                     timestamp: Date.now()
@@ -1318,8 +1325,16 @@ class ObdService {
             this.classicDataSubscription = null;
         }
 
+        // 연결 타입별로 정리
         if (this.connectionType === 'classic' && this.classicDevice) {
             await ClassicBtService.disconnect(this.classicDevice);
+        } else if (this.connectionType === 'ble' && this.currentDeviceId) {
+            // BLE의 경우 BleService를 통해 명시적으로 연결 해제
+            try {
+                await BleService.disconnect(this.currentDeviceId);
+            } catch (e) {
+                console.error('[ObdService] Failed to disconnect BLE device', e);
+            }
         }
 
         this.connectionType = null;

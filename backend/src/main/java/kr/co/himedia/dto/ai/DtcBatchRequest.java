@@ -30,8 +30,16 @@ public class DtcBatchRequest {
     public static class FreezeFrameData {
         private Double rpm;
         private Double speed;
+        private Double voltage;
         private Double coolantTemp;
         private Double engineLoad;
+        private Double fuelTrimShort;
+        private Double fuelTrimLong;
+        private Double intakeTemp;
+        private Double map;
+        private Double maf;
+        private Double throttlePos;
+        private Integer engineRuntime;
         private Double ambientTemp;
         private Double fuelPressure;
         private String pidsSnapshot;

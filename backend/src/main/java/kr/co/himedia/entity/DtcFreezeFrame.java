@@ -32,11 +32,35 @@ public class DtcFreezeFrame {
     @Column(name = "speed")
     private Double speed;
 
+    @Column(name = "voltage")
+    private Double voltage;
+
     @Column(name = "coolant_temp")
     private Double coolantTemp;
 
     @Column(name = "engine_load")
     private Double engineLoad;
+
+    @Column(name = "fuel_trim_short")
+    private Double fuelTrimShort;
+
+    @Column(name = "fuel_trim_long")
+    private Double fuelTrimLong;
+
+    @Column(name = "intake_temp")
+    private Double intakeTemp;
+
+    @Column(name = "map")
+    private Double map;
+
+    @Column(name = "maf")
+    private Double maf;
+
+    @Column(name = "throttle_pos")
+    private Double throttlePos;
+
+    @Column(name = "engine_runtime")
+    private Integer engineRuntime;
 
     @Column(name = "ambient_temp")
     private Double ambientTemp;
@@ -44,6 +68,6 @@ public class DtcFreezeFrame {
     @Column(name = "fuel_pressure")
     private Double fuelPressure;
 
-    @Column(name = "pids_snapshot", columnDefinition = "TEXT")
-    private String pidsSnapshot; // JSON String
+    @Column(name = "pids_snapshot", columnDefinition = "JSONB")
+    private String pidsSnapshot; // JSON String (JSONB 컬럼에 저장)
 }
