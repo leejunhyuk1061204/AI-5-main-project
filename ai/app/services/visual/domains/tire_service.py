@@ -60,7 +60,7 @@ async def run_tire_yolo(
         return {"is_worn": None, "confidence": 0.0, "label": None}
     
     try:
-        results = yolo_model.predict(source=image, save=False, conf=0.25)
+        results = yolo_model.predict(source=image, save=False, conf=0.25, imgsz=1280)
         
         if not results or len(results) == 0:
             return {"is_worn": None, "confidence": 0.0, "label": None}

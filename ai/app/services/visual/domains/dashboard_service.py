@@ -57,7 +57,7 @@ async def run_dashboard_yolo(
         return []
     
     try:
-        results = yolo_model.predict(source=image, save=False, conf=0.25)
+        results = yolo_model.predict(source=image, save=False, conf=0.25, imgsz=1280)
         detections = []
         
         for r in results:
