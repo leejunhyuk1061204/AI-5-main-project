@@ -7,6 +7,7 @@ import kr.co.himedia.common.BaseEntity;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
+import lombok.Setter;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
@@ -18,6 +19,7 @@ import java.util.UUID;
 @Entity
 @Table(name = "maintenance_logs")
 @Getter
+@Setter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class MaintenanceHistory extends BaseEntity {
 
@@ -53,13 +55,16 @@ public class MaintenanceHistory extends BaseEntity {
     @Column(name = "ocr_data", columnDefinition = "jsonb")
     private String ocrData;
 
+    @Column(name = "receipt_id")
+    private UUID receiptId;
+
     @Column(columnDefinition = "TEXT")
     private String memo;
 
     @Builder
     public MaintenanceHistory(Vehicle vehicle, LocalDate maintenanceDate, Double mileageAtMaintenance,
             ConsumableItem consumableItem, Boolean isStandardized, String shopName, Integer cost, String ocrData,
-            String memo) {
+            String memo, UUID receiptId) {
         this.vehicle = vehicle;
         this.maintenanceDate = maintenanceDate;
         this.mileageAtMaintenance = mileageAtMaintenance;
@@ -69,5 +74,6 @@ public class MaintenanceHistory extends BaseEntity {
         this.cost = cost;
         this.ocrData = ocrData;
         this.memo = memo;
+        this.receiptId = receiptId;
     }
 }

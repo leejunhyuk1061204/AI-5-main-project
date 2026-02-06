@@ -12,9 +12,11 @@ public class MaintenanceHistoryRequest {
     private Double mileageAtMaintenance;
     private Long consumableItemId;
     private String consumableItemCode;
+    private String consumableItemName;
     private Boolean isStandardized;
     private String shopName;
     private Integer cost;
     private String ocrData;
     private String memo;
+    private java.util.UUID receiptId;
 }
