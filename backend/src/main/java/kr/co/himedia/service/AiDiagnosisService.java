@@ -10,19 +10,13 @@ import kr.co.himedia.entity.DiagSession.DiagTriggerType;
 import kr.co.himedia.repository.*;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 import java.util.concurrent.TimeUnit;
-
-import java.util.stream.Collectors;
 
 /**
  * AI 진단 및 DTC 처리 서비스
@@ -41,6 +35,8 @@ public class AiDiagnosisService {
     private final DiagSessionRepository diagSessionRepository;
     private final DiagResultRepository diagResultRepository;
     private final AiEvidenceRepository aiEvidenceRepository;
+    private final DtcFreezeFrameRepository dtcFreezeFrameRepository;
+    private final DtcCodeRepository dtcCodeRepository;
     private final AiClient aiClient;
     private final ObjectMapper objectMapper;
 
@@ -61,6 +57,8 @@ public class AiDiagnosisService {
             DiagSessionRepository diagSessionRepository,
             DiagResultRepository diagResultRepository,
             AiEvidenceRepository aiEvidenceRepository,
+            DtcFreezeFrameRepository dtcFreezeFrameRepository,
+            DtcCodeRepository dtcCodeRepository,
             AiClient aiClient,
             ObjectMapper objectMapper,
             FcmService fcmService,
@@ -76,6 +74,8 @@ public class AiDiagnosisService {
         this.diagSessionRepository = diagSessionRepository;
         this.diagResultRepository = diagResultRepository;
         this.aiEvidenceRepository = aiEvidenceRepository;
+        this.dtcFreezeFrameRepository = dtcFreezeFrameRepository;
+        this.dtcCodeRepository = dtcCodeRepository;
         this.aiClient = aiClient;
         this.objectMapper = objectMapper;
         this.fcmService = fcmService;
@@ -107,63 +107,121 @@ public class AiDiagnosisService {
      * DTC 이력 저장 및 즉시 AI 분석/알림 (비동기 아님 - 외부 API 포함)
      * RabbitMQ 제거 후 직접 호출로 변경
      */
+    /**
+     * 단일 DTC 처리 (하위 호환성 유지)
+     */
     @Transactional
     public void processDtc(DtcDto dtcDto) {
-        // 1. DTC 이력 저장
-        DtcHistory history = DtcHistory.builder()
-                .vehiclesId(UUID.fromString(dtcDto.getVehicleId()))
-                .dtcCode(dtcDto.getDtcCode())
-                .description(dtcDto.getDescriptionEn())
-                .severity(dtcDto.getSeverity())
-                .status(DtcHistory.DtcStatus.valueOf(dtcDto.getStatus()))
+        DtcBatchRequest batchRequest = DtcBatchRequest.builder()
+                .vehicleId(dtcDto.getVehicleId())
+                .dtcs(List.of(new DtcBatchRequest.DtcInfo(
+                        dtcDto.getDtcCode(),
+                        "STORED",
+                        dtcDto.getStatus() != null ? dtcDto.getStatus() : "ACTIVE")))
                 .build();
-        dtcHistoryRepository.save(history);
-        log.info("Saved DTC History: {}", dtcDto.getDtcCode());
-
-        // 2. RAG 및 FCM 알림 발송 (직접 호출)
-        try {
-            sendDtcNotification(dtcDto);
-        } catch (Exception e) {
-            log.error("Failed to send DTC notification", e);
-            // 알림 실패가 Transaction 롤백을 유발하지 않도록 함 (선택 사항)
-            // @Transactional이 걸려있으므로 RuntimeException은 롤백됨.
-            // 알림만 실패하고 저장은 성공하게 하려면 try-catch 필수.
-        }
+        processDtcBatch(batchRequest);
     }
 
-    private void sendDtcNotification(DtcDto dtcDto) {
-        // 1. 차량 정보 및 소유주 확인
-        UUID vehicleId = UUID.fromString(dtcDto.getVehicleId());
+    @Transactional
+    public void processDtcBatch(DtcBatchRequest request) {
+        UUID vehicleId = UUID.fromString(request.getVehicleId());
         Vehicle vehicle = vehicleRepository.findById(vehicleId)
                 .orElseThrow(() -> new RuntimeException("Vehicle not found: " + vehicleId));
 
-        String fcmToken = userService.getFcmToken(vehicle.getUserId());
-        if (fcmToken == null) {
-            log.info("No FCM token for user. Skip notification. UserID: {}", vehicle.getUserId());
-            return;
+        List<String> savedCodes = new ArrayList<>();
+        List<String> descriptions = new ArrayList<>();
+        boolean freezeFrameSaved = false;
+
+        // 1. 모든 DTC 저장
+        for (DtcBatchRequest.DtcInfo info : request.getDtcs()) {
+            // 상세 정보 조회 (DTC 마스터 테이블 활용)
+            Optional<DtcCode> master = dtcCodeRepository.findByCodeGeneric(info.getCode());
+            String desc = master.isPresent() ? master.get().getDescriptionKo() : "알 수 없는 고장 코드";
+
+            DtcHistory.DtcType dtcType = parseDtcType(info.getType());
+            DtcHistory.DtcStatus dtcStatus = parseDtcStatus(info.getStatus());
+
+            DtcHistory history = DtcHistory.builder()
+                    .vehiclesId(vehicleId)
+                    .dtcCode(info.getCode())
+                    .description(desc)
+                    .status(dtcStatus)
+                    .dtcType(dtcType)
+                    .build();
+            history = dtcHistoryRepository.save(history);
+
+            savedCodes.add(info.getCode());
+            descriptions.add(desc);
+
+            // 2. Freeze Frame 저장: 첫 번째 DTC에만 1건 저장 (중복 방지)
+            if (request.getFreezeFrame() != null && !freezeFrameSaved) {
+                DtcFreezeFrame ff = DtcFreezeFrame.builder()
+                        .dtcHistory(history)
+                        .rpm(request.getFreezeFrame().getRpm())
+                        .speed(request.getFreezeFrame().getSpeed())
+                        .coolantTemp(request.getFreezeFrame().getCoolantTemp())
+                        .engineLoad(request.getFreezeFrame().getEngineLoad())
+                        .ambientTemp(request.getFreezeFrame().getAmbientTemp())
+                        .fuelPressure(request.getFreezeFrame().getFuelPressure())
+                        .pidsSnapshot(request.getFreezeFrame().getPidsSnapshot())
+                        .build();
+                dtcFreezeFrameRepository.save(ff);
+                freezeFrameSaved = true;
+            }
         }
 
-        // 2. RAG 지식 검색 (이미 번역/정제된 텍스트 가정)
-        String query = dtcDto.getDtcCode() + " " + dtcDto.getDescriptionEn();
-        List<String> searchResults = knowledgeService.searchKnowledge(query, 1);
+        // 3. 통합 알림 발송
+        if (!savedCodes.isEmpty()) {
+            sendBatchDtcNotification(vehicle, savedCodes, descriptions);
+        }
+    }
 
-        // RAG 결과가 있으면 그것을 '설명'으로 사용, 없으면 기본 설명 사용
-        String explanation = searchResults.isEmpty() ? dtcDto.getDescriptionEn() : searchResults.get(0);
+    /** type 문자열을 DtcType으로 변환. null/unknown 시 STORED 폴백 */
+    private DtcHistory.DtcType parseDtcType(String type) {
+        if (type == null || type.isBlank()) return DtcHistory.DtcType.STORED;
+        try {
+            return DtcHistory.DtcType.valueOf(type.trim().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            log.warn("[DTC Batch] Unknown dtc_type '{}', fallback to STORED", type);
+            return DtcHistory.DtcType.STORED;
+        }
+    }
 
-        // 3. 알림 메시지 구성 (최소한의 조립)
-        String title = "차량 이상 감지";
-        String body = dtcDto.getDtcCode() + ": " + explanation;
+    /** status 문자열을 DtcStatus로 변환. null/unknown 시 ACTIVE 폴백 */
+    private DtcHistory.DtcStatus parseDtcStatus(String status) {
+        if (status == null || status.isBlank()) return DtcHistory.DtcStatus.ACTIVE;
+        try {
+            return DtcHistory.DtcStatus.valueOf(status.trim().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            log.warn("[DTC Batch] Unknown status '{}', fallback to ACTIVE", status);
+            return DtcHistory.DtcStatus.ACTIVE;
+        }
+    }
 
-        // 4. TTS용 텍스트 (프론트엔드가 읽을 원문 그대로 전달)
-        String ttsText = explanation;
+    private void sendBatchDtcNotification(Vehicle vehicle, List<String> codes, List<String> descs) {
+        String fcmToken = userService.getFcmToken(vehicle.getUserId());
+        if (fcmToken == null)
+            return;
+
+        int count = codes.size();
+        String summary = String.join(", ", descs.stream().limit(2).collect(Collectors.toList()));
+        if (count > 2)
+            summary += " 등";
+
+        String title = "차량 이상 감지 (" + count + "건)";
+        String body = codes.get(0) + " 외 " + (count - 1) + "건의 고장이 감지되었습니다.";
+
+        // 스마트 TTS 문장 생성
+        String ttsText = String.format("%d건의 차량 이상이 감지되었습니다. 주요 항목은 %s 입니다. 안전한 곳에 정차 후 상세 내용을 확인해 주세요.",
+                count, summary);
 
         Map<String, String> data = new HashMap<>();
-        data.put("type", "DTC_ALERT");
-        data.put("dtcCode", dtcDto.getDtcCode());
+        data.put("type", "DTC_BATCH_ALERT");
+        data.put("codes", String.join(",", codes));
         data.put("tts", ttsText);
 
-        // 5. FCM 발송
         fcmService.sendMessage("User-" + vehicle.getUserId(), fcmToken, title, body, data);
+        log.info("Sent Batch DTC Notification: vehicle={}, codes={}", vehicle.getVehicleId(), codes);
     }
 
     /**

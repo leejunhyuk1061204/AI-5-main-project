@@ -30,9 +30,9 @@ DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'media_type') T
 
 DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'evidence_status') THEN CREATE TYPE evidence_status AS ENUM ('REQUESTED', 'UPLOADED', 'FAILED'); END IF; END $$;
 
-DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'dtc_type') THEN CREATE TYPE dtc_type AS ENUM ('STORED', 'PENDING', 'PERMANENT'); END IF; END $$;
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'dtc_type') THEN CREATE TYPE dtc_type AS ENUM ('STORED', 'PENDING', 'PERMANENT', 'FREEZE_FRAME'); END IF; END $$;
 
-DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'dtc_status') THEN CREATE TYPE dtc_status AS ENUM ('ACTIVE', 'RESOLVED', 'CLEARED'); END IF; END $$;
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'dtc_status') THEN CREATE TYPE dtc_status AS ENUM ('ACTIVE', 'RESOLVED', 'CLEARED', 'PENDING', 'STORED'); END IF; END $$;
 
 DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'dtc_resolution_type') THEN CREATE TYPE dtc_resolution_type AS ENUM ('AUTO', 'MANUAL', 'OBD_CLEAR'); END IF; END $$;
 

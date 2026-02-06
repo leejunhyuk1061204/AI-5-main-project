@@ -126,7 +126,14 @@ public ResponseEntity<ApiResponse<Void>> uploadObdLogs(@RequestBody ObdBatchRequ
 ### 2.1 API 계층
 
 #### aiApi.ts
-**신규 추가**: `sendDtcReport()` 함수
+**추가된 DTC 관련 API**:
+
+- `sendDtcReport(data: DtcReportRequest)`  
+  - 단일 DTC 보고용(하위 호환/테스트용) 엔드포인트: `POST /api/v1/ai/dtc`
+  - 현재 앱 플로우에서는 **직접 사용하지 않음**.
+- `sendDtcBatchReport(data: DtcBatchReportRequest)`  
+  - Mode 03(Stored DTCs) + Mode 02(Freeze Frame)을 **배치로 통합 보고**하는 실제 사용 API  
+  - 엔드포인트: `POST /api/v1/ai/dtc/batch`
 
 ```typescript
 export interface DtcReportRequest {
@@ -140,16 +147,32 @@ export interface DtcReportRequest {
     status?: 'ACTIVE' | 'STORED' | 'PENDING';
 }
 
+export interface DtcBatchReportRequest {
+    vehicleId: string;
+    dtcs: { code: string; type: string; status: string }[];
+    freezeFrame?: {
+        rpm?: number;
+        speed?: number;
+        coolantTemp?: number;
+        engineLoad?: number;
+        ambientTemp?: number;
+        fuelPressure?: number;
+        pidsSnapshot?: string;
+    };
+}
+
 export const sendDtcReport = async (data: DtcReportRequest): Promise<void> => {
     await api.post('/api/v1/ai/dtc', data);
 };
+
+export const sendDtcBatchReport = async (data: DtcBatchReportRequest): Promise<void> => {
+    await api.post('/api/v1/ai/dtc/batch', data);
+};
 ```
 
-**목적**: DTC(고장 코드) 실시간 AI 서버 보고
-
-**사용 시나리오**:
-- Mode 03 조회로 DTC 발견 시 즉시 AI 서버에 전송
-- 운전자 알림 및 진단 데이터 수집
+**목적**:
+- `sendDtcReport`: 단일 코드 테스트/호환용
+- `sendDtcBatchReport`: **실제 DTC 보고 흐름** (복수 코드 + Freeze Frame 스냅샷)
 
 #### obdApi.ts
 **변경사항**:
@@ -375,35 +398,47 @@ private async endTripAndDisconnect() {
 - 데이터 손실 방지 (버퍼 플러시)
 - 주행 종료 시점 명확화
 
-##### D. DTC 자동 보고
+##### D. DTC 자동 보고 (Mode 01 → 02/03 Edge 기반)
 
-**신규 추가**:
-```typescript
-// Mode 03 조회 및 DTC 보고
-const dtcResult = await this.queryPid('GET_DTCS');
-if (dtcResult && dtcResult.value && typeof dtcResult.value === 'string') {
-    const dtcCodes = dtcResult.value.split(', ');
-    for (const code of dtcCodes) {
-        if (code.trim()) {
-            await sendDtcReport({
-                vehicleId: this.currentVehicleId,
-                dtcCode: code,
-                status: 'ACTIVE'
-            });
-            console.log(`[ObdService] DTC reported: ${code}`);
-        }
-    }
-}
-```
+**최종 구조**:
 
-**트리거 시점**:
-- 주행 시작 시 1회 조회
-- 이후 주기적 조회 (30초마다, 선택적)
+1. **01 01 (DTC_STATUS) 폴링**
+   - `pollingLoop()`에서 5초 주기로 `OBD_PIDS.DTC_STATUS`를 큐에 넣음.
+   - 디코더는 `"MIL ON (3 DTCs)"`/`"MIL OFF (0 DTCs)"`처럼 문자열을 반환.
 
-**장점**:
-- 실시간 고장 코드 모니터링
-- AI 기반 진단 데이터 축적
-- 사전 예방 정비 알림 기반 제공
+2. **0 → N(>0) 변화 감지**
+   - `ObdService.ts`에 `previousDtcCount: number` 필드를 두고,  
+     직전 01 01 응답과 현재 응답의 DTC 개수를 비교.
+   - **직전 0, 현재 >0 인 “엣지”가 발생할 때만** 상세 수집을 시작:
+     ```typescript
+     const text = result.toString();
+     const match = text.match(/(\d+)\s*DTCs?/i);
+     const currentCount = match ? parseInt(match[1], 10) : 0;
+     if (previousDtcCount === 0 && currentCount > 0) {
+         // 여기에서만 상세 수집 시작
+         this.reportDetailedDtc(text);
+     }
+     previousDtcCount = currentCount;
+     ```
+
+3. **Mode 03 + Mode 02 상세 수집 및 배치 전송**
+   - `reportDetailedDtc()` 내부에서:
+     - `lastDtcCodes`, `lastFreezeDtc` 초기화
+     - `GET_DTCS`(Mode 03)와 `FREEZE_DTC`(Mode 02)를 **HIGH 우선순위**로 큐에 추가
+     - 최대 5초 대기하면서 두 응답 수집
+     - `lastDtcCodes`를 쉼표 기준으로 파싱해 `type: 'STORED'` DTC 목록 구성
+     - `lastFreezeDtc`(Mode 02) 결과를 `type: 'FREEZE_FRAME'`으로 1개 추가 (중복 제거)
+     - `sendDtcBatchReport(...)`로 **한 번만** 배치 보고:
+       - `vehicleId`
+       - `dtcs: { code, type, status }[]`
+       - `freezeFrame`: 현재 스냅샷(`rpm`, `speed`, `coolantTemp`, `engineLoad`, `pidsSnapshot` 등)
+
+**결과**:
+- 동일 고장이 계속 유지되는 동안에도,  
+  - **01 01 기준 “0 → N”이 되는 최초 시점에만** Mode 02/03 수집 + 백엔드 보고 수행.
+- 앱/연결 재시작 시:
+  - `previousDtcCount`가 0에서 시작하므로,  
+  - 이미 존재하는 DTC에 대해서도 **시작 시 1회 보고**가 일어난다.
 
 ##### E. 코드 리팩토링
 
@@ -794,3 +829,73 @@ async setClassicDevice(device: BluetoothDevice) {
 - **사용자 경험 개선** (자동 주행 종료, 실시간 DTC 알림)
 
 **현재 상태로 배포 가능**하며, 향후 개선 사항은 필요에 따라 단계적으로 적용하면 됩니다.
+
+---
+
+## 8. DTC 고도화 추가 변경사항 및 부족한 점 (Git 최신 반영)
+
+최근 Git에서 DTC 관련으로 추가·수정된 항목을 기준으로, **현재 구현 상태**와 **부족한 점**을 정리했습니다.
+
+### 8.1 최신 DTC 관련 변경 요약
+
+| 구분 | 파일 | 변경 내용 |
+|------|------|-----------|
+| 백엔드 | `AiController.java` | `POST /ai/dtc/batch` 추가 (Mode 03 + Mode 02 통합) |
+| 백엔드 | `AiDiagnosisService.java` | `processDtcBatch()` 구현, Freeze Frame 저장, 배치 알림 |
+| 백엔드 | `DtcBatchRequest.java` | 신규 DTO (vehicleId, dtcs[], freezeFrame) |
+| 백엔드 | `DtcFreezeFrame.java` | 신규 엔티티 (dtc_freeze_frames) |
+| 백엔드 | `DtcFreezeFrameRepository.java` | 신규 Repository |
+| 프론트 | `aiApi.ts` | `sendDtcBatchReport()` 추가, `/api/v1/ai/dtc/batch` 호출 |
+| 프론트 | `ObdService.ts` | `reportDetailedDtc()`에서 배치+프리즈프레임 전송 |
+
+- 프론트는 **단일 DTC**(`sendDtcReport`)는 사용하지 않고, **배치 전송**(`sendDtcBatchReport`)만 사용 중입니다.
+- 백엔드는 단일(`/ai/dtc`) + 배치(`/ai/dtc/batch`) 모두 지원하며, 배치 시 Freeze Frame을 `DtcFreezeFrame` 엔티티로 저장합니다.
+
+### 8.2 부족한 점 및 수정 권장 사항 (업데이트)
+
+#### 1) **DtcType에 FREEZE_FRAME 없음 → 런타임 예외** *(해결됨)*
+
+- **수정**: `DtcHistory.DtcType`에 `FREEZE_FRAME` 추가, DB `dtc_type` enum에도 동일 값 반영.
+- **결과**: 프론트에서 `type: 'FREEZE_FRAME'`으로 전송해도 `valueOf` 예외 없이 정상 저장.
+
+#### 2) **DB dtc_status enum과 Java DtcStatus 불일치** *(해결됨)*
+
+- **수정**: `schema.sql`의 `dtc_status` enum에 `PENDING`, `STORED` 추가.
+- **Java**: `DtcHistory.DtcStatus` (`ACTIVE`, `RESOLVED`, `CLEARED`, `PENDING`, `STORED`)와 일치.
+
+#### 3) **DTC 중복 보고 방지 미구현** *(부분 해결 / 백엔드 추가 개선 여지)*
+
+- **프론트**: 01 01 DTC 개수 기준 **0 → N(>0) 엣지에서만** Mode 02/03 수집 + `sendDtcBatchReport` 수행 → 동일 세션 내 과도한 중복 전송 방지.
+- **백엔드**: 현재는 모든 배치를 수신해 `dtc_history`에 저장하며,  
+  - 향후 차량+코드 세트 시그니처 기반으로 **동일 세트에 대한 FCM/진단 중복 억제 로직**을 추가하는 것이 권장된다.
+
+#### 4) **Freeze Frame 데이터 1:N 중복 저장** *(해결됨)*
+
+- **수정 전**: `processDtcBatch()`에서 동일 `freezeFrame`을 배치 내 모든 DTC에 대해 각각 저장 → 동일 스냅샷 N행.
+- **수정 후**:
+  - `freezeFrameSaved` 플래그를 도입하여 **첫 번째 DTC에 대해서만 1건 저장**.
+  - 설계상 “Freeze Frame 1건 ↔ 대표 DTC 1건” 관계로 단순화.
+
+#### 5) **프론트 Freeze Frame 필드 누락 (선택)**
+
+- 여전히 선택 사항이지만, 현재 구현은 다음만 전송:
+  - `rpm`, `speed`, `coolantTemp`, `engineLoad`, `pidsSnapshot`
+- `ambientTemp`, `fuelPressure`는 추후 PID 수집 안정화 시 확장 여지.
+
+#### 6) **스키마와 엔티티 불일치 (dtc_history)**
+
+- `dtc_manufacturer`, `resolution_type` 필드는 여전히 엔티티에 직접 매핑되지 않음(기본값/nullable로 운영).
+- 장기적으로는 감사/리포트 요구사항에 따라 엔티티에 추가 매핑하거나, 별도 뷰/리포트 테이블로 정리하는 것이 좋다.
+
+### 8.3 정리
+
+| 항목 | 심각도 | 비고 |
+|------|--------|------|
+| FREEZE_FRAME → DtcType | 해결됨 | enum/DB 모두 FREEZE_FRAME 반영 |
+| dtc_status enum 불일치 | 해결됨 | DB/Java enum 동기화 완료 |
+| DTC 중복 보고 방지 | 중간 | 프론트 0→N 엣지 처리 완료, 백엔드 시그니처 기반 억제는 추가 개선 여지 |
+| Freeze Frame 1:N 중복 | 해결됨 | 첫 번째 DTC에만 1건 저장 |
+| 프론트 freezeFrame 필드 | 낮음 | 선택적 보강 (ambientTemp, fuelPressure 등) |
+| dtc_history 스키마 정합성 | 낮음 | 유지보수/리포팅 필요 시 추가 정렬 예정 |
+
+**현재 상태**: 프론트/백 기준 필수 이슈는 모두 처리되었고, 남은 항목은 “중복 알림 억제 튜닝” 및 “필드 확장/리포팅 품질” 수준의 고도화 과제입니다.
