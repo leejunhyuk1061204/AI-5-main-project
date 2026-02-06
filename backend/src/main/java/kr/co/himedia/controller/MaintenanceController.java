@@ -24,20 +24,24 @@ public class MaintenanceController {
     @PostMapping("/{vehicleId}/maintenance")
     public ApiResponse<List<MaintenanceHistoryResponse>> registerMaintenance(
             @PathVariable("vehicleId") UUID vehicleId,
-            @jakarta.validation.Valid @RequestBody List<MaintenanceHistoryRequest> requests) {
+            @RequestBody List<MaintenanceHistoryRequest> requests) {
 
         List<MaintenanceHistoryResponse> responses = maintenanceService.registerMaintenanceList(vehicleId, requests);
         return ApiResponse.success(responses);
     }
 
     /**
-     * 정비 이력 조회
+     * 정비 이력 조회 (필터링 포함)
      */
     @GetMapping("/{vehicleId}/maintenance")
     public ApiResponse<List<MaintenanceHistoryResponse>> getMaintenanceHistory(
-            @PathVariable("vehicleId") UUID vehicleId) {
+            @PathVariable("vehicleId") UUID vehicleId,
+            @RequestParam(value = "itemCode", required = false) String itemCode,
+            @RequestParam(value = "startDate", required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate startDate,
+            @RequestParam(value = "endDate", required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate endDate) {
 
-        List<MaintenanceHistoryResponse> responses = maintenanceService.getMaintenanceHistory(vehicleId);
+        List<MaintenanceHistoryResponse> responses = maintenanceService.getMaintenanceHistory(vehicleId, itemCode,
+                startDate, endDate);
         return ApiResponse.success(responses);
     }
 
@@ -53,5 +57,26 @@ public class MaintenanceController {
     public ApiResponse<kr.co.himedia.dto.maintenance.MaintenanceReceiptResponse> analyzeReceipt(
             @RequestParam("file") org.springframework.web.multipart.MultipartFile file) {
         return ApiResponse.success(maintenanceService.analyzeReceipt(file));
+    }
+
+    /**
+     * 정비 이력 수정
+     */
+    @PutMapping("/maintenance/{historyId}")
+    public ApiResponse<MaintenanceHistoryResponse> updateMaintenance(
+            @PathVariable("historyId") UUID historyId,
+            @RequestBody MaintenanceHistoryRequest request) {
+
+        MaintenanceHistoryResponse response = maintenanceService.updateMaintenance(historyId, request);
+        return ApiResponse.success(response);
+    }
+
+    /**
+     * 정비 이력 삭제
+     */
+    @DeleteMapping("/maintenance/{historyId}")
+    public ApiResponse<Void> deleteMaintenance(@PathVariable("historyId") UUID historyId) {
+        maintenanceService.deleteMaintenance(historyId);
+        return ApiResponse.success(null);
     }
 }
