@@ -216,6 +216,34 @@ export const sendDtcReport = async (data: DtcReportRequest): Promise<void> => {
 };
 
 /**
+ * DTC 배치 및 프리즈 프레임 보고
+ */
+export interface DtcBatchReportRequest {
+    vehicleId: string;
+    dtcs: { code: string; type: string; status: string }[];
+    freezeFrame?: {
+        rpm?: number;
+        speed?: number;
+        coolantTemp?: number;
+        engineLoad?: number;
+        ambientTemp?: number;
+        fuelPressure?: number;
+        pidsSnapshot?: string;
+    };
+}
+
+export const sendDtcBatchReport = async (data: DtcBatchReportRequest): Promise<void> => {
+    try {
+        console.log('[aiApi] Sending DTC batch report, count:', data.dtcs.length);
+        await api.post('/api/v1/ai/dtc/batch', data);
+        console.log('[aiApi] DTC batch report sent successfully');
+    } catch (error) {
+        console.error('[aiApi] Failed to send DTC batch report:', error);
+        throw error;
+    }
+};
+
+/**
  * 차량별 진단 목록 조회
  */
 export const getDiagnosisList = async (vehicleId: string): Promise<any[]> => {

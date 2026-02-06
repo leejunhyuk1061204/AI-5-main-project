@@ -20,18 +20,18 @@ def download_zip(brand, year, model):
     # 1. 이미 파싱/임베딩된 경우 건너뛰기
     if os.path.exists(parsed_filepath):
         print(f"  [SKIP] Already parsed: {parsed_filename}")
-        return True
-    
+        return True, False
+
     embedded_filepath = os.path.join(EMBEDDED_DIR, parsed_filename)
     if os.path.exists(embedded_filepath):
         print(f"  [SKIP] Already embedded: {parsed_filename}")
-        return True
+        return True, False
 
     # 2. 이미 다운로드된 ZIP이 있는 경우 (중단된 경우 대비)
     if os.path.exists(filepath):
-        if os.path.getsize(filepath) > 1024 * 1024: # 1MB 이상인 경우만 유효하다고 판단
+        if os.path.getsize(filepath) > 1024 * 1024:
             print(f"  [READY] ZIP exists: {filename}")
-            return True
+            return True, False
         else:
             os.remove(filepath)
 
@@ -47,12 +47,14 @@ def download_zip(brand, year, model):
                 for chunk in response.iter_content(chunk_size=8192):
                     f.write(chunk)
             print(f"    [OK] Saved: {filename}")
-            return True
+            return True, True  # (Success, DidDownload)
         else:
             print(f"    [FAIL] Status: {response.status_code}")
+            return False, True # (Fail, DidDownload)
     except Exception as e:
         print(f"    [ERROR] {e}")
-    return False
+        return False, True # (Error, DidDownload)
+    return False, False
 
 def main():
     os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -80,8 +82,9 @@ def main():
         # track_all_progress.py 에서는 for brand, year, model in targets: 로 사용함
         if len(item) == 3:
             brand, year, model = item
-            download_zip(brand, year, model)
-            time.sleep(DELAY)
+            success, did_download = download_zip(brand, year, model)
+            if did_download:
+                time.sleep(DELAY)
         else:
             print(f"[WARN] Invalid item format: {item}")
 
