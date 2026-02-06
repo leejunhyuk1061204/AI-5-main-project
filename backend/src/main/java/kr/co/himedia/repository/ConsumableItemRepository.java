@@ -9,4 +9,6 @@ import java.util.Optional;
  */
 public interface ConsumableItemRepository extends JpaRepository<ConsumableItem, Long> {
     Optional<ConsumableItem> findByCode(String code);
+
+    Optional<ConsumableItem> findByName(String name);
 }

@@ -19,7 +19,7 @@ import java.util.Date;
 @Component
 public class JwtTokenProvider {
 
-    @Value("${jwt.secret:vmb70atp-bd59-400a-9450-523a253d0a90-this-is-a-long-secret-key-for-development}")
+    @Value("${jwt.secret}")
     private String salt;
 
     private SecretKey secretKey;

@@ -3,6 +3,7 @@ package kr.co.himedia.common.exception;
 import kr.co.himedia.common.ApiResponse;
 import kr.co.himedia.common.exception.ErrorCode;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -33,11 +34,39 @@ public class GlobalExceptionHandler {
         protected ResponseEntity<ApiResponse<?>> handleMethodArgumentNotValidException(
                         MethodArgumentNotValidException e) {
                 log.error("MethodArgumentNotValidException", e);
-                String message = e.getBindingResult().getAllErrors().get(0).getDefaultMessage();
+                java.util.List<org.springframework.validation.FieldError> fieldErrors = e.getBindingResult()
+                                .getFieldErrors();
+                String message = fieldErrors.stream()
+                                .map(error -> String.format("%s: %s", error.getField(), error.getDefaultMessage()))
+                                .collect(java.util.stream.Collectors.joining(", "));
+
+                if (message.isEmpty()) {
+                        message = e.getBindingResult().getAllErrors().get(0).getDefaultMessage();
+                }
+
                 return ResponseEntity
-                                .status((org.springframework.http.HttpStatusCode) ErrorCode.INVALID_INPUT_VALUE
-                                                .getStatus())
-                                .body(ApiResponse.fail(ErrorCode.INVALID_INPUT_VALUE.getCode(), message));
+                                .status(HttpStatus.BAD_REQUEST)
+                                .body(ApiResponse.fail("COMMON_001", "입력 오류 - " + message));
+        }
+
+        @ExceptionHandler(org.springframework.validation.BindException.class)
+        protected ResponseEntity<ApiResponse<?>> handleBindException(org.springframework.validation.BindException e) {
+                log.error("BindException", e);
+                String details = e.getBindingResult().getFieldErrors().stream()
+                                .map(error -> error.getField() + ": " + error.getDefaultMessage())
+                                .collect(java.util.stream.Collectors.joining(", "));
+                return ResponseEntity
+                                .status(HttpStatus.BAD_REQUEST)
+                                .body(ApiResponse.fail("COMMON_001", "바인딩 오류 - " + details));
+        }
+
+        @ExceptionHandler(org.springframework.http.converter.HttpMessageNotReadableException.class)
+        protected ResponseEntity<ApiResponse<?>> handleHttpMessageNotReadableException(
+                        org.springframework.http.converter.HttpMessageNotReadableException e) {
+                log.error("HttpMessageNotReadableException", e);
+                return ResponseEntity
+                                .status(HttpStatus.BAD_REQUEST)
+                                .body(ApiResponse.fail("COMMON_001", "JSON 파싱 오류: " + e.getMessage()));
         }
 
         /**

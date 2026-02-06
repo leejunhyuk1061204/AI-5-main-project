@@ -17,6 +17,7 @@ public class MaintenanceHistoryResponse {
     private Integer cost;
     private String ocrData;
     private String memo;
+    private UUID receiptId;
 
     public MaintenanceHistoryResponse(MaintenanceHistory history) {
         this.id = history.getId();
@@ -34,5 +35,6 @@ public class MaintenanceHistoryResponse {
         this.cost = history.getCost();
         this.ocrData = history.getOcrData();
         this.memo = history.getMemo();
+        this.receiptId = history.getReceiptId();
     }
 }
