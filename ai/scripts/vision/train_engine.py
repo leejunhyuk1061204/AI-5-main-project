@@ -49,14 +49,17 @@ WORKERS = 0      # Windows 메모리 충돌 방지 (Original 4090: 8)
 # PATIENCE = 20
 # WORKERS = 8
 
-# Augmentation
-MOSAIC = 1.0
-MIXUP = 0.1
-HSV_H = 0.015
-HSV_S = 0.7
-HSV_V = 0.4
-FLIPUD = 0.0
-FLIPLR = 0.5
+# Augmentation (Small Dataset Optimized - 강화!)
+MOSAIC = 1.0     # 최대 유지
+MIXUP = 0.2      # 0.1 → 0.2 증가 (더 많은 다양성)
+HSV_H = 0.02     # 0.015 → 0.02 (색조 변화 증가)
+HSV_S = 0.9      # 0.7 → 0.9 (채도 변화 증가)
+HSV_V = 0.6      # 0.4 → 0.6 (명도 변화 증가)
+FLIPUD = 0.0     # 유지 (엔진룸은 상하 반전 X)
+FLIPLR = 0.5     # 유지
+
+# Regularization (과적합 방지)
+WEIGHT_DECAY = 0.0005  # 추가!
 
 # =============================================================================
 # 1. Baseline Evaluation
@@ -112,7 +115,7 @@ def train_model(epochs=DEFAULT_EPOCHS):
         data=DATA_YAML_PATH,
         epochs=epochs,
         imgsz=1280,
-        batch=32,          # 런팟 상향 조정 (기존 2)
+        batch=16,          # 데이터 적을 때 최적화 (32 → 16)
         device=0,  # GPU 0
         project=OUTPUT_DIR,
         name="run",
@@ -134,6 +137,9 @@ def train_model(epochs=DEFAULT_EPOCHS):
         hsv_v=HSV_V,
         flipud=FLIPUD,
         fliplr=FLIPLR,
+        
+        # Regularization (과적합 방지)
+        weight_decay=WEIGHT_DECAY,
         
         # Performance
         workers=8,         # 리눅스 환경 상향 조정 (기존 0)

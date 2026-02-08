@@ -34,8 +34,19 @@ OUTPUT_DIR = "ai/runs/tire_model"
 SAVE_PATH = "ai/weights/tire/best.pt"
 
 DEFAULT_EPOCHS = 100
-BATCH_SIZE = 2  # 1280 + Medium 모델에는 8도 큼 -> 2로 초저하향 (OOM 방지)
-IMG_SIZE = 1280   # YOLO 분류 모델 표준 사이즈
+BATCH_SIZE = 16  # 데이터 적을 때 최적화
+IMG_SIZE = 1280
+WORKERS = 8  # RunPod Linux
+
+# Augmentation (Small Dataset Optimized)
+MOSAIC = 1.0
+MIXUP = 0.2
+HSV_H = 0.02
+HSV_S = 0.9
+HSV_V = 0.6
+
+# Regularization
+WEIGHT_DECAY = 0.0005
 
 def train_model(epochs=DEFAULT_EPOCHS):
     print(f"\n[Tire Classification] 학습 시작 ({epochs} epochs)...")
@@ -56,12 +67,22 @@ def train_model(epochs=DEFAULT_EPOCHS):
         data=DATA_DIR,
         epochs=epochs,
         imgsz=1280,
-        batch=32,          # 런팟 상향 조정 (기존 2)
+        batch=16,          # 데이터 적을 때 최적화 (기존 32)
         project=OUTPUT_DIR,
         name="run",
         exist_ok=True,     # 기존 폴더 덮어쓰기 (run1, run2... 누적 방지)
         device=0,
-        workers=8          # 리눅스 환경 상향 조정 (기존 0)
+        workers=8,         # 리눅스 환경 상향 조정 (기존 0)
+        
+        # Augmentation
+        mosaic=MOSAIC,
+        mixup=MIXUP,
+        hsv_h=HSV_H,
+        hsv_s=HSV_S,
+        hsv_v=HSV_V,
+        
+        # Regularization
+        weight_decay=WEIGHT_DECAY
     )
     
     # 가중치 저장 - 실제 저장 경로를 동적으로 추적
