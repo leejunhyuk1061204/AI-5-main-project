@@ -167,6 +167,117 @@ export const OBD_PIDS: { [key: string]: PidDefinition } = {
         unit: 'sec',
         decoder: (bytes) => (bytes[0] * 256) + bytes[1]
     },
+    // --- 보조 지표 (Ircama car 지원, 실차 진단/모니터링용) ---
+    // 01 03: Fuel system status
+    FUEL_STATUS: {
+        mode: '01',
+        pid: '03',
+        name: 'Fuel System Status',
+        description: 'Fuel system status (Open/Closed Loop)',
+        bytes: 2,
+        decoder: (bytes) => {
+            const status = (v: number) => ['Unused', 'Open', 'Closed', 'Open (drive)', 'Closed (drive)'][v] ?? `0x${v.toString(16)}`;
+            const s1 = bytes[0] & 0x0F;
+            const s2 = (bytes[0] >> 4) & 0x0F;
+            return `${status(s1)} / ${status(s2)}`;
+        }
+    },
+    // 01 0E: Timing advance
+    TIMING_ADVANCE: {
+        mode: '01',
+        pid: '0E',
+        name: 'Timing Advance',
+        description: 'Ignition timing advance',
+        bytes: 1,
+        unit: '°',
+        decoder: (bytes) => (bytes[0] / 2) - 64
+    },
+    // 01 1C: OBD compliance
+    OBD_COMPLIANCE: {
+        mode: '01',
+        pid: '1C',
+        name: 'OBD Compliance',
+        description: 'OBD standards compliance',
+        bytes: 1,
+        decoder: (bytes) => {
+            const v = bytes[0];
+            const map: Record<number, string> = { 1: 'OBD-II', 2: 'OBD', 3: 'EOBD', 4: 'EOBD-II', 5: 'JOBD', 6: 'OBD-III' };
+            return map[v] ?? `0x${v.toString(16)}`;
+        }
+    },
+    // 01 21: Distance with MIL on
+    DISTANCE_W_MIL: {
+        mode: '01',
+        pid: '21',
+        name: 'Distance with MIL',
+        description: 'Distance traveled with MIL on',
+        bytes: 2,
+        unit: 'km',
+        decoder: (bytes) => (bytes[0] * 256) + bytes[1]
+    },
+    // 01 31: Distance since DTC clear
+    DISTANCE_SINCE_DTC_CLEAR: {
+        mode: '01',
+        pid: '31',
+        name: 'Distance since DTC clear',
+        description: 'Distance traveled since codes cleared',
+        bytes: 2,
+        unit: 'km',
+        decoder: (bytes) => (bytes[0] * 256) + bytes[1]
+    },
+    // 01 33: Barometric pressure
+    BAROMETRIC_PRESSURE: {
+        mode: '01',
+        pid: '33',
+        name: 'Barometric Pressure',
+        description: 'Barometric pressure',
+        bytes: 1,
+        unit: 'kPa',
+        decoder: (bytes) => bytes[0]
+    },
+    // 01 3C: Catalyst temp B1S1
+    CATALYST_TEMP_B1S1: {
+        mode: '01',
+        pid: '3C',
+        name: 'Catalyst Temp B1S1',
+        description: 'Catalyst temperature bank 1 sensor 1',
+        bytes: 2,
+        unit: '°C',
+        decoder: (bytes) => ((bytes[0] * 256) + bytes[1]) / 10 - 40
+    },
+    // 01 43: Absolute load
+    ABSOLUTE_LOAD: {
+        mode: '01',
+        pid: '43',
+        name: 'Absolute Load',
+        description: 'Absolute load value',
+        bytes: 2,
+        unit: '%',
+        decoder: (bytes) => ((bytes[0] * 256) + bytes[1]) * 100 / 255
+    },
+    // 01 4E: Time since DTC cleared
+    TIME_SINCE_DTC_CLEARED: {
+        mode: '01',
+        pid: '4E',
+        name: 'Time since DTC clear',
+        description: 'Time since trouble codes cleared',
+        bytes: 2,
+        unit: 'min',
+        decoder: (bytes) => (bytes[0] * 256) + bytes[1]
+    },
+    // 01 51: Fuel type
+    FUEL_TYPE: {
+        mode: '01',
+        pid: '51',
+        name: 'Fuel Type',
+        description: 'Fuel type',
+        bytes: 1,
+        decoder: (bytes) => {
+            const v = bytes[0];
+            const map: Record<number, string> = { 0: 'Not available', 1: 'Gasoline', 2: 'Methanol', 3: 'Ethanol', 4: 'Diesel', 5: 'LPG', 6: 'CNG', 7: 'Propane', 8: 'Electric', 9: 'Bifuel' };
+            return map[v] ?? `0x${v.toString(16)}`;
+        }
+    },
     // Mode 03: Request trouble codes
     GET_DTCS: {
         mode: '03',
