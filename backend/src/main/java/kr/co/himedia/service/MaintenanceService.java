@@ -26,6 +26,9 @@ import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class MaintenanceService {
@@ -46,8 +49,15 @@ public class MaintenanceService {
                 if (requests == null || requests.isEmpty()) {
                         return List.of();
                 }
+
+                // 영수증 단위 그룹화를 위한 ID 생성
+                UUID receiptId = UUID.randomUUID();
+
                 return requests.stream()
-                                .map(req -> registerMaintenance(vehicleId, req))
+                                .map(req -> {
+                                        req.setReceiptId(receiptId);
+                                        return registerMaintenance(vehicleId, req);
+                                })
                                 .collect(Collectors.toList());
         }
 
@@ -59,17 +69,33 @@ public class MaintenanceService {
                 Vehicle vehicle = vehicleRepository.findById(vehicleId)
                                 .orElseThrow(() -> new BaseException(ErrorCode.VEHICLE_NOT_FOUND));
 
-                // 1. 정비 이력 저장 (Stack)
-                ConsumableItem item;
+                ConsumableItem searchItem = null;
                 if (request.getConsumableItemId() != null) {
-                        item = consumableItemRepository.findById(request.getConsumableItemId())
-                                        .orElseThrow(() -> new BaseException(ErrorCode.INVALID_INPUT_VALUE));
-                } else if (request.getConsumableItemCode() != null) {
-                        item = consumableItemRepository.findByCode(request.getConsumableItemCode())
-                                        .orElseThrow(() -> new BaseException(ErrorCode.INVALID_INPUT_VALUE));
-                } else {
-                        throw new BaseException(ErrorCode.INVALID_INPUT_VALUE);
+                        searchItem = consumableItemRepository.findById(request.getConsumableItemId()).orElse(null);
                 }
+
+                if (searchItem == null && request.getConsumableItemCode() != null) {
+                        String code = request.getConsumableItemCode().trim().toUpperCase();
+                        searchItem = consumableItemRepository.findByCode(code).orElse(null);
+                }
+
+                if (searchItem == null && request.getConsumableItemName() != null) {
+                        String name = request.getConsumableItemName().trim();
+                        // 1. 이름으로 정확히 찾기
+                        searchItem = consumableItemRepository.findByName(name).orElse(null);
+
+                        // 2. 공백 제거하고 다시 찾아보기 (DB의 '엔진 오일' vs 프런트의 '엔진오일' 등)
+                        if (searchItem == null) {
+                                final String normalizedSearchName = name.replace(" ", "");
+                                searchItem = consumableItemRepository.findAll().stream()
+                                                .filter(ci -> ci.getName().replace(" ", "")
+                                                                .equals(normalizedSearchName))
+                                                .findFirst()
+                                                .orElse(null);
+                        }
+                }
+
+                final ConsumableItem item = (searchItem != null) ? searchItem : getOrCreateOtherItem();
 
                 MaintenanceHistory history = MaintenanceHistory.builder()
                                 .vehicle(vehicle)
@@ -80,6 +106,7 @@ public class MaintenanceService {
                                 .shopName(request.getShopName())
                                 .cost(request.getCost())
                                 .ocrData(request.getOcrData())
+                                .receiptId(request.getReceiptId()) // 영수증 ID 저장
                                 .memo(request.getMemo())
                                 .build();
 
@@ -116,15 +143,33 @@ public class MaintenanceService {
         }
 
         /**
-         * 정비 이력 조회
+         * 정비 이력 조회 (필터링 지원)
          */
         @Transactional(readOnly = true)
-        public List<MaintenanceHistoryResponse> getMaintenanceHistory(UUID vehicleId) {
+        public List<MaintenanceHistoryResponse> getMaintenanceHistory(UUID vehicleId, String itemCode,
+                        LocalDate startDate, LocalDate endDate) {
                 Vehicle vehicle = vehicleRepository.findById(vehicleId)
-                                .orElseThrow(() -> new IllegalArgumentException("해당 차량을 찾을 수 없습니다. ID: " + vehicleId));
+                                .orElseThrow(() -> new BaseException(ErrorCode.VEHICLE_NOT_FOUND));
 
-                List<MaintenanceHistory> histories = maintenanceHistoryRepository
-                                .findByVehicleOrderByMaintenanceDateDesc(vehicle);
+                List<MaintenanceHistory> histories;
+
+                if (itemCode != null && !itemCode.isEmpty()) {
+                        if (startDate != null && endDate != null) {
+                                histories = maintenanceHistoryRepository
+                                                .findByVehicleAndConsumableItem_CodeAndMaintenanceDateBetweenOrderByMaintenanceDateDesc(
+                                                                vehicle, itemCode, startDate, endDate);
+                        } else {
+                                histories = maintenanceHistoryRepository
+                                                .findByVehicleAndConsumableItem_CodeOrderByMaintenanceDateDesc(vehicle,
+                                                                itemCode);
+                        }
+                } else if (startDate != null && endDate != null) {
+                        histories = maintenanceHistoryRepository
+                                        .findByVehicleAndMaintenanceDateBetweenOrderByMaintenanceDateDesc(vehicle,
+                                                        startDate, endDate);
+                } else {
+                        histories = maintenanceHistoryRepository.findByVehicleOrderByMaintenanceDateDesc(vehicle);
+                }
 
                 return histories.stream()
                                 .map(MaintenanceHistoryResponse::new)
@@ -257,9 +302,10 @@ public class MaintenanceService {
         /**
          * [BE-OCR-002] OCR 분석 + 정비 이력 저장 + 소모품 상태 갱신 (원스톱)
          * 영수증 이미지를 분석하여 정비 이력을 저장하고, 소모품 상태를 자동으로 갱신합니다.
+         * manualDataJson이 있으면 사용자가 수정한 값을 우선 적용합니다.
          */
         @Transactional
-        public MaintenanceHistoryResponse analyzeAndSave(UUID vehicleId, MultipartFile file) {
+        public MaintenanceHistoryResponse analyzeAndSave(UUID vehicleId, MultipartFile file, String manualDataJson) {
                 // 1. 차량 존재 확인
                 Vehicle vehicle = vehicleRepository.findById(vehicleId)
                                 .orElseThrow(() -> new BaseException(ErrorCode.VEHICLE_NOT_FOUND));
@@ -267,12 +313,46 @@ public class MaintenanceService {
                 // 2. OCR 분석 (Naver OCR + OpenAI 파싱)
                 OcrAnalysisResponse ocrResult = receiptAnalyzerService.analyze(file);
 
-                // 3. OCR 결과 → MaintenanceHistoryRequest로 변환
+                // 3. 사용자 수동 수정 데이터 파싱 (있을 경우)
+                if (manualDataJson != null && !manualDataJson.isEmpty()) {
+                        try {
+                                com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper()
+                                                .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
+                                com.fasterxml.jackson.databind.JsonNode manualNode = mapper.readTree(manualDataJson);
+
+                                if (manualNode.has("maintenanceDate") && !manualNode.get("maintenanceDate").isNull()) {
+                                        ocrResult.setMaintenanceDate(
+                                                        LocalDate.parse(manualNode.get("maintenanceDate").asText()));
+                                }
+                                if (manualNode.has("mileageAtMaintenance")
+                                                && !manualNode.get("mileageAtMaintenance").isNull()) {
+                                        ocrResult.setMileageAtMaintenance(
+                                                        manualNode.get("mileageAtMaintenance").asDouble());
+                                }
+                                if (manualNode.has("shopName") && !manualNode.get("shopName").isNull()) {
+                                        ocrResult.setShopName(manualNode.get("shopName").asText());
+                                }
+                                if (manualNode.has("cost") && !manualNode.get("cost").isNull()) {
+                                        ocrResult.setCost(manualNode.get("cost").asInt());
+                                }
+                                if (manualNode.has("consumableItemCode")
+                                                && !manualNode.get("consumableItemCode").isNull()) {
+                                        ocrResult.setConsumableItemCode(manualNode.get("consumableItemCode").asText());
+                                }
+                                if (manualNode.has("memo") && !manualNode.get("memo").isNull()) {
+                                        // OcrAnalysisResponse 에는 memo가 없지만 ocrData에 병합하거나
+                                        // 아래 request 생성 시 직접 주입 가능
+                                }
+                        } catch (Exception e) {
+                                log.error("Failed to parse manual data JSON", e);
+                        }
+                }
+
+                // 4. OCR/수동 데이터 → MaintenanceHistoryRequest로 변환
                 MaintenanceHistoryRequest request = new MaintenanceHistoryRequest();
                 request.setMaintenanceDate(ocrResult.getMaintenanceDate() != null
                                 ? ocrResult.getMaintenanceDate()
                                 : LocalDate.now());
-                // 주행거리가 null이면 차량의 현재 주행거리로 대체
                 request.setMileageAtMaintenance(ocrResult.getMileageAtMaintenance() != null
                                 ? ocrResult.getMileageAtMaintenance()
                                 : vehicle.getTotalMileage());
@@ -282,7 +362,111 @@ public class MaintenanceService {
                 request.setOcrData(ocrResult.getOcrData());
                 request.setIsStandardized(true);
 
-                // 4. 기존 registerMaintenance 호출 (소모품 상태 갱신 자동 수행)
+                // 메모 처리 (JSON에 있으면 주입)
+                try {
+                        if (manualDataJson != null) {
+                                com.fasterxml.jackson.databind.JsonNode node = new com.fasterxml.jackson.databind.ObjectMapper()
+                                                .readTree(manualDataJson);
+                                if (node.has("memo"))
+                                        request.setMemo(node.get("memo").asText());
+                        }
+                } catch (Exception ignored) {
+                }
+
+                // 5. 정비 이력 저장 (소모품 상태 갱신 포함)
                 return registerMaintenance(vehicleId, request);
+        }
+
+        /**
+         * 정비 이력 수정
+         */
+        @Transactional
+        public MaintenanceHistoryResponse updateMaintenance(UUID historyId, MaintenanceHistoryRequest request) {
+                MaintenanceHistory history = maintenanceHistoryRepository.findById(historyId)
+                                .orElseThrow(() -> new BaseException(ErrorCode.ENTITY_NOT_FOUND));
+
+                // 1. 기본 정보 업데이트
+                history.setMaintenanceDate(request.getMaintenanceDate());
+                history.setMileageAtMaintenance(request.getMileageAtMaintenance());
+                history.setShopName(request.getShopName());
+                history.setCost(request.getCost());
+                history.setMemo(request.getMemo());
+
+                // 소모품 항목이 변경된 경우
+                if (request.getConsumableItemCode() != null
+                                && !history.getConsumableItem().getCode().equals(request.getConsumableItemCode())) {
+                        ConsumableItem newItem = consumableItemRepository.findByCode(request.getConsumableItemCode())
+                                        .orElseGet(() -> consumableItemRepository.findByCode("OTHER")
+                                                        .orElseThrow(() -> new BaseException(
+                                                                        ErrorCode.INVALID_INPUT_VALUE)));
+                        history.setConsumableItem(newItem);
+                }
+
+                MaintenanceHistory updated = maintenanceHistoryRepository.save(history);
+
+                // 2. 소모품 상태 재계산 (최신 데이터 기준으로)
+                updateVehicleConsumableStatus(history.getVehicle(), history.getConsumableItem());
+
+                return new MaintenanceHistoryResponse(updated);
+        }
+
+        /**
+         * 정비 이력 삭제
+         */
+        @Transactional
+        public void deleteMaintenance(UUID historyId) {
+                MaintenanceHistory history = maintenanceHistoryRepository.findById(historyId)
+                                .orElseThrow(() -> new BaseException(ErrorCode.ENTITY_NOT_FOUND));
+
+                Vehicle vehicle = history.getVehicle();
+                ConsumableItem item = history.getConsumableItem();
+
+                maintenanceHistoryRepository.delete(history);
+
+                // 삭제 후 소모품 상태 재계산
+                updateVehicleConsumableStatus(vehicle, item);
+        }
+
+        /**
+         * 특정 소모품의 상태(마지막 교환일, 주행거리)를 최신 이력 기반으로 재계산
+         */
+        private void updateVehicleConsumableStatus(Vehicle vehicle, ConsumableItem item) {
+                maintenanceHistoryRepository.findTopByVehicleAndConsumableItemOrderByMaintenanceDateDesc(vehicle, item)
+                                .ifPresentOrElse(last -> {
+                                        vehicleConsumableRepository
+                                                        .findByVehicleAndConsumableItem_Id(vehicle, item.getId())
+                                                        .ifPresent(vc -> {
+                                                                vc.setLastReplacedAt(last.getMaintenanceDate()
+                                                                                .atStartOfDay());
+                                                                vc.setLastReplacedMileage(
+                                                                                last.getMileageAtMaintenance());
+                                                                vc.updateRemainingLife(100.0); // 교체 이력이 있으면 100%
+                                                                vehicleConsumableRepository.save(vc);
+                                                        });
+                                }, () -> {
+                                        // 이력이 하나도 없으면 상태 초기화
+                                        vehicleConsumableRepository
+                                                        .findByVehicleAndConsumableItem_Id(vehicle, item.getId())
+                                                        .ifPresent(vc -> {
+                                                                vc.setLastReplacedAt(null);
+                                                                vc.setLastReplacedMileage(0.0);
+                                                                vc.setRemainingLife(100.0);
+                                                                vehicleConsumableRepository.save(vc);
+                                                        });
+                                });
+        }
+
+        /**
+         * 특정 항목이 없을 경우 '기타' 항목을 반환하거나, '기타'조차 없으면 자동 생성하여 반환합니다.
+         */
+        private ConsumableItem getOrCreateOtherItem() {
+                return consumableItemRepository.findByCode("OTHER")
+                                .orElseGet(() -> {
+                                        ConsumableItem other = new ConsumableItem();
+                                        other.setCode("OTHER");
+                                        other.setName("기타 정비");
+                                        other.setDefaultIntervalMileage(0);
+                                        return consumableItemRepository.save(other);
+                                });
         }
 }

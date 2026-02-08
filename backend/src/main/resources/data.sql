@@ -67,14 +67,78 @@ VALUES (
         '점화 플러그',
         100000,
         '가솔린 엔진 점화 장치 (백금 기준)'
-    );
+    ),
+    (
+        'AIR_FILTER',
+        '에어클리너',
+        20000,
+        '엔진 흡기 필터'
+    ),
+    (
+        'MISSION_OIL',
+        '미션 오일',
+        80000,
+        '변속기 윤활 및 유압 제어'
+    ),
+    (
+        'FUEL_FILTER',
+        '연료 필터',
+        40000,
+        '연료 내 불순물 제거'
+    ),
+    (
+        'TIRES',
+        '타이어',
+        50000,
+        '전/후륜 전체 타이어'
+    ),
+    (
+        'BRAKE_PADS',
+        '브레이크 패드',
+        40000,
+        '전/후륜 전체 브레이크 패드'
+    ),
+    (
+        'DRIVE_BELT',
+        '구동 벨트 (겉벨트)',
+        80000,
+        '엔진 주요 장치 구동'
+    ),
+    (
+        'WHEEL_ALIGNMENT',
+        '휠 얼라인먼트',
+        20000,
+        '바퀴 정렬 상태 조정'
+    ),
+    (
+        'WIPER',
+        '와이퍼',
+        10000,
+        '앞 유리 세정'
+    ),
+    (
+        'AIR_CON_REFRIGERANT',
+        '에어컨 가스',
+        50000,
+        '에어컨 냉매 충전'
+    ),
+    (
+        'OTHER',
+        '기타 정비',
+        0,
+        '분류되지 않은 일반 정비'
+    )
+ON CONFLICT (code) DO UPDATE SET 
+    name = EXCLUDED.name,
+    default_interval_mileage = EXCLUDED.default_interval_mileage,
+    description = EXCLUDED.description;
 
 -- Auto-generated Seed Data for car_model_master
 -- Contains popular Korean models with generation-based fuel type mapping
 INSERT INTO
     car_model_master (
-        manufacturer,
-        model_name,
+        manufacturer_ko,
+        model_name_ko,
         model_year,
         fuel_type
     )

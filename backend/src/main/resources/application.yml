@@ -21,7 +21,12 @@ spring:
     show-sql: false
     properties:
       hibernate:
-        format_sql: true
+        "[format_sql]": true
+  
+  sql:
+    init:
+      mode: always
+      encoding: UTF-8
 
   batch:
     jdbc:
@@ -68,6 +73,8 @@ spring:
 
 app:
   backend-url: ${APP_BACKEND_URL:http://localhost:8080}
+  cors:
+    allowed-origins: ${ALLOWED_ORIGINS:http://localhost:8080,http://localhost:19006,http://10.0.2.2:8080}
   storage:
     type: ${STORAGE_TYPE:local} # local or s3
   firebase:
@@ -77,8 +84,8 @@ logging:
   file:
     name: logs/backend.log
   level:
-    org.hibernate.SQL: INFO
-    org.hibernate.type.descriptor.sql.BasicBinder: INFO
+    "[org.hibernate.SQL]": INFO
+    "[org.hibernate.type.descriptor.sql.BasicBinder]": INFO
     org.springframework.web: INFO # 404 디버깅용 로그 원복 (너무 많아서 INFO로 조정)
 
 # 암호화 키(코드는 가짜를 들고 있고, 서버가 진짜를 넣어주는 방식"이므로 보안상 안전함)
