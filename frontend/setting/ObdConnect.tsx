@@ -31,13 +31,17 @@ interface ObdConnectProps {
     onConnected?: (device: UnifiedDevice) => void;
 }
 
+const CONNECT_TIMEOUT_MS = 15000;
+
 export default function ObdConnect({ visible, onClose, onConnected }: ObdConnectProps) {
     const {
         isScanning,
         status,
         scannedDevices,
         error: storeError,
-        setScanning
+        setScanning,
+        setStatus,
+        setError
     } = useBleStore();
 
     const [classicDevices, setClassicDevices] = useState<UnifiedDevice[]>([]);
@@ -73,10 +77,7 @@ export default function ObdConnect({ visible, onClose, onConnected }: ObdConnect
     // 연결 성공 시 자동으로 다음 페이지로 이동
     useEffect(() => {
         if (status === 'connected' && visible) {
-            const timer = setTimeout(() => {
-                console.log('[ObdConnect] Auto-closing after connection success');
-                onClose();
-            }, 1500); // 1.5초 후 자동 닫기
+            const timer = setTimeout(() => onClose(), 1500); // 1.5초 후 자동 닫기
             return () => clearTimeout(timer);
         }
     }, [status, visible, onClose]);
@@ -87,97 +88,91 @@ export default function ObdConnect({ visible, onClose, onConnected }: ObdConnect
     // 통합 스캔 (BLE + Classic)
     const startScan = async () => {
         setClassicDevices([]);
-
+        console.log('[ObdConnect] scan start');
         try {
-            // 1. Classic Bluetooth 페어링된 기기 가져오기
-            console.log('[ObdConnect] Getting Classic BT bonded devices...');
             const classicBonded = await ClassicBtService.getBondedDevices();
             const classicList: UnifiedDevice[] = classicBonded
                 .filter(device => device.name && device.name.trim().length > 0)
                 .map(device => ({
                     id: device.address,
                     name: device.name!,
-                    rssi: -50, // Classic BT는 RSSI 제공 안 함
+                    rssi: -50,
                     type: 'classic',
                     classicDevice: device,
                 }));
             setClassicDevices(classicList);
-
-            // 2. BLE 페어링된 기기 가져오기 - (BleService 내부에서 bonded 가져오는 로직은 생략하거나 store에 추가 가능, 
-            // 현재 BleService store action은 스캔된 것만 추가함. 
-            // bonded도 스캔 리스트에 추가하고 싶으면 여기서 수동으로 store action 호출 가능)
-            // For now, let's rely on scan.
-
-            // 3. BLE 스캔 시작 (새 기기 발견용) - This clears previous scan results in store
+            console.log('[ObdConnect] classic bonded count=', classicList.length);
             await BleService.startScan();
-
         } catch (e) {
-            console.error('[ObdConnect] Scan error:', e);
+            const msg = e instanceof Error ? e.message : String(e);
+            console.error('[ObdConnect] scan failed. reason=', msg);
             setScanning(false);
         }
     };
 
     const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-    // 통합 연결 함수
-    const connectToDevice = async (device: UnifiedDevice, retries = 3) => {
-        try {
-            await BleService.stopScan();
-            // Store status automatically updates to 'connecting' via BleService.connect
-            // But for Classic, updating store manually in ObdService.setClassicDevice
+    const timeoutMsg = `연결 시간 초과 (${CONNECT_TIMEOUT_MS / 1000}초)`;
+    const connectWithTimeout = <T,>(promise: Promise<T>, ms: number, msg: string): Promise<T> =>
+        Promise.race([
+            promise,
+            delay(ms).then(() => {
+                console.warn('[ObdConnect] connect timeout fired after', ms, 'ms');
+                throw new Error(msg);
+            })
+        ]);
 
+    // 통합 연결 함수 (P0: 폴링 전에 알림 권한 요청, 1=connecting 표시 2=실패 시 setError 3=전체 타임아웃)
+    const connectToDevice = async (device: UnifiedDevice, retries = 3) => {
+        setStatus('connecting');
+        setError(null);
+        console.log('[ObdConnect] connect start name=', device.name, 'type=', device.type, 'id=', device.id);
+
+        const doConnect = async () => {
+            console.log('[ObdConnect] stopScan + delay...');
+            await BleService.stopScan();
             await delay(1000);
 
-            console.log(`[ObdConnect] Connecting to ${device.name} (${device.type})...`);
-
             if (device.type === 'classic' && device.classicDevice) {
-                // ===== Classic Bluetooth (SPP) 연결 =====
+                console.log('[ObdConnect] classic connect attempt...');
                 const connected = await ClassicBtService.connect(device.classicDevice);
 
                 if (connected) {
-                    console.log('[ObdConnect] Classic BT connected!');
+                    console.log('[ObdConnect] classic connected name=', device.name);
                     await ObdService.setClassicDevice(device.classicDevice);
-                    // Status update is handled in ObdService
-
                     setTimeout(() => {
                         if (onConnected) onConnected(device);
                     }, 1500);
                 } else {
-                    throw new Error('Classic BT connection failed');
+                    throw new Error('Classic BT connection returned false');
                 }
 
-            } else if (device.type === 'ble') { // Device ID is sufficient
-                // ===== BLE 연결 =====
+            } else if (device.type === 'ble') {
+                console.log('[ObdConnect] BLE connect attempt...');
                 await delay(500);
-
-                // BleService.connect handles status updates via store
                 await BleService.connect(device.id);
-
-                console.log('[ObdConnect] Retrieving Services...');
                 await BleService.retrieveServices(device.id);
-
-                console.log('[ObdConnect] Configuring ObdService...');
                 await ObdService.setTargetDevice(device.id);
-
+                console.log('[ObdConnect] BLE connected name=', device.name);
                 setTimeout(() => {
                     if (onConnected) onConnected(device);
                 }, 1500);
             }
+        };
 
+        try {
+            await connectWithTimeout(doConnect(), CONNECT_TIMEOUT_MS, timeoutMsg);
         } catch (error) {
-            const msg = error instanceof Error ? error.message : JSON.stringify(error);
-            console.warn(`[ObdConnect] Connection failed: ${msg}`);
-
-            // Status will be 'disconnected' (set by BleService/ObdService on error)
-
+            const msg = error instanceof Error ? error.message : String(error);
+            setStatus('disconnected');
+            setError(msg);
+            console.warn('[ObdConnect] connection failed reason=', msg, 'retriesLeft=', retries - 1);
             if (retries > 0) {
-                console.log(`[ObdConnect] Retrying in 2 seconds...`);
-                // Optionally show retry UI?
+                console.log('[ObdConnect] retry in 2s...');
                 await delay(2000);
                 await connectToDevice(device, retries - 1);
             } else {
-                console.error('[ObdConnect] Connection Failed:', msg);
-                // Store error state is set by BleService
+                console.error('[ObdConnect] connection failed after retries. reason=', msg);
             }
         }
     };

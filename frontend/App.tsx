@@ -2,7 +2,7 @@ import './global.css';
 import { StatusBar } from 'expo-status-bar';
 import { View, Text, Platform, Keyboard, AppState } from 'react-native';
 import * as ExpoSplashScreen from 'expo-splash-screen';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NavigationContainer, DarkTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -67,6 +67,7 @@ import ReceiptScan from './maintenance/ReceiptScan';
 import ReceiptResult from './maintenance/ReceiptResult';
 import PaymentSuccess from './payment/PaymentSuccess';
 import MaintenanceHistory from './history/MaintenanceHistory';
+import Elm327TestScreen from './obd-test/Elm327TestScreen';
 
 // Deep Linking Configuration
 const linking = {
@@ -205,22 +206,35 @@ export default function App() {
     initializeFcm();
   }, [initialRoute]);
 
-  // 3. Background Service Handling
+  // 3. Background Service Handling (P0: active 시 디바운스 후 stop으로 플랩핑 방지)
+  const activeStopDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const ACTIVE_STOP_DEBOUNCE_MS = 2500;
+
   useEffect(() => {
     const subscription = AppState.addEventListener('change', async (nextAppState) => {
       if (nextAppState === 'background') {
-        // 앱이 백그라운드로 갈 때, OBD가 연결되어 있다면 백그라운드 서비스 시작
+        if (activeStopDebounceRef.current) {
+          clearTimeout(activeStopDebounceRef.current);
+          activeStopDebounceRef.current = null;
+        }
         if (ObdService.isConnected()) {
           await BackgroundService.start();
         }
       } else if (nextAppState === 'active') {
-        // 앱이 포그라운드로 오면 백그라운드 알림 제거 (서비스 중지)
-        await BackgroundService.stop();
+        if (activeStopDebounceRef.current) clearTimeout(activeStopDebounceRef.current);
+        activeStopDebounceRef.current = setTimeout(async () => {
+          activeStopDebounceRef.current = null;
+          await BackgroundService.stop();
+        }, ACTIVE_STOP_DEBOUNCE_MS);
       }
     });
 
     return () => {
       subscription.remove();
+      if (activeStopDebounceRef.current) {
+        clearTimeout(activeStopDebounceRef.current);
+        activeStopDebounceRef.current = null;
+      }
     };
   }, []);
 
@@ -260,6 +274,7 @@ export default function App() {
                 >
                   <Stack.Screen name="Tos" component={Tos} />
                   <Stack.Screen name="Login" component={Login} />
+                  <Stack.Screen name="Elm327Test" component={Elm327TestScreen} />
                   <Stack.Screen name="SignUp" component={SignUp} />
                   <Stack.Screen name="FindPW" component={FindPW} />
                   <Stack.Screen
