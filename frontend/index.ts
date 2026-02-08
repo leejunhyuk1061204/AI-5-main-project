@@ -13,6 +13,24 @@ LogBox.ignoreLogs([
     "navigation context",
 ]);
 
+// 콘솔 로그를 파일로 저장할 수 있도록 LogBuffer에 복사
+import { LogBuffer } from './services/LogBuffer';
+const originalLog = console.log;
+const originalWarn = console.warn;
+const originalError = console.error;
+console.log = (...args: unknown[]) => {
+    LogBuffer.append('log', ...args);
+    originalLog.apply(console, args);
+};
+console.warn = (...args: unknown[]) => {
+    LogBuffer.append('warn', ...args);
+    originalWarn.apply(console, args);
+};
+console.error = (...args: unknown[]) => {
+    LogBuffer.append('error', ...args);
+    originalError.apply(console, args);
+};
+
 import App from './App';
 
 // registerRootComponent calls AppRegistry.registerComponent('main', () => App);

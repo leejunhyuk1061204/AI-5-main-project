@@ -30,9 +30,9 @@ DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'media_type') T
 
 DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'evidence_status') THEN CREATE TYPE evidence_status AS ENUM ('REQUESTED', 'UPLOADED', 'FAILED'); END IF; END $$;
 
-DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'dtc_type') THEN CREATE TYPE dtc_type AS ENUM ('STORED', 'PENDING', 'PERMANENT'); END IF; END $$;
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'dtc_type') THEN CREATE TYPE dtc_type AS ENUM ('STORED', 'PENDING', 'PERMANENT', 'FREEZE_FRAME'); END IF; END $$;
 
-DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'dtc_status') THEN CREATE TYPE dtc_status AS ENUM ('ACTIVE', 'RESOLVED', 'CLEARED'); END IF; END $$;
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'dtc_status') THEN CREATE TYPE dtc_status AS ENUM ('ACTIVE', 'RESOLVED', 'CLEARED', 'PENDING', 'STORED'); END IF; END $$;
 
 DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'dtc_resolution_type') THEN CREATE TYPE dtc_resolution_type AS ENUM ('AUTO', 'MANUAL', 'OBD_CLEAR'); END IF; END $$;
 
@@ -116,6 +116,33 @@ CREATE TABLE IF NOT EXISTS car_model_master (
 );
 
 -- 4. 텔레메트리 (Telemetry)
+
+-- OBD 장치 목록 (2.2.0) - 사용자 소유 OBD 어댑터
+CREATE TABLE IF NOT EXISTS obd_devices (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
+    user_id UUID NOT NULL REFERENCES users (user_id),
+    device_id VARCHAR(255) NOT NULL,
+    device_type VARCHAR(20) NOT NULL,
+    name VARCHAR(100),
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP,
+    UNIQUE (user_id, device_id)
+);
+
+-- OBD 장치-차량 연결 히스토리 (CALID/CVN, 마지막 연결)
+CREATE TABLE IF NOT EXISTS obd_device_vehicle_history (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
+    obd_device_id UUID NOT NULL REFERENCES obd_devices (id),
+    vehicles_id UUID NOT NULL REFERENCES vehicles (vehicles_id),
+    calid VARCHAR(255),
+    cvn VARCHAR(255),
+    last_connected_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_obd_history_device_last ON obd_device_vehicle_history (obd_device_id, last_connected_at DESC);
+CREATE INDEX IF NOT EXISTS idx_obd_history_device_calid_cvn ON obd_device_vehicle_history (obd_device_id, calid, cvn);
 
 -- OBD 실시간 로그 (2.2.1) - TimescaleDB
 CREATE TABLE IF NOT EXISTS obd_logs (
@@ -211,6 +238,7 @@ CREATE TABLE IF NOT EXISTS diag_sessions (
     trigger_type diag_trigger_type,
     status diag_status,
     progress_message VARCHAR(1000),
+    dtc_context_json TEXT, -- DTC 모드 진단 시 사용된 DTC 정보 저장 (JSON)
     created_at TIMESTAMP DEFAULT NOW()
 );
 
@@ -274,8 +302,16 @@ CREATE TABLE IF NOT EXISTS dtc_freeze_frames (
     dtc_id UUID UNIQUE REFERENCES dtc_history (dtc_id),
     rpm FLOAT,
     speed FLOAT,
+    voltage FLOAT,
     coolant_temp FLOAT,
     engine_load FLOAT,
+    fuel_trim_short FLOAT,
+    fuel_trim_long FLOAT,
+    intake_temp FLOAT,
+    map FLOAT,
+    maf FLOAT,
+    throttle_pos FLOAT,
+    engine_runtime INT,
     ambient_temp FLOAT,
     fuel_pressure FLOAT,
     pids_snapshot JSONB

@@ -56,6 +56,17 @@ const tripApi = {
             console.error('Error ending trip:', error);
             throw error;
         }
+    },
+
+    /** 주행 차량 재할당 (해당 주행 + OBD 로그를 새 차량으로 이전, 통계 재집계) */
+    changeTripVehicle: async (tripId: string, newVehicleId: string): Promise<ApiResponse<TripSummary>> => {
+        try {
+            const response = await api.patch(`/api/v1/trips/${tripId}/vehicle`, { newVehicleId });
+            return response.data;
+        } catch (error) {
+            console.error('Error changing trip vehicle:', error);
+            throw error;
+        }
     }
 };
 

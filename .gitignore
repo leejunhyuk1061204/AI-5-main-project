@@ -83,6 +83,9 @@ data/sync_tracker.db
 data/logs/
 *.zip
 db/seed_knowledge_vectors.sql
+db/seed_knowledge_vectors_v1.sql
+db/seed_knowledge_vectors_v2.sql
+db/seed_knowledge_vectors_v3.sql
 data/dtc/
 
 # ==================================================
@@ -127,6 +130,7 @@ frontend/android/
 # ==================================================
 GEMINI.md
 brain/
+.cursor/
 
 # ==================================================
 # Security & Firebase

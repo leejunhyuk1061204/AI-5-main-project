@@ -4,9 +4,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
-import Svg, { Circle, Path, Defs, LinearGradient, Stop } from 'react-native-svg';
+import Svg, { Circle } from 'react-native-svg';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import tripApi, { TripSummary } from '../api/tripApi';
+import VehicleSelectModal from '../components/VehicleSelectModal';
+import { useAlertStore } from '../store/useAlertStore';
 
 const { width } = Dimensions.get('window');
 
@@ -23,6 +25,9 @@ export default function DrivingHis() {
     const navigation = useNavigation();
     const [trips, setTrips] = useState<TripSummary[]>([]);
     const [loading, setLoading] = useState(true);
+    const [vehicleChangeTripId, setVehicleChangeTripId] = useState<string | null>(null);
+    const [changing, setChanging] = useState(false);
+    const showAlert = useAlertStore((s) => s.showAlert);
 
     // Derived State using useMemo
     const stats = useMemo(() => {
@@ -85,20 +90,34 @@ export default function DrivingHis() {
             const stored = await AsyncStorage.getItem('primaryVehicle');
             if (stored) {
                 const vehicle = JSON.parse(stored);
-                // Fetch trips for ONLY the primary vehicle
                 const response = await tripApi.getTrips(vehicle.vehicleId);
                 if (response.success && response.data) {
-                    // Sort by date desc
                     const sorted = [...response.data].sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
                     setTrips(sorted);
                 }
-            } else {
-                // Handle no primary vehicle
             }
         } catch (e) {
             console.error('Failed to load trips', e);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleChangeVehicleSelect = async (vehicle: { vehicleId: string }) => {
+        if (!vehicleChangeTripId) return;
+        setChanging(true);
+        try {
+            const res = await tripApi.changeTripVehicle(vehicleChangeTripId, vehicle.vehicleId);
+            if (res.success) {
+                showAlert('변경 완료', '해당 주행이 선택한 차량으로 재할당되었습니다.', 'SUCCESS');
+                setVehicleChangeTripId(null);
+                await loadTrips();
+            }
+        } catch (e) {
+            console.error('Change trip vehicle failed', e);
+            showAlert('변경 실패', '차량 재할당에 실패했습니다. 다시 시도해주세요.', 'ERROR');
+        } finally {
+            setChanging(false);
         }
     };
 
@@ -276,6 +295,14 @@ export default function DrivingHis() {
                                                     <Text className="text-white font-medium text-base">{trip.averageSpeed.toFixed(0)} <Text className="text-xs text-gray-400">km/h</Text></Text>
                                                 </View>
                                             </View>
+                                            <TouchableOpacity
+                                                className="mt-3 flex-row items-center gap-1 self-start"
+                                                onPress={() => setVehicleChangeTripId(trip.tripId)}
+                                                disabled={changing}
+                                            >
+                                                <MaterialIcons name="swap-horiz" size={16} color="#0d7ff2" />
+                                                <Text className="text-[#0d7ff2] text-xs font-medium">차량 변경</Text>
+                                            </TouchableOpacity>
                                         </View>
                                     ))}
                                 </View>
@@ -284,6 +311,14 @@ export default function DrivingHis() {
                     )}
                 </View>
             </ScrollView>
+
+            <VehicleSelectModal
+                visible={vehicleChangeTripId !== null}
+                onClose={() => !changing && setVehicleChangeTripId(null)}
+                onSelect={handleChangeVehicleSelect}
+                title="이 주행을 할당할 차량 선택"
+                description="선택한 차량으로 해당 주행 기록이 재할당됩니다."
+            />
         </SafeAreaView>
     );
 }

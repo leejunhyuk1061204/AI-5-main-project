@@ -188,6 +188,69 @@ export const predictComprehensive = async (data: {
         throw error;
     }
 };
+// DTC 보고 데이터 타입 (백엔드 DtcDto 매칭)
+export interface DtcReportRequest {
+    vehicleId: string;
+    dtcCode: string;
+    descriptionKo?: string;
+    descriptionEn?: string;
+    summaryKo?: string;
+    summaryEn?: string;
+    severity?: 'CRITICAL' | 'WARNING' | 'INFO';
+    status?: 'ACTIVE' | 'STORED' | 'PENDING';
+}
+
+/**
+ * DTC(고장 코드) 보고
+ * @param data DTC 보고 요청 데이터
+ */
+export const sendDtcReport = async (data: DtcReportRequest): Promise<void> => {
+    try {
+        console.log('[aiApi] Sending DTC report:', data.dtcCode);
+        await api.post('/api/v1/ai/dtc', data);
+        console.log('[aiApi] DTC report sent successfully');
+    } catch (error) {
+        console.error('[aiApi] Failed to send DTC report:', error);
+        throw error;
+    }
+};
+
+/**
+ * DTC 배치 및 프리즈 프레임 보고
+ */
+export interface DtcBatchReportRequest {
+    vehicleId: string;
+    dtcs: { code: string; type: string; status: string }[];
+    freezeFrame?: {
+        rpm?: number;
+        speed?: number;
+        voltage?: number;
+        coolantTemp?: number;
+        engineLoad?: number;
+        fuelTrimShort?: number;
+        fuelTrimLong?: number;
+        intakeTemp?: number;
+        map?: number;
+        maf?: number;
+        throttlePos?: number;
+        engineRuntime?: number;
+        ambientTemp?: number;
+        fuelPressure?: number;
+        pidsSnapshot?: string;
+    };
+}
+
+export const sendDtcBatchReport = async (data: DtcBatchReportRequest): Promise<void> => {
+    try {
+        console.log('[aiApi] Sending DTC batch report, count:', data.dtcs.length);
+        await api.post('/api/v1/ai/dtc/batch', data);
+        console.log('[aiApi] DTC batch report sent successfully');
+    } catch (error) {
+        console.error('[aiApi] Failed to send DTC batch report:', error);
+        throw error;
+    }
+};
+
 /**
  * 차량별 진단 목록 조회
  */

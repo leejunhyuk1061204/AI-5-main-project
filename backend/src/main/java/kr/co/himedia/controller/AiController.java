@@ -3,14 +3,17 @@ package kr.co.himedia.controller;
 import kr.co.himedia.common.ApiResponse;
 
 import kr.co.himedia.dto.ai.DtcDto;
+import kr.co.himedia.dto.ai.DtcBatchRequest;
 import kr.co.himedia.dto.ai.UnifiedDiagnosisRequestDto;
 import kr.co.himedia.dto.ai.DiagnosisResponseDto;
 import kr.co.himedia.service.AiDiagnosisService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
 
+@Slf4j
 @RestController
 @RequestMapping("/ai")
 @RequiredArgsConstructor
@@ -24,6 +27,17 @@ public class AiController {
     @PostMapping("/dtc")
     public ApiResponse<Void> receiveDtc(@RequestBody DtcDto dtcDto) {
         aiDiagnosisService.processDtc(dtcDto);
+        return ApiResponse.success(null);
+    }
+
+    /**
+     * 통합 DTC 배치 수신
+     * Mode 03(DTC) + Mode 02(Freeze Frame) 통합 처리
+     */
+    @PostMapping("/dtc/batch")
+    public ApiResponse<Void> receiveDtcBatch(@RequestBody DtcBatchRequest request) {
+        log.info("[DTC Batch] 수신 - 차량: {}, 코드 수: {}", request.getVehicleId(), request.getDtcs().size());
+        aiDiagnosisService.processDtcBatch(request);
         return ApiResponse.success(null);
     }
 
