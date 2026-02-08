@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.UUID;
 import kr.co.himedia.dto.common.VehicleIdRequest;
 import kr.co.himedia.dto.obd.ConnectionStatusDto;
+import kr.co.himedia.dto.obd.ObdBatchRequestDto;
 import kr.co.himedia.dto.obd.ObdLogDto;
 import kr.co.himedia.service.ObdService;
 import kr.co.himedia.common.ApiResponse;
@@ -19,12 +20,11 @@ public class ObdController {
     private final ObdService obdService;
 
     /**
-     * [BE-TD-002] 벌크 로그 수집
-     * OBD 장치로부터 수집된 3분 단위의 로그 데이터를 저장하고 주행 통계를 갱신합니다.
+     * [BE-TD-002] 벌크 로그 수집 (8.5단계: Idempotency 반영)
      */
     @PostMapping("/batch")
-    public ResponseEntity<ApiResponse<Void>> uploadObdLogs(@RequestBody List<ObdLogDto> obdLogDtos) {
-        obdService.saveObdLogs(obdLogDtos);
+    public ResponseEntity<ApiResponse<Void>> uploadObdLogs(@RequestBody ObdBatchRequestDto batchRequest) {
+        obdService.saveObdLogs(batchRequest);
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 

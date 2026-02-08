@@ -4,25 +4,21 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import kr.co.himedia.domain.DiagAction;
 import kr.co.himedia.dto.ai.*;
 import kr.co.himedia.common.SseEmitters;
+import kr.co.himedia.common.exception.BaseException;
+import kr.co.himedia.common.exception.ErrorCode;
 import kr.co.himedia.entity.*;
 import kr.co.himedia.entity.DiagSession.DiagStatus;
 import kr.co.himedia.entity.DiagSession.DiagTriggerType;
 import kr.co.himedia.repository.*;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 import java.util.concurrent.TimeUnit;
-
-import java.util.stream.Collectors;
 
 /**
  * AI 진단 및 DTC 처리 서비스
@@ -41,6 +37,8 @@ public class AiDiagnosisService {
     private final DiagSessionRepository diagSessionRepository;
     private final DiagResultRepository diagResultRepository;
     private final AiEvidenceRepository aiEvidenceRepository;
+    private final DtcFreezeFrameRepository dtcFreezeFrameRepository;
+    private final DtcCodeRepository dtcCodeRepository;
     private final AiClient aiClient;
     private final ObjectMapper objectMapper;
 
@@ -48,6 +46,8 @@ public class AiDiagnosisService {
     private final UserService userService;
     private final AiMediaService aiMediaService;
     private final SseEmitters sseEmitters;
+    private final NotificationService notificationService;
+    private final UserRepository userRepository;
 
     // 글로벌 AI 리소스 통합 제어 (RTX 3090 안정성을 위해 최대 6개 요청 제한)
     private final java.util.concurrent.Semaphore globalAiSemaphore = new java.util.concurrent.Semaphore(6);
@@ -61,12 +61,16 @@ public class AiDiagnosisService {
             DiagSessionRepository diagSessionRepository,
             DiagResultRepository diagResultRepository,
             AiEvidenceRepository aiEvidenceRepository,
+            DtcFreezeFrameRepository dtcFreezeFrameRepository,
+            DtcCodeRepository dtcCodeRepository,
             AiClient aiClient,
             ObjectMapper objectMapper,
             FcmService fcmService,
             UserService userService,
             AiMediaService aiMediaService,
-            SseEmitters sseEmitters) {
+            SseEmitters sseEmitters,
+            NotificationService notificationService,
+            UserRepository userRepository) {
         this.dtcHistoryRepository = dtcHistoryRepository;
         this.rabbitTemplate = rabbitTemplate;
         this.knowledgeService = knowledgeService;
@@ -76,12 +80,16 @@ public class AiDiagnosisService {
         this.diagSessionRepository = diagSessionRepository;
         this.diagResultRepository = diagResultRepository;
         this.aiEvidenceRepository = aiEvidenceRepository;
+        this.dtcFreezeFrameRepository = dtcFreezeFrameRepository;
+        this.dtcCodeRepository = dtcCodeRepository;
         this.aiClient = aiClient;
         this.objectMapper = objectMapper;
         this.fcmService = fcmService;
         this.userService = userService;
         this.aiMediaService = aiMediaService;
         this.sseEmitters = sseEmitters;
+        this.notificationService = notificationService;
+        this.userRepository = userRepository;
     }
 
     @Value("${app.storage.type:local}")
@@ -107,63 +115,144 @@ public class AiDiagnosisService {
      * DTC 이력 저장 및 즉시 AI 분석/알림 (비동기 아님 - 외부 API 포함)
      * RabbitMQ 제거 후 직접 호출로 변경
      */
+    /**
+     * 단일 DTC 처리 (하위 호환성 유지)
+     */
     @Transactional
     public void processDtc(DtcDto dtcDto) {
-        // 1. DTC 이력 저장
-        DtcHistory history = DtcHistory.builder()
-                .vehiclesId(UUID.fromString(dtcDto.getVehicleId()))
-                .dtcCode(dtcDto.getDtcCode())
-                .description(dtcDto.getDescriptionEn())
-                .severity(dtcDto.getSeverity())
-                .status(DtcHistory.DtcStatus.valueOf(dtcDto.getStatus()))
+        DtcBatchRequest batchRequest = DtcBatchRequest.builder()
+                .vehicleId(dtcDto.getVehicleId())
+                .dtcs(List.of(new DtcBatchRequest.DtcInfo(
+                        dtcDto.getDtcCode(),
+                        "STORED",
+                        dtcDto.getStatus() != null ? dtcDto.getStatus() : "ACTIVE")))
                 .build();
-        dtcHistoryRepository.save(history);
-        log.info("Saved DTC History: {}", dtcDto.getDtcCode());
-
-        // 2. RAG 및 FCM 알림 발송 (직접 호출)
-        try {
-            sendDtcNotification(dtcDto);
-        } catch (Exception e) {
-            log.error("Failed to send DTC notification", e);
-            // 알림 실패가 Transaction 롤백을 유발하지 않도록 함 (선택 사항)
-            // @Transactional이 걸려있으므로 RuntimeException은 롤백됨.
-            // 알림만 실패하고 저장은 성공하게 하려면 try-catch 필수.
-        }
+        processDtcBatch(batchRequest);
     }
 
-    private void sendDtcNotification(DtcDto dtcDto) {
-        // 1. 차량 정보 및 소유주 확인
-        UUID vehicleId = UUID.fromString(dtcDto.getVehicleId());
+    @Transactional
+    public void processDtcBatch(DtcBatchRequest request) {
+        UUID vehicleId = UUID.fromString(request.getVehicleId());
         Vehicle vehicle = vehicleRepository.findById(vehicleId)
                 .orElseThrow(() -> new RuntimeException("Vehicle not found: " + vehicleId));
 
-        String fcmToken = userService.getFcmToken(vehicle.getUserId());
-        if (fcmToken == null) {
-            log.info("No FCM token for user. Skip notification. UserID: {}", vehicle.getUserId());
-            return;
+        List<String> savedCodes = new ArrayList<>();
+        List<String> descriptions = new ArrayList<>();
+        boolean freezeFrameSaved = false;
+
+        // 1. 모든 DTC 저장
+        for (DtcBatchRequest.DtcInfo info : request.getDtcs()) {
+            // 상세 정보 조회 (DTC 마스터 테이블 활용)
+            Optional<DtcCode> master = dtcCodeRepository.findByCodeGeneric(info.getCode());
+            String desc = master.isPresent() ? master.get().getDescriptionKo() : "알 수 없는 고장 코드";
+
+            DtcHistory.DtcType dtcType = parseDtcType(info.getType());
+            DtcHistory.DtcStatus dtcStatus = parseDtcStatus(info.getStatus());
+
+            DtcHistory history = DtcHistory.builder()
+                    .vehiclesId(vehicleId)
+                    .dtcCode(info.getCode())
+                    .description(desc)
+                    .status(dtcStatus)
+                    .dtcType(dtcType)
+                    .build();
+            history = dtcHistoryRepository.save(history);
+
+            savedCodes.add(info.getCode());
+            descriptions.add(desc);
+
+            // 2. Freeze Frame 저장: 첫 번째 DTC에만 1건 저장 (중복 방지)
+            if (request.getFreezeFrame() != null && !freezeFrameSaved) {
+                DtcFreezeFrame ff = DtcFreezeFrame.builder()
+                        .dtcHistory(history)
+                        .rpm(request.getFreezeFrame().getRpm())
+                        .speed(request.getFreezeFrame().getSpeed())
+                        .voltage(request.getFreezeFrame().getVoltage())
+                        .coolantTemp(request.getFreezeFrame().getCoolantTemp())
+                        .engineLoad(request.getFreezeFrame().getEngineLoad())
+                        .fuelTrimShort(request.getFreezeFrame().getFuelTrimShort())
+                        .fuelTrimLong(request.getFreezeFrame().getFuelTrimLong())
+                        .intakeTemp(request.getFreezeFrame().getIntakeTemp())
+                        .map(request.getFreezeFrame().getMap())
+                        .maf(request.getFreezeFrame().getMaf())
+                        .throttlePos(request.getFreezeFrame().getThrottlePos())
+                        .engineRuntime(request.getFreezeFrame().getEngineRuntime())
+                        .ambientTemp(request.getFreezeFrame().getAmbientTemp())
+                        .fuelPressure(request.getFreezeFrame().getFuelPressure())
+                        .pidsSnapshot(request.getFreezeFrame().getPidsSnapshot())
+                        .build();
+                dtcFreezeFrameRepository.save(ff);
+                freezeFrameSaved = true;
+            }
         }
 
-        // 2. RAG 지식 검색 (이미 번역/정제된 텍스트 가정)
-        String query = dtcDto.getDtcCode() + " " + dtcDto.getDescriptionEn();
-        List<String> searchResults = knowledgeService.searchKnowledge(query, 1);
+        // 3. 통합 알림 발송
+        if (!savedCodes.isEmpty()) {
+            sendBatchDtcNotification(vehicle, savedCodes, descriptions);
+        }
 
-        // RAG 결과가 있으면 그것을 '설명'으로 사용, 없으면 기본 설명 사용
-        String explanation = searchResults.isEmpty() ? dtcDto.getDescriptionEn() : searchResults.get(0);
+        // 4. DTC 모드 진단 트리거 (비동기)
+        if (!request.getDtcs().isEmpty()) {
+            try {
+                triggerDtcDiagnosis(vehicleId, request.getDtcs());
+            } catch (Exception e) {
+                log.error("[DTC] Failed to trigger DTC diagnosis for vehicle {}", vehicleId, e);
+            }
+        }
+    }
 
-        // 3. 알림 메시지 구성 (최소한의 조립)
-        String title = "차량 이상 감지";
-        String body = dtcDto.getDtcCode() + ": " + explanation;
+    /** type 문자열을 DtcType으로 변환. null/unknown 시 STORED 폴백 */
+    private DtcHistory.DtcType parseDtcType(String type) {
+        if (type == null || type.isBlank()) return DtcHistory.DtcType.STORED;
+        try {
+            return DtcHistory.DtcType.valueOf(type.trim().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            log.warn("[DTC Batch] Unknown dtc_type '{}', fallback to STORED", type);
+            return DtcHistory.DtcType.STORED;
+        }
+    }
 
-        // 4. TTS용 텍스트 (프론트엔드가 읽을 원문 그대로 전달)
-        String ttsText = explanation;
+    /** status 문자열을 DtcStatus로 변환. null/unknown 시 ACTIVE 폴백 */
+    private DtcHistory.DtcStatus parseDtcStatus(String status) {
+        if (status == null || status.isBlank()) return DtcHistory.DtcStatus.ACTIVE;
+        try {
+            return DtcHistory.DtcStatus.valueOf(status.trim().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            log.warn("[DTC Batch] Unknown status '{}', fallback to ACTIVE", status);
+            return DtcHistory.DtcStatus.ACTIVE;
+        }
+    }
+
+    private void sendBatchDtcNotification(Vehicle vehicle, List<String> codes, List<String> descs) {
+        int count = codes.size();
+        // 설명 문장에서 끝의 "입니다.", "합니다." 등은 제거해서 TTS 문장이 어색하지 않도록 정규화
+        List<String> normalized = descs.stream()
+                .limit(2)
+                .map(d -> d == null ? "" : d.replaceAll("\\s*(입니다\\.?|합니다\\.?)$", ""))
+                .collect(Collectors.toList());
+        String summary = String.join(", ", normalized);
+        if (count > 2)
+            summary += " 등";
+
+        String title = "차량 이상 감지 (" + count + "건)";
+        String body = codes.get(0) + " 외 " + (count - 1) + "건의 고장이 감지되었습니다.";
+
+        // 스마트 TTS 문장 생성
+        String ttsText = String.format("%d건의 차량 이상이 감지되었습니다. 주요 이상 항목은 %s입니다. 안전한 곳에 정차하신 후 상세 내용을 확인해 주세요.",
+                count, summary);
+        log.info("[Notification-TTS] vehicle={}, tts={}", vehicle.getVehicleId(), ttsText);
 
         Map<String, String> data = new HashMap<>();
-        data.put("type", "DTC_ALERT");
-        data.put("dtcCode", dtcDto.getDtcCode());
+        data.put("type", "DTC_BATCH_ALERT");
+        data.put("codes", String.join(",", codes));
         data.put("tts", ttsText);
 
-        // 5. FCM 발송
-        fcmService.sendMessage("User-" + vehicle.getUserId(), fcmToken, title, body, data);
+        // DB에 알림 저장 및 푸시 발송 (NotificationService 사용)
+        User user = userRepository.findById(vehicle.getUserId())
+                .orElseThrow(() -> new BaseException(ErrorCode.USER_NOT_FOUND));
+        notificationService.sendNotification(user, title, body, Notification.NotificationType.DTC_ALERT, data);
+        log.info("[Notification] Sent Batch DTC Alert: vehicle={}, userId={}, codes={}", 
+                vehicle.getVehicleId(), user.getUserId(), codes);
     }
 
     /**
@@ -384,9 +473,53 @@ public class AiDiagnosisService {
 
         populateVehicleAndConsumableInfo(aiRequestBuilder, requestDto.getVehicleId());
 
-        String query = buildSearchQuery(visualResult, audioResult, anomalyResult);
+        // DTC 모드일 경우 dtc_info 추가
+        Map<String, Object> dtcInfo = null;
+        if (session.getTriggerType() == DiagTriggerType.DTC) {
+            dtcInfo = buildDtcInfoForSession(session);
+            if (dtcInfo != null) {
+                aiRequestBuilder.dtcInfo(dtcInfo);
+                log.info("[DTC Mode] Added dtc_info to LLM request for session: {}", sessionId);
+            }
+        }
+
+        // RAG 검색 (DTC 키워드 포함)
+        String query = buildSearchQueryWithDtc(visualResult, audioResult, anomalyResult, dtcInfo);
+        List<String> knowledgeResults = new ArrayList<>();
+        
+        // DTC 정의 정보 우선 추가 (DTC 모드일 경우)
+        if (dtcInfo != null && dtcInfo.containsKey("dtc_list")) {
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> dtcList = (List<Map<String, Object>>) dtcInfo.get("dtc_list");
+            if (dtcList != null && !dtcList.isEmpty()) {
+                vehicleRepository.findById(requestDto.getVehicleId()).ifPresent(vehicle -> {
+                    String manufacturer = vehicle.getManufacturerEn();
+                    for (Map<String, Object> dtcItem : dtcList) {
+                        String code = (String) dtcItem.get("code");
+                        if (code != null) {
+                            List<String> dtcDefs = knowledgeService.searchDtcInformation(code, manufacturer, 2);
+                            log.info("[RAG-DTC] Code={}, Manufacturer={}, Results={}", code, manufacturer, dtcDefs.size());
+                            if (!dtcDefs.isEmpty()) {
+                                log.debug("[RAG-DTC] Contents: {}", dtcDefs);
+                            }
+                            knowledgeResults.addAll(dtcDefs);
+                        }
+                    }
+                });
+            }
+        }
+        
+        // 일반 RAG 검색 결과 추가
         if (!query.isEmpty()) {
-            List<String> knowledgeResults = knowledgeService.searchKnowledge(query, 3);
+            List<String> generalKnowledge = knowledgeService.searchKnowledge(query, 3);
+            log.info("[RAG-General] Query='{}', Results={}", query, generalKnowledge.size());
+            if (!generalKnowledge.isEmpty()) {
+                log.debug("[RAG-General] Contents: {}", generalKnowledge);
+            }
+            knowledgeResults.addAll(generalKnowledge);
+        }
+        
+        if (!knowledgeResults.isEmpty()) {
             aiRequestBuilder.knowledgeData(knowledgeResults);
         }
 
@@ -484,6 +617,16 @@ public class AiDiagnosisService {
                 .conversationHistory(conversation);
 
         populateVehicleAndConsumableInfo(aiRequestBuilder, session.getVehiclesId());
+        
+        // DTC 모드일 경우 dtc_info 재사용
+        if (session.getTriggerType() == DiagTriggerType.DTC) {
+            Map<String, Object> dtcInfo = buildDtcInfoForSession(session);
+            if (dtcInfo != null) {
+                aiRequestBuilder.dtcInfo(dtcInfo);
+                log.info("[DTC Mode Reply] Reusing dtc_info for session: {}", sessionId);
+            }
+        }
+        
         // 필요 시 신규 분석 결과도 최상위에 포함
         if (visualResult != null)
             aiRequestBuilder.visualAnalysis(visualResult);
@@ -508,24 +651,6 @@ public class AiDiagnosisService {
         // 6. 알림 발송 (Reply 단계에서는 불필요 - 이미 대화 중)
     }
 
-    private String buildSearchQuery(Map<String, Object> visualResult, Map<String, Object> audioResult,
-            Map<String, Object> anomalyResult) {
-        StringBuilder searchQuery = new StringBuilder();
-        if (visualResult != null && visualResult.containsKey("category")) {
-            searchQuery.append(visualResult.get("category")).append(" ");
-        }
-        if (audioResult != null && audioResult.containsKey("status")) {
-            searchQuery.append(audioResult.get("status")).append(" ");
-        }
-        if (anomalyResult != null && Boolean.TRUE.equals(anomalyResult.get("is_anomaly"))) {
-            @SuppressWarnings("unchecked")
-            List<String> factors = (List<String>) anomalyResult.get("contributing_factors");
-            if (factors != null && !factors.isEmpty()) {
-                searchQuery.append(String.join(" ", factors)).append(" 이상징후");
-            }
-        }
-        return searchQuery.toString().trim();
-    }
 
     private String updateReplyResult(UUID sessionId, Map<String, Object> aiResponse,
             List<Map<String, Object>> conversation, long userTurnCount, DiagResult existingResult) throws Exception {
@@ -964,6 +1089,143 @@ public class AiDiagnosisService {
     }
 
     // calculateRemainingLife 제거 (VehicleConsumable.currentLife 사용)
+
+    /**
+     * DTC 모드 진단 트리거
+     */
+    private void triggerDtcDiagnosis(UUID vehicleId, List<DtcBatchRequest.DtcInfo> dtcs) {
+        log.info("[DTC Trigger] Starting DTC diagnosis for vehicle: {}, DTCs: {}", vehicleId, 
+                 dtcs.stream().map(DtcBatchRequest.DtcInfo::getCode).collect(Collectors.toList()));
+
+        // 1. DTC 컨텍스트 JSON 생성
+        List<Map<String, Object>> dtcList = new ArrayList<>();
+        for (DtcBatchRequest.DtcInfo info : dtcs) {
+            Optional<DtcCode> master = dtcCodeRepository.findByCodeGeneric(info.getCode());
+            
+            Map<String, Object> dtcItem = new HashMap<>();
+            dtcItem.put("code", info.getCode());
+            dtcItem.put("name_en", master.map(DtcCode::getDescriptionEn)
+                                          .filter(s -> s != null && !s.isBlank())
+                                          .orElse(master.map(DtcCode::getDescriptionKo).orElse("Unknown DTC")));
+            dtcItem.put("status", info.getStatus() != null ? info.getStatus() : "ACTIVE");
+            if (info.getType() != null) {
+                dtcItem.put("type", info.getType());
+            }
+            dtcList.add(dtcItem);
+        }
+
+        Map<String, Object> dtcContext = new HashMap<>();
+        dtcContext.put("dtc_list", dtcList);
+
+        try {
+            String dtcContextJson = objectMapper.writeValueAsString(dtcContext);
+
+            // 2. DiagSession 생성 (또는 기존 PENDING/FAILED 재사용)
+            DiagSession session = diagSessionRepository
+                    .findFirstByVehiclesIdAndStatusOrderByCreatedAtDesc(vehicleId, DiagStatus.PENDING)
+                    .orElseGet(() -> diagSessionRepository
+                            .findFirstByVehiclesIdAndStatusOrderByCreatedAtDesc(vehicleId, DiagStatus.FAILED)
+                            .orElse(null));
+
+            if (session != null && session.getTriggerType() == DiagTriggerType.DTC) {
+                log.info("[DTC Trigger] Reusing existing DTC session: {}", session.getDiagSessionId());
+                session.setDtcContextJson(dtcContextJson);
+                session.updateStatus(DiagStatus.PENDING, "DTC 진단 대기 중 (재요청)");
+            } else {
+                session = new DiagSession(vehicleId, null, DiagTriggerType.DTC);
+                session.setDtcContextJson(dtcContextJson);
+            }
+            session = diagSessionRepository.save(session);
+
+            // 3. UnifiedDiagnosisRequestDto 생성 및 진단 요청
+            UnifiedDiagnosisRequestDto requestDto = UnifiedDiagnosisRequestDto.builder()
+                    .vehicleId(vehicleId)
+                    .build();
+
+            DiagnosisTaskMessage message = DiagnosisTaskMessage.builder()
+                    .sessionId(session.getDiagSessionId())
+                    .requestDto(requestDto)
+                    .messageType(DiagnosisTaskMessage.MessageType.INITIAL)
+                    .build();
+
+            // 4. RabbitMQ 발행 (Transaction Commit 후 실행)
+            UUID finalSessionId = session.getDiagSessionId();
+            org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+                    new org.springframework.transaction.support.TransactionSynchronization() {
+                        @Override
+                        public void afterCommit() {
+                            rabbitTemplate.convertAndSend(kr.co.himedia.config.RabbitConfig.EXCHANGE_NAME,
+                                    kr.co.himedia.config.RabbitConfig.ROUTING_KEY, message);
+                            log.info("[DTC Trigger] Diagnosis message published for session: {}", finalSessionId);
+                        }
+                    });
+
+        } catch (Exception e) {
+            log.error("[DTC Trigger] Failed to trigger diagnosis for vehicle: {}", vehicleId, e);
+            throw new RuntimeException("DTC 진단 트리거 실패", e);
+        }
+    }
+
+    /**
+     * 세션에 저장된 DTC 정보를 Map으로 구성
+     */
+    private Map<String, Object> buildDtcInfoForSession(DiagSession session) {
+        if (session.getDtcContextJson() == null || session.getDtcContextJson().isBlank()) {
+            return null;
+        }
+
+        try {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> dtcContext = objectMapper.readValue(session.getDtcContextJson(), Map.class);
+            return dtcContext;
+        } catch (Exception e) {
+            log.error("[DTC Info] Failed to parse dtcContextJson for session: {}", session.getDiagSessionId(), e);
+            return null;
+        }
+    }
+
+    /**
+     * DTC를 포함한 RAG 검색 쿼리 구성
+     */
+    private String buildSearchQueryWithDtc(Map<String, Object> visualResult, Map<String, Object> audioResult,
+            Map<String, Object> anomalyResult, Map<String, Object> dtcInfo) {
+        StringBuilder searchQuery = new StringBuilder();
+        
+        // 기존 이상탐지/이미지/소리 키워드
+        if (visualResult != null && visualResult.containsKey("category")) {
+            searchQuery.append(visualResult.get("category")).append(" ");
+        }
+        if (audioResult != null && audioResult.containsKey("status")) {
+            searchQuery.append(audioResult.get("status")).append(" ");
+        }
+        if (anomalyResult != null && Boolean.TRUE.equals(anomalyResult.get("is_anomaly"))) {
+            @SuppressWarnings("unchecked")
+            List<String> factors = (List<String>) anomalyResult.get("contributing_factors");
+            if (factors != null && !factors.isEmpty()) {
+                searchQuery.append(String.join(" ", factors)).append(" 이상징후 ");
+            }
+        }
+
+        // DTC 키워드 추가
+        if (dtcInfo != null && dtcInfo.containsKey("dtc_list")) {
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> dtcList = (List<Map<String, Object>>) dtcInfo.get("dtc_list");
+            if (dtcList != null && !dtcList.isEmpty()) {
+                for (Map<String, Object> dtc : dtcList) {
+                    String code = (String) dtc.get("code");
+                    String nameEn = (String) dtc.get("name_en");
+                    if (code != null) {
+                        searchQuery.append(code).append(" ");
+                    }
+                    if (nameEn != null) {
+                        searchQuery.append(nameEn).append(" ");
+                    }
+                }
+            }
+        }
+
+        return searchQuery.toString().trim();
+    }
 
     @Transactional
     public Map<String, Object> replyToSession(UUID sessionId, ReplyRequestDto replyDto,

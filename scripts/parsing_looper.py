@@ -11,8 +11,8 @@ def main():
     try:
         while True:
             run_parser()
-            print("Waiting 5 minutes for next parse cycle...")
-            time.sleep(300) # 5분 대기
+            print("Waiting 30 seconds for next parse cycle...")
+            time.sleep(30) # 30초 대기 (다운로더 속도에 맞춤)
     except KeyboardInterrupt:
         print("Looper stopped.")
 

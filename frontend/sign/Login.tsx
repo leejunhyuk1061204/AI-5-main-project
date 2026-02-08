@@ -300,6 +300,13 @@ export default function Login() {
                     </TouchableOpacity>
                 </View>
 
+                <TouchableOpacity
+                    onPress={() => navigation.navigate('Elm327Test')}
+                    className="mb-2 items-center"
+                >
+                    <Text className="text-xs text-text-muted">ELM327 테스트 (로그인 없이)</Text>
+                </TouchableOpacity>
+
                 {/* Reset Button (For Testing) */}
                 <TouchableOpacity
                     onPress={handleReset}
