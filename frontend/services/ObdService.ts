@@ -12,7 +12,6 @@ import { uploadObdBatch, ObdLogRequest, ObdBatchRequest, obdDeviceApi } from '..
 import { sendDtcReport, sendDtcBatchReport } from '../api/aiApi';
 import { useBleStore } from '../store/useBleStore';
 import BackgroundService from './BackgroundService';
-import { checkAndRequestBatteryOpt } from '../utils/BatteryOptConfig';
 import { useTripStore } from '../store/useTripStore';
 import NetworkService from './NetworkService';
 import OfflineStorage from './OfflineStorage';
@@ -86,8 +85,13 @@ class ObdService {
     private connectionType: ConnectionType = null;
     private isDisconnectRequested = false;
     private reconnectAttempts = 0;
-    private readonly MAX_RECONNECT_ATTEMPTS = 5;
+    private readonly MAX_RECONNECT_ATTEMPTS = 3;
     private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+
+    // 연결 에러/해제 감지용 상태
+    private connectionErrorCount: number = 0;
+    private readonly MAX_CONNECTION_ERROR_BEFORE_DISCONNECT = 3;
+    private disconnectionHandled: boolean = false;
 
     // BLE 관련
     private currentDeviceId: string | null = null;
@@ -285,6 +289,8 @@ class ObdService {
         this.currentData = { timestamp: new Date().toISOString() };
         this.isDisconnectRequested = false;
         this.reconnectAttempts = 0;
+        this.connectionErrorCount = 0;
+        this.disconnectionHandled = false;
         useBleStore.getState().setConnectedDeviceName(device.name || 'Classic Device');
         useBleStore.getState().setConnectedDevice(device.address);
         useBleStore.getState().setStatus('connected');
@@ -299,9 +305,6 @@ class ObdService {
 
         // ELM327 초기화 명령 전송
         await this.initializeElm327();
-
-        // 배터리 최적화 확인
-        checkAndRequestBatteryOpt();
     }
 
     // ===== BLE 설정 =====
@@ -320,6 +323,10 @@ class ObdService {
         this.connectionType = 'ble';
         this.currentDeviceId = deviceId;
         this.currentData = { timestamp: new Date().toISOString() };
+        this.isDisconnectRequested = false;
+        this.reconnectAttempts = 0;
+        this.connectionErrorCount = 0;
+        this.disconnectionHandled = false;
         useBleStore.getState().setStatus('connecting');
 
         try {
@@ -367,7 +374,6 @@ class ObdService {
                 this.saveLastDevice('ble', this.currentDeviceId, this.currentDeviceId);
 
                 await this.initializeElm327();
-                checkAndRequestBatteryOpt();
             } else {
                 console.warn('[ObdService] OBD characteristics not found. deviceId=', this.currentDeviceId);
                 useBleStore.getState().setStatus('disconnected');
@@ -402,18 +408,30 @@ class ObdService {
     // ===== 명령 전송 =====
     private async sendCommand(command: string): Promise<boolean> {
         try {
+            let ok = false;
+
             if (this.connectionType === 'classic' && this.classicDevice) {
-                return await ClassicBtService.write(this.classicDevice, command);
+                ok = await ClassicBtService.write(this.classicDevice, command);
             } else if (this.connectionType === 'ble' && this.currentDeviceId) {
                 if (Platform.OS === 'web') return false;
                 const bytes = this.stringToBytes(command + '\r');
                 await BleManager.writeWithoutResponse(this.currentDeviceId, this.serviceUUID, this.charUUID, bytes);
+                ok = true;
+            } else {
+                return false;
+            }
+
+            if (ok) {
+                // 전송 성공 → 연결 정상으로 판단, 에러 카운트/플래그 리셋
+                this.connectionErrorCount = 0;
+                this.disconnectionHandled = false;
                 return true;
             }
+            // ok === false 인 경우 (Classic write 실패 등)
             return false;
         } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
-            console.error('[ObdService] send failed cmd=', command, 'reason=', msg);
+            console.warn('[ObdService] send failed cmd=', command, 'reason=', msg);
             return false;
         }
     }
@@ -470,7 +488,7 @@ class ObdService {
     }
 
     /** Android 13+ 알림 권한 요청. 폴링 시작 전(ObdConnect 등)에서 호출. */
-    static async ensureNotificationPermissionForPolling(): Promise<boolean> {
+    async ensureNotificationPermissionForPolling(): Promise<boolean> {
         if (Platform.OS !== 'android' || (Platform.Version as number) < 33) return true;
         const { PermissionsAndroid, Alert } = require('react-native');
         const hasPermission = await PermissionsAndroid.check('android.permission.POST_NOTIFICATIONS');
@@ -716,70 +734,9 @@ class ObdService {
      * [10단계] 주행 종료 상태 머신 체크
      */
     private checkTripTermination(snapshot: ObdData, now: number) {
-        if (!this.isPolling || this.isEndingTrip || this.tripState !== 'RUNNING') return;
-
-        // highAgeMs 계산: RPM 또는 Speed 중 최근 갱신 기준
-        const rpmTs = this.lastUpdatedAt.get('rpm') || 0;
-        const speedTs = this.lastUpdatedAt.get('speed') || 0;
-        const lastHighUpdatedAt = Math.max(rpmTs, speedTs);
-        const highAgeMs = now - lastHighUpdatedAt;
-
-        const isRpmZero = snapshot.rpm !== undefined && snapshot.rpm === 0;
-        const isSpeedZero = snapshot.speed !== undefined && snapshot.speed === 0;
-
-        if (this.tripState === 'RUNNING') {
-            // Case A (IDLE): RPM=0 && Speed=0 연속 5초
-            if (isRpmZero && isSpeedZero) {
-                this.idleCount++;
-                if (this.idleCount >= 5) {
-                    this.tripState = 'SUSPECT_END';
-                    this.suspectReason = 'IDLE';
-                    this.suspectStartedAt = now;
-                }
-            } else {
-                this.idleCount = 0; // 리셋
-            }
-
-            // Case B (DISCONNECT): highAgeMs > 3000ms 연속 3회
-            if (highAgeMs > 3000) {
-                this.disconnectCount++;
-                if (this.disconnectCount >= 3) {
-                    this.tripState = 'SUSPECT_END';
-                    this.suspectReason = 'DISCONNECT';
-                    this.suspectStartedAt = now;
-                }
-            } else {
-                this.disconnectCount = 0; // 리셋
-            }
-        }
-        else if (this.tripState === 'SUSPECT_END') {
-            // 복귀 조건: rpm > 0 또는 speed > 0 또는 업데이트 재개
-            const isActuallyActive = (snapshot.rpm !== undefined && snapshot.rpm > 0) ||
-                (snapshot.speed !== undefined && snapshot.speed > 0) ||
-                (highAgeMs <= 1000);
-
-            if (isActuallyActive) {
-                this.tripState = 'RUNNING';
-                this.suspectReason = null;
-                this.suspectStartedAt = 0;
-                this.idleCount = 0;
-                this.disconnectCount = 0;
-            } else {
-                // Grace Period 경과 체크
-                const elapsedSinceSuspect = now - this.suspectStartedAt;
-                const gracePeriod = this.suspectReason === 'IDLE' ?
-                    this.GRACE_PERIOD_IDLE_MS : this.GRACE_PERIOD_DISCONNECT_MS;
-
-                if (elapsedSinceSuspect >= gracePeriod) {
-                    this.finalizeTrip();
-                } else {
-                    // 매 15초마다 경과 로그
-                    const elapsedSec = Math.floor(elapsedSinceSuspect / 1000);
-                    if (elapsedSec > 0 && elapsedSec % 15 === 0) {
-                    }
-                }
-            }
-        }
+        // 기존 데이터 기반 종료 로직(IDLE / highAgeMs) 비활성화.
+        // 현재는 연결 상태(재연결 시도 실패 등)에 의해 주행 종료 여부를 판단한다.
+        if (!this.isPolling || this.isEndingTrip) return;
     }
 
     /**
@@ -1115,6 +1072,15 @@ class ObdService {
     private incrementPidFailCount(pid: PidDefinition, reason: string) {
         const key = `${pid.mode}:${pid.pid}`;
 
+        // 보내기/받기 모두 실패 시 연결 에러 카운트에 포함
+        this.connectionErrorCount++;
+        console.warn('[ObdService] connection error detected. count=', this.connectionErrorCount, 'reason=', reason, 'pid=', key);
+        if (!this.disconnectionHandled &&
+            this.connectionErrorCount >= this.MAX_CONNECTION_ERROR_BEFORE_DISCONNECT) {
+            this.disconnectionHandled = true;
+            this.handleDisconnection();
+        }
+
         // [11단계 피드백] RPM/Speed (High PIDs)는 비활성화 대상에서 제외
         // 이유: 상태 머신(주행 종료 감지)의 핵심 지표이므로 통신이 불안정해도 계속 시도해야 함
         if (key === '01:0C' || key === '01:0D') {
@@ -1379,25 +1345,25 @@ class ObdService {
             this.classicDataSubscription = null;
         }
 
-        // 연결 타입별로 정리
-        if (this.connectionType === 'classic' && this.classicDevice) {
-            await ClassicBtService.disconnect(this.classicDevice);
-        } else if (this.connectionType === 'ble' && this.currentDeviceId) {
-            // BLE의 경우 BleService를 통해 명시적으로 연결 해제
-            try {
-                await BleService.disconnect(this.currentDeviceId);
-            } catch (e) {
-                const msg = e instanceof Error ? e.message : String(e);
-                console.error('[ObdService] BLE disconnect failed. reason=', msg);
+        try {
+            if (this.connectionType === 'classic' && this.classicDevice) {
+                await ClassicBtService.disconnect(this.classicDevice);
+            } else if (this.connectionType === 'ble' && this.currentDeviceId) {
+                try {
+                    await BleService.disconnect(this.currentDeviceId);
+                } catch (e) {
+                    const msg = e instanceof Error ? e.message : String(e);
+                    console.error('[ObdService] BLE disconnect failed. reason=', msg);
+                }
             }
+        } finally {
+            this.connectionType = null;
+            this.classicDevice = null;
+            this.currentDeviceId = null;
+            this.dataBuffer = [];
+            useBleStore.getState().reset();
         }
-
         console.log('[ObdService] disconnect done, state reset');
-        this.connectionType = null;
-        this.classicDevice = null;
-        this.currentDeviceId = null;
-        this.dataBuffer = [];
-        useBleStore.getState().reset();
     }
 
     // --- Simulation ---
@@ -1434,25 +1400,56 @@ class ObdService {
 
     private handleDisconnection() {
         if (this.isDisconnectRequested) return;
+        console.warn('[ObdService] handleDisconnection: detected connection loss. stopping polling and scheduling reconnect.');
+
+        // 재연결 시도 동안에는 폴링을 중지해서 불필요한 PID 전송/실패를 막는다.
+        if (this.isPolling) {
+            this.stopPolling();
+        }
+
         this.connectionType = null;
         this.attemptReconnect();
     }
 
     private async attemptReconnect() {
         if (this.reconnectAttempts >= this.MAX_RECONNECT_ATTEMPTS) {
-            useBleStore.getState().setStatus('disconnected');
+            console.warn('[ObdService] attemptReconnect: max attempts reached. Forcing trip end and disconnect.');
+            // 3초 간격 * 5회 재시도 실패 → 주행 종료, 폴링 중지, BLE/Classic 모두 끊기
+            this.disconnect().catch(e => {
+                const msg = e instanceof Error ? e.message : String(e);
+                console.warn('[ObdService] attemptReconnect: disconnect failed. reason=', msg);
+            });
             return;
         }
         this.reconnectAttempts++;
+        console.log('[ObdService] attemptReconnect scheduled. attempt=', this.reconnectAttempts);
         this.reconnectTimer = setTimeout(async () => {
             try {
                 if (this.currentDeviceId) {
+                    console.log('[ObdService] attemptReconnect BLE. deviceId=', this.currentDeviceId);
                     await this.setTargetDevice(this.currentDeviceId);
+                    console.log('[ObdService] attemptReconnect BLE success. deviceId=', this.currentDeviceId);
+                    if (!this.isPolling) {
+                        this.startPolling(1000);
+                    }
                 } else if (this.classicDevice) {
+                    console.log('[ObdService] attemptReconnect Classic. address=', this.classicDevice.address);
                     const ok = await ClassicBtService.connect(this.classicDevice);
-                    if (ok) await this.setClassicDevice(this.classicDevice);
+                    if (ok) {
+                        await this.setClassicDevice(this.classicDevice);
+                        console.log('[ObdService] attemptReconnect Classic success. address=', this.classicDevice.address);
+                        if (!this.isPolling) {
+                            this.startPolling(1000);
+                        }
+                    } else {
+                        console.warn('[ObdService] attemptReconnect Classic connect() returned false. address=', this.classicDevice.address);
+                        // 예외 없이 false만 반환된 경우에도 재시도 카운터에 포함되도록 다음 시도 스케줄링
+                        this.attemptReconnect();
+                    }
                 }
             } catch (e) {
+                const msg = e instanceof Error ? e.message : String(e);
+                console.warn('[ObdService] attemptReconnect error. reason=', msg);
                 this.attemptReconnect();
             }
         }, 3000);
@@ -1476,19 +1473,41 @@ class ObdService {
         if (!last || this.isConnected()) return;
         try {
             if (last.type === 'ble') {
+                console.log('[ObdService] tryAutoConnect BLE. deviceId=', last.id);
                 await this.setTargetDevice(last.id);
             } else {
-                await this.setClassicDevice({ id: last.id, name: last.name, address: last.id } as any);
+                console.log('[ObdService] tryAutoConnect Classic. address=', last.id);
+                // last.id는 address 문자열만 가지고 있으므로, 실제 BluetoothDevice 인스턴스를 다시 조회해야 한다.
+                const bonded = await ClassicBtService.getBondedDevices();
+                const match = bonded.find((d: { address: string }) => d.address === last.id);
+                if (!match) {
+                    console.warn('[ObdService] tryAutoConnect Classic: no bonded device found for address=', last.id);
+                    return;
+                }
+                const ok = await ClassicBtService.connect(match);
+                if (!ok) {
+                    console.warn('[ObdService] tryAutoConnect Classic: connect() returned false. address=', last.id);
+                    return;
+                }
+                await this.setClassicDevice(match);
             }
-        } catch (e) { }
+            console.log('[ObdService] tryAutoConnect success. type=', last.type, 'id=', last.id);
+        } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            console.warn('[ObdService] tryAutoConnect failed. type=', last.type, 'id=', last.id, 'reason=', msg);
+        }
     }
 
     /** 서버에서 OBD 장치 목록 조회 후 캐시 저장 (앱 시작 시 1회 호출) */
     public async loadAndCacheDevices(): Promise<void> {
         try {
+            console.log('[ObdService] loadAndCacheDevices: fetching /obd/devices ...');
             const res = await obdDeviceApi.getDevices();
             if (res.success && res.data) {
                 await AsyncStorage.setItem(STORAGE_KEY_OBD_DEVICES, JSON.stringify(res.data));
+                console.log('[ObdService] loadAndCacheDevices: cached devices count=', res.data.length);
+            } else {
+                console.warn('[ObdService] loadAndCacheDevices: unexpected response. success=', res.success);
             }
         } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
@@ -1518,6 +1537,27 @@ class ObdService {
         return list.length > 1 ? 60000 : 120000;
     }
 
+    /**
+     * 로그인/앱 시작 시: 캐시된 장치 목록이 있으면
+     * 백그라운드 재연결 서비스를 시작한다.
+     * (실제 폴링/연결은 tryAutoConnectFromCache 내부에서 처리)
+     */
+    public async startBackgroundReconnectIfNeeded(): Promise<void> {
+        if (Platform.OS !== 'android') return;
+
+        const list = await this.getCachedDevices();
+        if (list.length === 0) return;
+
+        if (BackgroundService.isActive()) return;
+
+        try {
+            await BackgroundService.start();
+        } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            console.error('[ObdService] startBackgroundReconnectIfNeeded failed. reason=', msg);
+        }
+    }
+
     private cacheRoundRobinIndex = 0;
 
     /** 캐시된 장치 목록 기준 라운드로빈으로 1대 직접 연결 시도 (스캔 없음) */
@@ -1528,15 +1568,28 @@ class ObdService {
         const index = this.cacheRoundRobinIndex % list.length;
         this.cacheRoundRobinIndex = index + 1;
         const device = list[index];
+        console.log('[ObdService] tryAutoConnectFromCache selected device=', device.deviceId, 'type=', device.deviceType);
         try {
             if (device.deviceType === 'ble') {
                 await this.setTargetDevice(device.deviceId);
+                console.log('[ObdService] tryAutoConnectFromCache BLE success. deviceId=', device.deviceId);
+                if (!this.isPolling) {
+                    this.startPolling(1000);
+                }
             } else {
                 const bonded = await ClassicBtService.getBondedDevices();
                 const match = bonded.find((d: { address: string }) => d.address === device.deviceId);
                 if (match) {
                     const ok = await ClassicBtService.connect(match);
-                    if (ok) await this.setClassicDevice(match);
+                    if (ok) {
+                        await this.setClassicDevice(match);
+                        console.log('[ObdService] tryAutoConnectFromCache Classic success. address=', match.address);
+                        if (!this.isPolling) {
+                            this.startPolling(1000);
+                        }
+                    } else {
+                        console.warn('[ObdService] tryAutoConnectFromCache Classic connect() returned false. address=', match.address);
+                    }
                 }
             }
         } catch (e) {

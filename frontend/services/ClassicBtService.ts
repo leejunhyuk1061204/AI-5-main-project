@@ -106,7 +106,7 @@ class ClassicBtService {
             return connected;
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
-            console.error('[ClassicBT] connect failed. name=', device.name, 'reason=', msg);
+            console.warn('[ClassicBT] connect failed. name=', device.name, 'reason=', msg);
             try {
                 console.log('[ClassicBT] retry with accept mode');
                 const connected = await device.connect({
@@ -116,7 +116,8 @@ class ClassicBtService {
                 return connected;
             } catch (retryError) {
                 const retryMsg = retryError instanceof Error ? retryError.message : String(retryError);
-                console.error('[ClassicBT] retry failed. reason=', retryMsg);
+                // 재연결 로직에서 처리할 수 있도록, 여기서는 ERROR가 아니라 warn + false 반환만 한다.
+                console.warn('[ClassicBT] retry failed. reason=', retryMsg);
                 return false;
             }
         }
@@ -124,7 +125,12 @@ class ClassicBtService {
 
     async disconnect(device: BluetoothDevice): Promise<boolean> {
         try {
-            const disconnected = await device.disconnect();
+            const address = device?.address;
+            if (!address) {
+                console.warn('[ClassicBT] Disconnect skipped: no device address');
+                return true;
+            }
+            const disconnected = await RNBluetoothClassic.disconnectFromDevice(address);
             console.log('[ClassicBT] Disconnected:', disconnected);
             return disconnected;
         } catch (error) {
@@ -138,7 +144,7 @@ class ClassicBtService {
             const success = await device.write(command + '\r');
             return success;
         } catch (error) {
-            console.error('[ClassicBT] Write failed:', error);
+            console.warn('[ClassicBT] Write failed:', error);
             return false;
         }
     }
@@ -168,6 +174,11 @@ class ClassicBtService {
             }
             return '';
         } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            if (msg.includes('Not connected')) {
+                // 연결이 이미 끊긴 상태에서 읽기 시도 시 (테스트/재연결 직후 등) — 에러 로그 생략
+                return '';
+            }
             console.error('[ClassicBT] ReadAvailable failed:', error);
             return '';
         }

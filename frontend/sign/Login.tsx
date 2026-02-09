@@ -8,6 +8,7 @@ import { useUserStore } from '../store/useUserStore';
 import { useAlertStore } from '../store/useAlertStore';
 import BaseScreen from '../components/layout/BaseScreen';
 import NotificationService from '../services/NotificationService';
+import ObdService from '../services/ObdService';
 import Svg, { Path } from 'react-native-svg';
 
 // 정석 다색 구글 로고 SVG 컴포넌트
@@ -72,6 +73,14 @@ export default function Login() {
     const handleNavigation = async (result: any) => {
         // FCM 토큰 등록/갱신
         await NotificationService.registerFcmToken();
+
+        // 로그인 성공 시, 이미 등록된 OBD 기기 목록을 새로 불러와 캐시에 반영하고
+        // 백그라운드 재연결 서비스를 시작한다.
+        console.log('[Login] Login success. Loading OBD devices and starting background reconnect');
+        await ObdService.loadAndCacheDevices();
+        ObdService.startBackgroundReconnectIfNeeded().catch((e) => {
+            console.warn('[Login] startBackgroundReconnectIfNeeded failed', e);
+        });
 
         if (route.params?.fromSignup) {
             navigation.navigate('RegisterMain');
@@ -164,7 +173,8 @@ export default function Login() {
     const handleReset = async () => {
         const { logout } = useUserStore.getState();
         await logout();
-        await AsyncStorage.clear();
+        const { clearStorageForLogout } = await import('../utils/storageLogout');
+        await clearStorageForLogout();
         navigation.replace('Tos');
     };
 
