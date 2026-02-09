@@ -107,7 +107,6 @@ def train_model(epochs=DEFAULT_EPOCHS):
     # [Weight Management] 기존 가중치가 있다면 백업 (누적 방지용)
     if os.path.exists(SAVE_PATH):
         old_path = SAVE_PATH.replace(".pt", "_old.pt")
-        import shutil
         shutil.copy(SAVE_PATH, old_path)
         print(f"📦 기존 가중치를 백업했습니다: {old_path}")
 
