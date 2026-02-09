@@ -4,8 +4,8 @@ import joblib
 from sklearn.preprocessing import MinMaxScaler
 import pathlib
 
-JSONL_PATH = "ai/app/services/obd_anomaly/offline/datasets/kaggle_efd/data.jsonl"
-SCALER_OUT = "ai/app/services/obd_anomaly/offline/registry/scalers/global_minmax_v1.pkl"
+JSONL_PATH = "ai/app/services/obd_anomaly/offline/datasets/kaggle_efd/efd_full.jsonl"
+SCALER_OUT = "ai/app/services/obd_anomaly/offline/registry/scalers/efd_minmax_v1.pkl"
 
 def load_first_example(jsonl_path):
     with open(jsonl_path, "r", encoding="utf-8") as f:
