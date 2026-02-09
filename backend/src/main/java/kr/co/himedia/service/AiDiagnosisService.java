@@ -482,7 +482,6 @@ public class AiDiagnosisService {
         Map<String, Object> llmAnomalyPayload = new HashMap<>();
         llmAnomalyPayload.put("lstm_timeline", lstmTimeline);
         llmAnomalyPayload.put("is_anomaly", anomalyResult.get("is_anomaly"));
-        llmAnomalyPayload.put("chunk_count", anomalyResult.get("chunk_count"));
 
         // 2. 통합 요청 객체 구축 및 RAG 검색
         AiUnifiedRequestDto.AiUnifiedRequestDtoBuilder aiRequestBuilder = AiUnifiedRequestDto.builder()
