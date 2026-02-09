@@ -47,3 +47,14 @@ def normalize_to_xywh(bbox: List[float], width: int, height: int) -> List[int]:
     xyxy = normalize_bbox(bbox, width, height)
     x1, y1, x2, y2 = xyxy
     return [int(x1), int(y1), int(x2 - x1), int(y2 - y1)]
+
+
+def normalize_label(label: str) -> str:
+    """
+    라벨 이름을 일관된 형식으로 정규화합니다.
+    - 소문자 변환
+    - 공백 및 하이픈을 언더스코어로 변환
+    """
+    if not label:
+        return "unknown"
+    return label.lower().strip().replace(" ", "_").replace("-", "_")
