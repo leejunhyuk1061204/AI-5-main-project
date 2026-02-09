@@ -85,6 +85,7 @@ class ObdService {
     private connectionType: ConnectionType = null;
     private isDisconnectRequested = false;
     private reconnectAttempts = 0;
+    // 타임아웃/소켓 오류 시 무한 재시도 방지 (3회 × 3초 후 포기)
     private readonly MAX_RECONNECT_ATTEMPTS = 3;
     private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -92,6 +93,9 @@ class ObdService {
     private connectionErrorCount: number = 0;
     private readonly MAX_CONNECTION_ERROR_BEFORE_DISCONNECT = 3;
     private disconnectionHandled: boolean = false;
+    // Classic BT: 연속 빈 응답(Available=0) 카운터 (서버/어댑터 다운 감지용)
+    private emptyResponseConsecutiveCount: number = 0;
+    private readonly MAX_EMPTY_RESPONSE_BEFORE_DISCONNECT = 20;
 
     // BLE 관련
     private currentDeviceId: string | null = null;
@@ -268,7 +272,14 @@ class ObdService {
             });
             if (!res.success || !res.data?.vehicleId) return;
             const vehicleId = res.data.vehicleId;
-            await obdDeviceApi.recordConnect(deviceId, { vehicleId });
+
+            // 차량 특정이 성공한 시점에는 VIN/ CALID / CVN이 거의 다 채워져 있으므로
+            // 연결 이력에도 함께 기록해서, 이후에는 CALID/CVN만으로도 차량을 잘 찾을 수 있게 한다.
+            await obdDeviceApi.recordConnect(deviceId, {
+                vehicleId,
+                calid: this.calid || undefined,
+                cvn: this.cvn || undefined
+            });
             this.setVehicleId(vehicleId);
         } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
@@ -288,22 +299,19 @@ class ObdService {
         this.classicDevice = device;
         this.currentData = { timestamp: new Date().toISOString() };
         this.isDisconnectRequested = false;
-        this.reconnectAttempts = 0;
         this.connectionErrorCount = 0;
         this.disconnectionHandled = false;
+        this.emptyResponseConsecutiveCount = 0;
         useBleStore.getState().setConnectedDeviceName(device.name || 'Classic Device');
         useBleStore.getState().setConnectedDevice(device.address);
         useBleStore.getState().setStatus('connected');
 
-        // Save for auto-connect
         this.saveLastDevice('classic', device.address, device.name || 'Classic Device');
-
         console.log('[ObdService] classic connected name=', device.name, 'address=', device.address);
         this.classicDataSubscription = ClassicBtService.onDataReceived(device, (data) => {
             this.handleResponse(data);
         });
 
-        // ELM327 초기화 명령 전송
         await this.initializeElm327();
     }
 
@@ -324,7 +332,7 @@ class ObdService {
         this.currentDeviceId = deviceId;
         this.currentData = { timestamp: new Date().toISOString() };
         this.isDisconnectRequested = false;
-        this.reconnectAttempts = 0;
+        // reconnectAttempts는 재연결 시도 흐름( handleDisconnection/attemptReconnect )에서만 관리
         this.connectionErrorCount = 0;
         this.disconnectionHandled = false;
         useBleStore.getState().setStatus('connecting');
@@ -511,48 +519,44 @@ class ObdService {
         this.tripState = 'ENDED';
         console.log('[TripStateChange] ENDED (finalizing)');
 
-        try {
-            // 1. [필수] 응답 파편 차단
-            this.ignoreResponses = true;
-
-            // 2. 폴링 중단
-            this.isPolling = false;
-            this.commandQueue = [];
-            this.isProcessingQueue = false;
-            this.currentPid = null;
-
-            if (this.samplingTimer) {
-                clearTimeout(this.samplingTimer);
-                this.samplingTimer = null;
-            }
-            useBleStore.getState().setPolling(false);
-
-            await this.flushBuffer();
-
-            const tripId = useTripStore.getState().currentTripId;
             try {
-                await useTripStore.getState().endTrip();
-            } catch (e) {
-                const msg = e instanceof Error ? e.message : String(e);
-                console.error('[ObdService] endTrip failed, queuing. reason=', msg);
-                if (tripId) {
-                    const url = `/api/v1/trips/${tripId}/end`;
-                    const isQueued = await OfflineStorage.isUrlQueued(url);
-                    if (!isQueued) {
-                        await OfflineStorage.addToQueue({
-                            url: url,
-                            method: 'POST',
-                            timestamp: Date.now(),
-                            body: JSON.stringify({ endTime: new Date().toISOString() })
-                        });
+                // 1. [필수] 응답 파편 차단
+                this.ignoreResponses = true;
+
+                // 2. 폴링 중단
+                this.isPolling = false;
+                this.commandQueue = [];
+                this.isProcessingQueue = false;
+                this.currentPid = null;
+
+                if (this.samplingTimer) {
+                    clearTimeout(this.samplingTimer);
+                    this.samplingTimer = null;
+                }
+                useBleStore.getState().setPolling(false);
+
+                await this.flushBuffer();
+
+                const tripId = useTripStore.getState().currentTripId;
+                try {
+                    await useTripStore.getState().endTrip();
+                } catch (e) {
+                    const msg = e instanceof Error ? e.message : String(e);
+                    console.error('[ObdService] endTrip failed, queuing. reason=', msg);
+                    if (tripId) {
+                        const url = `/api/v1/trips/${tripId}/end`;
+                        const isQueued = await OfflineStorage.isUrlQueued(url);
+                        if (!isQueued) {
+                            await OfflineStorage.addToQueue({
+                                url: url,
+                                method: 'POST',
+                                timestamp: Date.now(),
+                                body: JSON.stringify({ endTime: new Date().toISOString() })
+                            });
+                        }
                     }
                 }
-            }
-
-            if (Platform.OS === 'android') {
-                BackgroundService.stop();
-            }
-        } catch (e) {
+            } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
             console.error('[ObdService] finalizeTrip error. reason=', msg);
         } finally {
@@ -849,7 +853,7 @@ class ObdService {
 
                 const success = await this.sendCommand(command);
                 if (!success) {
-                    // [11단계] sendCommand 실패 캘운팅
+                // [11단계] sendCommand 실패 캘운팅
                     this.pidRequestStartTime = null;
                     this.incrementPidFailCount(pid, 'sendCommand failed');
                     this.currentPid = null;
@@ -862,7 +866,25 @@ class ObdService {
                     await this.delay(200);
                     if (this.classicDevice) {
                         const response = await ClassicBtService.readAvailable(this.classicDevice);
-                        if (response) this.handleResponse(response);
+                        if (response) {
+                            // Classic BT에서 실제 응답이 오면 빈 응답 카운터 리셋
+                            this.emptyResponseConsecutiveCount = 0;
+                            this.handleResponse(response);
+                        } else {
+                            // Available=0 → 빈 응답으로 간주하고 연속 카운트
+                            this.emptyResponseConsecutiveCount++;
+                            console.warn('[ObdService] Empty response consecutive count:', this.emptyResponseConsecutiveCount);
+
+                            // 연속 3번 빈 응답이면 연결 끊김으로 간주하고 재연결 플로우 진입
+                            if (this.emptyResponseConsecutiveCount >= this.MAX_EMPTY_RESPONSE_BEFORE_DISCONNECT && !this.disconnectionHandled) {
+                                this.disconnectionHandled = true;
+                                console.warn('[ObdService] Empty response occurred', this.MAX_EMPTY_RESPONSE_BEFORE_DISCONNECT, 'times consecutively, treating as disconnection');
+                                this.pidRequestStartTime = null;
+                                this.currentPid = null;
+                                this.handleDisconnection();
+                                continue;
+                            }
+                        }
                     }
                 } else {
                     const maxWaitMs = pid.mode === '09' ? 20000 : 10000;
@@ -1427,7 +1449,15 @@ class ObdService {
             this.reconnectTimer = null;
         }
 
-        this.stopPolling();
+        // 재시도/에러 관련 상태를 완전히 초기화하여, 이후 새 세션에서 다시 공정하게 시도할 수 있도록 한다.
+        this.reconnectAttempts = 0;
+        this.connectionErrorCount = 0;
+        this.emptyResponseConsecutiveCount = 0;
+        this.disconnectionHandled = false;
+
+        // 주행 마감 / 배치 업로드 / BackgroundService.stop 등이 모두 끝난 뒤에
+        // 실제 BT disconnect를 수행하기 위해, stopPolling을 반드시 기다린다.
+        await this.stopPolling();
         await this.flushBuffer();
 
         if (this.classicDataSubscription) {
@@ -1504,11 +1534,14 @@ class ObdService {
     private async attemptReconnect() {
         if (this.reconnectAttempts >= this.MAX_RECONNECT_ATTEMPTS) {
             console.warn('[ObdService] attemptReconnect: max attempts reached. Forcing trip end and disconnect.');
-            // 3초 간격 * 5회 재시도 실패 → 주행 종료, 폴링 중지, BLE/Classic 모두 끊기
-            this.disconnect().catch(e => {
+            // 재시도 한계를 넘으면 현재 주행/연결만 정리한다.
+            // 백그라운드 재연결은 별도의 앱 플로우(자동로그인/설정 화면 등)에서 시작/유지한다.
+            try {
+                await this.disconnect();
+            } catch (e) {
                 const msg = e instanceof Error ? e.message : String(e);
                 console.warn('[ObdService] attemptReconnect: disconnect failed. reason=', msg);
-            });
+            }
             return;
         }
         this.reconnectAttempts++;

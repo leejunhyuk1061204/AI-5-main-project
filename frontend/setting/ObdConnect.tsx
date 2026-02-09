@@ -14,6 +14,7 @@ import ClassicBtService from '../services/ClassicBtService';
 import ObdService from '../services/ObdService';
 import type { BluetoothDevice } from 'react-native-bluetooth-classic';
 import { useBleStore } from '../store/useBleStore';
+import { useAlertStore } from '../store/useAlertStore';
 
 // 통합 기기 타입 (BLE 또는 Classic)
 interface UnifiedDevice {
@@ -83,12 +84,18 @@ export default function ObdConnect({ visible, onClose, onConnected }: ObdConnect
         }
     }, [visible]);
 
-    // 연결 성공 시 자동으로 다음 페이지로 이동
+    const successAlertShown = React.useRef(false);
+    // 연결 성공(실제 검증 완료) 시 알림 띄우고 자동 닫기
     useEffect(() => {
         if (status === 'connected' && visible) {
-            const timer = setTimeout(() => onClose(), 1500); // 1.5초 후 자동 닫기
+            if (!successAlertShown.current) {
+                successAlertShown.current = true;
+                useAlertStore.getState().showAlert('연결 성공', 'OBD 기기와 연결되었습니다.', 'SUCCESS');
+            }
+            const timer = setTimeout(() => onClose(), 1500);
             return () => clearTimeout(timer);
         }
+        if (!visible) successAlertShown.current = false;
     }, [status, visible, onClose]);
 
     // Listeners are now in BleService -> Store
@@ -175,6 +182,11 @@ export default function ObdConnect({ visible, onClose, onConnected }: ObdConnect
             const msg = error instanceof Error ? error.message : String(error);
             setStatus('disconnected');
             setError(msg);
+            if (device.type === 'ble') {
+                BleService.disconnect(device.id).catch(() => {});
+            } else if (device.type === 'classic' && device.classicDevice) {
+                ClassicBtService.disconnect(device.classicDevice).catch(() => {});
+            }
             console.warn('[ObdConnect] connection failed reason=', msg, 'retriesLeft=', retries - 1);
             if (retries > 0) {
                 console.log('[ObdConnect] retry in 2s...');
