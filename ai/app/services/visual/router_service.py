@@ -5,7 +5,7 @@ AI 분석 장면 분류 서비스 (Scene Router)
 [역할]
 1. 자동 장면 판별: 입력된 이미지가 차량의 어느 부분(엔진룸, 계기판, 외관, 타이어)인지 분류합니다.
 2. 분석 경로 최적화: 분류 결과에 따라 가장 적합한 전문 분석 파이프라인으로 요청을 전달합니다.
-3. MobileNetV3 기반: 가볍고 빠른 경량 모델을 사용하여 실시간 처리를 지원합니다.
+3. YOLOv11M-cls 기반: 정확하고 강력한 분류 모델을 사용하여 높은 정확도를 보장합니다.
 
 [주요 기능]
 - 이미지 장면 분류 (classify)
@@ -43,7 +43,7 @@ CONFIDENCE_THRESHOLD = 0.7
 # =============================================================================
 class RouterService:
     """
-    MobileNetV3-Small 기반 Scene Classifier
+    YOLOv11M-cls 기반 Scene Classifier
     
     Usage:
         router = RouterService()
@@ -53,11 +53,10 @@ class RouterService:
     def __init__(self, model_path: str = None):
         """
         Args:
-            model_path: MobileNetV3 가중치 경로. None이면 Mock 모드.
+            model_path: YOLOv11M-cls 가중치 경로. None이면 Mock 모드.
         """
         self.model = None
         self.mock_mode = True
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         
         # 기본 경로
         if model_path is None:
@@ -72,7 +71,7 @@ class RouterService:
             try:
                 self._load_model(model_path)
                 self.mock_mode = False
-                print(f"[Router] ✅ MobileNetV3 모델 로드 완료: {model_path} (Device: {self.device})")
+                print(f"[Router] ✅ YOLOv11M-cls 모델 로드 완료: {model_path}")
             except Exception as e:
                 print(f"[Router] ⚠️ 모델 로드 실패, Mock 모드로 전환: {e}")
                 self.mock_mode = True
@@ -81,34 +80,24 @@ class RouterService:
             self.mock_mode = True
     
     def _load_model(self, model_path: str):
-        """MobileNetV3-Small 모델 로드"""
-        import torch
-        import torchvision.models as models
+        """YOLOv11M-cls 모델 로드"""
+        from ultralytics import YOLO
         
-        # MobileNetV3-Small 구조 생성
-        self.model = models.mobilenet_v3_small(weights=None)
+        self.model = YOLO(model_path)
         
-        # 출력층을 4개 클래스로 수정
-        num_classes = 4  # ENGINE, DASHBOARD, EXTERIOR, TIRE
-        self.model.classifier[-1] = torch.nn.Linear(
-            self.model.classifier[-1].in_features, 
-            num_classes
-        )
+        # 클래스 매핑 (YOLO의 names에서 자동으로 가져옴)
+        # 폴더 구조: dashboard, engine, exterior, tire (알파벳 순)
+        names = self.model.names  # {0: 'dashboard', 1: 'engine', ...}
         
-        # 가중치 로드
-        state_dict = torch.load(model_path, map_location=self.device)
-        self.model.load_state_dict(state_dict)
-        self.model.to(self.device).eval()
+        # SceneType으로 매핑
+        scene_mapping = {
+            'dashboard': SceneType.SCENE_DASHBOARD,
+            'engine': SceneType.SCENE_ENGINE,
+            'exterior': SceneType.SCENE_EXTERIOR,
+            'tire': SceneType.SCENE_TIRE
+        }
         
-        # 클래스 매핑 (중요: 학습 데이터 폴더의 알파벳 순서와 일치해야 함 D->E(ngine)->E(xterior)->T)
-        # 만약 모델 재학습 시 폴더 구조가 바뀌면 이 리스트도 수정해야 합니다.
-        # 0: dashboard, 1: engine, 2: exterior, 3: tire
-        self.class_names = [
-            SceneType.SCENE_DASHBOARD,
-            SceneType.SCENE_ENGINE,
-            SceneType.SCENE_EXTERIOR,
-            SceneType.SCENE_TIRE
-        ]
+        self.class_names = [scene_mapping.get(names[i], SceneType.SCENE_ETC) for i in range(len(names))]
     
     async def classify(self, image: Union[str, Image.Image]) -> Tuple[SceneType, float]:
         """
@@ -162,32 +151,19 @@ class RouterService:
     
     async def _real_classify(self, image: Image.Image) -> Tuple[SceneType, float]:
         """
-        실제 MobileNetV3 모델로 분류 (pre-loaded image 사용)
+        실제 YOLOv11M-cls 모델로 분류
         """
-        import torch
-        import torchvision.transforms as transforms
+        # YOLO는 PIL Image를 직접 받을 수 있음
+        results = self.model(image, verbose=False)[0]
         
-        # 2. 전처리 (MobileNetV3 표준)
-        preprocess = transforms.Compose([
-            transforms.Resize((224, 224)),
-            transforms.ToTensor(),
-            transforms.Normalize(
-                mean=[0.485, 0.456, 0.406],
-                std=[0.229, 0.224, 0.225]
-            )
-        ])
-        input_tensor = preprocess(image).unsqueeze(0).to(self.device)
+        # Classification 결과
+        probs = results.probs  # Probs object
+        top1_idx = probs.top1  # 가장 높은 확률의 클래스 인덱스
+        top1_conf = probs.top1conf.item()  # 신뢰도
         
-        # 3. 추론
-        with torch.no_grad():
-            outputs = self.model(input_tensor)
-            probabilities = torch.nn.functional.softmax(outputs, dim=1)
-            confidence, predicted = torch.max(probabilities, 1)
+        scene_type = self.class_names[top1_idx]
         
-        scene_type = self.class_names[predicted.item()]
-        conf_value = confidence.item()
-        
-        return (scene_type, conf_value)
+        return (scene_type, top1_conf)
     
     async def _load_image_from_url(self, url: str) -> Image.Image:
         """S3 URL에서 이미지 로드"""

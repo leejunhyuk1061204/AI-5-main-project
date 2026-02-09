@@ -13,6 +13,7 @@ python ai/scripts/train_tire.py --mode train --epochs 150
 import argparse
 import os
 import shutil
+import platform
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -36,7 +37,7 @@ SAVE_PATH = "ai/weights/tire/best.pt"
 DEFAULT_EPOCHS = 100
 BATCH_SIZE = 16  # 데이터 적을 때 최적화
 IMG_SIZE = 1280
-WORKERS = 8  # RunPod Linux
+WORKERS = 8 if platform.system() != "Windows" else 0  # 환경 자동 감지
 
 # Augmentation (Small Dataset Optimized)
 MOSAIC = 1.0
