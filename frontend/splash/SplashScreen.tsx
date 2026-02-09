@@ -92,7 +92,7 @@ export default function SplashScreen({ onFinish }: { onFinish: () => void }) {
                     className="items-center gap-3"
                 >
                     <Text style={{ fontSize: titleSize, lineHeight: titleSize * 1.2 }} className="font-semibold tracking-wide text-white text-center">
-                        Project TBD
+                        차봄
                     </Text>
                     <View style={{ width: normalize(32), height: normalize(1) }} className="bg-primary/50 rounded-full" />
                 </Animated.View>

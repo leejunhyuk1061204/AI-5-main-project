@@ -695,17 +695,17 @@ class ObdService {
         this.collectData(snapshot);
 
         // [9단계] 정밀 드리프트 측정
-            if (this.lastSnapshotTs > 0) {
-                const expectedInterval = intervalMs;
-                const actualInterval = now - this.lastSnapshotTs;
-                const driftMs = Math.abs(actualInterval - expectedInterval);
-                this.maxDriftMs = Math.max(this.maxDriftMs, driftMs);
-                this.driftCheckCount++;
-                if (this.driftCheckCount >= 60) {
-                    this.maxDriftMs = 0;
-                    this.driftCheckCount = 0;
-                }
+        if (this.lastSnapshotTs > 0) {
+            const expectedInterval = intervalMs;
+            const actualInterval = now - this.lastSnapshotTs;
+            const driftMs = Math.abs(actualInterval - expectedInterval);
+            this.maxDriftMs = Math.max(this.maxDriftMs, driftMs);
+            this.driftCheckCount++;
+            if (this.driftCheckCount >= 60) {
+                this.maxDriftMs = 0;
+                this.driftCheckCount = 0;
             }
+        }
         this.lastSnapshotTs = now;
 
         this.samplingTimer = setTimeout(() => this.samplingLoop(intervalMs), intervalMs);
@@ -736,7 +736,71 @@ class ObdService {
     private checkTripTermination(snapshot: ObdData, now: number) {
         // 기존 데이터 기반 종료 로직(IDLE / highAgeMs) 비활성화.
         // 현재는 연결 상태(재연결 시도 실패 등)에 의해 주행 종료 여부를 판단한다.
-        if (!this.isPolling || this.isEndingTrip) return;
+        if (!this.isPolling || this.isEndingTrip || this.tripState !== 'RUNNING') return;
+
+        // highAgeMs 계산: RPM 또는 Speed 중 최근 갱신 기준
+        const rpmTs = this.lastUpdatedAt.get('rpm') || 0;
+        const speedTs = this.lastUpdatedAt.get('speed') || 0;
+        const lastHighUpdatedAt = Math.max(rpmTs, speedTs);
+        const highAgeMs = now - lastHighUpdatedAt;
+
+        const isRpmZero = snapshot.rpm !== undefined && snapshot.rpm === 0;
+        const isSpeedZero = snapshot.speed !== undefined && snapshot.speed === 0;
+
+        if (this.tripState === 'RUNNING') {
+            // Case A (IDLE): RPM=0 && Speed=0 연속 10분 (600초)
+            if (isRpmZero && isSpeedZero) {
+                this.idleCount++;
+                if (this.idleCount >= 600) { // 10분 = 600초
+                    this.tripState = 'SUSPECT_END';
+                    this.suspectReason = 'IDLE';
+                    this.suspectStartedAt = now;
+                }
+            } else {
+                this.idleCount = 0; // 리셋
+            }
+
+            // Case B (DISCONNECT): highAgeMs > 3000ms 연속 3회
+            if (highAgeMs > 3000) {
+                this.disconnectCount++;
+                if (this.disconnectCount >= 3) {
+                    this.tripState = 'SUSPECT_END';
+                    this.suspectReason = 'DISCONNECT';
+                    this.suspectStartedAt = now;
+                }
+            } else {
+                this.disconnectCount = 0; // 리셋
+            }
+        }
+        else if (this.tripState === 'SUSPECT_END') {
+            // 복귀 조건: rpm > 0 또는 speed > 0 또는 업데이트 재개
+            const isActuallyActive = (snapshot.rpm !== undefined && snapshot.rpm > 0) ||
+                (snapshot.speed !== undefined && snapshot.speed > 0) ||
+                (highAgeMs <= 1000);
+
+            if (isActuallyActive) {
+                this.tripState = 'RUNNING';
+                this.suspectReason = null;
+                this.suspectStartedAt = 0;
+                this.idleCount = 0;
+                this.disconnectCount = 0;
+            } else {
+                // Grace Period 경과 체크
+                const elapsedSinceSuspect = now - this.suspectStartedAt;
+                const gracePeriod = this.suspectReason === 'IDLE' ?
+                    this.GRACE_PERIOD_IDLE_MS : this.GRACE_PERIOD_DISCONNECT_MS;
+
+                if (elapsedSinceSuspect >= gracePeriod) {
+                    this.finalizeTrip();
+                } else {
+                    // 매 15초마다 경과 로그
+                    const elapsedSec = Math.floor(elapsedSinceSuspect / 1000);
+                    if (elapsedSec > 0 && elapsedSec % 15 === 0) {
+                    }
+                }
+            }
+        }
+>>>>>>> bb8ceab4fd263083480f620bc727b9e0fe1462af
     }
 
     /**
@@ -1014,7 +1078,7 @@ class ObdService {
                 return;
             }
 
-            await sendDtcBatchReport({
+            const reportData = {
                 vehicleId: vehicleId,
                 dtcs: dtcs,
                 freezeFrame: {
@@ -1032,9 +1096,36 @@ class ObdService {
                     engineRuntime: this.currentData.engine_runtime,
                     pidsSnapshot: JSON.stringify(this.currentData)
                 }
-            });
+            };
 
-            this.lastDtcReportAt = Date.now();
+            const url = '/api/v1/ai/dtc/batch';
+
+            // [Offline Mode] 네트워크 연결 없으면 큐에 저장
+            if (!NetworkService.IsConnected) {
+                console.log('[ObdService] Offline, queuing DTC report');
+                await OfflineStorage.addToQueue({
+                    url,
+                    method: 'POST',
+                    body: JSON.stringify(reportData),
+                    timestamp: Date.now()
+                });
+                return;
+            }
+
+            try {
+                await sendDtcBatchReport(reportData);
+                this.lastDtcReportAt = Date.now();
+            } catch (error) {
+                const msg = error instanceof Error ? error.message : String(error);
+                console.error('[ObdService] DTC report upload failed, queuing for retry. reason=', msg);
+                // [Failover] 전송 실패 시에도 큐에 저장하여 재시도 보장
+                await OfflineStorage.addToQueue({
+                    url,
+                    method: 'POST',
+                    body: JSON.stringify(reportData),
+                    timestamp: Date.now()
+                });
+            }
 
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);

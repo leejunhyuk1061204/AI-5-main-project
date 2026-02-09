@@ -10,9 +10,9 @@ from .electrical_rule import run_electrical
 from .idle_rule import run_idle
 from .tire_rule import run_tire
 
-ExtensionRunner = Callable[[ObdAnomalyRequest, Window], CommonEnvelope]
+DomainRunner = Callable[[ObdAnomalyRequest, Window], CommonEnvelope]
 
-EXTENSION_REGISTRY: Dict[str, ExtensionRunner] = {
+DOMAIN_REGISTRY: Dict[str, DomainRunner] = {
     "brake": run_brake,
     "electrical": run_electrical,
     "tire": run_tire,

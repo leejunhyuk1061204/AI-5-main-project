@@ -98,3 +98,6 @@ pyyaml                  # config, threshold 로드
 pytest                  # 회귀 테스트 및 검증
 kaggle                  # Kaggle 데이터셋 다운로드
 
+# === Optional: Training only 런팟에서만 필요 ===
+# scikit-learn>=1.3.0  # Uncomment for advanced metrics
+# seaborn>=0.12.0      # Uncomment for visualizations
