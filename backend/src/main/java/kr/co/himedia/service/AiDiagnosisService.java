@@ -10,6 +10,7 @@ import kr.co.himedia.entity.*;
 import kr.co.himedia.entity.DiagSession.DiagStatus;
 import kr.co.himedia.entity.DiagSession.DiagTriggerType;
 import kr.co.himedia.repository.*;
+import kr.co.himedia.entity.CloudTelemetry;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Value;
@@ -39,6 +40,7 @@ public class AiDiagnosisService {
     private final AiEvidenceRepository aiEvidenceRepository;
     private final DtcFreezeFrameRepository dtcFreezeFrameRepository;
     private final DtcCodeRepository dtcCodeRepository;
+    private final CloudTelemetryRepository cloudTelemetryRepository;
     private final AiClient aiClient;
     private final ObjectMapper objectMapper;
 
@@ -63,6 +65,7 @@ public class AiDiagnosisService {
             AiEvidenceRepository aiEvidenceRepository,
             DtcFreezeFrameRepository dtcFreezeFrameRepository,
             DtcCodeRepository dtcCodeRepository,
+            CloudTelemetryRepository cloudTelemetryRepository,
             AiClient aiClient,
             ObjectMapper objectMapper,
             FcmService fcmService,
@@ -82,6 +85,7 @@ public class AiDiagnosisService {
         this.aiEvidenceRepository = aiEvidenceRepository;
         this.dtcFreezeFrameRepository = dtcFreezeFrameRepository;
         this.dtcCodeRepository = dtcCodeRepository;
+        this.cloudTelemetryRepository = cloudTelemetryRepository;
         this.aiClient = aiClient;
         this.objectMapper = objectMapper;
         this.fcmService = fcmService;
@@ -104,7 +108,7 @@ public class AiDiagnosisService {
     @Value("${ai.server.url.comprehensive:http://localhost:8001/api/v1/connect/predict/comprehensive}")
     private String aiServerUnifiedUrl;
 
-    @Value("${ai.server.url.anomaly:http://localhost:8001/api/v1/connect/predict/anomaly}")
+    @Value("${ai.server.url.anomaly:http://localhost:8001/api/v1/predict/anomaly}")
     private String aiServerAnomalyUrl;
 
     public org.springframework.web.servlet.mvc.method.annotation.SseEmitter subscribe(UUID sessionId) {
@@ -423,7 +427,7 @@ public class AiDiagnosisService {
         });
 
         CompletableFuture<Map<String, Object>> anomalyTask = CompletableFuture.supplyAsync(() -> {
-            return performAnomalyDetection(requestDto, session.getTriggerType(), sessionSemaphore, sessionId);
+            return performAnomalyDetection(requestDto, session, sessionSemaphore);
         });
 
         // [Step 2] 전처리 및 분석 준비 완료 (이미지/오디오 로드됨, 태스크 생성됨)
@@ -439,12 +443,10 @@ public class AiDiagnosisService {
         // [Step 3] AI 병렬 분석 완료
         sseEmitters.send(sessionId.toString(), "step3", "[Step 3/5] AI 정밀 분석 완료 (시각/청각/데이터)");
 
-        // [Filter Logic] LLM 전송용 데이터 필터링 (토큰 절약)
-        // 1. 이상(Anomaly)이 있는 청크만 우선 수집
-        // 2. 만약 모두 정상(Normal)이라면, 가장 마지막(최신) 청크 하나만 전송
+        // [Filter Logic] LLM 전송: 전부 정상이면 lstm_timeline=[], 하나라도 이상이면 is_anomaly + 해당 events만 한 덩어리로 전달
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> detailedResults = (List<Map<String, Object>>) anomalyResult.get("detailed_results");
-        List<Map<String, Object>> filteredTimeline = new ArrayList<>();
+        List<Map<String, Object>> lstmTimeline = new ArrayList<>();
 
         if (detailedResults != null && !detailedResults.isEmpty()) {
             List<Map<String, Object>> anomalies = detailedResults.stream()
@@ -452,16 +454,33 @@ public class AiDiagnosisService {
                     .collect(Collectors.toList());
 
             if (anomalies.isEmpty()) {
-                // Case: All Normal -> Take last one
-                filteredTimeline.add(detailedResults.get(detailedResults.size() - 1));
+                // 전부 정상: lstm_timeline은 빈 배열 (is_anomaly=false만 상위에서 전달)
             } else {
-                // Case: Has Anomaly -> Take all anomalies
-                filteredTimeline.addAll(anomalies);
+                // 하나라도 이상: is_anomaly=true + 해당 청크들의 events를 한 배열로 모아서 한 덩어리로 전달
+                List<Map<String, Object>> mergedEvents = new ArrayList<>();
+                double maxScore = 0.0;
+                for (Map<String, Object> chunk : anomalies) {
+                    Object scoreObj = chunk.get("anomaly_score");
+                    if (scoreObj instanceof Number) {
+                        maxScore = Math.max(maxScore, ((Number) scoreObj).doubleValue());
+                    }
+                    Object eventsObj = chunk.get("events");
+                    if (eventsObj instanceof List) {
+                        @SuppressWarnings("unchecked")
+                        List<Map<String, Object>> events = (List<Map<String, Object>>) eventsObj;
+                        mergedEvents.addAll(events);
+                    }
+                }
+                Map<String, Object> singlePayload = new HashMap<>();
+                singlePayload.put("is_anomaly", true);
+                singlePayload.put("anomaly_score", maxScore);
+                singlePayload.put("events", mergedEvents);
+                lstmTimeline.add(singlePayload);
             }
         }
 
         Map<String, Object> llmAnomalyPayload = new HashMap<>();
-        llmAnomalyPayload.put("lstm_timeline", filteredTimeline);
+        llmAnomalyPayload.put("lstm_timeline", lstmTimeline);
         llmAnomalyPayload.put("is_anomaly", anomalyResult.get("is_anomaly"));
         llmAnomalyPayload.put("chunk_count", anomalyResult.get("chunk_count"));
 
@@ -528,9 +547,10 @@ public class AiDiagnosisService {
 
         // 3. 최종 통합 진단 요청 (Phase 1: 6대 항목)
         AiUnifiedRequestDto aiRequest = aiRequestBuilder.build();
+        Map<String, Object> llmPayload = objectMapper.convertValue(aiRequest, Map.class);
+        logLlmRequest(llmPayload, sessionId);
         @SuppressWarnings("unchecked")
-        Map<String, Object> finalResponse = aiClient
-                .callComprehensiveDiagnosis(objectMapper.convertValue(aiRequest, Map.class));
+        Map<String, Object> finalResponse = aiClient.callComprehensiveDiagnosis(llmPayload);
 
         // 4. 결과 저장 및 상태 결정
         DiagStatus finalStatus = saveDiagnosisResult(sessionId, finalResponse, imageFile, audioFile, visualResult,
@@ -633,9 +653,10 @@ public class AiDiagnosisService {
         if (audioResult != null)
             aiRequestBuilder.audioAnalysis(audioResult);
 
+        Map<String, Object> replyLlmPayload = objectMapper.convertValue(aiRequestBuilder.build(), Map.class);
+        logLlmRequest(replyLlmPayload, sessionId);
         @SuppressWarnings("unchecked")
-        Map<String, Object> aiResponse = aiClient
-                .callComprehensiveDiagnosis(objectMapper.convertValue(aiRequestBuilder.build(), Map.class));
+        Map<String, Object> aiResponse = aiClient.callComprehensiveDiagnosis(replyLlmPayload);
 
         // 5. 결과 저장 및 상태 업데이트
         long userTurnCount = conversation.stream().filter(t -> "user".equals(t.get("role"))).count();
@@ -727,10 +748,18 @@ public class AiDiagnosisService {
     }
 
     private Map<String, Object> performAnomalyDetection(UnifiedDiagnosisRequestDto requestDto,
-            DiagTriggerType triggerType, java.util.concurrent.Semaphore sessionSemaphore, java.util.UUID sessionId) {
+            DiagSession session, java.util.concurrent.Semaphore sessionSemaphore) {
         try {
+            java.util.UUID sessionId = session.getDiagSessionId();
+            DiagTriggerType triggerType = session.getTriggerType();
             UUID vehicleId = requestDto.getVehicleId();
             List<List<Map<String, Object>>> chunks = new ArrayList<>();
+
+            // trip_id: 세션에 트립이 연결되어 있으면 사용, 없으면 session-{sessionId}
+            UUID tripId = session.getTripId();
+
+            // 타이어 압력: vehicles.cloud_linked == true 일 때만 최신 cloud_telemetry에서 채움. null 컬럼은 제외
+            final Map<String, Double> tirePressureForPayload = getTirePressureForVehicle(vehicleId);
 
             // 1. 데이터 수집 및 청크 분할
             if (triggerType == DiagTriggerType.AUTO && requestDto.getLstmAnalysis() != null
@@ -742,12 +771,18 @@ public class AiDiagnosisService {
                     chunks = splitIntoChunks(logs, 900); // 15분(900초) 단위 분할
                 }
             } else {
-                log.info("[Anomaly] {} 모드: 최근 3일 데이터 조회 및 청크화", triggerType);
-                java.time.OffsetDateTime threeDaysAgo = java.time.OffsetDateTime.now(java.time.ZoneOffset.UTC)
-                        .minusDays(3);
+                log.info("[Anomaly] {} 모드: 최근 3일 데이터 조회 및 청크화 (날짜 기준)", triggerType);
+                java.time.ZoneOffset utc = java.time.ZoneOffset.UTC;
+                java.time.LocalDate todayUtc = java.time.LocalDate.now(utc);
+                // 3일 = 오늘 포함 과거 3일 (예: 2/9면 2/7, 2/8, 2/9) — 2/10 미포함
+                java.time.OffsetDateTime rangeStart = todayUtc.minusDays(2).atStartOfDay(utc).toOffsetDateTime();
+                java.time.OffsetDateTime rangeEnd = todayUtc.atTime(23, 59, 59, 999_999_999).atOffset(utc);
                 List<ObdLog> allLogs = obdLogRepository.findByVehicleIdAndTimeBetweenOrderByTimeAsc(vehicleId,
-                        threeDaysAgo, java.time.OffsetDateTime.now(java.time.ZoneOffset.UTC));
+                        rangeStart, rangeEnd);
+                int totalLogs = allLogs.size();
                 chunks = chunkByTripAndSubdivide(allLogs, 900);
+                log.info("[Anomaly] 3일치 조회: {}건 ({} ~ {}), 트립 그룹 분할 후 청크 수: {} (15분 단위)",
+                        totalLogs, rangeStart.toLocalDate(), rangeEnd.toLocalDate(), chunks.size());
             }
 
             if (chunks.isEmpty()) {
@@ -772,18 +807,21 @@ public class AiDiagnosisService {
                             log.info("[Anomaly-Parallel] [Semaphore-Acquire] 진입 성공 (Global: {}, Session: {})",
                                     globalAiSemaphore.availablePermits(), sessionSemaphore.availablePermits());
 
-                            Map<String, Object> payload = new java.util.HashMap<>();
-                            payload.put("time_series", chunk);
-                            payload.put("vehicle_id", requestDto.getVehicleId().toString());
-                            payload.put("session_id", sessionId.toString());
-                            payload.put("chunk_index", chunkIndex);
-                            payload.put("total_chunks", totalChunks);
+                            Map<String, Object> payload = buildObdAnomalyRequestPayload(
+                                    requestDto.getVehicleId().toString(),
+                                    sessionId.toString(),
+                                    chunk,
+                                    tripId,
+                                    tirePressureForPayload);
 
                             log.info(
-                                    "[Anomaly-Parallel] 청강 전송 시작 ({}/{}) [Vehicle: {}, Session: {}]",
+                                    "[Anomaly-Parallel] 청크 전송 시작 ({}/{}) [Vehicle: {}, Session: {}]",
                                     chunkIndex, totalChunks, requestDto.getVehicleId(), sessionId);
+                            logAnomalyRequest(payload);
 
-                            return aiClient.callAnomalyDetection(payload);
+                            Map<String, Object> response = aiClient.callAnomalyDetection(payload);
+                            logAnomalyResponse(response, chunkIndex, totalChunks);
+                            return response;
                         } catch (InterruptedException e) {
                             Thread.currentThread().interrupt();
                             Map<String, Object> errorMap = new HashMap<>();
@@ -802,20 +840,186 @@ public class AiDiagnosisService {
                     .map(java.util.concurrent.CompletableFuture::join)
                     .collect(Collectors.toList());
 
-            // 3. 결과 취합 (사용자 가이드에 따라 우선 리스트로 반환 - 추후 Aggregation 로직 강화 가능)
+            // 3. 결과 취합: meta/domains/events/is_anomaly/anomaly_score만 사용 (window_results 미사용)
             boolean isAnyAnomaly = results.stream()
                     .anyMatch(r -> r.get("is_anomaly") != null && (boolean) r.get("is_anomaly"));
 
             log.info("[Anomaly] 분석 완료. 이상 징후 발견 여부: {}", isAnyAnomaly);
 
-            return Map.of(
-                    "is_anomaly", isAnyAnomaly,
-                    "detailed_results", results,
-                    "chunk_count", chunks.size());
+            List<String> contributingFactors = collectContributingFactorsFromResults(results);
+
+            Map<String, Object> aggregated = new HashMap<>();
+            aggregated.put("is_anomaly", isAnyAnomaly);
+            aggregated.put("detailed_results", results);
+            aggregated.put("chunk_count", chunks.size());
+            aggregated.put("contributing_factors", contributingFactors);
+            return aggregated;
 
         } catch (Exception e) {
             log.error("Anomaly detection failed", e);
             return Map.of("is_anomaly", false, "error", e.getMessage());
+        }
+    }
+
+    /**
+     * 청크별 응답 목록에서 이상(anomaly) 청크의 events를 바탕으로 contributing_factors 수집 (RAG 검색용).
+     */
+    private List<String> collectContributingFactorsFromResults(List<Map<String, Object>> results) {
+        java.util.Set<String> factors = new java.util.LinkedHashSet<>();
+        for (Map<String, Object> r : results) {
+            if (!Boolean.TRUE.equals(r.get("is_anomaly"))) {
+                continue;
+            }
+            Object eventsObj = r.get("events");
+            if (!(eventsObj instanceof List)) {
+                continue;
+            }
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> events = (List<Map<String, Object>>) eventsObj;
+            for (Map<String, Object> ev : events) {
+                addNonBlank(ev.get("feature"), factors);
+                addNonBlank(ev.get("domain"), factors);
+                addNonBlank(ev.get("message"), factors);
+            }
+        }
+        return new ArrayList<>(factors);
+    }
+
+    private void addNonBlank(Object value, java.util.Set<String> out) {
+        if (value != null) {
+            String s = value.toString().trim();
+            if (!s.isEmpty()) {
+                out.add(s);
+            }
+        }
+    }
+
+    /**
+     * cloud_linked == true 인 차량만 최신 cloud_telemetry에서 타이어 압력 조회. null 컬럼은 제외.
+     */
+    private Map<String, Double> getTirePressureForVehicle(UUID vehicleId) {
+        return vehicleRepository.findById(vehicleId)
+                .filter(v -> Boolean.TRUE.equals(v.getCloudLinked()))
+                .flatMap(vehicle -> {
+                    List<CloudTelemetry> list = cloudTelemetryRepository.findByVehicleOrderByLastSyncedAtDesc(vehicle);
+                    if (list.isEmpty()) return Optional.<Map<String, Double>>empty();
+                    CloudTelemetry ct = list.get(0);
+                    Map<String, Double> map = new HashMap<>();
+                    if (ct.getTirePressureFl() != null) map.put("tire_pressure_fl_kpa", ct.getTirePressureFl());
+                    if (ct.getTirePressureFr() != null) map.put("tire_pressure_fr_kpa", ct.getTirePressureFr());
+                    if (ct.getTirePressureRl() != null) map.put("tire_pressure_rl_kpa", ct.getTirePressureRl());
+                    if (ct.getTirePressureRr() != null) map.put("tire_pressure_rr_kpa", ct.getTirePressureRr());
+                    return map.isEmpty() ? Optional.<Map<String, Double>>empty() : Optional.of(map);
+                })
+                .orElse(null);
+    }
+
+    /**
+     * ObdAnomalyRequest 스키마에 맞는 페이로드 생성.
+     * tripId가 있으면 사용, 없으면 session-{sessionId}. cloud_linked 시 tirePressureKpa를 각 샘플 features에 넣음.
+     */
+    private Map<String, Object> buildObdAnomalyRequestPayload(String vehicleId, String sessionId,
+            List<Map<String, Object>> chunk, UUID tripIdOrNull, Map<String, Double> tirePressureKpa) {
+        List<Map<String, Object>> data = new ArrayList<>();
+        int t = 0;
+        for (Map<String, Object> row : chunk) {
+            Map<String, Object> features = new HashMap<>();
+            putIfNumber(row, features, "rpm", "rpm");
+            putIfNumber(row, features, "speed", "speed");
+            putIfNumber(row, features, "load", "engine_load");
+            putIfNumber(row, features, "engineLoad", "engine_load");
+            putIfNumber(row, features, "coolant", "coolant_temp");
+            putIfNumber(row, features, "coolantTemp", "coolant_temp");
+            putIfNumber(row, features, "voltage", "battery_voltage_v");
+            if (tirePressureKpa != null && !tirePressureKpa.isEmpty()) {
+                features.putAll(tirePressureKpa);
+            }
+            if (!features.isEmpty()) {
+                data.add(Map.of("t", t, "features", features));
+                t++;
+            }
+        }
+        int durationSec = data.size();
+        if (durationSec == 0) {
+            durationSec = 1;
+        }
+        Map<String, Object> options = new HashMap<>();
+        options.put("window_sec", 60);
+        options.put("stride_sec", 60);
+
+        String tripIdStr = (tripIdOrNull != null) ? tripIdOrNull.toString() : ("session-" + sessionId);
+
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("vehicle_id", vehicleId);
+        payload.put("trip_id", tripIdStr);
+        payload.put("mode", "DRIVING");
+        payload.put("duration_sec", durationSec);
+        payload.put("sampling_hz", 1);
+        payload.put("timestamp_unit", "s");
+        payload.put("data", data);
+        payload.put("options", options);
+        return payload;
+    }
+
+    private void putIfNumber(Map<String, Object> source, Map<String, Object> target, String sourceKey, String targetKey) {
+        Object v = source.get(sourceKey);
+        if (v instanceof Number) {
+            target.put(targetKey, v);
+        }
+    }
+
+    private void logAnomalyRequest(Map<String, Object> payload) {
+        try {
+            Map<String, Object> forLog = new HashMap<>(payload);
+            if (forLog.containsKey("data")) {
+                Object data = forLog.get("data");
+                int size = data instanceof List ? ((List<?>) data).size() : 0;
+                forLog.put("data", "[size=" + size + "]");
+            }
+            log.info("[Anomaly] Request: {}", objectMapper.writeValueAsString(forLog));
+        } catch (Exception e) {
+            log.warn("[Anomaly] Request log failed: {}", e.getMessage());
+        }
+    }
+
+    private void logAnomalyResponse(Map<String, Object> response, int chunkIndex, int totalChunks) {
+        try {
+            if (response == null) {
+                log.info("[Anomaly] Response (chunk {}/{}): null", chunkIndex, totalChunks);
+                return;
+            }
+            Map<String, Object> forLog = new HashMap<>(response);
+            if (forLog.containsKey("window_results")) {
+                Object wr = forLog.get("window_results");
+                int size = wr instanceof List ? ((List<?>) wr).size() : 0;
+                forLog.put("window_results", "[size=" + size + "]");
+            }
+            log.info("[Anomaly] Response (chunk {}/{}): {}", chunkIndex, totalChunks, objectMapper.writeValueAsString(forLog));
+        } catch (Exception e) {
+            log.warn("[Anomaly] Response log failed: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * 요약/통합 처리 후 LLM(Comprehensive Diagnosis)에 보내는 요청 payload 로깅.
+     * knowledge_data, conversation_history는 길이만 [size=N]으로 표기.
+     */
+    private void logLlmRequest(Map<String, Object> payload, UUID sessionId) {
+        try {
+            Map<String, Object> forLog = new HashMap<>(payload);
+            if (forLog.containsKey("knowledge_data")) {
+                Object v = forLog.get("knowledge_data");
+                int size = v instanceof List ? ((List<?>) v).size() : 0;
+                forLog.put("knowledge_data", "[size=" + size + "]");
+            }
+            if (forLog.containsKey("conversation_history")) {
+                Object v = forLog.get("conversation_history");
+                int size = v instanceof List ? ((List<?>) v).size() : 0;
+                forLog.put("conversation_history", "[size=" + size + "]");
+            }
+            log.info("[LLM] Request (session={}): {}", sessionId, objectMapper.writeValueAsString(forLog));
+        } catch (Exception e) {
+            log.warn("[LLM] Request log failed: {}", e.getMessage());
         }
     }
 
@@ -995,7 +1199,11 @@ public class AiDiagnosisService {
                 .createdAt(session.getCreatedAt());
 
         if (result != null) {
-            builder.responseMode(result.getResponseMode())
+            String responseMode = result.getResponseMode();
+            if (session.getStatus() == DiagStatus.ACTION_REQUIRED && !"INTERACTIVE".equalsIgnoreCase(responseMode)) {
+                responseMode = "INTERACTIVE";
+            }
+            builder.responseMode(responseMode)
                     .confidenceLevel(result.getConfidenceLevel())
                     .summary(result.getSummary())
                     .finalReport(result.getFinalReport())
@@ -1014,6 +1222,8 @@ public class AiDiagnosisService {
             } catch (Exception e) {
                 log.error("Failed to parse JSON fields in DiagResult", e);
             }
+        } else if (session.getStatus() == DiagStatus.ACTION_REQUIRED) {
+            builder.responseMode("INTERACTIVE");
         }
 
         return builder.build();
@@ -1028,6 +1238,10 @@ public class AiDiagnosisService {
 
         return sessions.stream().map(session -> {
             DiagResult result = diagResultRepository.findByDiagSessionId(session.getDiagSessionId()).orElse(null);
+            String responseMode = result != null ? result.getResponseMode() : null;
+            if (session.getStatus() == DiagStatus.ACTION_REQUIRED && !"INTERACTIVE".equalsIgnoreCase(responseMode)) {
+                responseMode = "INTERACTIVE";
+            }
 
             return DiagnosisListItemDto.builder()
                     .sessionId(session.getDiagSessionId())
@@ -1035,7 +1249,7 @@ public class AiDiagnosisService {
                     .progressMessage(session.getProgressMessage())
                     .triggerType(session.getTriggerType().name())
                     .triggerTypeLabel(getTriggerTypeLabel(session.getTriggerType()))
-                    .responseMode(result != null ? result.getResponseMode() : null)
+                    .responseMode(responseMode)
                     .riskLevel(result != null && result.getRiskLevel() != null ? result.getRiskLevel().name() : null)
                     .createdAt(session.getCreatedAt())
                     .build();
