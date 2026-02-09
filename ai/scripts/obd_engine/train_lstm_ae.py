@@ -5,6 +5,8 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
+from datetime import datetime
+import time
 
 
 class NpzSequenceDataset(Dataset):
@@ -40,11 +42,15 @@ class LSTMAutoencoder(nn.Module):
 
 
 def main():
-    npz_path = "data/processed/lstm_ae/train.npz"
+    start_ts = time.time()
+    npz_path = "ai/data/processed/lstm_ae/train.npz"
     out_dir = "ai/weights"
     os.makedirs(out_dir, exist_ok=True)
+    run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+    run_dir = os.path.join(out_dir, "runs", run_id)
+    os.makedirs(run_dir, exist_ok=True)
 
-    batch_size = 64
+    batch_size = 16
     epochs = 10
     lr = 1e-3
 
@@ -61,6 +67,7 @@ def main():
     loss_fn = nn.MSELoss()
 
     for ep in range(1, epochs + 1):
+        print(f"[epoch {ep:02d}] start")
         total = 0.0
         for x in dl:
             x = x.to(device)
@@ -71,8 +78,15 @@ def main():
             total += loss.item()
         print(f"[epoch {ep:02d}] loss={total/len(dl):.6f}")
 
-    torch.save(model.state_dict(), f"{out_dir}/lstm_ae_v0.pt")
+    run_path = os.path.join(run_dir, "lstm_ae.pt")
+    latest_path = os.path.join(out_dir, "lstm_ae_latest.pt")
+    torch.save(model.state_dict(), run_path)
+    torch.save(model.state_dict(), latest_path)
+    elapsed = time.time() - start_ts
     print("[OK] model saved")
+    print("run:", run_path)
+    print("latest:", latest_path)
+    print(f"[time] {elapsed:.1f}s")
 
 
 if __name__ == "__main__":
