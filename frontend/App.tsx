@@ -67,6 +67,7 @@ import ReceiptScan from './maintenance/ReceiptScan';
 import ReceiptResult from './maintenance/ReceiptResult';
 import PaymentSuccess from './payment/PaymentSuccess';
 import MaintenanceHistory from './history/MaintenanceHistory';
+import DrivingList from './history/DrivingList';
 import Elm327TestScreen from './obd-test/Elm327TestScreen';
 
 // Deep Linking Configuration
@@ -149,7 +150,7 @@ export default function App() {
           try {
             await loadUser(); // 사용자 정보 미리 로드
             const vehicles = await fetchVehicles();
-            ObdService.loadAndCacheDevices().catch(() => {});
+            ObdService.loadAndCacheDevices().catch(() => { });
 
             // FCM 토큰 발급 및 서버 동기화 (자동 로그인 시)
             await NotificationService.registerFcmToken();
@@ -323,6 +324,7 @@ export default function App() {
                   <Stack.Screen name="ReceiptResult" component={ReceiptResult} />
                   <Stack.Screen name="PaymentSuccess" component={PaymentSuccess} />
                   <Stack.Screen name="MaintenanceHistory" component={MaintenanceHistory} />
+                  <Stack.Screen name="DrivingList" component={DrivingList} />
                 </Stack.Navigator>
                 <GlobalAlert />
                 <GlobalDatePicker />

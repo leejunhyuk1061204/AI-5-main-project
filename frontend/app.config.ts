@@ -17,7 +17,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     },
     backgroundColor: "#101922",
     ios: {
-        supportsTablet: true
+        supportsTablet: true,
+        bundleIdentifier: "com.lee-kang-hyun.frontend"
     },
     android: {
         adaptiveIcon: {

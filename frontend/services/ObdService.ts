@@ -677,17 +677,17 @@ class ObdService {
         this.collectData(snapshot);
 
         // [9단계] 정밀 드리프트 측정
-            if (this.lastSnapshotTs > 0) {
-                const expectedInterval = intervalMs;
-                const actualInterval = now - this.lastSnapshotTs;
-                const driftMs = Math.abs(actualInterval - expectedInterval);
-                this.maxDriftMs = Math.max(this.maxDriftMs, driftMs);
-                this.driftCheckCount++;
-                if (this.driftCheckCount >= 60) {
-                    this.maxDriftMs = 0;
-                    this.driftCheckCount = 0;
-                }
+        if (this.lastSnapshotTs > 0) {
+            const expectedInterval = intervalMs;
+            const actualInterval = now - this.lastSnapshotTs;
+            const driftMs = Math.abs(actualInterval - expectedInterval);
+            this.maxDriftMs = Math.max(this.maxDriftMs, driftMs);
+            this.driftCheckCount++;
+            if (this.driftCheckCount >= 60) {
+                this.maxDriftMs = 0;
+                this.driftCheckCount = 0;
             }
+        }
         this.lastSnapshotTs = now;
 
         this.samplingTimer = setTimeout(() => this.samplingLoop(intervalMs), intervalMs);
@@ -728,10 +728,10 @@ class ObdService {
         const isSpeedZero = snapshot.speed !== undefined && snapshot.speed === 0;
 
         if (this.tripState === 'RUNNING') {
-            // Case A (IDLE): RPM=0 && Speed=0 연속 5초
+            // Case A (IDLE): RPM=0 && Speed=0 연속 10분 (600초)
             if (isRpmZero && isSpeedZero) {
                 this.idleCount++;
-                if (this.idleCount >= 5) {
+                if (this.idleCount >= 600) { // 10분 = 600초
                     this.tripState = 'SUSPECT_END';
                     this.suspectReason = 'IDLE';
                     this.suspectStartedAt = now;
@@ -1057,7 +1057,7 @@ class ObdService {
                 return;
             }
 
-            await sendDtcBatchReport({
+            const reportData = {
                 vehicleId: vehicleId,
                 dtcs: dtcs,
                 freezeFrame: {
@@ -1075,9 +1075,36 @@ class ObdService {
                     engineRuntime: this.currentData.engine_runtime,
                     pidsSnapshot: JSON.stringify(this.currentData)
                 }
-            });
+            };
 
-            this.lastDtcReportAt = Date.now();
+            const url = '/api/v1/ai/dtc/batch';
+
+            // [Offline Mode] 네트워크 연결 없으면 큐에 저장
+            if (!NetworkService.IsConnected) {
+                console.log('[ObdService] Offline, queuing DTC report');
+                await OfflineStorage.addToQueue({
+                    url,
+                    method: 'POST',
+                    body: JSON.stringify(reportData),
+                    timestamp: Date.now()
+                });
+                return;
+            }
+
+            try {
+                await sendDtcBatchReport(reportData);
+                this.lastDtcReportAt = Date.now();
+            } catch (error) {
+                const msg = error instanceof Error ? error.message : String(error);
+                console.error('[ObdService] DTC report upload failed, queuing for retry. reason=', msg);
+                // [Failover] 전송 실패 시에도 큐에 저장하여 재시도 보장
+                await OfflineStorage.addToQueue({
+                    url,
+                    method: 'POST',
+                    body: JSON.stringify(reportData),
+                    timestamp: Date.now()
+                });
+            }
 
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
