@@ -68,6 +68,7 @@ import ReceiptScan from './maintenance/ReceiptScan';
 import ReceiptResult from './maintenance/ReceiptResult';
 import PaymentSuccess from './payment/PaymentSuccess';
 import MaintenanceHistory from './history/MaintenanceHistory';
+import DrivingList from './history/DrivingList';
 import Elm327TestScreen from './obd-test/Elm327TestScreen';
 
 // Deep Linking Configuration
@@ -330,6 +331,7 @@ export default function App() {
                   <Stack.Screen name="ReceiptResult" component={ReceiptResult} />
                   <Stack.Screen name="PaymentSuccess" component={PaymentSuccess} />
                   <Stack.Screen name="MaintenanceHistory" component={MaintenanceHistory} />
+                  <Stack.Screen name="DrivingList" component={DrivingList} />
                 </Stack.Navigator>
                 <GlobalAlert />
                 <GlobalDatePicker />

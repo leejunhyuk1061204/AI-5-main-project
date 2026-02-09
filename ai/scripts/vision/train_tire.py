@@ -15,10 +15,11 @@ import os
 import shutil
 import platform
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')  # Non-interactive backend
 import matplotlib.pyplot as plt
-import seaborn as sns
-from sklearn.metrics import classification_report, confusion_matrix, roc_curve, auc
 from ultralytics import YOLO
+import glob
 
 # =============================================================================
 # [Configuration] 
@@ -60,7 +61,6 @@ def train_model(epochs=DEFAULT_EPOCHS):
     # [Weight Management] 기존 가중치가 있다면 백업 (누적 방지용)
     if os.path.exists(SAVE_PATH):
         old_path = SAVE_PATH.replace(".pt", "_old.pt")
-        import shutil
         shutil.copy(SAVE_PATH, old_path)
         print(f"📦 기존 가중치를 백업했습니다: {old_path}")
 
@@ -73,7 +73,7 @@ def train_model(epochs=DEFAULT_EPOCHS):
         name="run",
         exist_ok=True,     # 기존 폴더 덮어쓰기 (run1, run2... 누적 방지)
         device=0,
-        workers=8,         # 리눅스 환경 상향 조정 (기존 0)
+        workers=4,         # 리눅스 환경 상향 조정 (기존 0)
         
         # Augmentation
         mosaic=MOSAIC,
@@ -100,7 +100,21 @@ def train_model(epochs=DEFAULT_EPOCHS):
         print(f"[Warning] Best model weight file not found at: {best_path}")
 
 def evaluate_model():
+    """
+    Tire model evaluation with lazy imports to avoid version conflicts
+    """
     print(f"\n[Tire Classification] 상세 테스트 시작...")
+    
+    # Lazy import sklearn/seaborn (avoid numpy version conflicts)
+    try:
+        from sklearn.metrics import classification_report, confusion_matrix, roc_curve, auc
+        import seaborn as sns
+        has_advanced_metrics = True
+    except ImportError as e:
+        print(f"[Warning] sklearn/seaborn not available: {e}")
+        print(f"[Info] Using YOLO-only evaluation")
+        has_advanced_metrics = False
+    
     if not os.path.exists(SAVE_PATH):
         print(f"[Error] 학습된 모델이 없습니다: {SAVE_PATH}")
         return
@@ -115,18 +129,25 @@ def evaluate_model():
         print(f"[Error] 테스트 데이터 디렉토리가 없습니다: {test_dir}")
         return
 
-    # YOLOv8 top-1, top-5 metrics
+    # YOLOv8 built-in validation
+    print("\n" + "="*50)
+    print("📊 YOLO Validation Results")
+    print("="*50)
     results_val = model.val(data=DATA_DIR, split='test', imgsz=1280)
+    print("="*50)
+    
+    # Advanced metrics (if sklearn available)
+    if not has_advanced_metrics:
+        print("\n[Info] For detailed metrics, install: pip install scikit-learn seaborn")
+        return
     
     # Custom Detailed Metrics (Binary Classification Focus)
     y_true = []
     y_pred = []
-    y_scores = [] # Probabilities for 'cracked' (Danger class)
+    y_scores = []  # Probabilities for 'cracked' (Danger class)
     
-    # class_names: {0: 'cracked', 1: 'normal'} - YOLO folders are alphabetical usually
-    # But let's get it from the model
     names = model.names
-    print(f"[Info] Identifed Classes: {names}")
+    print(f"\n[Info] Identified Classes: {names}")
     
     # Find index for 'cracked' (Danger class)
     danger_idx = next((k for k, v in names.items() if v == 'cracked'), 0)
@@ -134,19 +155,18 @@ def evaluate_model():
 
     print(f"   Danger Class: {names[danger_idx]}, Normal Class: {names[normal_idx]}")
 
-    import glob
-    from PIL import Image
-
     for class_name in names.values():
         class_folder = os.path.join(test_dir, class_name)
-        if not os.path.exists(class_folder): continue
+        if not os.path.exists(class_folder): 
+            continue
         
         img_paths = glob.glob(os.path.join(class_folder, "*"))
         for img_path in img_paths:
-            if not img_path.lower().endswith(('.png', '.jpg', '.jpeg')): continue
+            if not img_path.lower().endswith(('.png', '.jpg', '.jpeg')): 
+                continue
             
             res = model.predict(img_path, verbose=False)[0]
-            probs = res.probs.data.cpu().numpy() # [prob_class0, prob_class1, ...]
+            probs = res.probs.data.cpu().numpy()  # [prob_class0, prob_class1, ...]
             
             # True label
             true_label = danger_idx if class_name == names[danger_idx] else normal_idx
@@ -176,6 +196,7 @@ def evaluate_model():
     plt.ylabel("True Labels")
     cm_path = os.path.join(OUTPUT_DIR, "confusion_matrix.png")
     plt.savefig(cm_path)
+    plt.close()
     print(f"📊 Confusion Matrix saved to: {cm_path}")
 
     # 3. ROC Curve & AUC
@@ -193,6 +214,7 @@ def evaluate_model():
     plt.legend(loc="lower right")
     roc_path = os.path.join(OUTPUT_DIR, "roc_curve.png")
     plt.savefig(roc_path)
+    plt.close()
     print(f"📈 ROC Curve saved to: {roc_path}")
     print(f"🎯 AUC Score: {roc_auc:.4f}")
     print("="*50 + "\n")

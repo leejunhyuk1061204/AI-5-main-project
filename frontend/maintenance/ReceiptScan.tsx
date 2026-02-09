@@ -90,6 +90,7 @@ export default function ReceiptScan({ navigation, route }: { navigation?: any; r
                 vehicleId,
                 imageUri: capturedImage,
                 ocrResult: result,
+                initialType: route?.params?.initialType, // 전달받은 타입 넘기기
             });
         } catch (error: any) {
             console.error('OCR Analysis Error:', error);

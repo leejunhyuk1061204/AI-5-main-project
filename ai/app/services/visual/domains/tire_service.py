@@ -32,11 +32,20 @@ import os
 from typing import List, Union, Dict, Any
 from PIL import Image
 from ai.app.services.visual.router_service import CONFIDENCE_THRESHOLD
+from ai.app.services.visual.domains.tire.tire_llm_fallback import confidence_gating_tire
 
 # =============================================================================
-# Reliability Thresholds
+# Configuration
 # =============================================================================
-FAST_PATH_THRESHOLD = 0.9  # 이 값 이상이면 LLM 없이 로컬 결과 반환 (테스트용)
+# NOTE: Tire LLM Pattern
+# ----------------------
+# Tire domain uses LLM as ORACLE (get_tire_analysis_from_llm).
+# confidence_gating_tire only decides "should we trust YOLO or call LLM oracle?"
+#
+# Agreement-based LLM fallback will be enabled after YOLO multi-class retraining.
+# Current YOLO: normal/worn only (no cracked/flat/bulge)
+
+
 
 
 async def run_tire_yolo(
@@ -72,8 +81,10 @@ async def run_tire_yolo(
             label_name = yolo_model.names[top1_idx].lower()
             confidence = float(r.probs.top1conf)
             
+            # NOTE: cracked currently not in YOLO labels (normal/worn only)
+            # Kept for future-proofing when multi-class YOLO is trained
             return {
-                "is_worn": label_name == "cracked" or label_name == "worn", # cracked와 worn 모두 이상으로 간주
+                "is_worn": label_name == "worn" or label_name == "cracked",
                 "confidence": round(confidence, 2),
                 "label": label_name
             }
@@ -89,7 +100,7 @@ async def run_tire_yolo(
                 if confidence > max_confidence:
                     max_confidence = confidence
                     best_detection = {
-                        "is_worn": label_name == "cracked" or label_name == "worn",
+                        "is_worn": label_name == "worn" or label_name == "cracked",  # Future-proofing
                         "confidence": round(confidence, 2),
                         "label": label_name
                     }
@@ -214,35 +225,68 @@ async def analyze_tire_image(
         yolo_result = await run_tire_yolo(image, yolo_model)
         print(f"[Tire] YOLO 1차 판단: {yolo_result}")
     
-    # 신뢰도가 매우 높으면 로컬 결과만으로 리포트 생성 (LLM 비용 절감 및 속도)
-    if yolo_result and yolo_result.get("confidence", 0) >= FAST_PATH_THRESHOLD:
-        print(f"[Tire] Fast Path 적용 (신뢰도: {yolo_result['confidence']}). LLM 스킵.")
+    
+    # =================================================================
+    # Step 1.5: Confidence Gating (Simplified for Classification)
+    # =================================================================
+    if yolo_model is not None and yolo_result:
         label = yolo_result.get("label", "normal")
+        confidence = yolo_result.get("confidence", 0.0)
         
-        if label == "worn" or label == "cracked":
-            wear_status = "DANGER"
-            wear_level_pct = 85
-            critical_issues = ["crack"] if label == "cracked" else None
-            is_replacement_needed = True
-            final_status = "CRITICAL"
-        else:
-            wear_status = "GOOD"
-            wear_level_pct = 20
-            critical_issues = None
-            is_replacement_needed = False
-            final_status = "NORMAL"
+        # Call simplified fallback (classification-only)
+        fallback_result = confidence_gating_tire(
+            label=label,
+            confidence=confidence
+        )
+        
+        print(f"[Tire Gating] {fallback_result}")
+        
+        # Check gating decision
+        if fallback_result["label"] != "UNKNOWN" and fallback_result.get("source") in [
+            "model_high_conf",
+            "model_mid_clear"
+        ]:
+            # Gating approved YOLO prediction → Skip LLM oracle
+            approved_label = fallback_result["label"]
+            model_conf = fallback_result["model_confidence"]
+            print(f"[Tire] Gating approved ({fallback_result.get('gate')}) - skipping LLM oracle")
             
-        return {
-            "status": final_status,
-            "analysis_type": "SCENE_TIRE",
-            "category": "TIRE",
-            "data": {
-                "wear_status": wear_status,
-                "wear_level_pct": wear_level_pct,
-                "critical_issues": critical_issues,
-                "is_replacement_needed": is_replacement_needed
+            # ⚠️ CRITICAL FIX: No hardcoded wear_level_pct
+            # Since we're skipping LLM oracle, we don't have real wear %
+            if approved_label in ["worn", "cracked"]:
+                wear_status = "DANGER"
+                wear_level_pct = None  # ⚠️ No hardcoding! LLM oracle handles this
+                # Alternative: int(model_conf * 100) for confidence-based estimate
+                critical_issues = None  # YOLO doesn't output cracked/flat/bulge
+                is_replacement_needed = True
+                final_status = "WARNING"  # Not CRITICAL without LLM confirmation
+            else:
+                wear_status = "GOOD"
+                wear_level_pct = None  # ⚠️ No hardcoding!
+                critical_issues = None
+                is_replacement_needed = False
+                final_status = "NORMAL"
+            
+            return {
+                "status": final_status,
+                "analysis_type": "SCENE_TIRE",
+                "category": "TIRE",
+                "data": {
+                    "wear_status": wear_status,
+                    "wear_level_pct": wear_level_pct,
+                    "critical_issues": critical_issues,
+                    "is_replacement_needed": is_replacement_needed
+                },
+                "fallback_info": {
+                    "gate": fallback_result.get("gate"),
+                    "model_confidence": fallback_result.get("model_confidence"),
+                    "decision_confidence": fallback_result.get("decision_confidence"),
+                    "note": "YOLO-only result, no LLM oracle called"
+                }
             }
-        }
+        
+        # Gating rejected or UNKNOWN → Call LLM oracle
+        print(f"[Tire] Gating: {fallback_result.get('label')} ({fallback_result.get('reason_tag')}) - calling LLM oracle")
 
     # =================================================================
     # Step 2: LLM으로 마모도(%) + 위험상태 정밀 측정 (저신뢰 데이터 등)
