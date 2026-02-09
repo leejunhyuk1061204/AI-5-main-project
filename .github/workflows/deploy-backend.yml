@@ -1,0 +1,72 @@
+name: Deploy Backend
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  deploy:
+    name: Build and Deploy Backend
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x backend/gradlew
+
+      - name: Build with Gradle
+        working-directory: backend
+        run: ./gradlew build -x test
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and Push Docker Image
+        working-directory: backend
+        run: |
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:${{ github.ref_name }} .
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:latest .
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:${{ github.ref_name }}
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:latest
+
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            # Pull latest image
+            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:latest
+            
+            # Stop and remove existing container
+            docker stop ai-5-backend || true
+            docker rm ai-5-backend || true
+            
+            # Run new container
+            docker run -d \
+              --name ai-5-backend \
+              -p 8080:8080 \
+              --restart unless-stopped \
+              ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:latest
+            
+            # Clean up old images
+            docker image prune -f
+
+      - name: Deployment Complete
+        run: |
+          echo "✅ Backend deployed successfully!"
+          echo "🌐 Server: http://${{ secrets.EC2_HOST }}:8080"
