@@ -70,13 +70,17 @@ export const useUserStore = create<UserState>((set) => ({
         await AsyncStorage.removeItem('accessToken');
         await AsyncStorage.removeItem('refreshToken');
 
-        // 3. 모든 Store 초기화
+        // 3. OBD 연결/폴링 종료 및 모든 Store 초기화
         try {
             const { useVehicleStore } = await import('./useVehicleStore');
             const { useAiDiagnosisStore } = await import('./useAiDiagnosisStore');
             const { useBleStore } = await import('./useBleStore');
             const { useAlertStore } = await import('./useAlertStore');
             const { useRegistrationStore } = await import('./useRegistrationStore');
+            const ObdService = (await import('../services/ObdService')).default;
+
+            // 폴링/백그라운드 업로드/BT 연결 정리
+            await ObdService.disconnect();
 
             await useVehicleStore.getState().reset();
             useAiDiagnosisStore.getState().reset();

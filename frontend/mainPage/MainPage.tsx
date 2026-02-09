@@ -33,8 +33,16 @@ export default function MainPage() {
     useEffect(() => {
         const initObd = async () => {
             // 잠시 지연 후 시도하여 네비게이션 트랜지션 부하 분산
-            setTimeout(() => {
-                ObdService.tryAutoConnect();
+            setTimeout(async () => {
+                try {
+                    await ObdService.ensureNotificationPermissionForPolling();
+                    await ObdService.tryAutoConnect();
+                    if (ObdService.isConnected()) {
+                        ObdService.startPolling(1000);
+                    }
+                } catch {
+                    // 자동 연결 실패는 조용히 무시
+                }
             }, 1000);
         };
         initObd();
