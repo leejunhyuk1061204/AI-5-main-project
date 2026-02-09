@@ -95,7 +95,7 @@ class WindowResult(BaseModel):
     end_t: conint(ge=0)
 
     core: CommonEnvelope
-    extensions: Dict[str, CommonEnvelope] = Field(default_factory=dict)
+    domains: Dict[str, CommonEnvelope] = Field(default_factory=dict)
 
 
 class ResponseMeta(BaseModel):

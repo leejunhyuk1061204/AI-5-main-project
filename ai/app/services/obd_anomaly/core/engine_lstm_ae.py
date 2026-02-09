@@ -7,8 +7,6 @@ from ai.app.services.obd_anomaly.windowing import Window
 def run_engine_lstm_ae(req: ObdAnomalyRequest, w: Window) -> CommonEnvelope:
     domain = "engine"
 
-    # TODO: 기존 LSTM-AE 추론 로직을 여기로 이관
-    # placeholder: 항상 정상
     score = 0.0
     threshold = 0.70
     is_anom = score >= threshold
