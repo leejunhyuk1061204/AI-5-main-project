@@ -60,7 +60,16 @@ export default function ObdConnect({ visible, onClose, onConnected }: ObdConnect
             blePeripheral: d as Peripheral
         }));
 
-    const allDevices = [...classicDevices, ...bleUnifiedDevices];
+    const allDevices = React.useMemo(() => {
+        const combined = [...classicDevices, ...bleUnifiedDevices];
+        const seen = new Set<string>();
+        return combined.filter((d) => {
+            const key = `${d.type}-${d.id}`;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
+    }, [classicDevices, bleUnifiedDevices]);
 
     useEffect(() => {
         BleService.initialize();
@@ -304,7 +313,7 @@ export default function ObdConnect({ visible, onClose, onConnected }: ObdConnect
                                     return (a.name || '').localeCompare(b.name || '');
                                 })}
                                 renderItem={renderItem}
-                                keyExtractor={(item) => item.id}
+                                keyExtractor={(item) => `${item.type}-${item.id}`}
                                 contentContainerStyle={{ paddingBottom: 20 }}
                                 ListEmptyComponent={() => (
                                     <View className="items-center justify-center py-10 opacity-50">

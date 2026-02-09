@@ -14,6 +14,9 @@ import {
     deleteVehicle as apiDeleteVehicle,
     VehicleResponse
 } from '../api/vehicleApi';
+import { obdDeviceApi } from '../api/obdApi';
+import ObdService from '../services/ObdService';
+import { checkAndRequestBatteryOpt } from '../utils/BatteryOptConfig';
 
 // 차량 디스플레이용 변환 함수
 const formatMileage = (mileage: number | null | undefined): string => {
@@ -42,6 +45,7 @@ export default function CarManage() {
     const [isLoading, setIsLoading] = useState(true);
     const [obdModalVisible, setObdModalVisible] = useState(false);
     const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
+    const [selectedVehicleIdForObd, setSelectedVehicleIdForObd] = useState<string | null>(null);
 
     // Primary Vehicle Derived State
     const primaryVehicle = vehicles.find(v => v.isPrimary) || vehicles[0];
@@ -116,8 +120,44 @@ export default function CarManage() {
         }
     };
 
-    // OBD 연결 성공 핸들러
-    const handleObdConnected = (device: any) => {
+    // OBD 연결 성공 핸들러 (차량 선택 후 연결 시 서버 기록 + 로컬 캐시 갱신)
+    const handleObdConnected = async (device: { id: string; name: string; type: 'ble' | 'classic'; classicDevice?: { address: string } }) => {
+        const vehicleId = selectedVehicleIdForObd;
+        if (vehicleId) {
+            const deviceId = device.type === 'classic' && device.classicDevice
+                ? device.classicDevice.address
+                : device.id;
+            try {
+                await ObdService.ensureNotificationPermissionForPolling();
+
+                await obdDeviceApi.registerDevice({
+                    deviceId,
+                    deviceType: device.type,
+                    name: device.name || deviceId,
+                });
+                await obdDeviceApi.recordConnect(deviceId, { vehicleId });
+                ObdService.setVehicleId(vehicleId);
+                await ObdService.loadAndCacheDevices();
+            } catch (e) {
+                const msg = e instanceof Error ? e.message : String(e);
+                console.error('[CarManage] register/record failed:', msg);
+                useAlertStore.getState().showAlert('연결 기록 실패', '기기 연결은 되었으나 서버 기록에 실패했습니다.', 'ERROR');
+            }
+            // 실제 앱 플로우에서 폴링 시작
+            ObdService.startPolling(1000);
+
+            setSelectedVehicleIdForObd(null);
+            setObdModalVisible(false);
+            useAlertStore.getState().showAlert(
+                '연결 완료',
+                'OBD 어댑터가 선택한 차량에 연결되었습니다.',
+                'SUCCESS',
+                async () => {
+                    await checkAndRequestBatteryOpt();
+                }
+            );
+            return;
+        }
         setObdModalVisible(false);
         navigation.navigate('ActiveLoading', {
             isNewRegistration: true,
@@ -294,6 +334,18 @@ export default function CarManage() {
                                                         <Text className="text-white text-sm">대표 차량 설정</Text>
                                                     </TouchableOpacity>
                                                     <TouchableOpacity
+                                                        className="flex-row items-center gap-2 px-4 py-3 active:bg-white/5 border-b border-white/5"
+                                                        onPress={(e) => {
+                                                            e.stopPropagation();
+                                                            setSelectedVehicleIdForObd(vehicle.vehicleId);
+                                                            setObdModalVisible(true);
+                                                            setActiveMenuId(null);
+                                                        }}
+                                                    >
+                                                        <MaterialIcons name="bluetooth" size={18} color="#f1f5f9" />
+                                                        <Text className="text-white text-sm">OBD 연결</Text>
+                                                    </TouchableOpacity>
+                                                    <TouchableOpacity
                                                         className="flex-row items-center gap-2 px-4 py-3 active:bg-white/5"
                                                         onPress={(e) => {
                                                             e.stopPropagation();
@@ -342,7 +394,10 @@ export default function CarManage() {
 
             <ObdConnect
                 visible={obdModalVisible}
-                onClose={() => setObdModalVisible(false)}
+                onClose={() => {
+                    setObdModalVisible(false);
+                    setSelectedVehicleIdForObd(null);
+                }}
                 onConnected={handleObdConnected}
             />
         </BaseScreen >

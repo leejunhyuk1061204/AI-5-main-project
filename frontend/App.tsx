@@ -54,6 +54,7 @@ import AlertSetting from './setting/AlertSetting';
 import SettingMain from './setting/SettingMain';
 import CarManage from './setting/CarManage';
 import CarEdit from './setting/CarEdit';
+import ObdConnectFlow from './setting/ObdConnectFlow';
 import VisualDiagnosis from './diagnosis/VisualDiagnosis';
 import AiDiagChat from './diagnosis/AiDiagChat';
 import DiagnosisReport from './diagnosis/DiagnosisReport';
@@ -150,7 +151,12 @@ export default function App() {
           try {
             await loadUser(); // 사용자 정보 미리 로드
             const vehicles = await fetchVehicles();
-            ObdService.loadAndCacheDevices().catch(() => { });
+            // 등록된 OBD 기기 목록 캐시 및 백그라운드 재연결 시작
+            console.log('[App] Auto-login: loading OBD devices and starting background reconnect');
+            await ObdService.loadAndCacheDevices();
+            ObdService.startBackgroundReconnectIfNeeded().catch((e) => {
+              console.warn('[App] startBackgroundReconnectIfNeeded failed during auto-login', e);
+            });
 
             // FCM 토큰 발급 및 서버 동기화 (자동 로그인 시)
             await NotificationService.registerFcmToken();
@@ -317,6 +323,7 @@ export default function App() {
                   <Stack.Screen name="AlertSetting" component={AlertSetting} />
                   <Stack.Screen name="CarManage" component={CarManage} />
                   <Stack.Screen name="CarEdit" component={CarEdit} />
+                  <Stack.Screen name="ObdConnectFlow" component={ObdConnectFlow} />
                   <Stack.Screen name="Cloud" component={Cloud} />
                   <Stack.Screen name="Membership" component={Membership} />
                   <Stack.Screen name="MaintenanceBook" component={MaintenanceBook} />
