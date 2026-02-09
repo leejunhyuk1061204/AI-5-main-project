@@ -1,12 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Image, TextInput, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useAlertStore } from '../store/useAlertStore';
 import ocrApi, { OcrAnalysisResponse } from '../api/ocrApi';
+import { formatInputWithCommas, parseFormattedNumber } from '../utils/formatNumber';
 
-// 소모품 항목 목록 (DB 동기화)
+// 소모품 항목 목록
 const CONSUMABLE_ITEMS = [
     { code: 'ENGINE_OIL', name: '엔진 오일' },
     { code: 'AIR_FILTER', name: '에어클리너' },
@@ -30,35 +31,38 @@ const CONSUMABLE_ITEMS = [
     { code: 'OTHER', name: '기타 정비' },
 ];
 
+const FUEL_TYPE_NAMES: { [key: string]: string } = {
+    'GASOLINE': '휘발유',
+    'DIESEL': '경유',
+    'LPG': 'LPG',
+    'EV': '전기',
+};
+
 export default function ReceiptResult({ navigation, route }: { navigation?: any; route?: any }) {
-    const { vehicleId, imageUri, ocrResult } = route?.params || {};
+    const { vehicleId, imageUri, ocrResult, initialType } = route?.params || {};
     const result: OcrAnalysisResponse = ocrResult || {};
 
-    // 편집 가능한 상태
+    // 초기 타입 결정 (파라미터 > OCR 결과 > 기본값)
+    const isFueling = initialType === 'FUELING' || result.receiptType === 'FUELING';
+
+    // 공통 상태
     const [shopName, setShopName] = useState(result.shopName || '');
-    const [maintenanceDate, setMaintenanceDate] = useState(result.maintenanceDate || '');
-    const [cost, setCost] = useState(result.cost?.toString() || '');
-    const [mileage, setMileage] = useState(result.mileageAtMaintenance?.toString() || '');
-    const [selectedItem, setSelectedItem] = useState(result.consumableItemCode || 'OTHER');
+    const [date, setDate] = useState(result.maintenanceDate || new Date().toISOString().split('T')[0]);
+    const [cost, setCost] = useState(result.cost ? formatInputWithCommas(result.cost.toString()) : '');
+    const [mileage, setMileage] = useState(result.mileageAtMaintenance ? formatInputWithCommas(result.mileageAtMaintenance.toString()) : '');
     const [memo, setMemo] = useState('');
     const [isSaving, setIsSaving] = useState(false);
+
+    // 정비 전용 상태
+    const [selectedItem, setSelectedItem] = useState(result.consumableItemCode || 'OTHER');
     const [showItemPicker, setShowItemPicker] = useState(false);
 
-    // 콤마 포맷팅 유틸리티
-    const addCommas = (num: string | number) => {
-        if (num === null || num === undefined || num === '') return '';
-        const stringVal = num.toString();
-        const parts = stringVal.split('.');
-        parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-        return parts.length > 1 ? `${parts[0]}.${parts[1]}` : parts[0];
-    };
+    // 주유 전용 상태
+    const [fuelType, setFuelType] = useState(result.fuelType || 'GASOLINE');
+    const [unitPrice, setUnitPrice] = useState(result.unitPrice ? formatInputWithCommas(result.unitPrice.toString()) : '');
+    const [fuelAmount, setFuelAmount] = useState(result.fuelAmount ? result.fuelAmount.toString() : '');
 
-    const removeCommas = (str: string) => {
-        if (!str) return '';
-        return str.toString().replace(/,/g, '');
-    };
-
-    // 저장 처리
+    // 저장 핸들러
     const handleSave = async () => {
         if (!vehicleId) {
             useAlertStore.getState().showAlert('오류', '차량 정보가 없습니다.', 'ERROR');
@@ -67,33 +71,48 @@ export default function ReceiptResult({ navigation, route }: { navigation?: any;
 
         setIsSaving(true);
         try {
-            // FormData 생성
-            const formData = new FormData();
-            formData.append('file', {
-                uri: imageUri,
-                type: 'image/jpeg',
-                name: 'receipt.jpg',
-            } as any);
+            if (isFueling) {
+                // 주유 내역 저장 (수동 API 사용)
+                // TODO: 이미지 업로드 API가 있다면 추가 구현 필요
+                const payload = {
+                    fuelingDate: date,
+                    mileageAtFueling: parseFormattedNumber(mileage),
+                    fuelType,
+                    amount: parseFloat(fuelAmount) || 0,
+                    unitPrice: parseFormattedNumber(unitPrice),
+                    totalCost: parseFormattedNumber(cost),
+                    shopName,
+                    memo,
+                    receiptId: null // 이미지 연동 불가 시 null
+                };
+                await ocrApi.registerFuelingManual(vehicleId, payload);
+            } else {
+                // 정비 내역 저장 (OCR 분석 저장 API 사용)
+                const formData = new FormData();
+                formData.append('file', {
+                    uri: imageUri,
+                    type: 'image/jpeg',
+                    name: 'receipt.jpg',
+                } as any);
 
-            // API 호출 (analyze-save) - 사용자 수정값(manualData) 포함
-            const manualData = {
-                shopName,
-                maintenanceDate,
-                cost: parseInt(removeCommas(cost) || '0'),
-                mileageAtMaintenance: parseFloat(removeCommas(mileage) || '0'),
-                consumableItemCode: selectedItem,
-                memo
-            };
-            formData.append('manualData', JSON.stringify(manualData));
+                const manualData = {
+                    shopName,
+                    maintenanceDate: date,
+                    cost: parseFormattedNumber(cost),
+                    mileageAtMaintenance: parseFormattedNumber(mileage),
+                    consumableItemCode: selectedItem,
+                    memo
+                };
+                formData.append('manualData', JSON.stringify(manualData));
 
-            await ocrApi.analyzeAndSaveReceipt(vehicleId, formData);
+                await ocrApi.analyzeAndSaveReceipt(vehicleId, formData);
+            }
 
             useAlertStore.getState().showAlert(
                 '저장 완료',
-                '정비 이력이 저장되었습니다.',
+                isFueling ? '주유 기록이 저장되었습니다.' : '정비 이력이 저장되었습니다.',
                 'SUCCESS',
                 () => {
-                    // 차계부 메인으로 돌아가기
                     navigation.navigate('MaintenanceBook');
                 }
             );
@@ -109,32 +128,43 @@ export default function ReceiptResult({ navigation, route }: { navigation?: any;
         }
     };
 
-    // 재촬영
-    const handleRetake = () => {
-        navigation.goBack();
-    };
-
-    // 선택된 항목 이름 찾기
     const getSelectedItemName = () => {
         const item = CONSUMABLE_ITEMS.find(i => i.code === selectedItem);
         return item?.name || '선택하세요';
+    };
+
+    // 주유 금액 자동 계산
+    const handleFuelPriceChange = (field: 'unitPrice' | 'amount', value: string) => {
+        if (field === 'unitPrice') {
+            const formatted = formatInputWithCommas(value);
+            setUnitPrice(formatted);
+            if (fuelAmount) {
+                const total = parseFormattedNumber(formatted) * parseFloat(fuelAmount);
+                setCost(formatInputWithCommas(Math.round(total).toString()));
+            }
+        } else {
+            setFuelAmount(value);
+            if (unitPrice) {
+                const total = parseFormattedNumber(unitPrice) * parseFloat(value);
+                setCost(formatInputWithCommas(Math.round(total).toString()));
+            }
+        }
     };
 
     return (
         <SafeAreaView className="flex-1 bg-background-dark">
             <StatusBar style="light" />
 
-            {/* Header */}
             <View className="flex-row items-center justify-between px-4 py-3 border-b border-white/5">
                 <TouchableOpacity
-                    onPress={handleRetake}
+                    onPress={() => navigation.goBack()}
                     className="w-10 h-10 items-center justify-center rounded-full active:bg-white/10"
                 >
                     <MaterialIcons name="arrow-back-ios" size={20} color="white" />
                 </TouchableOpacity>
-
-                <Text className="text-white text-lg font-bold">분석 결과</Text>
-
+                <Text className="text-white text-lg font-bold">
+                    {isFueling ? '주유 분석 결과' : '정비 분석 결과'}
+                </Text>
                 <View className="w-10" />
             </View>
 
@@ -148,114 +178,176 @@ export default function ReceiptResult({ navigation, route }: { navigation?: any;
                         <Text className="text-[13px] font-semibold text-text-dim uppercase tracking-widest mb-3">
                             원본 영수증
                         </Text>
-                        <View className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
+                        <View className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden h-48 items-center justify-center">
                             <Image
                                 source={{ uri: imageUri }}
-                                className="w-full h-48"
+                                className="w-full h-full"
                                 resizeMode="contain"
                             />
                         </View>
                     </View>
 
-                    {/* 추출된 데이터 */}
-                    <View className="px-5 pt-6">
-                        <Text className="text-[13px] font-semibold text-text-dim uppercase tracking-widest mb-3">
-                            추출된 정보
+                    {/* 추출된 정보 */}
+                    <View className="px-5 pt-6 gap-4">
+                        <Text className="text-[13px] font-semibold text-text-dim uppercase tracking-widest">
+                            추출 및 수정
                         </Text>
 
+                        {/* 공통 정보 */}
                         <View className="bg-white/5 border border-white/10 rounded-2xl p-4 gap-4">
-                            {/* 정비소 */}
                             <View>
-                                <Text className="text-text-dim text-xs mb-2">정비소</Text>
+                                <Text className="text-text-dim text-xs mb-2">{isFueling ? '주유소' : '정비소'}</Text>
                                 <TextInput
                                     className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white"
                                     value={shopName}
                                     onChangeText={setShopName}
-                                    placeholder="정비소 이름"
+                                    placeholder={isFueling ? "주유소 이름" : "정비소 이름"}
                                     placeholderTextColor="#64748b"
                                 />
                             </View>
 
-                            {/* 정비일 */}
                             <View>
-                                <Text className="text-text-dim text-xs mb-2">정비일</Text>
+                                <Text className="text-text-dim text-xs mb-2">{isFueling ? '주유일' : '정비일'}</Text>
                                 <TextInput
                                     className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white"
-                                    value={maintenanceDate}
-                                    onChangeText={setMaintenanceDate}
+                                    value={date}
+                                    onChangeText={setDate}
                                     placeholder="YYYY-MM-DD"
                                     placeholderTextColor="#64748b"
                                 />
                             </View>
 
-                            {/* 비용 */}
-                            <View>
-                                <Text className="text-text-dim text-xs mb-2">비용</Text>
-                                <TextInput
-                                    className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white"
-                                    value={addCommas(cost)}
-                                    onChangeText={(val) => setCost(removeCommas(val).replace(/[^0-9]/g, ''))}
-                                    placeholder="정비 비용"
-                                    placeholderTextColor="#64748b"
-                                    keyboardType="numeric"
-                                />
-                            </View>
-
-                            {/* 주행거리 */}
                             <View>
                                 <Text className="text-text-dim text-xs mb-2">주행거리 (km)</Text>
                                 <TextInput
                                     className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white"
-                                    value={addCommas(mileage)}
-                                    onChangeText={(val) => setMileage(removeCommas(val).replace(/[^0-9]/g, ''))}
-                                    placeholder="주행거리"
+                                    value={mileage}
+                                    onChangeText={(v) => setMileage(formatInputWithCommas(v))}
+                                    placeholder="0"
                                     placeholderTextColor="#64748b"
                                     keyboardType="numeric"
                                 />
                             </View>
+                        </View>
 
-                            {/* 정비 항목 */}
-                            <View>
-                                <Text className="text-text-dim text-xs mb-2">정비 항목</Text>
-                                <TouchableOpacity
-                                    className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 flex-row justify-between items-center"
-                                    onPress={() => setShowItemPicker(!showItemPicker)}
-                                >
-                                    <Text className="text-white">{getSelectedItemName()}</Text>
-                                    <MaterialIcons name="arrow-drop-down" size={24} color="#94a3b8" />
-                                </TouchableOpacity>
-
-                                {showItemPicker && (
-                                    <View className="bg-surface-dark border border-white/10 rounded-xl mt-2 overflow-hidden">
-                                        {CONSUMABLE_ITEMS.map((item) => (
-                                            <TouchableOpacity
-                                                key={item.code}
-                                                className={`px-4 py-3 border-b border-white/5 ${selectedItem === item.code ? 'bg-primary/20' : ''}`}
-                                                onPress={() => {
-                                                    setSelectedItem(item.code);
-                                                    setShowItemPicker(false);
-                                                }}
-                                            >
-                                                <Text className={`${selectedItem === item.code ? 'text-primary font-bold' : 'text-white'}`}>
-                                                    {item.name}
-                                                </Text>
-                                            </TouchableOpacity>
-                                        ))}
+                        {/* 타입별 정보 */}
+                        <View className="bg-white/5 border border-white/10 rounded-2xl p-4 gap-4">
+                            {isFueling ? (
+                                // 주유 전용 UI
+                                <>
+                                    <View>
+                                        <Text className="text-text-dim text-xs mb-2">유종</Text>
+                                        <View className="flex-row flex-wrap gap-2">
+                                            {Object.entries(FUEL_TYPE_NAMES).map(([code, name]) => (
+                                                <TouchableOpacity
+                                                    key={code}
+                                                    onPress={() => setFuelType(code)}
+                                                    className={`px-3 py-2 rounded-lg border ${fuelType === code ? 'bg-orange-500 border-orange-500' : 'bg-white/5 border-white/10'}`}
+                                                >
+                                                    <Text className={fuelType === code ? 'text-white font-bold' : 'text-text-dim'}>
+                                                        {name}
+                                                    </Text>
+                                                </TouchableOpacity>
+                                            ))}
+                                        </View>
                                     </View>
-                                )}
-                            </View>
 
-                            {/* 메모 */}
+                                    <View className="flex-row gap-3">
+                                        <View className="flex-1">
+                                            <Text className="text-text-dim text-xs mb-2">단가 (원)</Text>
+                                            <TextInput
+                                                className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white"
+                                                value={unitPrice}
+                                                onChangeText={(v) => handleFuelPriceChange('unitPrice', v)}
+                                                placeholder="0"
+                                                placeholderTextColor="#64748b"
+                                                keyboardType="numeric"
+                                            />
+                                        </View>
+                                        <View className="flex-1">
+                                            <Text className="text-text-dim text-xs mb-2">주유량 (L)</Text>
+                                            <TextInput
+                                                className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white"
+                                                value={fuelAmount}
+                                                onChangeText={(v) => handleFuelPriceChange('amount', v)}
+                                                placeholder="0"
+                                                placeholderTextColor="#64748b"
+                                                keyboardType="numeric"
+                                            />
+                                        </View>
+                                    </View>
+
+                                    <View>
+                                        <Text className="text-text-dim text-xs mb-2">총 결제금액 (원)</Text>
+                                        <TextInput
+                                            className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white font-bold text-lg"
+                                            value={cost}
+                                            onChangeText={(v) => setCost(formatInputWithCommas(v))}
+                                            placeholder="0"
+                                            placeholderTextColor="#64748b"
+                                            keyboardType="numeric"
+                                        />
+                                    </View>
+                                </>
+                            ) : (
+                                // 정비 전용 UI
+                                <>
+                                    <View>
+                                        <Text className="text-text-dim text-xs mb-2">정비 항목</Text>
+                                        <TouchableOpacity
+                                            className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 flex-row justify-between items-center"
+                                            onPress={() => setShowItemPicker(!showItemPicker)}
+                                        >
+                                            <Text className="text-white">{getSelectedItemName()}</Text>
+                                            <MaterialIcons name="arrow-drop-down" size={24} color="#94a3b8" />
+                                        </TouchableOpacity>
+
+                                        {showItemPicker && (
+                                            <View className="bg-surface-dark border border-white/10 rounded-xl mt-2 overflow-hidden max-h-48">
+                                                <ScrollView nestedScrollEnabled>
+                                                    {CONSUMABLE_ITEMS.map((item) => (
+                                                        <TouchableOpacity
+                                                            key={item.code}
+                                                            className={`px-4 py-3 border-b border-white/5 ${selectedItem === item.code ? 'bg-primary/20' : ''}`}
+                                                            onPress={() => {
+                                                                setSelectedItem(item.code);
+                                                                setShowItemPicker(false);
+                                                            }}
+                                                        >
+                                                            <Text className={`${selectedItem === item.code ? 'text-primary font-bold' : 'text-white'}`}>
+                                                                {item.name}
+                                                            </Text>
+                                                        </TouchableOpacity>
+                                                    ))}
+                                                </ScrollView>
+                                            </View>
+                                        )}
+                                    </View>
+
+                                    <View>
+                                        <Text className="text-text-dim text-xs mb-2">정비 비용 (원)</Text>
+                                        <TextInput
+                                            className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white font-bold text-lg"
+                                            value={cost}
+                                            onChangeText={(v) => setCost(formatInputWithCommas(v))}
+                                            placeholder="0"
+                                            placeholderTextColor="#64748b"
+                                            keyboardType="numeric"
+                                        />
+                                    </View>
+                                </>
+                            )}
+
+                            {/* 메모 (공통) */}
                             <View>
-                                <Text className="text-text-dim text-xs mb-2">메모 (선택)</Text>
+                                <Text className="text-text-dim text-xs mb-2">메모</Text>
                                 <TextInput
-                                    className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white"
+                                    className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white h-24"
                                     value={memo}
                                     onChangeText={setMemo}
-                                    placeholder="추가 메모"
+                                    placeholder="메모 입력"
                                     placeholderTextColor="#64748b"
                                     multiline
-                                    numberOfLines={3}
                                     textAlignVertical="top"
                                 />
                             </View>
@@ -264,19 +356,19 @@ export default function ReceiptResult({ navigation, route }: { navigation?: any;
                 </ScrollView>
             </KeyboardAvoidingView>
 
-            {/* Bottom Buttons */}
+            {/* 하단 버튼 */}
             <View className="absolute bottom-0 left-0 right-0 bg-background-dark border-t border-white/5 px-5 py-4 pb-8">
                 <View className="flex-row gap-3">
                     <TouchableOpacity
                         className="flex-1 bg-[#1e2936] py-4 rounded-xl items-center"
-                        onPress={handleRetake}
+                        onPress={() => navigation.goBack()}
                         disabled={isSaving}
                     >
                         <Text className="text-white font-bold">재촬영</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
-                        className="flex-[2] bg-primary py-4 rounded-xl items-center flex-row justify-center gap-2"
+                        className={`flex-[2] py-4 rounded-xl items-center flex-row justify-center gap-2 ${isFueling ? 'bg-orange-500' : 'bg-primary'}`}
                         onPress={handleSave}
                         disabled={isSaving}
                     >

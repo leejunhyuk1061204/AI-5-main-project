@@ -168,18 +168,18 @@ export default function DrivingHis() {
                     ) : (
                         <>
                             {/* Score Section */}
-                            <View className="items-center justify-center py-6 relative">
+                            <View className="items-center justify-center py-2 relative">
                                 {/* Background mesh effect approximation */}
                                 <View className="absolute inset-0 opacity-10" style={{
                                     backgroundColor: 'transparent',
                                 }} />
 
-                                <Text className="text-gray-400 text-xs font-medium tracking-widest uppercase mb-6">종합 안전 점수</Text>
+                                <Text className="text-gray-400 text-xs font-medium tracking-widest uppercase mb-2">종합 안전 점수</Text>
 
-                                <View className="relative w-64 h-64 justify-center items-center">
+                                <View className="relative w-48 h-48 justify-center items-center">
                                     <View className="absolute inset-0 rounded-full border border-gray-800 border-dashed" style={{ opacity: 0.5 }} />
 
-                                    <Svg height="250" width="250" viewBox="0 0 100 100" style={{ transform: [{ rotate: '-90deg' }] }}>
+                                    <Svg height="180" width="180" viewBox="0 0 100 100" style={{ transform: [{ rotate: '-90deg' }] }}>
                                         <Circle
                                             cx="50"
                                             cy="50"
@@ -202,27 +202,27 @@ export default function DrivingHis() {
                                     </Svg>
 
                                     <View className="absolute inset-0 items-center justify-center">
-                                        <Text className="text-6xl font-bold text-white tracking-tighter" style={{ textShadowColor: 'rgba(13, 127, 242, 0.5)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 10 }}>
+                                        <Text className="text-5xl font-bold text-white tracking-tighter" style={{ textShadowColor: 'rgba(13, 127, 242, 0.5)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 10 }}>
                                             {stats.avgScore}
                                         </Text>
-                                        <Text className="text-[#0d7ff2] text-sm font-bold mt-1 tracking-widest uppercase">
+                                        <Text className="text-[#0d7ff2] text-xs font-bold mt-1 tracking-widest uppercase">
                                             {stats.avgScore >= 90 ? '최우수 등급' : stats.avgScore >= 70 ? '양호' : '주의 필요'}
                                         </Text>
                                     </View>
                                 </View>
 
                                 {/* Stats Row */}
-                                <View className="flex-row justify-between w-full max-w-[300px] mt-6 px-4">
+                                <View className="flex-row justify-between w-full max-w-[300px] mt-4 px-4">
                                     <View className="items-center">
                                         <Text className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">총 주행 거리</Text>
                                         <Text className="text-lg font-bold text-white">{stats.totalDistance.toLocaleString()} <Text className="text-xs text-gray-400 font-normal">km</Text></Text>
                                     </View>
-                                    <View className="w-px h-10 bg-gray-800" />
+                                    <View className="w-px h-8 bg-gray-800" />
                                     <View className="items-center">
                                         <Text className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">안전 운행</Text>
                                         <Text className="text-lg font-bold text-[#0bda5b]">{stats.safetyRate}%</Text>
                                     </View>
-                                    <View className="w-px h-10 bg-gray-800" />
+                                    <View className="w-px h-8 bg-gray-800" />
                                     <View className="items-center">
                                         <Text className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">평균 연비</Text>
                                         <Text className="text-lg font-bold text-[#1E90FF]">{stats.avgFuelEff} <Text className="text-xs text-gray-400 font-normal">km/L</Text></Text>
@@ -232,18 +232,18 @@ export default function DrivingHis() {
 
                             {/* Chart Section - Simplified for MVP without full graph library */}
                             {/* Visual representation of weekly safety trend */}
-                            <View className="bg-surface-dark border border-gray-800 rounded-xl p-5 overflow-hidden">
-                                <View className="flex-row justify-between items-center mb-6">
-                                    <Text className="text-white text-base font-bold">주간 안전 지수 변화</Text>
-                                    <View className="bg-primary/20 border border-primary/30 px-2 py-1 rounded">
-                                        <Text className="text-xs text-primary">이번주</Text>
+                            <View className="bg-surface-dark border border-gray-800 rounded-xl p-4 overflow-hidden mb-2">
+                                <View className="flex-row justify-between items-center mb-4">
+                                    <Text className="text-white text-sm font-bold">주간 안전 지수 변화</Text>
+                                    <View className="bg-primary/20 border border-primary/30 px-2 py-0.5 rounded">
+                                        <Text className="text-[10px] text-primary">이번주</Text>
                                     </View>
                                 </View>
 
-                                <View className="h-40 w-full relative flex-row items-end justify-between px-2 pb-6">
+                                <View className="h-24 w-full relative flex-row items-end justify-between px-2 pb-2">
                                     {/* Bars instead of complex path for creating simpler dynamic graph */}
                                     {weeklyData.map((score, idx) => (
-                                        <View key={idx} className="items-center gap-2">
+                                        <View key={idx} className="items-center gap-1">
                                             <View
                                                 className="w-2 rounded-full bg-blue-500"
                                                 style={{
@@ -263,14 +263,14 @@ export default function DrivingHis() {
                             <View>
                                 <View className="flex-row items-center justify-between mb-4 px-1">
                                     <Text className="text-white text-lg font-bold">최근 주행 기록</Text>
-                                    <TouchableOpacity>
+                                    <TouchableOpacity onPress={() => navigation.navigate('DrivingList' as never)}>
                                         <Text className="text-[#0d7ff2] text-sm font-medium">전체보기</Text>
                                     </TouchableOpacity>
                                 </View>
 
-                                {/* List Mapping */}
+                                {/* List Mapping - Show only 1 recent */}
                                 <View className="gap-3">
-                                    {trips.slice(0, 5).map((trip, index) => (
+                                    {trips.slice(0, 1).map((trip, index) => (
                                         <View key={index} className="bg-surface-dark rounded-xl border border-primary/30 p-4 relative overflow-hidden">
                                             <View className="flex-row justify-between items-center mb-4">
                                                 <View className="flex-row items-center gap-3">
@@ -279,9 +279,10 @@ export default function DrivingHis() {
                                                     </View>
                                                     <Text className="text-white font-bold text-lg">{formatDate(trip.startTime)}</Text>
                                                 </View>
-                                                <View className="flex-row items-center gap-1 bg-surface-highlight/50 px-2 py-1 rounded border border-gray-700">
-                                                    <View className="w-2 h-2 rounded-full bg-success" style={{ shadowColor: '#0bda5b', shadowOpacity: 0.5, shadowRadius: 5 }} />
-                                                    <Text className="text-xs font-medium text-gray-300">{trip.driveScore}점</Text>
+                                                {/* Score Badge */}
+                                                <View className="flex-row items-center gap-1 bg-surface-highlight/20 px-3 py-1.5 rounded-full border border-gray-700">
+                                                    <View className={`w-2 h-2 rounded-full ${trip.driveScore >= 80 ? 'bg-success' : trip.driveScore >= 60 ? 'bg-yellow-500' : 'bg-red-500'}`} style={{ shadowColor: '#0bda5b', shadowOpacity: 0.5, shadowRadius: 5 }} />
+                                                    <Text className="text-sm font-bold text-white">{trip.driveScore}점</Text>
                                                 </View>
                                             </View>
 
