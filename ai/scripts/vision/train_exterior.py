@@ -1,44 +1,83 @@
 from ultralytics import YOLO
 import argparse
 import os
+import platform
 
-def train_exterior_model(mode="train", epochs=10, batch_size=2, device=0):
+# =============================================================================
+# [Configuration] RunPod Optimized Settings
+# =============================================================================
+BASE_MODEL = "yolo11m.pt"
+
+# [Path Config] RunPod과 로컬 환경 자동 감지
+RUNPOD_DATA_PATH = "/workspace/large_data"
+LOCAL_DATA_PATH = "ai/data"
+DATA_ROOT = RUNPOD_DATA_PATH if os.path.exists(RUNPOD_DATA_PATH) else LOCAL_DATA_PATH
+
+# [Environment Config] 환경 변수로 제어 가능
+DEFAULT_BATCH_SIZE = int(os.getenv("BATCH_SIZE", "16"))  # RunPod 기본값 16
+DEFAULT_IMG_SIZE = int(os.getenv("IMG_SIZE", "1280"))
+WORKERS = 8 if platform.system() != "Windows" else 0  # 자동 감지
+
+# RunPod 환경 감지
+IS_RUNPOD = os.path.exists(RUNPOD_DATA_PATH)
+CACHE = True if IS_RUNPOD else False  # RunPod에서는 cache 활성화
+
+def train_exterior_model(mode="train", epochs=10, batch_size=None, device=0):
     """
-    Train or Evaluate YOLOv8 model for unified exterior damage detection (22 classes).
+    Train or Evaluate YOLOv11M model for unified exterior damage detection (22 classes).
     """
+    # Batch size 기본값 처리
+    if batch_size is None:
+        batch_size = DEFAULT_BATCH_SIZE
+    
     # 1. Project Setup
     project_path = os.path.join("ai", "weights", "exterior", "unified_v1")
-    data_yaml = os.path.join("ai", "data", "yolo", "exterior", "data.yaml")
+    data_yaml = os.path.join(DATA_ROOT, "yolo", "exterior", "data.yaml")
+    
+    # Base model 존재 여부 확인
+    if not os.path.exists(BASE_MODEL):
+        print(f"[Error] Base model not found: {BASE_MODEL}")
+        print(f"Please download from: https://github.com/ultralytics/assets/releases/download/v8.1.0/{BASE_MODEL}")
+        return
     
     # Ensure yaml exists
     if not os.path.exists(data_yaml):
         print(f"[Error] No data.yaml found at: {data_yaml}")
+        print(f"[Info] Checking paths:")
+        print(f"  - RunPod path: {RUNPOD_DATA_PATH} (Exists: {os.path.exists(RUNPOD_DATA_PATH)})")
+        print(f"  - Local path: {LOCAL_DATA_PATH} (Exists: {os.path.exists(LOCAL_DATA_PATH)})")
+        print(f"  - Using: {DATA_ROOT}")
         return
 
     # 2. Mode Selection
     if mode == "train":
-        print(f"\n🚀 Starting YOLOv8 Training for Exterior Damage (22 Classes)")
+        print(f"\n🚀 Starting YOLOv11M Training for Exterior Damage (22 Classes)")
+        print(f"   Environment: {'RunPod' if IS_RUNPOD else 'Local'}")
         print(f"   Data: {data_yaml}")
         print(f"   Output: {project_path}")
         print(f"   Epochs: {epochs}")
         print(f"   Batch: {batch_size}")
+        print(f"   Image Size: {DEFAULT_IMG_SIZE}")
+        print(f"   Workers: {WORKERS}")
+        print(f"   Cache: {CACHE}")
         
         # Load Model (YOLO11 Medium)
-        model = YOLO("yolo11m.pt") 
+        model = YOLO(BASE_MODEL)
         
         # Train
         model.train(
             data=data_yaml,
             epochs=epochs,
-            imgsz=1280,
+            imgsz=DEFAULT_IMG_SIZE,
             batch=batch_size,
             device=device,
             project=project_path,
             name="train",
             exist_ok=True, 
             plots=True,
-            cache=False, 
-            workers=0  # Fix for WinError 1455
+            cache=CACHE,
+            workers=WORKERS,
+            amp=True  # Mixed precision for better performance
         )
         print(f"\n✅ Training Completed. Best weights saved at: {project_path}/train/weights/best.pt")
         
