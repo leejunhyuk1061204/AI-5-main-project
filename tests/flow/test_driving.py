@@ -6,7 +6,8 @@ from datetime import datetime, timedelta
 
 # 설정
 BASE_URL = "http://localhost:8080/api/v1"
-ACCESS_TOKEN = "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJmMjBkNDk5MS0yZGZlLTQxZjgtYmExYS01MTg2OGQ0ZTI4MTEiLCJpYXQiOjE3NzAyNzg1MDksImV4cCI6MTc3MDI4MjEwOX0.YkbYKAjoSGMgMQAxXJpETJTAOwDhxdtoodLqwprx5yy-J6GJnryoyKcsLUg7_nw-H_aeu4PECPR7lsaQ23YBvw"
+ACCESS_TOKEN = "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiIzZGI0NjVjMy1lNThhLTQzYWQtOTUxNy02MTRmNDhjOGVmZjMiLCJpYXQiOjE3NzA2MTI0MDksImV4cCI6MTc3MDYxNjAwOX0.L5alysYSEYAwo-rgiX2MR7vlFLndNbTxVaMsYAe6AKl4dgsGyY-dCFYbeT8MAbh9QwQvp4OVEq8ZTIhy73HecA"
+VEHICLE_ID = "690713b3-34ee-45c8-adfe-73af1ad5d798"
 
 def get_headers():
     return {
@@ -51,16 +52,16 @@ def start_trip(vehicle_id):
 
 def send_bulk_logs(vehicle_id, target_duration_min, start_time_base, target_s):
     headers = get_headers()
+    # 1초당 1건, 실제 주행 시간 구간에 맞춤 (LSTM/이상감지가 시간 구간 사용)
     log_count = int(target_duration_min * 60)
-    print(f"[*] Sending Bulk Logs ({log_count} EA / Target {target_s}km/h)...")
+    print(f"[*] Sending Bulk Logs ({log_count} EA, {target_duration_min}min span / Target {target_s}km/h)...")
     
     logs = []
-    # 밀리초 단위로 촘촘하게 배치하여 트립 간 완전 격리
     base_time = start_time_base + timedelta(milliseconds=10)
     current_speed = 0.0
 
     for i in range(log_count):
-        ts = (base_time + timedelta(milliseconds=i*2)).isoformat()
+        ts = (base_time + timedelta(seconds=i)).isoformat()
         
         if current_speed < target_s:
             current_speed += random.uniform(2.0, 5.0)
@@ -82,9 +83,15 @@ def send_bulk_logs(vehicle_id, target_duration_min, start_time_base, target_s):
         }
         logs.append(log)
 
-    chunk_size = 500 
+    # API 스펙: { "vehicleId", "batchId", "logs" } (배열만 보내면 저장 안 됨)
+    chunk_size = 500
     for i in range(0, len(logs), chunk_size):
-        requests.post(f"{BASE_URL}/telemetry/batch", json=logs[i:i + chunk_size], headers=headers)
+        chunk = logs[i:i + chunk_size]
+        batch_id = f"driving-{start_time_base.strftime('%Y%m%d%H%M%S')}-{i // chunk_size}"
+        payload = {"vehicleId": vehicle_id, "batchId": batch_id, "logs": chunk}
+        r = requests.post(f"{BASE_URL}/telemetry/batch", json=payload, headers=headers)
+        if r.status_code != 200:
+            print(f"[-] Batch chunk {i // chunk_size} failed: {r.status_code} {r.text[:200]}")
 
 def end_trip(trip_id):
     headers = get_headers()
@@ -100,28 +107,19 @@ def end_trip(trip_id):
         print("="*35)
 
 def main():
-    print("[*] Starting Accurate Multi-Trip Simulation for Primary Vehicle...")
-    
-    # Primary Vehicle ID 설정
-    vid = "00b38f1d-04a8-4167-830f-8d5cbe911a2d"
+    print("[*] 20분 주행 시뮬레이션 (단일 트립)")
+    vid = VEHICLE_ID
+    target_speed = 80.0
 
-    # 80~90km/h 시나리오 실행 (3개)
-    scenarios = [80.0, 85.0, 90.0]
-    
-    for idx, target in enumerate(scenarios, 1):
-        print(f"\n[Scenario {idx}/5] Target Speed: {target} km/h")
-        
-        # Trip 시작 시점 캡처
-        start_time = datetime.now()
-        tid = start_trip(vid)
-        
-        if tid:
-            time.sleep(0.5)
-            send_bulk_logs(vid, 5.0, start_time, target)
-            time.sleep(1.0)
-            end_trip(tid)
-        
-        time.sleep(2.0)
+    start_time = datetime.now()
+    tid = start_trip(vid)
+    if not tid:
+        return
+    time.sleep(0.5)
+    send_bulk_logs(vid, 20.0, start_time, target_speed)
+    time.sleep(1.0)
+    end_trip(tid)
+    print("\n[+] 20분 주행 시뮬레이션 완료.")
 
 if __name__ == "__main__":
     main()

@@ -372,16 +372,18 @@ CREATE TABLE IF NOT EXISTS user_notifications (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
--- 지식 베이스 벡터 (2.5.2)
+-- 지식 베이스 벡터 (2.5.2) - RAG용 매뉴얼 청크 (charm.li)
 CREATE TABLE IF NOT EXISTS knowledge_vectors (
     knowledge_id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
     content TEXT,
-    metadata JSONB, -- { manufacturer, model, year, source, page, dtc_code }
+    metadata JSONB, -- { manufacturer, year, model, page_number, chunk_index, total_chunks_in_page, source_file, source_zip, chunk_method }
     embedding VECTOR (768), -- nomic-embed-text (768차원) 대응
-    content_hash VARCHAR(64) UNIQUE -- 중복 방지용 해시
+    content_hash VARCHAR(64) UNIQUE, -- 중복 방지용 해시
+    created_at TIMESTAMP DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_knowledge_metadata ON knowledge_vectors USING GIN (metadata);
+CREATE INDEX IF NOT EXISTS idx_knowledge_embedding ON knowledge_vectors USING hnsw (embedding vector_cosine_ops);
 
 -- 8. 외부 API 연동 및 상세 정보 (External)
 
