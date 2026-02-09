@@ -74,7 +74,10 @@
 - `analysis_results`:
   - `sound`: 음향 분석 결과 (Optional, audio_analysis에서 매핑)
   - `image`: 이미지 분석 결과 (Optional, visual_analysis에서 매핑)
-  - `lstm`: 시계열 이상 탐지 결과 (anomaly_analysis에서 매핑, lstm_timeline 등 포함)
+  - `lstm`: 시계열 이상 탐지 결과 (anomaly_analysis에서 매핑). 규격:
+    - 전부 정상: `is_anomaly`=false, `lstm_timeline`=[] (빈 배열). 별도 청크 항목 없음.
+    - 하나라도 이상: `is_anomaly`=true, `lstm_timeline`=[ { "is_anomaly": true, "anomaly_score": number, "events": [ ... ] } ]. 해당 청크들의 events가 한 배열로 합쳐져 한 덩어리로 전달됨.
+    - events 각 항목: `message`는 해당 이상에 대한 짧은 설명(예: "engine anomaly detected on engine_rpm"). `domain`/`feature`는 구간·신호 식별자(engine, electrical, brake, tire, engine_rpm, battery_voltage_v 등). `severity`는 INFO/WARNING/CRITICAL.
 - `rag_context`: 관련 정비 매뉴얼(2010~2013) 검색 결과 문단 목록
   - 이상탐지/이미지/소리 키워드 + DTC 코드 및 영어 설명을 함께 사용해 검색한 매뉴얼 문단
   - DTC 정의(En/Ko) 텍스트도 포함될 수 있음
@@ -222,7 +225,10 @@ You receive structured data (JSON) as follows:
 - `analysis_results`:
   - `sound`: Audio analysis result (Optional, mapped from audio_analysis)
   - `image`: Image analysis result (Optional, mapped from visual_analysis)
-  - `lstm`: Time-series anomaly detection result (mapped from anomaly_analysis, includes lstm_timeline, etc.)
+  - `lstm`: Time-series anomaly detection result (mapped from anomaly_analysis). Format:
+    - All normal: `is_anomaly`=false, `lstm_timeline`=[] (empty). No per-chunk entries.
+    - Any anomaly: `is_anomaly`=true, `lstm_timeline`=[ { "is_anomaly": true, "anomaly_score": number, "events": [ ... ] } ]. Events from anomaly chunks are merged into a single array.
+    - Each event: `message` is a short description of the anomaly (e.g. "engine anomaly detected on engine_rpm"). `domain`/`feature` are segment/signal identifiers (engine, electrical, brake, tire, engine_rpm, battery_voltage_v, etc.). `severity` is INFO/WARNING/CRITICAL.
 - `rag_context`: List of paragraphs from relevant maintenance manual (2010~2013) search results
   - Search results using keywords from anomaly detection/image/sound + DTC codes and English descriptions
   - May include DTC definition texts (En/Ko)
