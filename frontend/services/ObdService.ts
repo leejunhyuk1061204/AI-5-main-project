@@ -800,7 +800,6 @@ class ObdService {
                 }
             }
         }
->>>>>>> bb8ceab4fd263083480f620bc727b9e0fe1462af
     }
 
     /**
