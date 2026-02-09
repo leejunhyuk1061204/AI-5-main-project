@@ -13,6 +13,7 @@ python ai/scripts/train_dashboard.py --mode train --epochs 100
 import argparse
 import os
 import shutil
+import platform
 from ultralytics import YOLO
 
 # =============================================================================
@@ -32,7 +33,7 @@ SAVE_PATH = "ai/weights/dashboard/best.pt"
 DEFAULT_EPOCHS = 100
 BATCH_SIZE = 16  # 데이터 적을 때 최적화 (기존 2)
 IMG_SIZE = 1280
-WORKERS = 8  # RunPod Linux 환경
+WORKERS = 8 if platform.system() != "Windows" else 0  # 환경 자동 감지
 
 # Augmentation (Small Dataset Optimized)
 MOSAIC = 1.0
