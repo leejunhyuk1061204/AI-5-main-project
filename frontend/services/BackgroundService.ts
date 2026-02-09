@@ -19,12 +19,15 @@ class BackgroundTaskService {
         const reconnectEveryTicks = Math.max(1, Math.floor(intervalMs / HEARTBEAT_MS));
         let tick = 0;
 
+        console.log('[BackgroundService] Task started. intervalMs=', intervalMs, 'reconnectEveryTicks=', reconnectEveryTicks);
+
         while (BackgroundService.isRunning()) {
             await sleep(HEARTBEAT_MS);
             tick++;
             if (tick >= reconnectEveryTicks) {
                 tick = 0;
                 try {
+                    console.log('[BackgroundService] Heartbeat tick reached. Trying auto-connect from cache...');
                     await ObdService.tryAutoConnectFromCache();
                 } catch (e) {
                     console.warn('[BackgroundService] tryAutoConnectFromCache failed', e);

@@ -16,7 +16,6 @@ export interface VehicleResponse {
     memo: string | null;
     isPrimary: boolean;
     registrationSource: 'MANUAL' | 'OBD' | 'CLOUD';
-    obdDeviceId: string | null;
     cloudLinked: boolean;
 
     // Spec info
@@ -52,7 +51,6 @@ export interface ManualRegistrationRequest {
     carNumber?: string;
     nickname?: string;
     memo?: string;
-    obdDeviceId?: string;
     consumables?: {
         code: string;
         maintenanceDate?: string;

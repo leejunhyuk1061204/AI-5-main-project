@@ -173,6 +173,16 @@ api.interceptors.response.use(
                 isRefreshing = false;
                 refreshSubscribers = [];
                 await AsyncStorage.multiRemove(['accessToken', 'refreshToken']);
+
+                // 리프레시 토큰 재발급도 실패한 경우:
+                // - 더 이상 인증 세션이 없으므로 OBD 폴링/연결 포함 전체 세션을 종료한다.
+                try {
+                    const { useUserStore } = await import('../store/useUserStore');
+                    await useUserStore.getState().logout();
+                } catch (logoutError) {
+                    console.error('[Auth] Auto logout after refresh failure failed:', logoutError);
+                }
+
                 return Promise.reject(error);
             }
         }

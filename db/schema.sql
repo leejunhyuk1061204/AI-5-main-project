@@ -83,6 +83,7 @@ CREATE TABLE IF NOT EXISTS cloud_accounts (
 );
 
 -- 차량 (2.1.4)
+-- 기존 DB에 obd_device_id 컬럼이 있으면: ALTER TABLE vehicles DROP COLUMN IF EXISTS obd_device_id;
 CREATE TABLE IF NOT EXISTS vehicles (
     vehicles_id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
     user_id UUID REFERENCES users (user_id),
