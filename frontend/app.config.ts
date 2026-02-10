@@ -37,7 +37,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
             "android.permission.WAKE_LOCK"
         ],
         package: "com.lee_kang_hyun.frontend",
-        googleServicesFile: "./google-services.json",
+        googleServicesFile: process.env.GOOGLE_SERVICES_JSON || "./google-services.json",
         softwareKeyboardLayoutMode: "resize"
     },
     web: {
@@ -69,7 +69,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
                     "bundleIdentifier": "com.lee-kang-hyun.frontend"
                 },
                 "android": {
-                    "googleServicesFile": "./google-services.json"
+                    googleServicesFile: process.env.GOOGLE_SERVICES_JSON || "./google-services.json"
                 }
             }
         ],
@@ -98,7 +98,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     ],
     extra: {
         eas: {
-            projectId: "0c0101ed-c848-4c23-893d-64609323b4d4"
+            projectId: "62f1e1fc-2999-4e4c-b44f-ad5801fc4d4c"
         }
     }
 });
