@@ -15,6 +15,7 @@
 import argparse
 import os
 import shutil
+import platform
 from ultralytics import YOLO
 
 # =============================================================================
@@ -31,15 +32,15 @@ DATA_YAML_PATH = os.path.join(DATA_ROOT, "yolo/engine/data.yaml")
 OUTPUT_DIR = "ai/runs/engine_model"
 SAVE_PATH = "ai/weights/engine/best.pt"
 
-# Training Hyperparameters (RTX 3050 6GB Optimized)
+# Training Hyperparameters (RunPod Optimized)
 DEFAULT_EPOCHS = 100
-BATCH_SIZE = 2  # 1280 + Medium 모델에는 4도 큼 -> 2로 초저하향 (OOM 방지)
+BATCH_SIZE = int(os.getenv("BATCH_SIZE", "16"))  # RunPod 기본값 16 (로컬 2)
 IMG_SIZE = 1280
 OPTIMIZER = "AdamW"
 LR0 = 0.001
 LRF = 0.01
 PATIENCE = 50
-WORKERS = 0      # Windows 메모리 충돌 방지 (Original 4090: 8)
+WORKERS = 8 if platform.system() != "Windows" else 0  # 자동 감지
 
 # [Original RTX 4090 Reference]
 # DEFAULT_EPOCHS = 150
@@ -106,7 +107,6 @@ def train_model(epochs=DEFAULT_EPOCHS):
     # [Weight Management] 기존 가중치가 있다면 백업 (누적 방지용)
     if os.path.exists(SAVE_PATH):
         old_path = SAVE_PATH.replace(".pt", "_old.pt")
-        import shutil
         shutil.copy(SAVE_PATH, old_path)
         print(f"📦 기존 가중치를 백업했습니다: {old_path}")
 
@@ -115,7 +115,7 @@ def train_model(epochs=DEFAULT_EPOCHS):
         data=DATA_YAML_PATH,
         epochs=epochs,
         imgsz=1280,
-        batch=16,          # 데이터 적을 때 최적화 (32 → 16)
+        batch=BATCH_SIZE,  # 상수 사용 (일관성 유지)
         device=0,  # GPU 0
         project=OUTPUT_DIR,
         name="run",
@@ -142,7 +142,7 @@ def train_model(epochs=DEFAULT_EPOCHS):
         weight_decay=WEIGHT_DECAY,
         
         # Performance
-        workers=8,         # 리눅스 환경 상향 조정 (기존 0)
+        workers=WORKERS,  # 환경 자동 감지
         cache=True,  # RAM으로 데이터셋 캐싱 (속도 향상)
         
         # Logging

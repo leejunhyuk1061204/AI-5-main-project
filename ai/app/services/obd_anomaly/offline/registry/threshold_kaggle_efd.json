@@ -1,0 +1,12 @@
+{
+  "auc": 0.49656565656565654,
+  "threshold": 1.06732976436615,
+  "quantile": 0.99,
+  "normal_windows": 99,
+  "fault_windows": 50,
+  "normal_score_mean": 0.9990618228912354,
+  "fault_score_mean": 0.9980690479278564,
+  "model": "ai/weights/efd/lstm_ae_efd_latest.pt",
+  "normal_jsonl": "ai/app/services/obd_anomaly/offline/datasets/kaggle_efd/normal.jsonl",
+  "fault_jsonl": "ai/app/services/obd_anomaly/offline/datasets/kaggle_efd/fault.jsonl"
+}

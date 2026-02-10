@@ -17,4 +17,8 @@ public interface ObdLogRepository extends JpaRepository<ObdLog, ObdLog.ObdLogId>
             java.util.UUID vehicleId,
             java.time.OffsetDateTime startTime);
 
+    void deleteByVehicleIdAndTimeBetween(
+            java.util.UUID vehicleId,
+            java.time.OffsetDateTime startTime,
+            java.time.OffsetDateTime endTime);
 }

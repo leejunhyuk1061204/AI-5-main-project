@@ -4,6 +4,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import Header from '../header/Header';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { clearStorageForLogout } from '../utils/storageLogout';
 import BaseScreen from '../components/layout/BaseScreen';
 import { BASE_URL } from '../api/axios';
 import { useAlertStore } from '../store/useAlertStore';
@@ -159,6 +160,12 @@ export default function SettingMain() {
                         onPress={() => navigation.navigate('CarManage')}
                     />
                     <SettingsItem
+                        icon="bluetooth"
+                        title="OBD 어댑터 연결"
+                        subtitle="블루투스 OBD 스캔 및 연결"
+                        onPress={() => navigation.navigate('ObdConnectFlow')}
+                    />
+                    <SettingsItem
                         icon="cloud-sync"
                         title="커넥티드 카 연동"
                         subtitle="SmartCar 계정 연결"
@@ -174,7 +181,7 @@ export default function SettingMain() {
                 activeOpacity={0.7}
                 onPress={async () => {
                     try {
-                        await AsyncStorage.clear();
+                        await clearStorageForLogout();
                         navigation.reset({
                             index: 0,
                             routes: [{ name: 'Login' }],

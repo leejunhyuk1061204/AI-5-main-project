@@ -114,5 +114,5 @@ ocr:
 
 kakao:
   pay:
-    secret-key: ${KAKAO_PAY_SECRET_KEY}
+    secret-key: ${KAKAO_PAY_SECRET_KEY:dummy}
 

@@ -4,9 +4,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
-import Svg, { Circle, Path, Defs, LinearGradient, Stop } from 'react-native-svg';
+import Svg, { Circle } from 'react-native-svg';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import tripApi, { TripSummary } from '../api/tripApi';
+import VehicleSelectModal from '../components/VehicleSelectModal';
+import { useAlertStore } from '../store/useAlertStore';
 
 const { width } = Dimensions.get('window');
 
@@ -23,6 +25,9 @@ export default function DrivingHis() {
     const navigation = useNavigation();
     const [trips, setTrips] = useState<TripSummary[]>([]);
     const [loading, setLoading] = useState(true);
+    const [vehicleChangeTripId, setVehicleChangeTripId] = useState<string | null>(null);
+    const [changing, setChanging] = useState(false);
+    const showAlert = useAlertStore((s) => s.showAlert);
 
     // Derived State using useMemo
     const stats = useMemo(() => {
@@ -85,20 +90,34 @@ export default function DrivingHis() {
             const stored = await AsyncStorage.getItem('primaryVehicle');
             if (stored) {
                 const vehicle = JSON.parse(stored);
-                // Fetch trips for ONLY the primary vehicle
                 const response = await tripApi.getTrips(vehicle.vehicleId);
                 if (response.success && response.data) {
-                    // Sort by date desc
                     const sorted = [...response.data].sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
                     setTrips(sorted);
                 }
-            } else {
-                // Handle no primary vehicle
             }
         } catch (e) {
             console.error('Failed to load trips', e);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleChangeVehicleSelect = async (vehicle: { vehicleId: string }) => {
+        if (!vehicleChangeTripId) return;
+        setChanging(true);
+        try {
+            const res = await tripApi.changeTripVehicle(vehicleChangeTripId, vehicle.vehicleId);
+            if (res.success) {
+                showAlert('변경 완료', '해당 주행이 선택한 차량으로 재할당되었습니다.', 'SUCCESS');
+                setVehicleChangeTripId(null);
+                await loadTrips();
+            }
+        } catch (e) {
+            console.error('Change trip vehicle failed', e);
+            showAlert('변경 실패', '차량 재할당에 실패했습니다. 다시 시도해주세요.', 'ERROR');
+        } finally {
+            setChanging(false);
         }
     };
 
@@ -149,18 +168,18 @@ export default function DrivingHis() {
                     ) : (
                         <>
                             {/* Score Section */}
-                            <View className="items-center justify-center py-6 relative">
+                            <View className="items-center justify-center py-2 relative">
                                 {/* Background mesh effect approximation */}
                                 <View className="absolute inset-0 opacity-10" style={{
                                     backgroundColor: 'transparent',
                                 }} />
 
-                                <Text className="text-gray-400 text-xs font-medium tracking-widest uppercase mb-6">종합 안전 점수</Text>
+                                <Text className="text-gray-400 text-xs font-medium tracking-widest uppercase mb-2">종합 안전 점수</Text>
 
-                                <View className="relative w-64 h-64 justify-center items-center">
+                                <View className="relative w-48 h-48 justify-center items-center">
                                     <View className="absolute inset-0 rounded-full border border-gray-800 border-dashed" style={{ opacity: 0.5 }} />
 
-                                    <Svg height="250" width="250" viewBox="0 0 100 100" style={{ transform: [{ rotate: '-90deg' }] }}>
+                                    <Svg height="180" width="180" viewBox="0 0 100 100" style={{ transform: [{ rotate: '-90deg' }] }}>
                                         <Circle
                                             cx="50"
                                             cy="50"
@@ -183,27 +202,27 @@ export default function DrivingHis() {
                                     </Svg>
 
                                     <View className="absolute inset-0 items-center justify-center">
-                                        <Text className="text-6xl font-bold text-white tracking-tighter" style={{ textShadowColor: 'rgba(13, 127, 242, 0.5)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 10 }}>
+                                        <Text className="text-5xl font-bold text-white tracking-tighter" style={{ textShadowColor: 'rgba(13, 127, 242, 0.5)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 10 }}>
                                             {stats.avgScore}
                                         </Text>
-                                        <Text className="text-[#0d7ff2] text-sm font-bold mt-1 tracking-widest uppercase">
+                                        <Text className="text-[#0d7ff2] text-xs font-bold mt-1 tracking-widest uppercase">
                                             {stats.avgScore >= 90 ? '최우수 등급' : stats.avgScore >= 70 ? '양호' : '주의 필요'}
                                         </Text>
                                     </View>
                                 </View>
 
                                 {/* Stats Row */}
-                                <View className="flex-row justify-between w-full max-w-[300px] mt-6 px-4">
+                                <View className="flex-row justify-between w-full max-w-[300px] mt-4 px-4">
                                     <View className="items-center">
                                         <Text className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">총 주행 거리</Text>
                                         <Text className="text-lg font-bold text-white">{stats.totalDistance.toLocaleString()} <Text className="text-xs text-gray-400 font-normal">km</Text></Text>
                                     </View>
-                                    <View className="w-px h-10 bg-gray-800" />
+                                    <View className="w-px h-8 bg-gray-800" />
                                     <View className="items-center">
                                         <Text className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">안전 운행</Text>
                                         <Text className="text-lg font-bold text-[#0bda5b]">{stats.safetyRate}%</Text>
                                     </View>
-                                    <View className="w-px h-10 bg-gray-800" />
+                                    <View className="w-px h-8 bg-gray-800" />
                                     <View className="items-center">
                                         <Text className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">평균 연비</Text>
                                         <Text className="text-lg font-bold text-[#1E90FF]">{stats.avgFuelEff} <Text className="text-xs text-gray-400 font-normal">km/L</Text></Text>
@@ -213,18 +232,18 @@ export default function DrivingHis() {
 
                             {/* Chart Section - Simplified for MVP without full graph library */}
                             {/* Visual representation of weekly safety trend */}
-                            <View className="bg-surface-dark border border-gray-800 rounded-xl p-5 overflow-hidden">
-                                <View className="flex-row justify-between items-center mb-6">
-                                    <Text className="text-white text-base font-bold">주간 안전 지수 변화</Text>
-                                    <View className="bg-primary/20 border border-primary/30 px-2 py-1 rounded">
-                                        <Text className="text-xs text-primary">이번주</Text>
+                            <View className="bg-surface-dark border border-gray-800 rounded-xl p-4 overflow-hidden mb-2">
+                                <View className="flex-row justify-between items-center mb-4">
+                                    <Text className="text-white text-sm font-bold">주간 안전 지수 변화</Text>
+                                    <View className="bg-primary/20 border border-primary/30 px-2 py-0.5 rounded">
+                                        <Text className="text-[10px] text-primary">이번주</Text>
                                     </View>
                                 </View>
 
-                                <View className="h-40 w-full relative flex-row items-end justify-between px-2 pb-6">
+                                <View className="h-24 w-full relative flex-row items-end justify-between px-2 pb-2">
                                     {/* Bars instead of complex path for creating simpler dynamic graph */}
                                     {weeklyData.map((score, idx) => (
-                                        <View key={idx} className="items-center gap-2">
+                                        <View key={idx} className="items-center gap-1">
                                             <View
                                                 className="w-2 rounded-full bg-blue-500"
                                                 style={{
@@ -244,14 +263,14 @@ export default function DrivingHis() {
                             <View>
                                 <View className="flex-row items-center justify-between mb-4 px-1">
                                     <Text className="text-white text-lg font-bold">최근 주행 기록</Text>
-                                    <TouchableOpacity>
+                                    <TouchableOpacity onPress={() => navigation.navigate('DrivingList' as never)}>
                                         <Text className="text-[#0d7ff2] text-sm font-medium">전체보기</Text>
                                     </TouchableOpacity>
                                 </View>
 
-                                {/* List Mapping */}
+                                {/* List Mapping - Show only 1 recent */}
                                 <View className="gap-3">
-                                    {trips.slice(0, 5).map((trip, index) => (
+                                    {trips.slice(0, 1).map((trip, index) => (
                                         <View key={index} className="bg-surface-dark rounded-xl border border-primary/30 p-4 relative overflow-hidden">
                                             <View className="flex-row justify-between items-center mb-4">
                                                 <View className="flex-row items-center gap-3">
@@ -260,9 +279,10 @@ export default function DrivingHis() {
                                                     </View>
                                                     <Text className="text-white font-bold text-lg">{formatDate(trip.startTime)}</Text>
                                                 </View>
-                                                <View className="flex-row items-center gap-1 bg-surface-highlight/50 px-2 py-1 rounded border border-gray-700">
-                                                    <View className="w-2 h-2 rounded-full bg-success" style={{ shadowColor: '#0bda5b', shadowOpacity: 0.5, shadowRadius: 5 }} />
-                                                    <Text className="text-xs font-medium text-gray-300">{trip.driveScore}점</Text>
+                                                {/* Score Badge */}
+                                                <View className="flex-row items-center gap-1 bg-surface-highlight/20 px-3 py-1.5 rounded-full border border-gray-700">
+                                                    <View className={`w-2 h-2 rounded-full ${trip.driveScore >= 80 ? 'bg-success' : trip.driveScore >= 60 ? 'bg-yellow-500' : 'bg-red-500'}`} style={{ shadowColor: '#0bda5b', shadowOpacity: 0.5, shadowRadius: 5 }} />
+                                                    <Text className="text-sm font-bold text-white">{trip.driveScore}점</Text>
                                                 </View>
                                             </View>
 
@@ -276,6 +296,14 @@ export default function DrivingHis() {
                                                     <Text className="text-white font-medium text-base">{trip.averageSpeed.toFixed(0)} <Text className="text-xs text-gray-400">km/h</Text></Text>
                                                 </View>
                                             </View>
+                                            <TouchableOpacity
+                                                className="mt-3 flex-row items-center gap-1 self-start"
+                                                onPress={() => setVehicleChangeTripId(trip.tripId)}
+                                                disabled={changing}
+                                            >
+                                                <MaterialIcons name="swap-horiz" size={16} color="#0d7ff2" />
+                                                <Text className="text-[#0d7ff2] text-xs font-medium">차량 변경</Text>
+                                            </TouchableOpacity>
                                         </View>
                                     ))}
                                 </View>
@@ -284,6 +312,14 @@ export default function DrivingHis() {
                     )}
                 </View>
             </ScrollView>
+
+            <VehicleSelectModal
+                visible={vehicleChangeTripId !== null}
+                onClose={() => !changing && setVehicleChangeTripId(null)}
+                onSelect={handleChangeVehicleSelect}
+                title="이 주행을 할당할 차량 선택"
+                description="선택한 차량으로 해당 주행 기록이 재할당됩니다."
+            />
         </SafeAreaView>
     );
 }

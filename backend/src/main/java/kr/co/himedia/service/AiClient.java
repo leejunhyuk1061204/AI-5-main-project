@@ -41,7 +41,7 @@ public class AiClient {
     @Value("${ai.server.url.comprehensive:http://localhost:8001/api/v1/connect/predict/comprehensive}")
     private String aiServerUnifiedUrl;
 
-    @Value("${ai.server.url.anomaly:http://localhost:8001/api/v1/connect/predict/anomaly}")
+    @Value("${ai.server.url.anomaly:http://localhost:8001/api/v1/predict/anomaly}")
     private String aiServerAnomalyUrl;
 
     @Value("${ai.server.url.wear-factor:http://localhost:8001/api/v1/connect/predict/wear-factor}")

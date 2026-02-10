@@ -283,4 +283,153 @@ public class TripService {
 
         return tripSummaryRepository.save(trip);
     }
+
+    /**
+     * 주행 차량 재할당: trip_summaries 및 해당 구간 obd_logs의 vehicles_id 변경 후 통계 재집계.
+     * 소모품 반영은 하지 않음. 진단(RAG+GPT) 재실행은 별도 트리거.
+     */
+    @Transactional
+    public TripSummary changeTripVehicle(UUID userId, UUID tripId, UUID newVehicleId) {
+        TripSummary trip = tripSummaryRepository.findByTripId(tripId)
+                .orElseThrow(() -> new BaseException(ErrorCode.TRIP_NOT_FOUND));
+
+        kr.co.himedia.entity.Vehicle oldVehicle = vehicleRepository.findByVehicleIdAndDeletedAtIsNull(trip.getVehicleId())
+                .orElseThrow(() -> new BaseException(ErrorCode.VEHICLE_NOT_FOUND));
+        if (!oldVehicle.getUserId().equals(userId))
+            throw new BaseException(ErrorCode.VEHICLE_NOT_FOUND);
+
+        kr.co.himedia.entity.Vehicle newVehicle = vehicleRepository.findByVehicleIdAndDeletedAtIsNull(newVehicleId)
+                .orElseThrow(() -> new BaseException(ErrorCode.VEHICLE_NOT_FOUND));
+        if (!newVehicle.getUserId().equals(userId))
+            throw new BaseException(ErrorCode.VEHICLE_NOT_FOUND);
+
+        UUID oldVehicleId = trip.getVehicleId();
+        if (oldVehicleId.equals(newVehicleId)) {
+            return trip;
+        }
+
+        java.time.OffsetDateTime startOffset = trip.getStartTime().atZone(java.time.ZoneId.systemDefault()).toOffsetDateTime();
+        java.time.OffsetDateTime endOffset = (trip.getEndTime() != null)
+                ? trip.getEndTime().atZone(java.time.ZoneId.systemDefault()).toOffsetDateTime()
+                : java.time.OffsetDateTime.now();
+
+        List<ObdLog> oldLogs = obdLogRepository.findByVehicleIdAndTimeBetweenOrderByTimeAsc(oldVehicleId, startOffset, endOffset);
+        List<ObdLog> newLogs = oldLogs.stream()
+                .map(log -> ObdLog.builder()
+                        .time(log.getTime())
+                        .vehicleId(newVehicleId)
+                        .rpm(log.getRpm())
+                        .speed(log.getSpeed())
+                        .voltage(log.getVoltage())
+                        .coolantTemp(log.getCoolantTemp())
+                        .engineLoad(log.getEngineLoad())
+                        .fuelTrimShort(log.getFuelTrimShort())
+                        .fuelTrimLong(log.getFuelTrimLong())
+                        .intakeTemp(log.getIntakeTemp())
+                        .map(log.getMap())
+                        .maf(log.getMaf())
+                        .throttlePos(log.getThrottlePos())
+                        .engineRuntime(log.getEngineRuntime())
+                        .jsonExtra(log.getJsonExtra())
+                        .build())
+                .collect(Collectors.toList());
+
+        if (!newLogs.isEmpty()) {
+            obdLogRepository.saveAll(newLogs);
+        }
+        obdLogRepository.deleteByVehicleIdAndTimeBetween(oldVehicleId, startOffset, endOffset);
+
+        TripSummary newTrip = TripSummary.builder()
+                .startTime(trip.getStartTime())
+                .vehicleId(newVehicleId)
+                .tripId(trip.getTripId())
+                .endTime(trip.getEndTime())
+                .fuelConsumed(trip.getFuelConsumed() != null ? trip.getFuelConsumed() : 0.0)
+                .build();
+
+        if (!newLogs.isEmpty()) {
+            double sumSpeed = 0.0, maxSpeed = 0.0, distance = 0.0;
+            int driveScore = 100;
+            double sumRpm = 0.0, sumEngineLoad = 0.0, sumMaf = 0.0, sumThrottlePos = 0.0, sumFuelTrim = 0.0;
+            double maxCoolantTemp = -100.0, maxEngineLoad = 0.0, minBatteryVoltage = 0.0;
+            int overheatDurationSec = 0, idleTime = 0, hardAccelCount = 0, hardBrakeCount = 0;
+            double prevSpeed = -1.0;
+
+            for (ObdLog log : newLogs) {
+                double speed = log.getSpeed() != null ? log.getSpeed() : 0.0;
+                double rpm = log.getRpm() != null ? log.getRpm() : 0.0;
+                double coolant = log.getCoolantTemp() != null ? log.getCoolantTemp() : 0.0;
+                double voltage = log.getVoltage() != null ? log.getVoltage() : 0.0;
+                double load = log.getEngineLoad() != null ? log.getEngineLoad() : 0.0;
+                double maf = log.getMaf() != null ? log.getMaf() : 0.0;
+                double throttle = log.getThrottlePos() != null ? log.getThrottlePos() : 0.0;
+                double fuelTrim = log.getFuelTrimShort() != null ? log.getFuelTrimShort() : 0.0;
+
+                if (speed > maxSpeed) maxSpeed = speed;
+                sumSpeed += speed;
+                sumRpm += rpm;
+                sumEngineLoad += load;
+                sumMaf += maf;
+                sumThrottlePos += throttle;
+                sumFuelTrim += fuelTrim;
+                if (coolant > maxCoolantTemp) maxCoolantTemp = coolant;
+                if (load > maxEngineLoad) maxEngineLoad = load;
+                if (voltage > 0 && (minBatteryVoltage == 0 || voltage < minBatteryVoltage)) minBatteryVoltage = voltage;
+                if (coolant >= 95.0) overheatDurationSec++;
+                if (speed < 1.0 && rpm > 0) {
+                    idleTime++;
+                    if (idleTime % 60 == 0) driveScore = Math.max(0, driveScore - 1);
+                }
+                if (prevSpeed != -1.0) {
+                    double speedDelta = speed - prevSpeed;
+                    if (speedDelta >= 10.0) { hardAccelCount++; driveScore = Math.max(0, driveScore - 5); }
+                    if (speedDelta <= -10.0) { hardBrakeCount++; driveScore = Math.max(0, driveScore - 5); }
+                }
+                prevSpeed = speed;
+                distance += (speed / 3600.0);
+                if (speed > 140) driveScore = Math.max(0, driveScore - 1);
+                if (rpm > 5000) driveScore = Math.max(0, driveScore - 1);
+                if (throttle > 90) driveScore = Math.max(0, driveScore - 1);
+                if (load > 90) driveScore = Math.max(0, driveScore - 1);
+            }
+
+            int count = newLogs.size();
+            newTrip.setAverageSpeed(sumSpeed / count);
+            newTrip.setTopSpeed(maxSpeed);
+            newTrip.setDistance(distance);
+            newTrip.setDriveScore(driveScore);
+            newTrip.setAvgRpm(sumRpm / count);
+            newTrip.setAvgEngineLoad(sumEngineLoad / count);
+            newTrip.setAvgMaf(sumMaf / count);
+            newTrip.setAvgThrottlePos(sumThrottlePos / count);
+            newTrip.setAvgFuelTrim(sumFuelTrim / count);
+            newTrip.setMaxCoolantTemp(maxCoolantTemp);
+            newTrip.setMaxEngineLoad(maxEngineLoad);
+            newTrip.setMinBatteryVoltage(minBatteryVoltage);
+            newTrip.setOverheatDurationSec(overheatDurationSec);
+            newTrip.setIdleTime(idleTime);
+            newTrip.setHardAccelCount(hardAccelCount);
+            newTrip.setHardBrakeCount(hardBrakeCount);
+        } else {
+            newTrip.setDistance(0.0);
+            newTrip.setAverageSpeed(0.0);
+            newTrip.setTopSpeed(0.0);
+            newTrip.setDriveScore(100);
+            newTrip.setAvgRpm(0.0);
+            newTrip.setAvgEngineLoad(0.0);
+            newTrip.setAvgMaf(0.0);
+            newTrip.setAvgThrottlePos(0.0);
+            newTrip.setAvgFuelTrim(0.0);
+            newTrip.setMaxCoolantTemp(0.0);
+            newTrip.setMaxEngineLoad(0.0);
+            newTrip.setMinBatteryVoltage(0.0);
+            newTrip.setOverheatDurationSec(0);
+            newTrip.setIdleTime(0);
+            newTrip.setHardAccelCount(0);
+            newTrip.setHardBrakeCount(0);
+        }
+
+        tripSummaryRepository.delete(trip);
+        return tripSummaryRepository.save(newTrip);
+    }
 }

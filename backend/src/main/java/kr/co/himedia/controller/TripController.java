@@ -3,14 +3,16 @@ package kr.co.himedia.controller;
 import kr.co.himedia.common.ApiResponse;
 import kr.co.himedia.dto.trip.TripEndRequest;
 import kr.co.himedia.dto.trip.TripStartRequest;
+import kr.co.himedia.dto.trip.TripVehicleChangeRequest;
 import kr.co.himedia.entity.TripSummary;
+import kr.co.himedia.security.CustomUserDetails;
 import kr.co.himedia.service.TripService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.validation.Valid;
-import org.springframework.http.ResponseEntity;
-
 import java.util.List;
 import java.util.UUID;
 
@@ -55,5 +57,17 @@ public class TripController {
     @PostMapping("/end")
     public ResponseEntity<ApiResponse<TripSummary>> endTrip(@Valid @RequestBody TripEndRequest req) {
         return ResponseEntity.ok(ApiResponse.success(tripService.endTrip(req.getTripId())));
+    }
+
+    /**
+     * 주행 차량 재할당 (v1.7)
+     */
+    @PatchMapping("/{tripId}/vehicle")
+    public ResponseEntity<ApiResponse<TripSummary>> changeTripVehicle(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable UUID tripId,
+            @Valid @RequestBody TripVehicleChangeRequest req) {
+        return ResponseEntity.ok(ApiResponse.success(
+                tripService.changeTripVehicle(userDetails.getUserId(), tripId, req.getNewVehicleId())));
     }
 }

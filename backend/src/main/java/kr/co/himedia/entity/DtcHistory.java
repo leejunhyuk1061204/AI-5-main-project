@@ -67,7 +67,7 @@ public class DtcHistory {
     }
 
     public enum DtcType {
-        STORED, PENDING, PERMANENT
+        STORED, PENDING, PERMANENT, FREEZE_FRAME
     }
 
     public enum DtcStatus {
