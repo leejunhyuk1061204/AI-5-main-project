@@ -20,7 +20,7 @@ from pathlib import Path
 # --- 버전/리스트 (v3 = 3번 리스트) ---
 VERSION = "v3"
 LIST_INDEX = 2
-NUM_LISTS = 3
+NUM_LISTS = 6
 
 # --- 경로 ---
 SOURCE_DIR = r"G:\내 드라이브\정비지침서\원본_zip"
