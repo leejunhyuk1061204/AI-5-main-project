@@ -31,7 +31,28 @@ python run_emulator.py config_k5.yml      # COM4 + DEV_002
 - **vehicle_id**: 사용할 차량 ID. `vehicles` 중 하나. 없으면 첫 번째 차량.
 - **connection.port**: 시리얼 포트 (예: COM3). BLE 동글으로 가상 COM이 생성되면 그 포트 번호 지정.
 - **mode**: `replay`(CSV 재생) 또는 `static`(초기값만).
-- **vehicles**: 차량별 id, name, vin, csv_file, mappings, dtcs.
+- **vehicles**: 차량별 id, name, vin, **calid**, **cvn**, csv_file, mappings, dtcs.
+  - **vin**: 09 02 응답 (차량 특정 1단계). 백엔드 `vehicles.vin`과 맞추면 VIN 매칭 테스트 가능.
+  - **calid**: 09 04 응답 (ASCII). **cvn**: 09 06 응답 (8자 hex, 예: `A1B2C3D4`). 백엔드 `obd_device_vehicle_history`에 넣어 둔 값과 맞추면 CALID/CVN 경로 테스트 가능.
+
+## 차량 특정 로직(VIN/CALID/CVN) 앱 테스트
+
+앱이 09 모드로 읽은 VIN/CALID/CVN을 서버 `resolveVehicle`에 보내고, 서버가 **VIN → CALID → CVN → 마지막 접속 → 대표 차량** 순으로 차량을 정하는 흐름을 검증하려면:
+
+1. **config.yml에서 보낼 값 지정**  
+   - `emulator/config.yml`의 `vehicles[].vin`, `calid`, `cvn`을 원하는 값으로 설정. (이미 DEV_001 등에 예시가 있음.)
+2. **백엔드와 맞추기**  
+   - **VIN 경로**: 앱 로그인 계정으로 등록한 차량 중 **한 대의 VIN**을 config의 `vin`과 동일하게 넣어 둠. (DB에 해당 vehicle이 있어야 함.)  
+   - **CALID/CVN 경로**: 한 번이라도 해당 deviceId + vehicleId로 `recordConnect(calid, cvn)`가 호출된 적 있으면, 같은 `calid`/`cvn`을 config에 넣어 두면 서버가 이력으로 매칭.
+3. **에뮬레이터 실행**  
+   - COM3가 블루투스 수신 포트라면: `connection.port: "COM3"` 인 상태로 `python run_emulator.py` 실행 (또는 `--port COM3 --vehicle DEV_001`).
+4. **앱에서 연결**  
+   - 폰에서 PC(블루투스)로 OBD SPP 연결 후, 앱에서 해당 기기 선택해 연결.
+5. **결과 확인**  
+   - 앱: 연결된 차량명이 헤더 등에 표시되는지 확인.  
+   - 백엔드 로그: `[resolveVehicle] step=VIN|CALID|CVN|LAST_CONNECTED|PRIMARY` 로 어느 단계에서 결정됐는지 확인.
+
+**COM3에서 폰으로 보내는 값**은 모두 **config.yml의 해당 vehicle의 vin, calid, cvn**으로 지정됩니다. 값을 바꾼 뒤 에뮬레이터를 다시 실행하면 됩니다.
 
 ## PC 블루투스(BLE 5.0 동글) + 폰 연결
 

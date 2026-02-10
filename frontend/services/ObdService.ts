@@ -93,9 +93,9 @@ class ObdService {
     private connectionErrorCount: number = 0;
     private readonly MAX_CONNECTION_ERROR_BEFORE_DISCONNECT = 3;
     private disconnectionHandled: boolean = false;
-    // Classic BT: 연속 빈 응답(Available=0) 카운터 (서버/어댑터 다운 감지용)
-    private emptyResponseConsecutiveCount: number = 0;
-    private readonly MAX_EMPTY_RESPONSE_BEFORE_DISCONNECT = 20;
+
+    /** 수동 연결(설정 UI)로 붙인 세션: 끊기면 재연결 시도 안 함 */
+    private manualConnectSession: boolean = false;
 
     // BLE 관련
     private currentDeviceId: string | null = null;
@@ -123,6 +123,8 @@ class ObdService {
     private calid: string | null = null;
     private cvn: string | null = null;
     private resolveVehicleTimer: ReturnType<typeof setTimeout> | null = null;
+    private resolveVehicleFallbackTimer: ReturnType<typeof setTimeout> | null = null;
+    private resolveVehicleFired = false;
     private lastDtcCodes: string = '';
     private lastFreezeDtc: string = '';
 
@@ -186,6 +188,11 @@ class ObdService {
         console.log('[ObdService] testMode=', value);
     }
 
+    /** 수동 연결(ObdConnectFlow)로 붙었을 때 true. 끊기면 attemptReconnect 하지 않음 */
+    setManualConnectSession(value: boolean): void {
+        this.manualConnectSession = value;
+    }
+
     constructor() {
         if (Platform.OS !== 'web') {
             const BleManagerModule = NativeModules.BleManager;
@@ -246,6 +253,10 @@ class ObdService {
             clearTimeout(this.resolveVehicleTimer);
             this.resolveVehicleTimer = null;
         }
+        if (this.resolveVehicleFallbackTimer) {
+            clearTimeout(this.resolveVehicleFallbackTimer);
+            this.resolveVehicleFallbackTimer = null;
+        }
 
         // 폴링 플래그 리셋
         this.isPolling = false;
@@ -259,31 +270,70 @@ class ObdService {
     }
 
     private async doResolveAndConnect() {
-        this.resolveVehicleTimer = null;
-        if (this.testMode) return;
+        if (this.resolveVehicleTimer) {
+            clearTimeout(this.resolveVehicleTimer);
+            this.resolveVehicleTimer = null;
+        }
+        if (this.resolveVehicleFallbackTimer) {
+            clearTimeout(this.resolveVehicleFallbackTimer);
+            this.resolveVehicleFallbackTimer = null;
+        }
+        if (this.resolveVehicleFired) {
+            console.log('[ObdService] doResolveAndConnect already fired, skip');
+            return;
+        }
+        this.resolveVehicleFired = true;
+
+        if (this.testMode) {
+            console.log('[ObdService] doResolveAndConnect skip (testMode)');
+            return;
+        }
         const deviceId = this.getDeviceId();
-        if (!deviceId || !this.vin) return;
+        if (!deviceId) {
+            console.warn('[ObdService] doResolveAndConnect no deviceId, skip');
+            return;
+        }
+
+        const vin = this.vin || undefined;
+        const calid = this.calid || undefined;
+        const cvn = this.cvn || undefined;
+        console.log('[ObdService] doResolveAndConnect call resolveVehicle deviceId=', deviceId, 'vin=', vin ? '***' : null, 'calid=', calid ? '***' : null, 'cvn=', cvn ? '***' : null);
+
         try {
             const res = await obdDeviceApi.resolveVehicle({
                 deviceId,
-                vin: this.vin || undefined,
-                calid: this.calid || undefined,
-                cvn: this.cvn || undefined
+                vin,
+                calid,
+                cvn
             });
-            if (!res.success || !res.data?.vehicleId) return;
+            if (!res.success || !res.data?.vehicleId) {
+                console.warn('[ObdService] resolveVehicle no vehicleId in response');
+                return;
+            }
             const vehicleId = res.data.vehicleId;
+            console.log('[ObdService] resolveVehicle success vehicleId=', vehicleId);
 
-            // 차량 특정이 성공한 시점에는 VIN/ CALID / CVN이 거의 다 채워져 있으므로
-            // 연결 이력에도 함께 기록해서, 이후에는 CALID/CVN만으로도 차량을 잘 찾을 수 있게 한다.
             await obdDeviceApi.recordConnect(deviceId, {
                 vehicleId,
                 calid: this.calid || undefined,
                 cvn: this.cvn || undefined
             });
             this.setVehicleId(vehicleId);
+            useBleStore.getState().setConnectedVehicleId(vehicleId);
         } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
             console.error('[ObdService] resolve-vehicle or recordConnect failed. reason=', msg);
+        }
+    }
+
+    private tryResolveWhenIdentifiersReady() {
+        if (this.calid !== null && this.cvn !== null) {
+            if (this.resolveVehicleTimer) {
+                clearTimeout(this.resolveVehicleTimer);
+                this.resolveVehicleTimer = null;
+            }
+            console.log('[ObdService] CALID+CVN both received, trigger doResolveAndConnect');
+            this.doResolveAndConnect();
         }
     }
 
@@ -301,7 +351,6 @@ class ObdService {
         this.isDisconnectRequested = false;
         this.connectionErrorCount = 0;
         this.disconnectionHandled = false;
-        this.emptyResponseConsecutiveCount = 0;
         useBleStore.getState().setConnectedDeviceName(device.name || 'Classic Device');
         useBleStore.getState().setConnectedDevice(device.address);
         useBleStore.getState().setStatus('connected');
@@ -385,12 +434,14 @@ class ObdService {
             } else {
                 console.warn('[ObdService] OBD characteristics not found. deviceId=', this.currentDeviceId);
                 useBleStore.getState().setStatus('disconnected');
+                useBleStore.getState().setConnectedVehicleId(null);
             }
 
         } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
             console.error('[ObdService] BLE configure failed. reason=', msg);
             useBleStore.getState().setStatus('disconnected');
+            useBleStore.getState().setConnectedVehicleId(null);
         }
     }
 
@@ -410,7 +461,18 @@ class ObdService {
             await this.sendCommand(cmd);
             await this.delay(150);
         }
+        this.resolveVehicleFired = false;
         this.enqueue(OBD_PIDS.VIN, QueuePriority.NORMAL);
+        this.enqueue(OBD_PIDS.CALID, QueuePriority.NORMAL);
+        this.enqueue(OBD_PIDS.CVN, QueuePriority.NORMAL);
+        if (this.resolveVehicleFallbackTimer) clearTimeout(this.resolveVehicleFallbackTimer);
+        this.resolveVehicleFallbackTimer = setTimeout(() => {
+            this.resolveVehicleFallbackTimer = null;
+            if (!this.resolveVehicleFired) {
+                console.log('[ObdService] resolve fallback 12s: no 09 response in time, call doResolveAndConnect');
+                this.doResolveAndConnect();
+            }
+        }, 12000);
     }
 
     // ===== 명령 전송 =====
@@ -488,8 +550,7 @@ class ObdService {
                     await BackgroundService.start();
                 } catch (e) {
                     const msg = e instanceof Error ? e.message : String(e);
-                    console.error('[ObdService] Foreground Service start failed, stopping polling. reason=', msg);
-                    this.stopPolling();
+                    console.warn('[ObdService] Foreground Service start failed, continuing polling without background reconnect. reason=', msg);
                 }
             })();
         }
@@ -861,43 +922,17 @@ class ObdService {
                 }
                 console.log('[ObdService] sent', command);
 
-                // 응답 처리 대기 (BLE: Promise.race로 보장, P1. Mode 09는 VIN/CALID/CVN 등 응답 느린 경우 많아서 20초)
-                if (this.connectionType === 'classic' && this.classicDevice) {
-                    await this.delay(200);
-                    if (this.classicDevice) {
-                        const response = await ClassicBtService.readAvailable(this.classicDevice);
-                        if (response) {
-                            // Classic BT에서 실제 응답이 오면 빈 응답 카운터 리셋
-                            this.emptyResponseConsecutiveCount = 0;
-                            this.handleResponse(response);
-                        } else {
-                            // Available=0 → 빈 응답으로 간주하고 연속 카운트
-                            this.emptyResponseConsecutiveCount++;
-                            console.warn('[ObdService] Empty response consecutive count:', this.emptyResponseConsecutiveCount);
-
-                            // 연속 3번 빈 응답이면 연결 끊김으로 간주하고 재연결 플로우 진입
-                            if (this.emptyResponseConsecutiveCount >= this.MAX_EMPTY_RESPONSE_BEFORE_DISCONNECT && !this.disconnectionHandled) {
-                                this.disconnectionHandled = true;
-                                console.warn('[ObdService] Empty response occurred', this.MAX_EMPTY_RESPONSE_BEFORE_DISCONNECT, 'times consecutively, treating as disconnection');
-                                this.pidRequestStartTime = null;
-                                this.currentPid = null;
-                                this.handleDisconnection();
-                                continue;
-                            }
-                        }
-                    }
-                } else {
-                    const maxWaitMs = pid.mode === '09' ? 20000 : 10000;
-                    const responsePromise = new Promise<void>(r => { this.responseResolve = r; });
-                    await Promise.race([responsePromise, this.delay(maxWaitMs)]);
-                    if (this.currentPid !== null) {
-                        console.warn(`[ObdService] PID ${pid.mode}:${pid.pid} response timeout after ${maxWaitMs}ms`);
-                        this.pidRequestStartTime = null;
-                        this.incrementPidFailCount(pid, 'response timeout');
-                        this.currentPid = null;
-                    }
-                    this.responseResolve = null;
+                // 응답 처리 대기 (BLE/Classic 공통: 응답 기반, onDataReceived 또는 notify로 responseResolve 호출)
+                const maxWaitMs = 10000;
+                const responsePromise = new Promise<void>(r => { this.responseResolve = r; });
+                await Promise.race([responsePromise, this.delay(maxWaitMs)]);
+                if (this.currentPid !== null) {
+                    console.warn(`[ObdService] PID ${pid.mode}:${pid.pid} response timeout after ${maxWaitMs}ms`);
+                    this.pidRequestStartTime = null;
+                    this.incrementPidFailCount(pid, 'response timeout');
+                    this.currentPid = null;
                 }
+                this.responseResolve = null;
             }
         } finally {
             this.isProcessingQueue = false;
@@ -1003,19 +1038,26 @@ class ObdService {
                     this.lastFreezeDtc = result as string;
                     break;
 
-                // Mode 09 02: VIN → 차량 특정용 09 04/06 수집 후 resolve-vehicle
+                // Mode 09 02: VIN → 차량 특정용 (0904/0906은 초기화 시 이미 enqueue됨)
                 case '0902':
                     this.vin = result as string;
-                    this.enqueue(OBD_PIDS.CALID, QueuePriority.NORMAL);
-                    this.enqueue(OBD_PIDS.CVN, QueuePriority.NORMAL);
+                    console.log('[ObdService] 0902 VIN received');
                     if (this.resolveVehicleTimer) clearTimeout(this.resolveVehicleTimer);
-                    this.resolveVehicleTimer = setTimeout(() => this.doResolveAndConnect(), 2500);
+                    if (this.resolveVehicleFallbackTimer) {
+                        clearTimeout(this.resolveVehicleFallbackTimer);
+                        this.resolveVehicleFallbackTimer = null;
+                    }
+                    this.resolveVehicleTimer = setTimeout(() => this.doResolveAndConnect(), 5000);
                     break;
                 case '0904':
                     this.calid = (result as string)?.toString() || null;
+                    console.log('[ObdService] 0904 CALID received');
+                    this.tryResolveWhenIdentifiersReady();
                     break;
                 case '0906':
                     this.cvn = (result as string)?.toString() || null;
+                    console.log('[ObdService] 0906 CVN received');
+                    this.tryResolveWhenIdentifiersReady();
                     break;
             }
         }
@@ -1243,6 +1285,24 @@ class ObdService {
         this.vehicleId = id;
     }
 
+    getCalid(): string | null {
+        return this.calid;
+    }
+
+    getCvn(): string | null {
+        return this.cvn;
+    }
+
+    /**
+     * 연결 차량 변경 시 09 모드(CALID/CVN) 재요청.
+     * 호출 후 일정 시간 대기하면 최신 calid/cvn이 채워지므로, 그 다음 recordConnect 시 사용.
+     */
+    async requestCalidCvnRefresh(): Promise<void> {
+        this.enqueue(OBD_PIDS.CALID, QueuePriority.HIGH);
+        this.enqueue(OBD_PIDS.CVN, QueuePriority.HIGH);
+        await this.delay(5000);
+    }
+
     private collectData(data: ObdData) {
         // 안전 장치: 버퍼가 비정상적으로 커지면 정리
         if (this.dataBuffer.length >= 1000) {
@@ -1452,8 +1512,8 @@ class ObdService {
         // 재시도/에러 관련 상태를 완전히 초기화하여, 이후 새 세션에서 다시 공정하게 시도할 수 있도록 한다.
         this.reconnectAttempts = 0;
         this.connectionErrorCount = 0;
-        this.emptyResponseConsecutiveCount = 0;
         this.disconnectionHandled = false;
+        this.manualConnectSession = false;
 
         // 주행 마감 / 배치 업로드 / BackgroundService.stop 등이 모두 끝난 뒤에
         // 실제 BT disconnect를 수행하기 위해, stopPolling을 반드시 기다린다.
@@ -1520,13 +1580,26 @@ class ObdService {
 
     private handleDisconnection() {
         if (this.isDisconnectRequested) return;
-        console.warn('[ObdService] handleDisconnection: detected connection loss. stopping polling and scheduling reconnect.');
 
-        // 재연결 시도 동안에는 폴링을 중지해서 불필요한 PID 전송/실패를 막는다.
         if (this.isPolling) {
             this.stopPolling();
         }
 
+        if (this.manualConnectSession || this.testMode) {
+            this.manualConnectSession = false;
+            this.connectionType = null;
+            this.currentDeviceId = null;
+            this.classicDevice = null;
+            if (this.classicDataSubscription) {
+                this.classicDataSubscription.remove();
+                this.classicDataSubscription = null;
+            }
+            useBleStore.getState().reset();
+            console.warn('[ObdService] handleDisconnection: manual/test session, no reconnect');
+            return;
+        }
+
+        console.warn('[ObdService] handleDisconnection: connection loss, scheduling reconnect.');
         this.connectionType = null;
         this.attemptReconnect();
     }

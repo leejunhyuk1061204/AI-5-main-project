@@ -6,6 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import BaseScreen from '../components/layout/BaseScreen';
 import { useAlertStore } from '../store/useAlertStore';
+import { useBleStore } from '../store/useBleStore';
 import ObdConnect from './ObdConnect';
 
 import { useVehicleStore } from '../store/useVehicleStore';
@@ -137,6 +138,7 @@ export default function CarManage() {
                 });
                 await obdDeviceApi.recordConnect(deviceId, { vehicleId });
                 ObdService.setVehicleId(vehicleId);
+                useBleStore.getState().setConnectedVehicleId(vehicleId);
                 await ObdService.loadAndCacheDevices();
             } catch (e) {
                 const msg = e instanceof Error ? e.message : String(e);

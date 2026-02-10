@@ -21,6 +21,7 @@ import ObdService from './services/ObdService';
 import BackgroundService from './services/BackgroundService';
 import NotificationService from './services/NotificationService';
 import fcmService from './services/fcmService';
+import { authService } from './services/auth';
 import GlobalAlert from './components/common/GlobalAlert';
 import GlobalDatePicker from './components/common/GlobalDatePicker';
 import BottomNav from './nav/BottomNav';
@@ -145,38 +146,42 @@ export default function App() {
           await NavigationBar.setButtonStyleAsync("light");
         }
 
-        // Check for persistent login
-        const token = await AsyncStorage.getItem('accessToken');
-        if (token) {
-          try {
-            await loadUser(); // 사용자 정보 미리 로드
-            const vehicles = await fetchVehicles();
-            // 등록된 OBD 기기 목록 캐시 및 백그라운드 재연결 시작
-            console.log('[App] Auto-login: loading OBD devices and starting background reconnect');
-            await ObdService.loadAndCacheDevices();
-            ObdService.startBackgroundReconnectIfNeeded().catch((e) => {
-              console.warn('[App] startBackgroundReconnectIfNeeded failed during auto-login', e);
-            });
-
-            // FCM 토큰 발급 및 서버 동기화 (자동 로그인 시)
-            await NotificationService.registerFcmToken();
-
-            if (vehicles.length > 0) {
-              setInitialRoute('MainPage');
-            } else {
-              setInitialRoute('RegisterMain');
-            }
-          } catch (e) {
-            console.error("Failed to fetch vehicles on startup", e);
-            setInitialRoute('Login');
-          }
+        // 1) 약정 동의는 로그인 여부와 무관하게 앱 최초/미동의 시 먼저 표시
+        const hasAgreed = await AsyncStorage.getItem('hasAgreedToTos');
+        if (hasAgreed !== 'true') {
+          setInitialRoute('Tos');
         } else {
-          // Check Tos agreement
-          const hasAgreed = await AsyncStorage.getItem('hasAgreedToTos');
-          if (hasAgreed === 'true') {
-            setInitialRoute('Login');
+          // 2) 동의 후 로그인 유지 여부에 따라 초기 화면 결정
+          const refreshToken = await AsyncStorage.getItem('refreshToken');
+          if (refreshToken) {
+            try {
+              const newAccessToken = await authService.refreshAccessToken();
+              if (!newAccessToken) {
+                await AsyncStorage.multiRemove(['accessToken', 'refreshToken']);
+                setInitialRoute('Login');
+              } else {
+                await loadUser();
+                const vehicles = await fetchVehicles();
+                console.log('[App] Auto-login: loading OBD devices and starting background reconnect');
+                await ObdService.loadAndCacheDevices();
+                ObdService.startBackgroundReconnectIfNeeded().catch((e) => {
+                  console.warn('[App] startBackgroundReconnectIfNeeded failed during auto-login', e);
+                });
+
+                await NotificationService.registerFcmToken();
+
+                if (vehicles.length > 0) {
+                  setInitialRoute('MainPage');
+                } else {
+                  setInitialRoute('RegisterMain');
+                }
+              }
+            } catch (e) {
+              console.error("Failed to restore session or fetch vehicles on startup", e);
+              setInitialRoute('Login');
+            }
           } else {
-            setInitialRoute('Tos');
+            setInitialRoute('Login');
           }
         }
       } catch (e) {
@@ -227,12 +232,6 @@ export default function App() {
         if (ObdService.isConnected()) {
           await BackgroundService.start();
         }
-      } else if (nextAppState === 'active') {
-        if (activeStopDebounceRef.current) clearTimeout(activeStopDebounceRef.current);
-        activeStopDebounceRef.current = setTimeout(async () => {
-          activeStopDebounceRef.current = null;
-          await BackgroundService.stop();
-        }, ACTIVE_STOP_DEBOUNCE_MS);
       }
     });
 

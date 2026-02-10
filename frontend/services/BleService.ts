@@ -60,6 +60,7 @@ class BleService {
             DeviceEventEmitter.addListener('BleManagerDisconnectPeripheral', () => {
                 useBleStore.getState().setStatus('disconnected');
                 useBleStore.getState().setConnectedDevice(null);
+                useBleStore.getState().setConnectedVehicleId(null);
             });
 
         } catch (error) {
@@ -127,6 +128,7 @@ class BleService {
             useAlertStore.getState().showAlert('Scan Error', `Failed to start scan: ${msg}`, 'ERROR');
             useBleStore.getState().setScanning(false);
             useBleStore.getState().setStatus('disconnected');
+            useBleStore.getState().setConnectedVehicleId(null);
         });
     }
 
@@ -149,6 +151,7 @@ class BleService {
                 const msg = err?.message ?? String(err);
                 console.error('[BleService] connect failed. id=', id, 'reason=', msg);
                 useBleStore.getState().setStatus('disconnected');
+                useBleStore.getState().setConnectedVehicleId(null);
                 useBleStore.getState().setError(`Connection failed: ${msg}`);
                 throw err;
             });
@@ -170,6 +173,7 @@ class BleService {
             console.log('[BleService] disconnected id=', id);
             useBleStore.getState().setStatus('disconnected');
             useBleStore.getState().setConnectedDevice(null);
+            useBleStore.getState().setConnectedVehicleId(null);
         });
     }
 

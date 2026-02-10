@@ -15,6 +15,7 @@ import ObdService from '../services/ObdService';
 import type { BluetoothDevice } from 'react-native-bluetooth-classic';
 import { useBleStore } from '../store/useBleStore';
 import { useAlertStore } from '../store/useAlertStore';
+import { obdDeviceApi } from '../api/obdApi';
 
 // 통합 기기 타입 (BLE 또는 Classic)
 interface UnifiedDevice {
@@ -30,20 +31,35 @@ interface ObdConnectProps {
     visible: boolean;
     onClose: () => void;
     onConnected?: (device: UnifiedDevice) => void;
+    /** 이미 연결된 상태에서 다른 차량으로 연결만 변경할 때 사용 */
+    selectedVehicleId?: string | null;
+    selectedVehicleLabel?: string;
+    onVehicleChangeSuccess?: () => void;
 }
 
-const CONNECT_TIMEOUT_MS = 15000;
+const CONNECT_TIMEOUT_MS = 20000;
 
-export default function ObdConnect({ visible, onClose, onConnected }: ObdConnectProps) {
+export default function ObdConnect({
+    visible,
+    onClose,
+    onConnected,
+    selectedVehicleId = null,
+    selectedVehicleLabel,
+    onVehicleChangeSuccess
+}: ObdConnectProps) {
     const {
         isScanning,
         status,
         scannedDevices,
         error: storeError,
+        connectedDeviceId,
+        connectedDeviceName,
         setScanning,
         setStatus,
         setError
     } = useBleStore();
+
+    const [changingVehicle, setChangingVehicle] = useState(false);
 
     const [classicDevices, setClassicDevices] = useState<UnifiedDevice[]>([]);
     // UI Local Status (to keep 'success' modal behavior separate from just 'connected' state if needed, 
@@ -85,9 +101,10 @@ export default function ObdConnect({ visible, onClose, onConnected }: ObdConnect
     }, [visible]);
 
     const successAlertShown = React.useRef(false);
-    // 연결 성공(실제 검증 완료) 시 알림 띄우고 자동 닫기
+    const connectedDuringSessionRef = React.useRef(false);
+    // 연결 성공: 이번 모달에서 막 연결에 성공한 경우에만 알림 띄우고 자동 닫기 (이미 연결된 상태에서 연 걸 때는 제외)
     useEffect(() => {
-        if (status === 'connected' && visible) {
+        if (status === 'connected' && visible && connectedDuringSessionRef.current) {
             if (!successAlertShown.current) {
                 successAlertShown.current = true;
                 useAlertStore.getState().showAlert('연결 성공', 'OBD 기기와 연결되었습니다.', 'SUCCESS');
@@ -95,7 +112,10 @@ export default function ObdConnect({ visible, onClose, onConnected }: ObdConnect
             const timer = setTimeout(() => onClose(), 1500);
             return () => clearTimeout(timer);
         }
-        if (!visible) successAlertShown.current = false;
+        if (!visible) {
+            successAlertShown.current = false;
+            connectedDuringSessionRef.current = false;
+        }
     }, [status, visible, onClose]);
 
     // Listeners are now in BleService -> Store
@@ -178,6 +198,7 @@ export default function ObdConnect({ visible, onClose, onConnected }: ObdConnect
 
         try {
             await connectWithTimeout(doConnect(), CONNECT_TIMEOUT_MS, timeoutMsg);
+            connectedDuringSessionRef.current = true;
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
             setStatus('disconnected');
@@ -250,12 +271,70 @@ export default function ObdConnect({ visible, onClose, onConnected }: ObdConnect
 
                     {/* Content based on Connection Status */}
                     {status === 'connected' ? (
-                        <View className="flex-1 items-center justify-center pb-20">
-                            <View className="w-24 h-24 rounded-full bg-[#0d7ff2]/10 items-center justify-center mb-6 border border-[#0d7ff2]/20">
-                                <MaterialIcons name="check" size={48} color="#0d7ff2" />
-                            </View>
-                            <Text className="text-white text-2xl font-bold mb-2">연결 성공!</Text>
-                            <Text className="text-slate-400 text-center">OBD 기기와 성공적으로{'\n'}연결되었습니다.</Text>
+                        <View className="flex-1 pb-20">
+                            {connectedDuringSessionRef.current ? (
+                                <View className="flex-1 items-center justify-center">
+                                    <View className="w-24 h-24 rounded-full bg-[#0d7ff2]/10 items-center justify-center mb-6 border border-[#0d7ff2]/20">
+                                        <MaterialIcons name="check" size={48} color="#0d7ff2" />
+                                    </View>
+                                    <Text className="text-white text-2xl font-bold mb-2">연결 성공!</Text>
+                                    <Text className="text-slate-400 text-center">OBD 기기와 성공적으로{'\n'}연결되었습니다.</Text>
+                                </View>
+                            ) : (
+                                <>
+                                    <View className="items-center mb-8">
+                                        <View className="w-20 h-20 rounded-full bg-[#0d7ff2]/10 items-center justify-center mb-4 border border-[#0d7ff2]/20">
+                                            <MaterialIcons name="bluetooth-connected" size={40} color="#0d7ff2" />
+                                        </View>
+                                        <Text className="text-white text-xl font-bold mb-1">이미 연결되어 있습니다</Text>
+                                        <Text className="text-slate-400 text-center text-sm">
+                                            {connectedDeviceName || connectedDeviceId || 'OBD 기기'}와 연결 중입니다.
+                                        </Text>
+                                    </View>
+                                    {selectedVehicleId && selectedVehicleLabel ? (
+                                        <TouchableOpacity
+                                            onPress={async () => {
+                                                if (!connectedDeviceId) return;
+                                                setChangingVehicle(true);
+                                                try {
+                                                    await ObdService.requestCalidCvnRefresh();
+                                                    const calid = ObdService.getCalid() || undefined;
+                                                    const cvn = ObdService.getCvn() || undefined;
+                                                    await obdDeviceApi.recordConnect(connectedDeviceId, {
+                                                        vehicleId: selectedVehicleId,
+                                                        calid,
+                                                        cvn
+                                                    });
+                                                    ObdService.setVehicleId(selectedVehicleId);
+                                                    useBleStore.getState().setConnectedVehicleId(selectedVehicleId);
+                                                    await ObdService.loadAndCacheDevices();
+                                                    onClose();
+                                                    onVehicleChangeSuccess?.();
+                                                } catch (e) {
+                                                    const msg = e instanceof Error ? e.message : String(e);
+                                                    useAlertStore.getState().showAlert('연결 변경 실패', msg, 'ERROR');
+                                                } finally {
+                                                    setChangingVehicle(false);
+                                                }
+                                            }}
+                                            disabled={changingVehicle}
+                                            className="w-full py-4 bg-primary rounded-xl flex-row items-center justify-center gap-2 mb-3 border border-primary/50"
+                                        >
+                                            {changingVehicle ? (
+                                                <ActivityIndicator size="small" color="white" />
+                                            ) : (
+                                                <MaterialIcons name="directions-car" size={22} color="white" />
+                                            )}
+                                            <Text className="text-white font-bold text-base">
+                                                {changingVehicle ? '변경 중...' : `"${selectedVehicleLabel}"로 연결 변경`}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    ) : null}
+                                    <Text className="text-slate-500 text-center text-xs px-4">
+                                        같은 OBD를 다른 차량에 꽂았을 때, 위에서 선택한 차량으로 연결을 변경할 수 있습니다.
+                                    </Text>
+                                </>
+                            )}
                         </View>
                     ) : status === 'disconnected' && storeError ? (
                         <View className="flex-1 items-center justify-center pb-20">

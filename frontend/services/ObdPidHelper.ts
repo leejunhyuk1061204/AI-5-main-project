@@ -324,7 +324,8 @@ export const OBD_PIDS: { [key: string]: PidDefinition } = {
         pid: '02',
         name: 'VIN',
         description: 'Vehicle Identification Number (17 characters)',
-        bytes: 20, // VIN은 여러 프레임으로 응답됨
+        // 최소 1프레임(헤더 1바이트 + VIN 17바이트 = 18바이트)만 오더라도 파싱 가능하도록 18로 설정
+        bytes: 18,
         unit: '',
         decoder: (bytes) => {
             const vinBytes = bytes.slice(1);

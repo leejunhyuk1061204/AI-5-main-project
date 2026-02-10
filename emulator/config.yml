@@ -3,7 +3,7 @@
 # 예: python run_emulator.py --port COM4 --vehicle DEV_002
 
 # 사용할 차량 ID (vehicles 중 하나). 없으면 첫 번째 차량.
-vehicle_id: "DEV_001"
+vehicle_id: "DEV_003"
 
 # 연결 설정
 connection:
@@ -15,9 +15,12 @@ mode: replay
 
 # 차량 프로필 (3대)
 vehicles:
+  # 차량 특정 테스트: 백엔드 vehicles.vin 또는 obd_device_vehicle_history(calid/cvn)와 맞추면 됨
   - id: "DEV_001"
     name: "YF Sonata"
     vin: "1HMXOBSGK693TJ7JR"
+    calid: "SONATA_CAL_001"
+    cvn: "A1B2C3D4"
     csv_file: "scenarios/driving_normal.csv"
     mappings:
       "010C": { col: "rpm", formula: "x * 4" }
@@ -33,6 +36,8 @@ vehicles:
   - id: "DEV_002"
     name: "K5 Hybrid"
     vin: "KNAKU411B56382911"
+    calid: "312J6000A4701000"
+    cvn: "11223344"
     csv_file: "scenarios/driving_traffic.csv"
     mappings:
       "010C": { col: "rpm", formula: "x * 4" }
@@ -47,6 +52,8 @@ vehicles:
   - id: "DEV_003"
     name: "Genesis G80"
     vin: "KMHGN41EBJU183921"
+    calid: "null"
+    cvn: "6953cd4b"
     csv_file: "scenarios/fault_scenario.csv"
     mappings:
       "010C": { col: "rpm", formula: "x * 4" }
