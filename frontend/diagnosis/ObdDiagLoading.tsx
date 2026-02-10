@@ -15,8 +15,9 @@ import Animated, {
     Easing
 } from 'react-native-reanimated';
 
-import EventSource, { EventSourceListener } from "react-native-sse";
+import EventSource from "react-native-sse";
 import { BASE_URL } from '../api/axios';
+import { getDiagnosisSessionStatus } from '../api/aiApi';
 import { useAiDiagnosisStore } from '../store/useAiDiagnosisStore';
 
 const { width } = Dimensions.get('window');
@@ -103,15 +104,33 @@ export default function ObdDiagLoading({ navigation }: any) {
             setStatusMessage("결함 원인 추론 및 지식 검색 완료");
             setProgress(0.8);
         };
-        const handleStep5 = (event: any) => {
+        const handleStep5 = async (event: any) => {
             console.log("[SSE] Step 5:", event.data);
-            setStatusMessage("최종 진단 리포트 생성 완료");
+            setStatusMessage("최종 진단 완료 (결과 확인 중)");
             setProgress(1.0);
 
-            // Auto navigate after short delay
-            setTimeout(() => {
-                navigation.replace('ObdDiagResult');
-            }, 1000);
+            if (!currentSessionId) {
+                setTimeout(() => navigation.replace('ObdDiagResult'), 1000);
+                return;
+            }
+            try {
+                const data = await getDiagnosisSessionStatus(currentSessionId);
+                const status = (data?.status || '').toUpperCase();
+                const responseMode = data?.responseMode || data?.response_mode || '';
+
+                const isInteractive = status === 'ACTION_REQUIRED' || status === 'INTERACTIVE' || responseMode === 'INTERACTIVE';
+
+                setTimeout(() => {
+                    if (isInteractive) {
+                        navigation.replace('AiDiagChat', { sessionId: currentSessionId, vehicleId: vehicleId ?? undefined });
+                    } else {
+                        navigation.replace('ObdDiagResult');
+                    }
+                }, 800);
+            } catch (e) {
+                console.warn("[ObdDiagLoading] Step5 status fetch failed, going to result:", e);
+                setTimeout(() => navigation.replace('ObdDiagResult'), 1000);
+            }
         };
 
         const handleError = (error: any) => {

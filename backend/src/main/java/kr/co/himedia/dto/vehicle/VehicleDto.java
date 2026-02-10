@@ -54,7 +54,6 @@ public class VehicleDto {
         private String memo;
         private String carNumber;
         private String vin;
-        private String obdDeviceId;
 
         // 추가: 소모품 등록 리스트
         private java.util.List<ConsumableRegistrationRequest> consumables;
@@ -75,7 +74,6 @@ public class VehicleDto {
                     .memo(memo)
                     .registrationSource(RegistrationSource.MANUAL)
                     .isPrimary(false)
-                    .obdDeviceId(obdDeviceId)
                     .build();
         }
     }
@@ -135,7 +133,6 @@ public class VehicleDto {
         private String vin;
         private Boolean isPrimary;
         private String registrationSource;
-        private String obdDeviceId;
         private Boolean cloudLinked; // 추가: 클라우드 연동 여부
 
         // 상세 제원 정보 (VehicleSpec 연동용)
@@ -168,7 +165,6 @@ public class VehicleDto {
             response.setIsPrimary(vehicle.getIsPrimary());
             response.setRegistrationSource(
                     vehicle.getRegistrationSource() != null ? vehicle.getRegistrationSource().name() : null);
-            response.setObdDeviceId(vehicle.getObdDeviceId());
             response.setCloudLinked(vehicle.getCloudLinked()); // 클라우드 연동 여부 설정
             return response;
         }

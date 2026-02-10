@@ -23,7 +23,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class WearFactorService {
 
-    private static final double CONSUMABLE_ALERT_THRESHOLD = 15.0;
+    private static final double CONSUMABLE_ALERT_THRESHOLD = 30.0;
 
     private final VehicleRepository vehicleRepository;
     private final VehicleConsumableRepository vehicleConsumableRepository;
@@ -129,7 +129,7 @@ public class WearFactorService {
                     log.info("[WearFactor] 증분 모드(Standard) - {}: 차감 반영 완료 (Factor={})", itemCode, wearFactor);
                 }
 
-                // 잔존 수명 15% 이하 시 알림 발송
+                // 잔존 수명 30% 이하 시 알림 발송
                 if (vehicleConsumable.getRemainingLife() != null
                         && vehicleConsumable.getRemainingLife() <= CONSUMABLE_ALERT_THRESHOLD) {
                     sendConsumableAlert(vehicle, vehicleConsumable);

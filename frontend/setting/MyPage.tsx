@@ -112,7 +112,8 @@ export default function MyPage() {
                         setTimeout(() => {
                             showAlert('성공', '비밀번호가 변경되었습니다.\n다시 로그인해주세요.', async () => {
                                 setModalVisible(false);
-                                await AsyncStorage.clear();
+                                const { clearStorageForLogout } = await import('../utils/storageLogout');
+                                await clearStorageForLogout();
                                 navigation.dispatch(
                                     CommonActions.reset({
                                         index: 0,

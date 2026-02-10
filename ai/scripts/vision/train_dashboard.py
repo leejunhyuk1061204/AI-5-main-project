@@ -13,6 +13,7 @@ python ai/scripts/train_dashboard.py --mode train --epochs 100
 import argparse
 import os
 import shutil
+import platform
 from ultralytics import YOLO
 
 # =============================================================================
@@ -32,7 +33,7 @@ SAVE_PATH = "ai/weights/dashboard/best.pt"
 DEFAULT_EPOCHS = 100
 BATCH_SIZE = 16  # 데이터 적을 때 최적화 (기존 2)
 IMG_SIZE = 1280
-WORKERS = 8  # RunPod Linux 환경
+WORKERS = 8 if platform.system() != "Windows" else 0  # 환경 자동 감지
 
 # Augmentation (Small Dataset Optimized)
 MOSAIC = 1.0
@@ -55,7 +56,6 @@ def train_model(epochs=DEFAULT_EPOCHS):
     # [Weight Management] 기존 가중치가 있다면 백업 (누적 방지용)
     if os.path.exists(SAVE_PATH):
         old_path = SAVE_PATH.replace(".pt", "_old.pt")
-        import shutil
         shutil.copy(SAVE_PATH, old_path)
         print(f"📦 기존 가중치를 백업했습니다: {old_path}")
 
@@ -117,28 +117,42 @@ def evaluate_model():
     names = model.names
     precision = metrics.box.p  # Array of precision per class
     recall = metrics.box.r     # Array of recall per class
+    maps = metrics.box.maps    # Array of mAP50-95 per class
     
-    print("\n" + "="*60)
+    print("\n" + "="*70)
     print(f"🎯 Dashboard Detailed Evaluation Results:")
-    print("-" * 60)
-    print(f"{'Class Name':<25} | {'Precision':<12} | {'Recall':<12}")
-    print("-" * 60)
+    print("-" * 70)
+    print(f"{'ID':<3} | {'Class Name':<20} | {'Precision':<10} | {'Recall':<10} | {'mAP50-95':<10}")
+    print("-" * 70)
     
     for i, name in names.items():
         p_val = precision[i] if i < len(precision) else 0.0
         r_val = recall[i] if i < len(recall) else 0.0
-        print(f"{name:<25} | {p_val:<12.4f} | {r_val:<12.4f}")
+        m_val = maps[i] if i < len(maps) else 0.0
+        print(f"{i:<3} | {name:<20} | {p_val:<10.4f} | {r_val:<10.4f} | {m_val:<10.4f}")
     
-    print("-" * 60)
-    print(f"💡 mAP50:    {metrics.box.map50:.4f}")
-    print(f"💡 mAP50-95: {metrics.box.map:.4f}")
-    print("="*60)
+    print("-" * 70)
+    print(f"💡 Overall mAP50:    {metrics.box.map50:.4f}")
+    print(f"💡 Overall mAP50-95: {metrics.box.map:.4f}")
+    
+    # Performance Summary
+    print(f"\n💡 Performance Summary:")
+    if metrics.box.map >= 0.95:
+        print(f"   ✅ Excellent! (>95% mAP)")
+    elif metrics.box.map >= 0.90:
+        print(f"   ✅ Very Good! (>90% mAP)")
+    elif metrics.box.map >= 0.85:
+        print(f"   ⚠️  Good, but can improve (>85% mAP)")
+    else:
+        print(f"   ❌ Needs improvement (<85% mAP)")
+    
+    print("="*70)
     
     print(f"\n📈 상세 분석 차트 저장 위치:")
-    print(f"   [Confusion Matrix] {os.path.join(OUTPUT_DIR, 'val_test', 'confusion_matrix.png')}")
-    print(f"   [Confidence-Recall] {os.path.join(OUTPUT_DIR, 'val_test', 'R_curve.png')} (추천)")
-    print(f"   [Precision-Recall] {os.path.join(OUTPUT_DIR, 'val_test', 'PR_curve.png')}")
-    print("="*60 + "\n")
+    print(f"   [Confusion Matrix]  {os.path.join(OUTPUT_DIR, 'val_test', 'confusion_matrix.png')}")
+    print(f"   [Precision-Recall]  {os.path.join(OUTPUT_DIR, 'val_test', 'PR_curve.png')}")
+    print(f"   [Confidence-Recall] {os.path.join(OUTPUT_DIR, 'val_test', 'R_curve.png')}")
+    print("="*70 + "\n")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Dashboard Warning Light Training")

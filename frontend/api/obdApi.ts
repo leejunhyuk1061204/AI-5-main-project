@@ -1,4 +1,49 @@
 import api from './axios';
+import { ApiResponse } from './axios';
+
+export interface ObdDeviceDto {
+    id: string;
+    deviceId: string;
+    deviceType: string;
+    name: string;
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface ObdDeviceRegisterRequest {
+    deviceId: string;
+    deviceType: 'ble' | 'classic';
+    name?: string;
+}
+
+export interface ConnectHistoryRequest {
+    vehicleId: string;
+}
+
+export interface ResolveVehicleRequest {
+    deviceId: string;
+    vin?: string;
+    calid?: string;
+    cvn?: string;
+}
+
+const obdDeviceApi = {
+    getDevices: async (): Promise<ApiResponse<ObdDeviceDto[]>> => {
+        const response = await api.get('/api/v1/obd/devices');
+        return response.data;
+    },
+    registerDevice: async (request: ObdDeviceRegisterRequest): Promise<ApiResponse<ObdDeviceDto>> => {
+        const response = await api.post('/api/v1/obd/devices', request);
+        return response.data;
+    },
+    recordConnect: async (deviceId: string, request: ConnectHistoryRequest): Promise<void> => {
+        await api.put(`/api/v1/obd/devices/${encodeURIComponent(deviceId)}/connect`, request);
+    },
+    resolveVehicle: async (request: ResolveVehicleRequest): Promise<ApiResponse<{ vehicleId: string }>> => {
+        const response = await api.post('/api/v1/obd/resolve-vehicle', request);
+        return response.data;
+    }
+};
 
 // OBD 로그 요청 인터페이스 (백엔드 ObdLogDto와 매칭)
 export interface ObdLogRequest {
@@ -11,17 +56,30 @@ export interface ObdLogRequest {
     engineLoad?: number;
     fuelTrimShort?: number;
     fuelTrimLong?: number;
+    throttle?: number;
+    map?: number;
+    maf?: number;
+    intakeTemp?: number;
+    engineRuntime?: number;
+}
+
+/**
+ * 8.5단계: Idempotency(중복 방지)를 위한 배치 요청 구조
+ */
+export interface ObdBatchRequest {
+    batchId: string;
+    vehicleId: string;
+    logs: ObdLogRequest[];
 }
 
 /**
  * OBD 로그 배치 업로드
- * 3분(180초) 단위로 수집된 OBD 데이터를 백엔드로 전송
- * @param logs - ObdLogRequest 배열 (최대 180개)
+ * @param data - ObdBatchRequest (batchId 포함)
  */
-export const uploadObdBatch = async (logs: ObdLogRequest[]): Promise<void> => {
+export const uploadObdBatch = async (data: ObdBatchRequest): Promise<void> => {
     try {
-        console.log(`[obdApi] Uploading ${logs.length} OBD logs...`);
-        const response = await api.post('/telemetry/batch', logs);
+        console.log(`[obdApi] Uploading batch ${data.batchId} (${data.logs.length} logs)...`);
+        const response = await api.post('/api/v1/telemetry/batch', data);
         console.log('[obdApi] Batch upload successful:', response.status);
     } catch (error) {
         console.error('[obdApi] Batch upload failed:', error);
@@ -34,7 +92,7 @@ export const uploadObdBatch = async (logs: ObdLogRequest[]): Promise<void> => {
  * @param vehicleId - 차량 UUID
  */
 export const getConnectionStatus = async (vehicleId: string) => {
-    const response = await api.get(`/telemetry/status/${vehicleId}`);
+    const response = await api.get(`/api/v1/telemetry/status/${vehicleId}`);
     return response.data;
 };
 
@@ -43,5 +101,7 @@ export const getConnectionStatus = async (vehicleId: string) => {
  * @param vehicleId - 차량 UUID
  */
 export const disconnectVehicle = async (vehicleId: string): Promise<void> => {
-    await api.post(`/telemetry/status/${vehicleId}/disconnect`);
+    await api.post(`/api/v1/telemetry/status/${vehicleId}/disconnect`);
 };
+
+export { obdDeviceApi };

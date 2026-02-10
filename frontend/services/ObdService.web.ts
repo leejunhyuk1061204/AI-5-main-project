@@ -1,6 +1,8 @@
 // Web Mock for ObdService
 // Native modules cause crashes on web.
 
+import { useBleStore } from '../store/useBleStore';
+
 export interface ObdData {
     timestamp: string;
     rpm?: number;
@@ -49,6 +51,7 @@ class ObdService {
 
     async disconnect() {
         console.log('[ObdService-Web] disconnect (Mock)');
+        useBleStore.getState().reset();
     }
 }
 

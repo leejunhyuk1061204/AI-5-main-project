@@ -17,7 +17,7 @@ from ai.app.schemas.obd_anomaly_schema import (
 )
 from ai.app.services.obd_anomaly.windowing import make_windows
 from ai.app.services.obd_anomaly.core.engine_lstm_ae import run_engine_lstm_ae
-from ai.app.services.obd_anomaly.extensions.extension_registry import EXTENSION_REGISTRY
+from ai.app.services.obd_anomaly.domains.domain_registry import DOMAIN_REGISTRY
 
 
 DEFAULT_DOMAINS = ["engine", "electrical", "brake", "tire", "idle"]
@@ -39,24 +39,24 @@ class ObdAnomalyService:
         for w in windows:
             core_env = run_engine_lstm_ae(req, w)
 
-            ext_envs: Dict[str, CommonEnvelope] = {}
+            domain_envs: Dict[str, CommonEnvelope] = {}
             for domain in selected_domains:
                 if domain == "engine":
                     continue
 
-                runner = EXTENSION_REGISTRY.get(domain)
+                runner = DOMAIN_REGISTRY.get(domain)
                 if not runner:
-                    ext_envs[domain] = CommonEnvelope(
+                    domain_envs[domain] = CommonEnvelope(
                         domain=domain,
                         status=EnvelopeStatus.UNSUPPORTED,
                         method=EnvelopeMethod.rule,
                         score=None,
                         threshold=None,
                         is_anomaly=False,
-                        details={"reason": "unknown extension"},
+                        details={"reason": "unknown domain"},
                     )
                     continue
-                ext_envs[domain] = runner(req, w)
+                domain_envs[domain] = runner(req, w)
 
             window_results.append(
                 WindowResult(
@@ -64,12 +64,12 @@ class ObdAnomalyService:
                     start_t=w.start_t,
                     end_t=w.end_t,
                     core=core_env,
-                    extensions=ext_envs,
+                    domains=domain_envs,
                 )
             )
 
         summary_core = self._aggregate_core(window_results)
-        summary_ext = self._aggregate_extensions(window_results)
+        summary_ext = self._aggregate_domains(window_results)
 
         domains = self._build_summary_domains(req, summary_core, summary_ext, selected_domains)
         events = self._collect_events({"engine": summary_core, **summary_ext}, selected_domains)
@@ -276,7 +276,7 @@ class ObdAnomalyService:
             for d in selected_domains:
                 if d == "engine":
                     continue
-                env = w.extensions.get(d)
+                env = w.domains.get(d)
                 if env is not None:
                     domains[d] = self._domain_result_dict(req, env)
 
@@ -360,15 +360,15 @@ class ObdAnomalyService:
             },
         )
 
-    def _aggregate_extensions(self, window_results: List[WindowResult]) -> Dict[str, CommonEnvelope]:
+    def _aggregate_domains(self, window_results: List[WindowResult]) -> Dict[str, CommonEnvelope]:
         keys = set()
         for w in window_results:
-            keys.update(w.extensions.keys())
+            keys.update(w.domains.keys())
 
         out: Dict[str, CommonEnvelope] = {}
 
         for k in keys:
-            envs = [w.extensions[k] for w in window_results if k in w.extensions]
+            envs = [w.domains[k] for w in window_results if k in w.domains]
             processed = [e for e in envs if e.status == EnvelopeStatus.PROCESSED]
             errors = [e for e in envs if e.status == EnvelopeStatus.ERROR]
 

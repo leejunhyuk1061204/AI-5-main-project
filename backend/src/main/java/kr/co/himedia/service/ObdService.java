@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import kr.co.himedia.dto.obd.ObdBatchRequestDto;
 import kr.co.himedia.dto.obd.ConnectionStatusDto;
 import kr.co.himedia.dto.obd.ObdLogDto;
 import kr.co.himedia.entity.ObdLog;
@@ -14,8 +15,11 @@ import kr.co.himedia.repository.ObdLogRepository;
 import kr.co.himedia.repository.TripSummaryRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.concurrent.TimeUnit;
 
 @Service
 @RequiredArgsConstructor
@@ -25,22 +29,57 @@ public class ObdService {
     private final ObdLogRepository obdLogRepository;
     private final TripSummaryRepository tripSummaryRepository;
     private final TripService tripService;
+    private final StringRedisTemplate redisTemplate;
 
-    // OBD 로그 대량 저장 및 주행 요약 갱신
+    // 8.5단계: Idempotency (중복 방지) 고도화
     @Transactional
-    public void saveObdLogs(List<ObdLogDto> obdLogDtos) {
-        if (obdLogDtos == null || obdLogDtos.isEmpty()) {
+    public void saveObdLogs(ObdBatchRequestDto batchRequest) {
+        if (batchRequest == null || batchRequest.getLogs() == null || batchRequest.getLogs().isEmpty()) {
             return;
         }
 
-        // 1. Save raw logs
-        List<ObdLog> obdLogs = obdLogDtos.stream()
-                .map(this::toEntity)
-                .collect(Collectors.toList());
+        UUID vehicleId = batchRequest.getVehicleId();
+        String batchId = batchRequest.getBatchId();
+        // Point 1: 키 설계 개선 (차량별 네임스페이스 분리)
+        String redisKey = String.format("obd:batch:%s:%s", vehicleId, batchId);
 
-        if (!obdLogs.isEmpty()) {
-            obdLogRepository.saveAll(obdLogs);
-            // 실시간 주행 요약 갱신은 부하 감소 및 정확도를 위해 종료 시 단회 처리로 변경됨
+        // Point 2 & 6: 중복 확인 및 처리 정책 (Option A: Processing Lock)
+        String status = redisTemplate.opsForValue().get(redisKey);
+        if ("DONE".equals(status)) {
+            log.info("[ObdService] Batch already processed (DONE): {}", batchId);
+            return; // 200 OK (정상 처리로 간주)
+        }
+
+        if ("PROCESSING".equals(status)) {
+            log.info("[ObdService] Batch is currently being processed: {}", batchId);
+            return; // 중복 요청 차단
+        }
+
+        // 락 시도 (10분간 유효한 처리중 락)
+        Boolean lockAcquired = redisTemplate.opsForValue().setIfAbsent(redisKey, "PROCESSING", 10, TimeUnit.MINUTES);
+        if (Boolean.FALSE.equals(lockAcquired)) {
+            log.warn("[ObdService] Failed to acquire lock for batch: {}", batchId);
+            return;
+        }
+
+        try {
+            // Point 3: 트랜잭션 내 일괄 저장 (원자성 보장)
+            List<ObdLog> obdLogs = batchRequest.getLogs().stream()
+                    .map(this::toEntity)
+                    .collect(Collectors.toList());
+
+            if (!obdLogs.isEmpty()) {
+                obdLogRepository.saveAll(obdLogs);
+
+                // Point 4: TTL 72시간으로 연장 (오프라인 큐 대응)
+                redisTemplate.opsForValue().set(redisKey, "DONE", 72, TimeUnit.HOURS);
+                log.info("[ObdService] Batch processed successfully: {} ({} logs)", batchId, obdLogs.size());
+            }
+        } catch (Exception e) {
+            // 실패 시 락 해제 (다음 재시도 허용)
+            redisTemplate.delete(redisKey);
+            log.error("[ObdService] Error processing batch {}: {}", batchId, e.getMessage());
+            throw e; // 트랜잭션 롤백 유도
         }
     }
 

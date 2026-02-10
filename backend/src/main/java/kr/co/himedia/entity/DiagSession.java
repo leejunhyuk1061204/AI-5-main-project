@@ -36,6 +36,9 @@ public class DiagSession {
     @Column(name = "progress_message", length = 1000)
     private String progressMessage;
 
+    @Column(name = "dtc_context_json", columnDefinition = "TEXT")
+    private String dtcContextJson;
+
     @CreationTimestamp
     @Column(name = "created_at")
     private LocalDateTime createdAt;
@@ -52,6 +55,10 @@ public class DiagSession {
     public void updateStatus(DiagStatus status, String message) {
         this.status = status;
         this.progressMessage = message;
+    }
+
+    public void setDtcContextJson(String dtcContextJson) {
+        this.dtcContextJson = dtcContextJson;
     }
 
     public enum DiagTriggerType {

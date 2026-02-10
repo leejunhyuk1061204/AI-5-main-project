@@ -39,8 +39,17 @@ MODEL_NAME = "MIT/ast-finetuned-audioset-10-10-0.4593"
 OUTPUT_DIR = "./ai/runs/audio_model"
 SAVE_PATH = "./ai/weights/audio/best_ast_model"
 
-TRAIN_DATA_DIR = "./ai/data/audio/train"
-TEST_DATA_DIR = "./ai/data/audio/test"
+# [Path Config] RunPod과 로컬 환경 자동 감지
+RUNPOD_DATA_PATH = "/workspace/large_data"
+LOCAL_DATA_PATH = "ai/data"
+DATA_ROOT = RUNPOD_DATA_PATH if os.path.exists(RUNPOD_DATA_PATH) else LOCAL_DATA_PATH
+
+TRAIN_DATA_DIR = os.path.join(DATA_ROOT, "audio", "train")
+TEST_DATA_DIR = os.path.join(DATA_ROOT, "audio", "test")
+
+# [Environment Config] 환경 변수로 제어 가능
+DEFAULT_BATCH_SIZE = int(os.getenv("BATCH_SIZE", "2"))  # Audio는 메모리 소모가 크므로 기본값 2
+DEFAULT_GRAD_ACCUM = int(os.getenv("GRAD_ACCUM", "4"))
 
 LABEL_LIST = ["normal", "engine", "brake", "starter"]
 label2id = {label: i for i, label in enumerate(LABEL_LIST)}
@@ -192,6 +201,12 @@ def prepare_data(mode="all"):
     
     if (mode in ["train", "all"] and not train_raw) or (mode in ["baseline", "test", "all"] and not test_raw):
         print("[Error] 데이터를 찾을 수 없습니다.")
+        print(f"[Info] Checking paths:")
+        print(f"  - RunPod path: {RUNPOD_DATA_PATH} (Exists: {os.path.exists(RUNPOD_DATA_PATH)})")
+        print(f"  - Local path: {LOCAL_DATA_PATH} (Exists: {os.path.exists(LOCAL_DATA_PATH)})")
+        print(f"  - Using: {DATA_ROOT}")
+        print(f"  - Train dir: {TRAIN_DATA_DIR} (Exists: {os.path.exists(TRAIN_DATA_DIR)})")
+        print(f"  - Test dir: {TEST_DATA_DIR} (Exists: {os.path.exists(TEST_DATA_DIR)})")
         return None, None, None
 
     if train_raw:
@@ -364,11 +379,20 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--mode", type=str, default="all", choices=["baseline", "train", "test", "all"])
     parser.add_argument("--epochs", type=int, default=10)
-    parser.add_argument("--batch_size", type=int, default=2, help="GPU batch size")
-    parser.add_argument("--grad_accum", type=int, default=4, help="Gradient accumulation steps")
+    parser.add_argument("--batch_size", type=int, default=DEFAULT_BATCH_SIZE, help=f"GPU batch size (default: {DEFAULT_BATCH_SIZE})")
+    parser.add_argument("--grad_accum", type=int, default=DEFAULT_GRAD_ACCUM, help=f"Gradient accumulation steps (default: {DEFAULT_GRAD_ACCUM})")
     parser.add_argument("--lr", type=float, default=1e-4, help="Learning rate (추천: 1e-4 초기, 3e-5 fine-tune)")
     parser.add_argument("--freeze_encoder", action="store_true", help="Freeze encoder for stable training")
     args = parser.parse_args()
+
+    print(f"\n🚀 Audio Training Script Started")
+    print(f"   Environment: {'RunPod' if os.path.exists(RUNPOD_DATA_PATH) else 'Local'}")
+    print(f"   Data Root: {DATA_ROOT}")
+    print(f"   Train Dir: {TRAIN_DATA_DIR}")
+    print(f"   Test Dir: {TEST_DATA_DIR}")
+    print(f"   Batch Size: {args.batch_size}")
+    print(f"   Grad Accum: {args.grad_accum}")
+    print(f"   Mode: {args.mode}")
 
     train_ds, eval_ds, test_ds = prepare_data(mode=args.mode)
 

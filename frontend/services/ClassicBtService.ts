@@ -89,14 +89,12 @@ class ClassicBtService {
             // 여러 연결 방식 시도
             console.log('[ClassicBT] Trying RFCOMM connection...');
 
-            // RFCOMM 연결 (기본 SPP UUID 사용)
+            // RFCOMM 연결 (ELM327 응답은 \r\r> 로 끝남. 구분자를 > 로 하면 응답 수신됨)
             const connected = await device.connect({
-                delimiter: '\r\n',  // ELM327은 보통 \r\n 사용
+                delimiter: '>',
                 charset: 'utf-8',
                 // @ts-ignore - 라이브러리 타입 정의에 없을 수 있음
                 connectorType: 'rfcomm',
-                // @ts-ignore
-                DELIMITER: '\r\n>',
             });
 
             if (connected) {
@@ -107,18 +105,19 @@ class ClassicBtService {
             console.log('[ClassicBT] Connection result:', connected);
             return connected;
         } catch (error) {
-            console.error('[ClassicBT] Connection failed:', error);
-
-            // 첫 번째 실패 시 accept 모드로 재시도
+            const msg = error instanceof Error ? error.message : String(error);
+            console.warn('[ClassicBT] connect failed. name=', device.name, 'reason=', msg);
             try {
-                console.log('[ClassicBT] Retrying with accept mode...');
+                console.log('[ClassicBT] retry with accept mode');
                 const connected = await device.connect({
                     delimiter: '\r',
                     charset: 'utf-8',
                 });
                 return connected;
             } catch (retryError) {
-                console.error('[ClassicBT] Retry also failed:', retryError);
+                const retryMsg = retryError instanceof Error ? retryError.message : String(retryError);
+                // 재연결 로직에서 처리할 수 있도록, 여기서는 ERROR가 아니라 warn + false 반환만 한다.
+                console.warn('[ClassicBT] retry failed. reason=', retryMsg);
                 return false;
             }
         }
@@ -126,7 +125,12 @@ class ClassicBtService {
 
     async disconnect(device: BluetoothDevice): Promise<boolean> {
         try {
-            const disconnected = await device.disconnect();
+            const address = device?.address;
+            if (!address) {
+                console.warn('[ClassicBT] Disconnect skipped: no device address');
+                return true;
+            }
+            const disconnected = await RNBluetoothClassic.disconnectFromDevice(address);
             console.log('[ClassicBT] Disconnected:', disconnected);
             return disconnected;
         } catch (error) {
@@ -140,7 +144,7 @@ class ClassicBtService {
             const success = await device.write(command + '\r');
             return success;
         } catch (error) {
-            console.error('[ClassicBT] Write failed:', error);
+            console.warn('[ClassicBT] Write failed:', error);
             return false;
         }
     }
@@ -156,7 +160,8 @@ class ClassicBtService {
     }
 
     // 버퍼에 있는 모든 데이터 읽기
-    async readAvailable(device: BluetoothDevice): Promise<string> {
+    async readAvailable(device: BluetoothDevice | null): Promise<string> {
+        if (!device) return '';
         try {
             // @ts-ignore - available()이 타입에 없을 수 있음
             const available = await device.available();
@@ -169,6 +174,11 @@ class ClassicBtService {
             }
             return '';
         } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            if (msg.includes('Not connected')) {
+                // 연결이 이미 끊긴 상태에서 읽기 시도 시 (테스트/재연결 직후 등) — 에러 로그 생략
+                return '';
+            }
             console.error('[ClassicBT] ReadAvailable failed:', error);
             return '';
         }

@@ -17,7 +17,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     },
     backgroundColor: "#101922",
     ios: {
-        supportsTablet: true
+        supportsTablet: true,
+        bundleIdentifier: "com.lee-kang-hyun.frontend"
     },
     android: {
         adaptiveIcon: {
@@ -37,7 +38,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
             "android.permission.WAKE_LOCK"
         ],
         package: "com.lee_kang_hyun.frontend",
-        googleServicesFile: process.env.GOOGLE_SERVICES_JSON || "./google-services.json",
+        googleServicesFile: process.env.GOOGLE_SERVICES_JSON ?? "./google-services.json",
         softwareKeyboardLayoutMode: "resize"
     },
     web: {
@@ -98,7 +99,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     ],
     extra: {
         eas: {
-            projectId: "62f1e1fc-2999-4e4c-b44f-ad5801fc4d4c"
+            projectId: "47fc3708-0a7c-4843-aacf-7a9719b8a636"
         }
     }
 });
