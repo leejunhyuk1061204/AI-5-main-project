@@ -1,7 +1,7 @@
 """
-매뉴얼 ZIP → 풀기 → 청킹 → 임베딩 → knowledge_vectors 시드 SQL (v2).
-리스트 3분할 중 2번: 원본_zip 목록 정렬 후 인덱스 % 3 == 1 인 ZIP만 처리.
-작업: embedding작업 폴더에 풀고, 처리 후 해당 폴더 삭제. 시드: seed 폴더에 seed_v2.sql.
+매뉴얼 ZIP → 풀기 → 청킹 → 임베딩 → knowledge_vectors 시드 SQL (v5).
+리스트 6분할 중 5번: 원본_zip 목록 정렬 후 인덱스 % 6 == 4 인 ZIP만 처리.
+작업: embedding작업 폴더에 풀고, 처리 후 해당 폴더 삭제. 시드: seed 폴더에 seed_v5.sql.
 """
 import argparse
 import os
@@ -17,9 +17,9 @@ from datetime import datetime
 from bs4 import BeautifulSoup
 from pathlib import Path
 
-# --- 버전/리스트 (v2 = 2번 리스트) ---
-VERSION = "v2"
-LIST_INDEX = 1
+# --- 버전/리스트 (v5 = 5번 리스트) ---
+VERSION = "v5"
+LIST_INDEX = 4
 NUM_LISTS = 6
 
 # --- 경로 ---
