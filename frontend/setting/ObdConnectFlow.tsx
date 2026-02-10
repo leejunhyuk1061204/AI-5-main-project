@@ -4,6 +4,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import BaseScreen from '../components/layout/BaseScreen';
 import { useVehicleStore } from '../store/useVehicleStore';
+import { useBleStore } from '../store/useBleStore';
 import { useAlertStore } from '../store/useAlertStore';
 import { VehicleResponse } from '../api/vehicleApi';
 import { obdDeviceApi } from '../api/obdApi';
@@ -21,6 +22,10 @@ export default function ObdConnectFlow() {
 
     const primaryVehicle = vehicles.find(v => v.isPrimary) || vehicles[0];
     const effectiveSelectedId = selectedVehicleId ?? primaryVehicle?.vehicleId ?? null;
+    const effectiveSelectedVehicle = vehicles.find(v => v.vehicleId === effectiveSelectedId);
+    const selectedVehicleLabel = effectiveSelectedVehicle
+        ? `${effectiveSelectedVehicle.manufacturerKo} ${effectiveSelectedVehicle.modelNameKo}`
+        : undefined;
 
     useFocusEffect(
         useCallback(() => {
@@ -44,10 +49,13 @@ export default function ObdConnectFlow() {
             ? device.classicDevice.address
             : device.id;
 
-        try {
-            // Android 13+ 알림 권한 확보 (있으면 내부에서 즉시 통과)
-            await ObdService.ensureNotificationPermissionForPolling();
+        await ObdService.ensureNotificationPermissionForPolling();
 
+        ObdService.setManualConnectSession(true);
+        // 연결 직후 폴링 먼저 시작 (서버 등록 전에 PID 수집 시작해 어댑터가 켜진 상태에서 바로 요청)
+        ObdService.startPolling(1000);
+
+        try {
             await obdDeviceApi.registerDevice({
                 deviceId,
                 deviceType: device.type,
@@ -55,6 +63,7 @@ export default function ObdConnectFlow() {
             });
             await obdDeviceApi.recordConnect(deviceId, { vehicleId });
             ObdService.setVehicleId(vehicleId);
+            useBleStore.getState().setConnectedVehicleId(vehicleId);
             await ObdService.loadAndCacheDevices();
         } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
@@ -62,13 +71,9 @@ export default function ObdConnectFlow() {
             showAlert('연결 기록 실패', '기기 연결은 되었으나 서버 기록에 실패했습니다.', 'ERROR');
         }
 
-        // 실제 앱 플로우에서 폴링 시작 (테스트 화면과 독립)
-        ObdService.startPolling(1000);
-
         setObdModalVisible(false);
         showAlert('연결 완료', 'OBD 어댑터가 선택한 차량에 연결되었습니다.', 'SUCCESS', async () => {
             navigation.goBack();
-            // 연결 완료 플로우가 끝난 뒤 배터리 최적화 안내 (1회성)
             await checkAndRequestBatteryOpt();
         });
     };
@@ -143,6 +148,14 @@ export default function ObdConnectFlow() {
                 visible={obdModalVisible}
                 onClose={() => setObdModalVisible(false)}
                 onConnected={handleConnected}
+                selectedVehicleId={effectiveSelectedId}
+                selectedVehicleLabel={selectedVehicleLabel}
+                onVehicleChangeSuccess={() => {
+                    showAlert('연결 변경 완료', '선택한 차량으로 OBD 연결이 변경되었습니다.', 'SUCCESS', async () => {
+                        navigation.goBack();
+                        await checkAndRequestBatteryOpt();
+                    });
+                }}
             />
         </BaseScreen>
     );

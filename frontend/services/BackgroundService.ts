@@ -21,6 +21,14 @@ class BackgroundTaskService {
 
         console.log('[BackgroundService] Task started. intervalMs=', intervalMs, 'reconnectEveryTicks=', reconnectEveryTicks);
 
+        // 시작 직후 1회 즉시 자동 연결 시도
+        try {
+            console.log('[BackgroundService] Initial auto-connect from cache...');
+            await ObdService.tryAutoConnectFromCache();
+        } catch (e) {
+            console.warn('[BackgroundService] initial tryAutoConnectFromCache failed', e);
+        }
+
         while (BackgroundService.isRunning()) {
             await sleep(HEARTBEAT_MS);
             tick++;

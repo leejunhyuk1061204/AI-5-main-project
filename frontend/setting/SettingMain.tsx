@@ -8,6 +8,7 @@ import { clearStorageForLogout } from '../utils/storageLogout';
 import BaseScreen from '../components/layout/BaseScreen';
 import { BASE_URL } from '../api/axios';
 import { useAlertStore } from '../store/useAlertStore';
+import { useUserStore } from '../store/useUserStore';
 
 export default function SettingMain() {
     const navigation = useNavigation<any>();
@@ -181,6 +182,8 @@ export default function SettingMain() {
                 activeOpacity={0.7}
                 onPress={async () => {
                     try {
+                        const { logout } = useUserStore.getState();
+                        await logout();
                         await clearStorageForLogout();
                         navigation.reset({
                             index: 0,

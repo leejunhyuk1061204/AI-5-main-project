@@ -22,6 +22,9 @@ public interface ObdDeviceVehicleHistoryRepository extends JpaRepository<ObdDevi
 
     Optional<ObdDeviceVehicleHistory> findByObdDeviceIdAndVehiclesId(UUID obdDeviceId, UUID vehiclesId);
 
-    @Query("SELECT h FROM ObdDeviceVehicleHistory h WHERE h.obdDeviceId = :deviceId AND h.calid IS NOT NULL AND h.calid = :calid")
-    Optional<ObdDeviceVehicleHistory> findByObdDeviceIdAndCalid(@Param("deviceId") UUID deviceId, @Param("calid") String calid);
+    @Query("SELECT h FROM ObdDeviceVehicleHistory h WHERE h.obdDeviceId = :deviceId AND h.calid IS NOT NULL AND h.calid = :calid ORDER BY h.lastConnectedAt DESC")
+    List<ObdDeviceVehicleHistory> findAllByObdDeviceIdAndCalid(@Param("deviceId") UUID deviceId, @Param("calid") String calid);
+
+    @Query("SELECT h FROM ObdDeviceVehicleHistory h WHERE h.obdDeviceId = :deviceId AND h.cvn IS NOT NULL AND h.cvn = :cvn ORDER BY h.lastConnectedAt DESC")
+    List<ObdDeviceVehicleHistory> findAllByObdDeviceIdAndCvn(@Param("deviceId") UUID deviceId, @Param("cvn") String cvn);
 }

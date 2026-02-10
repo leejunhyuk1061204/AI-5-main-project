@@ -15,6 +15,8 @@ interface BleState {
     isPolling: boolean; // OBD Polling Status
     connectedDeviceId: string | null;
     connectedDeviceName: string | null; // For UI display
+    /** OBD 연결 시 선택된 차량 ID (헤더 등에서 차량명 표시용) */
+    connectedVehicleId: string | null;
     scannedDevices: BleDevice[];
     error: string | null;
 
@@ -24,6 +26,7 @@ interface BleState {
     setPolling: (isPolling: boolean) => void;
     setConnectedDevice: (deviceId: string | null) => void;
     setConnectedDeviceName: (name: string | null) => void;
+    setConnectedVehicleId: (vehicleId: string | null) => void;
     addDevice: (device: BleDevice) => void;
     clearDevices: () => void;
     setError: (error: string | null) => void;
@@ -36,6 +39,7 @@ export const useBleStore = create<BleState>((set) => ({
     isPolling: false,
     connectedDeviceId: null,
     connectedDeviceName: null,
+    connectedVehicleId: null,
     scannedDevices: [],
     error: null,
 
@@ -44,6 +48,7 @@ export const useBleStore = create<BleState>((set) => ({
     setPolling: (isPolling) => set({ isPolling }),
     setConnectedDevice: (connectedDeviceId) => set({ connectedDeviceId }),
     setConnectedDeviceName: (connectedDeviceName) => set({ connectedDeviceName }),
+    setConnectedVehicleId: (connectedVehicleId) => set({ connectedVehicleId }),
 
     addDevice: (newDevice) => set((state) => {
         // 중복 제거 (기존에 있으면 업데이트, 없으면 추가)
@@ -66,6 +71,7 @@ export const useBleStore = create<BleState>((set) => ({
         isPolling: false,
         connectedDeviceId: null,
         connectedDeviceName: null,
+        connectedVehicleId: null,
         scannedDevices: [],
         error: null
     })
