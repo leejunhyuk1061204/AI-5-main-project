@@ -1,0 +1,19 @@
+.git
+.gitignore
+.dockerignore
+.gradle/
+build/
+out/
+bin/
+logs/
+.idea/
+.vscode/
+
+# Sensitive Files
+.env*
+firebase-service-account.json
+deploy_backend.ps1
+Dockerfile
+
+# Test reports
+build/reports/
