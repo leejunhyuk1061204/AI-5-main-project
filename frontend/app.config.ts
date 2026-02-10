@@ -70,7 +70,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
                     "bundleIdentifier": "com.lee-kang-hyun.frontend"
                 },
                 "android": {
-                    "googleServicesFile": "./google-services.json"
+                    googleServicesFile: process.env.GOOGLE_SERVICES_JSON || "./google-services.json"
                 }
             }
         ],
