@@ -44,16 +44,35 @@ jobs:
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:${{ github.ref_name }}
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:latest
 
+      - name: Create .env file
+        run: |
+          echo "JWT_SECRET=${{ secrets.JWT_SECRET }}" >> backend/.env
+          echo "ENCRYPTION_KEY=${{ secrets.ENCRYPTION_KEY }}" >> backend/.env
+          echo "NAVER_OCR_Secret_Key=${{ secrets.NAVER_OCR_SECRET_KEY }}" >> backend/.env
+          echo "NAVER_OCR_Invoke_Url=${{ secrets.NAVER_OCR_INVOKE_URL }}" >> backend/.env
+          echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" >> backend/.env
+          echo "DB_HOST=localhost" >> backend/.env
+          echo "DB_PORT=5432" >> backend/.env
+          echo "DB_NAME=car_sentry" >> backend/.env
+          echo "DB_USER=postgres" >> backend/.env
+          echo "DB_PASSWORD=postgres" >> backend/.env
+          echo "REDIS_HOST=localhost" >> backend/.env
+          echo "REDIS_PORT=6379" >> backend/.env
+          echo "MQ_HOST=localhost" >> backend/.env
+          echo "MQ_PORT=5672" >> backend/.env
+          echo "MQ_USER=guest" >> backend/.env
+          echo "MQ_PASSWORD=guest" >> backend/.env
+
       - name: Create Firebase Service Account file
         run: echo "${{ secrets.FIREBASE_SERVICE_ACCOUNT }}" > backend/firebase-service-account.json
 
-      - name: Copy Firebase Config to EC2
+      - name: Copy Configuration Files to EC2
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          source: "backend/firebase-service-account.json"
+          source: "backend/firebase-service-account.json,backend/.env"
           target: "/home/ubuntu/"
           strip_components: 1
 
