@@ -90,6 +90,7 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
+          command_timeout: 30m
           script: |
             # --- 0. Optimize Memory & Disk (Critical for t2.micro) ---
             echo "🧹 Cleaning up old Docker images to free space..."
