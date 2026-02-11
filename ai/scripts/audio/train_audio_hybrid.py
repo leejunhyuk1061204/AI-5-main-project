@@ -4,13 +4,13 @@ AST + CNN14 Hybrid Ensemble 학습 도구
 
 [아키텍처]
 1. AST (Audio Spectrogram Transformer): Global Context 학습
-2. CNN14 (from PANNs): Local Texture 학습
-3. Late Fusion: 두 모델의 예측을 가중 앙상블
+3. CNN14Lite (PANNs-inspired): Local Texture 학습
+4. Feature Fusion: 두 모델의 특징(Feature)을 결합하여 분석
 
 [장점]
 - AST가 놓치는 Local 패턴을 CNN이 보완
 - CNN이 놓치는 Global Context를 AST가 보완
-- Abnormal Recall이 크게 향상되는 경우 많음
+- Feature Fusion으로 인한 Abnormal Recall 향상
 
 [사용법]
 python ai/scripts/audio/train_audio_hybrid.py --mode all --epochs 10
@@ -38,10 +38,7 @@ from datasets import Dataset
 from sklearn.metrics import precision_recall_fscore_support, accuracy_score, confusion_matrix
 from sklearn.model_selection import train_test_split
 
-from ai.app.services.audio.audio_preprocessing import (
-    trim_silence_rms, apply_bandpass_filter, calculate_speech_ratio,
-    apply_speech_soft_masking, apply_spectral_gating
-)
+from ai.app.services.audio.audio_preprocessing import preprocess_array
 
 # =============================================================================
 # [설정]
@@ -80,9 +77,9 @@ class ConvBlock(nn.Module):
         x = self.pool(x)
         return x
 
-class CNN14(nn.Module):
+class CNN14Lite(nn.Module):
     """
-    CNN14 from PANNs (Pretrained Audio Neural Networks)
+    CNN14 style model (Lite version)
     Local texture 학습에 강함
     """
     def __init__(self, num_classes=4, in_channels=1):
@@ -124,7 +121,7 @@ class CNN14(nn.Module):
         return x
 
     def load_pretrained_weights(self):
-        """PANNs Cnn14 Pretrained Weights 로드 (Zenodo)"""
+        """PANNs Cnn14 Pretrained Weights 로드 시도"""
         url = "https://zenodo.org/record/3987831/files/Cnn14_16k_mAP%3D0.438.pth?download=1"
         path = Path("ai/weights/audio/Cnn14_16k_mAP=0.438.pth")
         
@@ -132,7 +129,7 @@ class CNN14(nn.Module):
             path.parent.mkdir(parents=True, exist_ok=True)
 
         if not path.exists():
-            print(f"[CNN14] Downloading pretrained weights from {url}...")
+            print(f"[CNN14Lite] Downloading pretrained weights...")
             try:
                 response = requests.get(url, timeout=30)
                 path.write_bytes(response.content)
@@ -142,65 +139,80 @@ class CNN14(nn.Module):
                 return False
 
         try:
-            print(f"[CNN14] Loading weights from {path}...")
-            # PANNs 모델의 레이어 이름과 현재 모델의 레이어 이름이 동일한지 확인
-            # 만약 다르면 수동 매핑이나 strict=False 사용
-            pretrained_dict = torch.load(path, map_location="cpu")
+            print(f"[CNN14Lite] Loading weights from {path}...")
+            # weights_only=False is used for legacy PANNs weights which might contain non-tensor values
+            pretrained_dict = torch.load(path, map_location="cpu", weights_only=False)
             if 'model' in pretrained_dict:
                 pretrained_dict = pretrained_dict['model']
                 
             model_dict = self.state_dict()
             
-            # 1. 필터링: 현재 모델에 존재하는 키만 선택 + 출력층(fc2) 제외
-            filtered_dict = {
-                k: v for k, v in pretrained_dict.items() 
-                if k in model_dict and "fc2" not in k and v.shape == model_dict[k].shape
-            }
-            
-            # 2. 업데이트
-            model_dict.update(filtered_dict)
+            # Key Mapping logic for PANNs -> CNN14Lite
+            # PANNs: conv_block1.conv1.weight -> Lite: conv_blocks.0.conv1.weight
+            mapped_dict = {}
+            for k, v in pretrained_dict.items():
+                new_k = k
+                # conv_blockN.X -> conv_blocks.N-1.X
+                if k.startswith("conv_block"):
+                    try:
+                        num = int(k.split(".")[0].replace("conv_block", ""))
+                        new_k = k.replace(f"conv_block{num}", f"conv_blocks.{num-1}")
+                    except:
+                        pass
+                
+                if new_k in model_dict and v.shape == model_dict[new_k].shape:
+                    mapped_dict[new_k] = v
+
+            model_dict.update(mapped_dict)
             self.load_state_dict(model_dict)
-            print(f"[CNN14] Successfully loaded {len(filtered_dict)} layers from pretrained model.")
+            print(f"[CNN14Lite] Successfully loaded {len(mapped_dict)} layers.")
             return True
         except Exception as e:
-            print(f"[CNN14] Weight loading error: {e}. Starting with random weights.")
+            print(f"[CNN14Lite] Weight loading error: {e}")
             return False
 
 # =============================================================================
 # 2. Hybrid Ensemble 모델 및 Fusion Head
 # =============================================================================
 class FusionHead(nn.Module):
-    def __init__(self, num_classes=4):
+    def __init__(self, ast_dim=768, cnn_dim=2048, num_classes=4):
         super().__init__()
         self.head = nn.Sequential(
-            nn.LayerNorm(num_classes * 2),
+            nn.Linear(ast_dim + cnn_dim, 512),
+            nn.ReLU(),
             nn.Dropout(0.3),
-            nn.Linear(num_classes * 2, num_classes)
+            nn.Linear(512, num_classes)
         )
 
-    def forward(self, ast_logits, cnn_logits):
-        x = torch.cat([ast_logits, cnn_logits], dim=-1)
+    def forward(self, ast_feat, cnn_feat):
+        x = torch.cat([ast_feat, cnn_feat], dim=-1)
         return self.head(x)
 
 class HybridEnsemble(nn.Module):
     """
-    AST + CNN14 Fusion Ensemble
+    AST + CNN14Lite Feature Fusion Ensemble
     """
     def __init__(self, ast_model, cnn_model, num_classes=4):
         super().__init__()
         self.ast_model = ast_model
         self.cnn_model = cnn_model
-        self.fusion_head = FusionHead(num_classes)
+        self.fusion_head = FusionHead(ast_dim=768, cnn_dim=2048, num_classes=num_classes)
         
     def forward(self, ast_input, cnn_input):
-        # 1. AST 예측 (Freeze 상태여도 연산은 수행)
-        ast_logits = self.ast_model(ast_input).logits
+        # 1. AST Features (Official Feature Extraction)
+        # Hidden State Mean: logits 최적화와는 별개로 feature 공간의 정보를 활용
+        ast_outputs = self.ast_model(
+            ast_input, 
+            output_hidden_states=True, 
+            return_dict=True
+        )
+        ast_feat = ast_outputs.hidden_states[-1].mean(dim=1) # (batch, 768)
         
-        # 2. CNN 예측
-        cnn_logits = self.cnn_model(cnn_input)
+        # 2. CNN Features (Lite 구조 특성상 전이학습 효과는 수렴 속도 향상에 집중됨)
+        cnn_feat = self.cnn_model.get_features(cnn_input) # (batch, 2048)
         
-        # 3. Fusion Head를 통한 최종 결정
-        return self.fusion_head(ast_logits, cnn_logits)
+        # 3. Fusion Head를 통한 최종 결정 (Concatenation)
+        return self.fusion_head(ast_feat, cnn_feat)
 
 # =============================================================================
 # 3. 데이터 로딩
@@ -230,21 +242,32 @@ def process_audio_for_hybrid(item):
     try:
         y, sr = librosa.load(item["audio"], sr=16000)
         
-        # 전처리
-        y = trim_silence_rms(y, sr, top_db=50)
-        y = apply_bandpass_filter(y, sr)
-        speech_ratio, vad_mask = calculate_speech_ratio(y, sr)
-        if item["label"] == "normal" and speech_ratio > 0.05:
-            y = apply_speech_soft_masking(y, sr, vad_mask)
-        y = apply_spectral_gating(y, sr, min_gain=0.2 if item["label"] == "normal" else 0.5)
+        # [전기차 소음 진단 최적화 전처리 - Single Source of Truth 활용]
+        is_normal = (item["label"] == "normal")
+        y, _ = preprocess_array(
+            y, sr,
+            top_db=50 if is_normal else 35,
+            low_freq=80,
+            min_gain=0.4 if is_normal else 0.6,
+            enable_speech_mask=True,
+            label_name=item["label"]
+        )
+        
+        # 5. [개선] 5초 고정 길이 보장 (AST 성능 일관성) - Sliding Crop (Augmentation)
+        target_len = 16000 * 5
+        if len(y) > target_len:
+            start = np.random.randint(0, len(y) - target_len)
+            y = y[start:start+target_len]
+        else:
+            y = librosa.util.fix_length(y, size=target_len)
         
         # RMS Norm
         target_rms = 0.1
         current_rms = np.sqrt(np.mean(y**2)) + 1e-8
         y = y * (target_rms / current_rms)
         
-        # CNN용: Mel Spectrogram
-        mel_spec = librosa.feature.melspectrogram(y=y, sr=sr, n_mels=128, fmax=8000)
+        # CNN용: Mel Spectrogram (fmax를 Band-pass와 일치시킴: 7500Hz)
+        mel_spec = librosa.feature.melspectrogram(y=y, sr=sr, n_mels=128, fmax=7500)
         mel_spec_db = librosa.power_to_db(mel_spec, ref=np.max)
         
         return {
@@ -259,7 +282,14 @@ def process_audio_for_hybrid(item):
 def prepare_hybrid_datasets(data_list, desc="Data"):
     global feature_extractor
     if feature_extractor is None:
-        feature_extractor = ASTFeatureExtractor.from_pretrained(MODEL_NAME)
+        # AST 규격에 맞는 Feature Extractor 설정 (고정 길이)
+        feature_extractor = ASTFeatureExtractor(
+            sampling_rate=16000,
+            max_length=1024,
+            padding="max_length",
+            truncation=True,
+            return_attention_mask=False
+        )
     
     print(f"[Info] {desc} 하이브리드 전처리 중 (총 {len(data_list)}개)...")
     results = []
@@ -276,12 +306,13 @@ def prepare_hybrid_datasets(data_list, desc="Data"):
             # AST features
             ast_input = feature_extractor(
                 res["audio_array"], sampling_rate=16000,
-                return_tensors="pt", padding="longest", truncation=True, max_length=1024
+                return_tensors="pt"
             )["input_values"].squeeze(0).numpy()
             
             # CNN features (mel spec)
             mel_spec = res["mel_spec"]
             # 패딩/자르기로 고정 크기 (128, 256)
+            # [Note] 256: 5초(약 155프레임) 대비 넉넉한 2의 거듭제곱으로 Augmentation/Pooling 안정성 확보
             target_len = 256
             if mel_spec.shape[1] < target_len:
                 mel_spec = np.pad(mel_spec, ((0, 0), (0, target_len - mel_spec.shape[1])))
@@ -302,10 +333,10 @@ def prepare_hybrid_datasets(data_list, desc="Data"):
 # =============================================================================
 # 4. 학습 함수들
 # =============================================================================
-def train_cnn14(train_data, test_data, epochs=10):
-    """CNN14 독립 학습"""
+def train_cnn(train_data, test_data, epochs=10):
+    """CNN14Lite 독립 학습"""
     print("\n" + "="*60)
-    print("[CNN14] Local Texture 모델 학습")
+    print("[CNN14Lite] Local Texture 모델 학습")
     print("="*60)
     
     t_data, v_data = train_test_split(train_data, test_size=0.1, 
@@ -325,7 +356,7 @@ def train_cnn14(train_data, test_data, epochs=10):
     test_loader = torch.utils.data.DataLoader(test_cnn, batch_size=16)
     
     # 모델
-    model = CNN14(num_classes=len(LABEL_LIST)).to(device)
+    model = CNN14Lite(num_classes=len(LABEL_LIST)).to(device)
     
     # Pretrained Weights 로드 시도
     model.load_pretrained_weights()
@@ -345,7 +376,10 @@ def train_cnn14(train_data, test_data, epochs=10):
         model.train()
         total_loss = 0
         for batch_x, batch_y in train_loader:
-            batch_x, batch_y = batch_x.to(device), torch.tensor(batch_y).to(device)
+            # batch_y might be a list or array, convert to tensor if needed, otherwise clone/detach
+            if not isinstance(batch_y, torch.Tensor):
+                batch_y = torch.tensor(batch_y)
+            batch_x, batch_y = batch_x.to(device), batch_y.clone().detach().to(device)
             
             optimizer.zero_grad()
             outputs = model(batch_x)
@@ -387,7 +421,7 @@ def train_cnn14(train_data, test_data, epochs=10):
             all_preds.extend(preds)
             all_labels.extend(batch_y)
     
-    print(f"\n📊 CNN14 Test 결과:")
+    print(f"\n📊 CNN14Lite Test 결과:")
     print(f" - Accuracy: {accuracy_score(all_labels, all_preds):.4f}")
     p, r, f1, _ = precision_recall_fscore_support(all_labels, all_preds, average='macro')
     print(f" - Macro F1: {f1:.4f}, Recall: {r:.4f}")
@@ -485,7 +519,7 @@ def train_fusion(train_data, test_data, epochs=10):
     
     # 1. 모델 로드 및 Freeze
     ast_model = ASTForAudioClassification.from_pretrained(SAVE_PATH_AST).to(device)
-    cnn_model = CNN14(num_classes=len(LABEL_LIST)).to(device)
+    cnn_model = CNN14Lite(num_classes=len(LABEL_LIST)).to(device)
     cnn_model.load_state_dict(torch.load(os.path.join(SAVE_PATH_CNN, "cnn14.pt")))
     
     for param in ast_model.parameters():
@@ -508,7 +542,9 @@ def train_fusion(train_data, test_data, epochs=10):
             (torch.tensor(r["ast_input"]), torch.tensor(r["cnn_input"]), r["labels"]) 
             for r in results
         ]
-        return torch.utils.data.DataLoader(data, batch_size=16, shuffle=shuffle)
+        # 6GB VRAM 대응: 배치 사이즈 축소 (16 -> 4)
+        batch_size = 4 if torch.cuda.get_device_properties(0).total_memory < 8e9 else 16
+        return torch.utils.data.DataLoader(data, batch_size=batch_size, shuffle=shuffle)
     
     train_loader = create_loader(train_results, shuffle=True)
     val_loader = create_loader(val_results)
@@ -535,7 +571,9 @@ def train_fusion(train_data, test_data, epochs=10):
         model.train()
         total_loss = 0
         for b_ast, b_cnn, b_y in train_loader:
-            b_ast, b_cnn, b_y = b_ast.to(device), b_cnn.to(device), b_y.to(device)
+            if not isinstance(b_y, torch.Tensor):
+                b_y = torch.tensor(b_y)
+            b_ast, b_cnn, b_y = b_ast.to(device), b_cnn.to(device), b_y.clone().detach().to(device)
             
             optimizer.zero_grad()
             outputs = model(b_ast, b_cnn)
@@ -562,19 +600,30 @@ def train_fusion(train_data, test_data, epochs=10):
             os.makedirs(SAVE_PATH_ENSEMBLE, exist_ok=True)
             torch.save(model.state_dict(), os.path.join(SAVE_PATH_ENSEMBLE, "hybrid_fusion.pt"))
 
+    # Stage 1 종료 후 메모리 정리
+    import gc
+    torch.cuda.empty_cache()
+    gc.collect()
+
     # [2단계] 전체 모델 미세 조정 (Unfreeze Backbones)
     print("\n>>> Stage 2: Fine-tuning Full Model (Unfreezing Backbones)")
     for param in model.parameters():
         param.requires_grad = True
     
-    # 훨씬 낮은 학습률로 조심스럽게 학습
-    optimizer = torch.optim.AdamW(model.parameters(), lr=5e-6) 
+    # [개선] 차별화된 학습률 적용 (Fusion Head는 크게, 백본은 보수적으로)
+    optimizer = torch.optim.AdamW([
+        {"params": model.fusion_head.parameters(), "lr": 1e-4},
+        {"params": model.ast_model.parameters(), "lr": 1e-5},
+        {"params": model.cnn_model.parameters(), "lr": 1e-5},
+    ])
     
     for epoch in range(5): # 추가 5에폭 미세조정
         model.train()
         total_loss = 0
         for b_ast, b_cnn, b_y in train_loader:
-            b_ast, b_cnn, b_y = b_ast.to(device), b_cnn.to(device), b_y.to(device)
+            if not isinstance(b_y, torch.Tensor):
+                b_y = torch.tensor(b_y)
+            b_ast, b_cnn, b_y = b_ast.to(device), b_cnn.to(device), b_y.clone().detach().to(device)
             optimizer.zero_grad()
             outputs = model(b_ast, b_cnn)
             loss = criterion(outputs, b_y)
@@ -603,7 +652,7 @@ def train_fusion(train_data, test_data, epochs=10):
     if not os.path.exists(final_model_path): # 2단계에서 개선 안 된 경우 1단계 모델 사용
         final_model_path = os.path.join(SAVE_PATH_ENSEMBLE, "hybrid_fusion.pt")
         
-    model.load_state_dict(torch.load(final_model_path))
+    model.load_state_dict(torch.load(final_model_path, weights_only=True))
     model.eval()
     all_preds, all_labels = [], []
     with torch.no_grad():
@@ -637,7 +686,7 @@ def evaluate_ensemble(test_data):
     
     # 모델 로드
     ast_model = ASTForAudioClassification.from_pretrained(SAVE_PATH_AST).to(device)
-    cnn_model = CNN14(num_classes=len(LABEL_LIST)).to(device)
+    cnn_model = CNN14Lite(num_classes=len(LABEL_LIST)).to(device)
     cnn_model.load_state_dict(torch.load(os.path.join(SAVE_PATH_CNN, "cnn14.pt")))
     
     model = HybridEnsemble(ast_model, cnn_model, num_classes=len(LABEL_LIST)).to(device)
@@ -666,6 +715,35 @@ def evaluate_ensemble(test_data):
     print(f" - Macro F1: {f1:.4f}")
     print(f" - Macro Recall: {r:.4f}")
     
+    # [NEW] Decision Layer Calibration Metrics
+    from ai.app.services.audio.audio_llm_fallback import get_audio_decision, T_HIGH, T_LOW
+    from collections import Counter
+    gate_counts = Counter()
+    
+    with torch.no_grad():
+        for r in test_results:
+            ast_input = torch.tensor(r["ast_input"]).unsqueeze(0).to(device)
+            cnn_input = torch.tensor(r["cnn_input"]).unsqueeze(0).to(device)
+            outputs = model(ast_input, cnn_input)
+            probs = torch.softmax(outputs, dim=-1).cpu().numpy()[0]
+            conf = np.max(probs)
+            pred_label = LABEL_LIST[np.argmax(probs)]
+            
+            decision = get_audio_decision(
+                confidence=conf,
+                label=pred_label,
+                all_probs={LABEL_LIST[i]: float(p) for i, p in enumerate(probs)}
+            )
+            gate_counts[decision.gate] += 1
+            
+    print(f"\n⚖️ Decision Layer 가이드 (T_HIGH={T_HIGH}, T_LOW={T_LOW}):")
+    total = sum(gate_counts.values())
+    for g in range(1, 5):
+        count = gate_counts[g]
+        pct = (count / total * 100) if total > 0 else 0
+        desc = {1: "High-Conf (Direct)", 2: "Mid-Conf (Approved)", 3: "Uncertain (LLM)", 4: "AL-Trigger"}.get(g)
+        print(f" - Gate {g} [{desc:>20}]: {count:>4} samples ({pct:>5.1f}%)")
+
     cm = confusion_matrix(all_labels, all_preds)
     print(f"\n🖼️ Confusion Matrix:")
     print(f"   Labels: {LABEL_LIST}")
@@ -730,7 +808,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--mode", type=str, default="all", choices=["baseline", "ast", "cnn", "fusion", "ensemble", "all"])
     parser.add_argument("--epochs", type=int, default=10)
-    parser.add_argument("--ast-weight", type=float, default=0.6, help="AST 가중치 (0~1)")
     args = parser.parse_args()
     
     print(f"[Info] 디바이스: {device}")
@@ -746,14 +823,14 @@ if __name__ == "__main__":
     elif args.mode == "ast":
         train_ast(train_data, test_data, args.epochs)
     elif args.mode == "cnn":
-        train_cnn14(train_data, test_data, args.epochs)
+        train_cnn(train_data, test_data, args.epochs)
     elif args.mode == "ensemble":
         evaluate_ensemble(test_data)
     elif args.mode == "fusion":
         train_fusion(train_data, test_data, args.epochs)
     elif args.mode == "all":
         train_ast(train_data, test_data, args.epochs)
-        train_cnn14(train_data, test_data, args.epochs)
+        train_cnn(train_data, test_data, args.epochs)
         train_fusion(train_data, test_data, args.epochs)
     
     print("\n✅ 완료!")
