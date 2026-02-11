@@ -32,32 +32,15 @@ def load_audio(path: str, sr: int = 16000):
 
 def get_preprocessed_audio(raw_audio: np.ndarray, sr: int = 16000):
     """동기 방식으로 전처리 파이프라인 실행"""
-    from ai.app.services.audio.audio_preprocessing import (
-        trim_silence_rms,
-        apply_bandpass_filter,
-        calculate_speech_ratio,
-        apply_speech_soft_masking,
-        apply_spectral_gating
+    from ai.app.services.audio.audio_preprocessing import preprocess_array
+    
+    # Single Source of Truth 기능 호출
+    audio, _ = preprocess_array(
+        raw_audio, sr,
+        top_db=20,     # 검증 기본값
+        min_gain=0.2,   # 검증 기본값
+        base_attenuation=0.3
     )
-    
-    audio = raw_audio.copy()
-    
-    # 1. Silence Trim
-    audio = trim_silence_rms(audio, sr)
-    
-    # 2. Band-pass Filter
-    audio = apply_bandpass_filter(audio, sr)
-    
-    # 3. VAD
-    speech_ratio, vad_mask = calculate_speech_ratio(audio, sr)
-    
-    # 4. Speech Masking (조건부)
-    if speech_ratio > 0.2:
-        audio = apply_speech_soft_masking(audio, sr, vad_mask)
-    
-    # 5. Spectral Gating
-    audio = apply_spectral_gating(audio, sr)
-    
     return audio
 
 

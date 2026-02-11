@@ -15,6 +15,7 @@ import os
 import shutil
 import platform
 from ultralytics import YOLO
+import shutil
 
 # =============================================================================
 # [Configuration] 
@@ -30,10 +31,10 @@ DATA_YAML_PATH = os.path.join(DATA_ROOT, "yolo/dashboard/data.yaml")
 OUTPUT_DIR = "ai/runs/dashboard_model"
 SAVE_PATH = "ai/weights/dashboard/best.pt"
 
-DEFAULT_EPOCHS = 100
+DEFAULT_EPOCHS = 10
 BATCH_SIZE = 16  # 데이터 적을 때 최적화 (기존 2)
-IMG_SIZE = 1280
-WORKERS = 8 if platform.system() != "Windows" else 0  # 환경 자동 감지
+IMG_SIZE = 640
+WORKERS = 4 if platform.system() != "Windows" else 0  # 환경 자동 감지
 
 # Augmentation (Small Dataset Optimized)
 MOSAIC = 1.0
@@ -45,7 +46,7 @@ HSV_V = 0.6      # 증가
 # Regularization
 WEIGHT_DECAY = 0.0005
 
-def train_model(epochs=DEFAULT_EPOCHS):
+def train_model(epochs=DEFAULT_EPOCHS, batch=BATCH_SIZE, imgsz=IMG_SIZE, workers=WORKERS, device=0):
     print(f"\n[Dashboard] 학습 시작 ({epochs} epochs)...")
     if not os.path.exists(DATA_YAML_PATH):
         print(f"[Error] {DATA_YAML_PATH} 가 없습니다.")
@@ -62,13 +63,13 @@ def train_model(epochs=DEFAULT_EPOCHS):
     results = model.train(
         data=DATA_YAML_PATH,
         epochs=epochs,
-        imgsz=1280,
-        batch=16,          # 데이터 적을 때 최적화 (기존 32)
+        imgsz=imgsz,
+        batch=batch,          # 데이터 적을 때 최적화 (기존 32)
         project=OUTPUT_DIR,
         name="run",
         exist_ok=True,     # 기존 폴더 덮어쓰기 (run1, run2... 누적 방지)
-        device=0,
-        workers=8,         # 리눅스 환경 상향 조정 (기존 0)
+        device=device,
+        workers=workers,         # 리눅스 환경 상향 조정 (기존 0)
         
         # Augmentation
         mosaic=MOSAIC,
@@ -117,50 +118,47 @@ def evaluate_model():
     names = model.names
     precision = metrics.box.p  # Array of precision per class
     recall = metrics.box.r     # Array of recall per class
-    maps = metrics.box.maps    # Array of mAP50-95 per class
     
-    print("\n" + "="*70)
+    print("\n" + "="*60)
     print(f"🎯 Dashboard Detailed Evaluation Results:")
-    print("-" * 70)
-    print(f"{'ID':<3} | {'Class Name':<20} | {'Precision':<10} | {'Recall':<10} | {'mAP50-95':<10}")
-    print("-" * 70)
+    print("-" * 60)
+    print(f"{'Class Name':<25} | {'Precision':<12} | {'Recall':<12}")
+    print("-" * 60)
     
     for i, name in names.items():
         p_val = precision[i] if i < len(precision) else 0.0
         r_val = recall[i] if i < len(recall) else 0.0
-        m_val = maps[i] if i < len(maps) else 0.0
-        print(f"{i:<3} | {name:<20} | {p_val:<10.4f} | {r_val:<10.4f} | {m_val:<10.4f}")
+        print(f"{name:<25} | {p_val:<12.4f} | {r_val:<12.4f}")
     
-    print("-" * 70)
-    print(f"💡 Overall mAP50:    {metrics.box.map50:.4f}")
-    print(f"💡 Overall mAP50-95: {metrics.box.map:.4f}")
-    
-    # Performance Summary
-    print(f"\n💡 Performance Summary:")
-    if metrics.box.map >= 0.95:
-        print(f"   ✅ Excellent! (>95% mAP)")
-    elif metrics.box.map >= 0.90:
-        print(f"   ✅ Very Good! (>90% mAP)")
-    elif metrics.box.map >= 0.85:
-        print(f"   ⚠️  Good, but can improve (>85% mAP)")
-    else:
-        print(f"   ❌ Needs improvement (<85% mAP)")
-    
-    print("="*70)
+    print("-" * 60)
+    print(f"💡 mAP50:    {metrics.box.map50:.4f}")
+    print(f"💡 mAP50-95: {metrics.box.map:.4f}")
+    print("="*60)
     
     print(f"\n📈 상세 분석 차트 저장 위치:")
-    print(f"   [Confusion Matrix]  {os.path.join(OUTPUT_DIR, 'val_test', 'confusion_matrix.png')}")
-    print(f"   [Precision-Recall]  {os.path.join(OUTPUT_DIR, 'val_test', 'PR_curve.png')}")
-    print(f"   [Confidence-Recall] {os.path.join(OUTPUT_DIR, 'val_test', 'R_curve.png')}")
-    print("="*70 + "\n")
+    print(f"   [Confusion Matrix] {os.path.join(OUTPUT_DIR, 'val_test', 'confusion_matrix.png')}")
+    print(f"   [Confidence-Recall] {os.path.join(OUTPUT_DIR, 'val_test', 'R_curve.png')} (추천)")
+    print(f"   [Precision-Recall] {os.path.join(OUTPUT_DIR, 'val_test', 'PR_curve.png')}")
+    print("="*60 + "\n")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Dashboard Warning Light Training")
     parser.add_argument("--mode", type=str, default="train", choices=["train", "test"])
     parser.add_argument("--epochs", type=int, default=DEFAULT_EPOCHS)
+    parser.add_argument("--batch", type=int, default=BATCH_SIZE, help="Batch size")
+    parser.add_argument("--imgsz", type=int, default=IMG_SIZE, help="Image size")
+    parser.add_argument("--workers", type=int, default=WORKERS, help="Number of dataloader workers")
+    parser.add_argument("--device", type=int, default=0, help="CUDA device index")
+    
     args = parser.parse_args()
     
     if args.mode == "train":
-        train_model(args.epochs)
+        train_model(
+            epochs=args.epochs,
+            batch=args.batch,
+            imgsz=args.imgsz,
+            workers=args.workers,
+            device=args.device
+            )
     elif args.mode == "test":
         evaluate_model()

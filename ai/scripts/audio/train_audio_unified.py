@@ -41,8 +41,7 @@ from sklearn.model_selection import train_test_split
 disable_caching()
 
 from ai.app.services.audio.audio_preprocessing import (
-    trim_silence_rms, apply_bandpass_filter, calculate_speech_ratio,
-    apply_speech_soft_masking, apply_spectral_gating
+    preprocess_array, calculate_speech_ratio
 )
 
 # =============================================================================
@@ -136,26 +135,20 @@ def process_audio(item, backbone="ast"):
         y, _ = librosa.load(item["audio"], sr=sr)
         label = item.get("label", "normal")
         
-        # 공통 전처리
-        y = trim_silence_rms(y, sr, top_db=50) # top_db=50: 무음 제거 기준 완화 (작은 소리도 유지)
-        y = apply_bandpass_filter(y, sr)
-        
-        # VAD & Speech Ratio (High-Energy Detector)
-        speech_ratio, vad_mask = calculate_speech_ratio(y, sr)
+        # [전기차 소음 진단 최적화 전처리 - Single Source of Truth 활용]
+        y, speech_ratio = preprocess_array(
+            y, sr,
+            top_db=50,
+            min_gain=0.2,
+            enable_speech_mask=True, 
+            label_name=label
+        )
         
         # ✅ "자동으로 0개 처리" 방어 코드: VAD 기준 미달이라도 Skip하지 않고 포함
         if speech_ratio < SPEECH_SKIP_THRESHOLD:
             print(f"[Warning] Low speech ratio ({speech_ratio:.2%}), but preserving data (Defense Mode).")
             # return {"skip": "no_speech", "path": item.get("audio", "unknown")} # 기존 Skip 로직 제거
 
-        # AST backbone: 전체 전처리 적용
-        if backbone == "ast":
-            # ✅ 'Normal' 클래스에 대해서만 Speech Masking 적용
-            if label == "normal" and speech_ratio > SPEECH_MASK_THRESHOLD:
-                y = apply_speech_soft_masking(y, sr, vad_mask)
-            # ✅ 전처리 불일치 해소: 모든 클래스/스플릿에 대해 min_gain=0.2 통일
-            y = apply_spectral_gating(y, sr, min_gain=0.2)
-        
         # RMS 정규화
         target_rms = 0.1
         current_rms = np.sqrt(np.mean(y**2)) + 1e-8
