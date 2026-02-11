@@ -15,7 +15,10 @@ spring:
     password: ${DB_PASSWORD:postgres}
     driver-class-name: org.postgresql.Driver
 
+  main:
+    lazy-initialization: true # 🚀 t2.micro startup optimization
   jpa:
+    open-in-view: false # Disable OSIV for performance
     defer-datasource-initialization: true # data.sql 실행을 Hibernate 테이블 이후로 미룸
     hibernate:
       ddl-auto: update
