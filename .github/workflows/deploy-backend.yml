@@ -2,7 +2,7 @@ name: Deploy Backend
 
 on:
   push:
-    branches: [deploy]
+    branches: [deploy, main]
 
 jobs:
   deploy:
@@ -52,14 +52,46 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             # Pull latest image
-            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:latest
+            sudo docker pull ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:latest
             
-            # Stop and remove existing container
-            docker stop ai-5-backend || true
-            docker rm ai-5-backend || true
+            # --- 1. PostgreSQL ---
+            if [ ! "$(sudo docker ps -q -f name=ai-5-db)" ]; then
+                if [ "$(sudo docker ps -aq -f status=exited -f name=ai-5-db)" ]; then
+                    echo "🔄 Starting existing PostgreSQL container..."
+                    sudo docker start ai-5-db
+                else
+                    echo "🐘 Running new PostgreSQL container..."
+                    sudo docker run -d --name ai-5-db --restart unless-stopped --network host -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=car_sentry postgres:15
+                fi
+            fi
+
+            # --- 2. Redis ---
+            if [ ! "$(sudo docker ps -q -f name=ai-5-redis)" ]; then
+                if [ "$(sudo docker ps -aq -f status=exited -f name=ai-5-redis)" ]; then
+                    echo "🔄 Starting existing Redis container..."
+                    sudo docker start ai-5-redis
+                else
+                    echo "🔺 Running new Redis container..."
+                    sudo docker run -d --name ai-5-redis --restart unless-stopped --network host redis:alpine
+                fi
+            fi
+
+            # --- 3. RabbitMQ ---
+            if [ ! "$(sudo docker ps -q -f name=ai-5-mq)" ]; then
+                if [ "$(sudo docker ps -aq -f status=exited -f name=ai-5-mq)" ]; then
+                    echo "🔄 Starting existing RabbitMQ container..."
+                    sudo docker start ai-5-mq
+                else
+                    echo "🐰 Running new RabbitMQ container..."
+                    sudo docker run -d --name ai-5-mq --restart unless-stopped --network host -e RABBITMQ_DEFAULT_USER=guest -e RABBITMQ_DEFAULT_PASS=guest rabbitmq:3-management
+                fi
+            fi
             
-            # Run new container (matching manual deploy script logic)
-            # Using --network host so localhost refers to EC2 host where DB/Redis/MQ are running
+            # --- 4. Backend ---
+            echo "⏹️ Stopping existing backend container..."
+            sudo docker stop ai-5-backend || true
+            sudo docker rm ai-5-backend || true
+            
             REMOTE_ENV_PATH="/home/ubuntu/.env"
             FIREBASE_MOUNT=""
             if [ -f "/home/ubuntu/firebase-service-account.json" ]; then
@@ -67,8 +99,9 @@ jobs:
                 echo "🔥 Firebase config found. Mounting..."
             fi
             
+            echo "▶️ Running new backend container..."
             if [ -f "$REMOTE_ENV_PATH" ]; then
-              docker run -d \
+              sudo docker run -d \
                 --name ai-5-backend \
                 --restart unless-stopped \
                 --network host \
@@ -77,7 +110,7 @@ jobs:
                 ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:latest
             else
               echo "⚠️ Warning: .env file not found. Running without env file."
-              docker run -d \
+              sudo docker run -d \
                 --name ai-5-backend \
                 --restart unless-stopped \
                 --network host \
@@ -86,7 +119,7 @@ jobs:
             fi
             
             # Clean up old images
-            docker image prune -f
+            sudo docker image prune -f
 
       - name: Deployment Complete
         run: |
