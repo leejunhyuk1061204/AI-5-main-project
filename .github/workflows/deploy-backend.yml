@@ -149,6 +149,12 @@ jobs:
             echo "🌐 Checking port 8080 usage..."
             sudo ss -tulpn | grep 8080 || echo "Port 8080 is free."
             
+            # --- Install haveged for Entropy (Fix slow startup on t2.micro) ---
+            echo "🚀 Installing haveged to fix entropy issues..."
+            sudo apt-get update && sudo apt-get install -y haveged
+            sudo systemctl start haveged
+            sudo systemctl enable haveged
+            
             # --- Wait for Services ---
             echo "⏳ Waiting for RabbitMQ (5672) and Redis (6379) to be ready..."
             timeout 60s bash -c 'until sudo ss -tulpn | grep 5672; do sleep 2; echo "Waiting for RabbitMQ..."; done'
@@ -187,8 +193,8 @@ jobs:
                 ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:latest
             fi
 
-            echo "⏳ Waiting for Backend to bind port 8080 (max 180s)..."
-            MAX_RETRIES=18
+            echo "⏳ Waiting for Backend to bind port 8080 (max 20min)..."
+            MAX_RETRIES=120
             for ((i=1; i<=MAX_RETRIES; i++)); do
               if sudo ss -tulpn | grep ':8080 ' > /dev/null; then
                   echo "✅ Backend is listening on port 8080!"
@@ -200,7 +206,7 @@ jobs:
             
             # Check if port is actually open after loop
             if ! sudo ss -tulpn | grep ':8080 ' > /dev/null; then
-                echo "❌ Backend failed to start within 180 seconds."
+                echo "❌ Backend failed to start within 20 minutes."
                 echo "📋 Container Logs (Last 50 lines):"
                 sudo docker logs --tail 50 ai-5-backend
                 exit 1
