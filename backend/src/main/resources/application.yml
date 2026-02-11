@@ -82,7 +82,7 @@ app:
   cors:
     allowed-origins: ${ALLOWED_ORIGINS:http://localhost:8080,http://localhost:19006,http://10.0.2.2:8080}
   storage:
-    type: ${STORAGE_TYPE:local} # local or s3
+    type: ${STORAGE_TYPE:local}  # 환경변수 사용, 기본값 local
   firebase:
     config-path: ${FIREBASE_CONFIG_PATH:firebase-service-account.json}
 

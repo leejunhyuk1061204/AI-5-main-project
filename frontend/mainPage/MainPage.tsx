@@ -164,7 +164,7 @@ export default function MainPage() {
         if (!item) return { color: '#334155', text: '-', percent: 0, iconColor: '#475569' };
 
         const life = Math.round(item.remainingLifePercent);
-        let color = '#22c55e'; // Success (Good)
+        let color = '#0d7ff2'; // Primary Blue (Good)
         let statusText = '양호';
 
         if (life <= 20) {
@@ -328,9 +328,9 @@ export default function MainPage() {
                 </View>
                 <View className="flex-row gap-2.5">
                     {[
-                        { label: '엔진오일', icon: 'oil', family: 'MaterialCommunityIcons', data: engineStatus },
+                        { label: '엔진오일', icon: 'water-drop', family: 'MaterialIcons', data: engineStatus },
                         { label: '배터리', icon: 'battery-charging-full', family: 'MaterialIcons', data: batteryStatus },
-                        { label: '냉각수', icon: 'coolant-temperature', family: 'MaterialCommunityIcons', data: coolantStatus }
+                        { label: '냉각수', icon: 'thermostat', family: 'MaterialIcons', data: coolantStatus }
                     ].map((item, index) => (
                         <TouchableOpacity
                             key={index}

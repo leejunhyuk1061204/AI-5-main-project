@@ -39,6 +39,7 @@ public class MaintenanceService {
         private final ConsumableItemRepository consumableItemRepository;
         private final OcrService ocrService;
         private final ReceiptAnalyzerService receiptAnalyzerService;
+        private final AiMediaService aiMediaService;
 
         /**
          * 정비 이력 다중 등록 (리스트 처리)
@@ -313,6 +314,21 @@ public class MaintenanceService {
                 // 2. OCR 분석 (Naver OCR + OpenAI 파싱)
                 OcrAnalysisResponse ocrResult = receiptAnalyzerService.analyze(file);
 
+                // 2.1 이미지 저장 (Receipt Gallery용)
+                UUID receiptId = UUID.randomUUID();
+                try {
+                        String originalFilename = file.getOriginalFilename();
+                        String ext = "jpg";
+                        if (originalFilename != null && originalFilename.contains(".")) {
+                                ext = originalFilename.substring(originalFilename.lastIndexOf(".") + 1);
+                        }
+                        String filename = receiptId.toString() + "." + ext;
+                        aiMediaService.storeMedia(file, "receipts", filename);
+                } catch (Exception e) {
+                        log.error("Failed to save receipt image", e);
+                        // 이미지가 저장되지 않아도 분석 및 저장은 계속 진행
+                }
+
                 // 3. 사용자 수동 수정 데이터 파싱 (있을 경우)
                 if (manualDataJson != null && !manualDataJson.isEmpty()) {
                         try {
@@ -374,6 +390,7 @@ public class MaintenanceService {
                 }
 
                 // 5. 정비 이력 저장 (소모품 상태 갱신 포함)
+                request.setReceiptId(receiptId);
                 return registerMaintenance(vehicleId, request);
         }
 

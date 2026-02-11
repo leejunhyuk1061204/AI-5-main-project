@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Modal, Pressable } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Modal, Pressable, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -70,29 +70,42 @@ export default function SupManage() {
     // Helper to map item code to icon
     const getIconInfo = (code: string) => {
         const map: Record<string, { icon: string, family: string }> = {
-            'ENGINE_OIL': { icon: 'oil', family: 'MaterialCommunityIcons' },
+            'ENGINE_OIL': { icon: 'water-drop', family: 'MaterialIcons' },
             'WIPER': { icon: 'wiper', family: 'MaterialCommunityIcons' },
             'AIR_FILTER': { icon: 'air-filter', family: 'MaterialCommunityIcons' },
+            'CABIN_FILTER': { icon: 'air-filter', family: 'MaterialCommunityIcons' },
             'TIRE': { icon: 'tire', family: 'MaterialCommunityIcons' },
             'TIRES': { icon: 'tire', family: 'MaterialCommunityIcons' },
             'TIRE_FRONT': { icon: 'tire', family: 'MaterialCommunityIcons' },
             'TIRE_REAR': { icon: 'tire', family: 'MaterialCommunityIcons' },
-            'BRAKE_PAD': { icon: 'disc-full', family: 'MaterialIcons' },
-            'BRAKE_PAD_FRONT': { icon: 'disc-full', family: 'MaterialIcons' },
-            'BRAKE_PAD_REAR': { icon: 'disc-full', family: 'MaterialIcons' },
-            'BATTERY': { icon: 'battery-charging-full', family: 'MaterialIcons' },
-            'BATTERY_12V': { icon: 'battery-charging-full', family: 'MaterialIcons' },
-            'SPARK_PLUG': { icon: 'engine', family: 'MaterialCommunityIcons' },
+            'BRAKE_PAD': { icon: 'stop-circle', family: 'MaterialIcons' },
+            'BRAKE_PAD_FRONT': { icon: 'stop-circle', family: 'MaterialIcons' },
+            'BRAKE_PAD_REAR': { icon: 'stop-circle', family: 'MaterialIcons' },
+            'BATTERY': { icon: 'car-battery', family: 'MaterialCommunityIcons' },
+            'BATTERY_12V': { icon: 'car-battery', family: 'MaterialCommunityIcons' },
+            'SPARK_PLUG': { icon: 'flash-on', family: 'MaterialIcons' },
             'BRAKE_FLUID': { icon: 'water-drop', family: 'MaterialIcons' },
             'COOLANT': { icon: 'thermostat', family: 'MaterialIcons' },
             'TRANSMISSION_FLUID': { icon: 'cog-transfer', family: 'MaterialCommunityIcons' },
+            'DRIVE_BELT': { icon: 'settings-input-component', family: 'MaterialIcons' },
+            'MISSION_OIL': { icon: 'cog-transfer', family: 'MaterialCommunityIcons' },
+            'AIR_CON_REFRIGERANT': { icon: 'snowflake', family: 'MaterialCommunityIcons' },
+            'BRAKE_PADS': { icon: 'stop-circle', family: 'MaterialIcons' },
+            'FUEL_FILTER': { icon: 'filter', family: 'MaterialCommunityIcons' },
+            'WHEEL_ALIGNMENT': { icon: 'tune', family: 'MaterialIcons' },
             'OTHER': { icon: 'construction', family: 'MaterialIcons' }
         };
-        return map[code] || { icon: 'settings', family: 'MaterialIcons' };
+        // Handle case-insensitive or snake_case matching if needed by normalizing input
+        const normalizedCode = code.toUpperCase();
+        return map[normalizedCode] || { icon: 'settings', family: 'MaterialIcons' };
     };
 
     const renderIcon = (item: VehicleConsumable, color: string) => {
-        const { icon, family } = getIconInfo(item.item);
+        const iconInfo = getIconInfo(item.itemCode);
+        if (!iconInfo) {
+            return <MaterialIcons name="help-outline" size={24} color={color} />;
+        }
+        const { icon, family } = iconInfo;
         if (family === "MaterialCommunityIcons") {
             return <MaterialCommunityIcons name={icon as any} size={24} color={color} />;
         }
@@ -205,7 +218,7 @@ export default function SupManage() {
                                                     {statusAvailable}
                                                 </Text>
                                                 {/* Tire Specific Warning */}
-                                                {(item.item === 'TIRE' || item.item === 'TIRES') && item.unevenWearDetected && (
+                                                {(item.itemCode === 'TIRE' || item.itemCode === 'TIRES') && item.unevenWearDetected && (
                                                     <View className="bg-red-500/20 px-2 py-0.5 rounded mt-1 self-start">
                                                         <Text className="text-red-400 text-[10px] font-bold">⚠️ 편마모 감지됨</Text>
                                                     </View>
