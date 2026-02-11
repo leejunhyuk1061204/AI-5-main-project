@@ -13,58 +13,28 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Create Firebase Service Account file
-        run: echo "${{ secrets.FIREBASE_SERVICE_ACCOUNT }}" > backend/firebase-service-account.json
-
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
-          cache: 'gradle'
-
-      - name: Grant execute permission for gradlew
-        run: chmod +x backend/gradlew
-
-      - name: Build with Gradle
-        working-directory: backend
-        run: ./gradlew build -x test
-
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Build and Push Docker Image
+      - name: Create Configuration Files
         working-directory: backend
         run: |
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:${{ github.ref_name }} .
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:latest .
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:${{ github.ref_name }}
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:latest
-
-      - name: Create .env file
-        run: |
-          echo "JWT_SECRET=${{ secrets.JWT_SECRET }}" >> backend/.env
-          echo "ENCRYPTION_KEY=${{ secrets.ENCRYPTION_KEY }}" >> backend/.env
-          echo "NAVER_OCR_Secret_Key=${{ secrets.NAVER_OCR_SECRET_KEY }}" >> backend/.env
-          echo "NAVER_OCR_Invoke_Url=${{ secrets.NAVER_OCR_INVOKE_URL }}" >> backend/.env
-          echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" >> backend/.env
-          echo "DB_HOST=localhost" >> backend/.env
-          echo "DB_PORT=5432" >> backend/.env
-          echo "DB_NAME=car_sentry" >> backend/.env
-          echo "DB_USER=postgres" >> backend/.env
-          echo "DB_PASSWORD=postgres" >> backend/.env
-          echo "REDIS_HOST=localhost" >> backend/.env
-          echo "REDIS_PORT=6379" >> backend/.env
-          echo "MQ_HOST=localhost" >> backend/.env
-          echo "MQ_PORT=5672" >> backend/.env
-          echo "MQ_USER=guest" >> backend/.env
-          echo "MQ_PASSWORD=guest" >> backend/.env
-
-      - name: Create Firebase Service Account file
-        run: echo "${{ secrets.FIREBASE_SERVICE_ACCOUNT }}" > backend/firebase-service-account.json
+          cat <<EOF > .env
+          JWT_SECRET=${{ secrets.JWT_SECRET }}
+          ENCRYPTION_KEY=${{ secrets.ENCRYPTION_KEY }}
+          NAVER_OCR_Secret_Key=${{ secrets.NAVER_OCR_SECRET_KEY }}
+          NAVER_OCR_Invoke_Url=${{ secrets.NAVER_OCR_INVOKE_URL }}
+          OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+          DB_HOST=localhost
+          DB_PORT=5432
+          DB_NAME=car_sentry
+          DB_USER=postgres
+          DB_PASSWORD=postgres
+          REDIS_HOST=localhost
+          REDIS_PORT=6379
+          MQ_HOST=localhost
+          MQ_PORT=5672
+          MQ_USER=guest
+          MQ_PASSWORD=guest
+          EOF
+          echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > firebase-service-account.json
 
       - name: Copy Configuration Files to EC2
         uses: appleboy/scp-action@v0.1.7
@@ -149,6 +119,11 @@ jobs:
                 $FIREBASE_MOUNT \
                 ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:latest
             fi
+
+            echo "⏳ Waiting for startup (10s)..."
+            sleep 10
+            echo "📋 Backend Logs:"
+            sudo docker logs ai-5-backend
             
             # Clean up old images
             sudo docker image prune -f
