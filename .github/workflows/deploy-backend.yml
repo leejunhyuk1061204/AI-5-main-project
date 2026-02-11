@@ -33,9 +33,12 @@ jobs:
           MQ_PORT=5672
           MQ_USER=guest
           MQ_PASSWORD=guest
+          EOF
+          
           cat <<'EOF' > firebase-service-account.json
           ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           EOF
+          
           mv .env app.env
 
       - name: Setup Java
@@ -145,7 +148,7 @@ jobs:
                 --env-file $REMOTE_ENV_PATH \
                 $FIREBASE_MOUNT \
                 ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:latest \
-                java -Xmx512m -jar app.jar
+                java -Xmx400m -jar app.jar
             else
               echo "⚠️ Warning: Env file not found at $REMOTE_ENV_PATH. Running without env file."
               sudo docker run -d \
@@ -154,7 +157,7 @@ jobs:
                 --network host \
                 $FIREBASE_MOUNT \
                 ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:latest \
-                java -Xmx512m -jar app.jar
+                java -Xmx400m -jar app.jar
             fi
 
             echo "⏳ Waiting for startup (10s)..."
