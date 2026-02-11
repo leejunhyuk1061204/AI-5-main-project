@@ -146,6 +146,9 @@ jobs:
             echo "🔍 Checking configuration files and memory..."
             ls -la /home/ubuntu/
             
+            echo "🌐 Checking port 8080 usage..."
+            sudo netstat -tulpn | grep 8080 || echo "Port 8080 is free."
+            
             REMOTE_ENV_PATH="/home/ubuntu/app.env"
             FIREBASE_MOUNT=""
             if [ -f "/home/ubuntu/firebase-service-account.json" ]; then
@@ -175,13 +178,16 @@ jobs:
                 ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:latest
             fi
 
-            echo "⏳ Waiting for startup (30s)..."
-            sleep 30
+            echo "⏳ Waiting for startup (60s)..."
+            sleep 60
             echo "📋 Container Status:"
             sudo docker ps -a -f name=ai-5-backend
             
-            echo "📋 Backend Logs:"
+            echo "📋 Docker Standard Logs:"
             sudo docker logs ai-5-backend
+            
+            echo "📋 Internal Backend Logs (logs/backend.log):"
+            sudo docker exec ai-5-backend cat logs/backend.log || echo "Internal log file not found yet."
             
             # Clean up old images
             sudo docker image prune -f
