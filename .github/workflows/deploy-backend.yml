@@ -147,7 +147,7 @@ jobs:
             ls -la /home/ubuntu/
             
             echo "🌐 Checking port 8080 usage..."
-            sudo netstat -tulpn | grep 8080 || echo "Port 8080 is free."
+            sudo ss -tulpn | grep 8080 || echo "Port 8080 is free."
             
             REMOTE_ENV_PATH="/home/ubuntu/app.env"
             FIREBASE_MOUNT=""
@@ -157,6 +157,9 @@ jobs:
             fi
             
             echo "▶️ Running new backend container..."
+            # Add entropy fix to JAVA_TOOL_OPTIONS to prevent startup hangs
+            JAVA_OPTS="-Xmx300m -Djava.security.egd=file:/dev/./urandom"
+            
             if [ -f "$REMOTE_ENV_PATH" ]; then
               echo "✅ Env file found at $REMOTE_ENV_PATH. Using it."
               sudo docker run -d \
@@ -164,7 +167,7 @@ jobs:
                 --restart unless-stopped \
                 --network host \
                 --env-file $REMOTE_ENV_PATH \
-                -e JAVA_TOOL_OPTIONS="-Xmx300m" \
+                -e JAVA_TOOL_OPTIONS="$JAVA_OPTS" \
                 $FIREBASE_MOUNT \
                 ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:latest
             else
@@ -173,13 +176,17 @@ jobs:
                 --name ai-5-backend \
                 --restart unless-stopped \
                 --network host \
-                -e JAVA_TOOL_OPTIONS="-Xmx300m" \
+                -e JAVA_TOOL_OPTIONS="$JAVA_OPTS" \
                 $FIREBASE_MOUNT \
                 ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:latest
             fi
 
             echo "⏳ Waiting for startup (60s)..."
             sleep 60
+            
+            echo "📋 Database Status:"
+            sudo docker exec ai-5-db pg_isready || echo "Creating DB health check failed (container might be down)"
+            
             echo "📋 Container Status:"
             sudo docker ps -a -f name=ai-5-backend
             
