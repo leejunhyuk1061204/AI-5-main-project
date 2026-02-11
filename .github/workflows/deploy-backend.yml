@@ -58,12 +58,32 @@ jobs:
             docker stop ai-5-backend || true
             docker rm ai-5-backend || true
             
-            # Run new container
-            docker run -d \
-              --name ai-5-backend \
-              -p 8080:8080 \
-              --restart unless-stopped \
-              ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:latest
+            # Run new container (matching manual deploy script logic)
+            # Using --network host so localhost refers to EC2 host where DB/Redis/MQ are running
+            REMOTE_ENV_PATH="/home/ubuntu/.env"
+            FIREBASE_MOUNT=""
+            if [ -f "/home/ubuntu/firebase-service-account.json" ]; then
+                FIREBASE_MOUNT="-v /home/ubuntu/firebase-service-account.json:/app/firebase-service-account.json"
+                echo "🔥 Firebase config found. Mounting..."
+            fi
+            
+            if [ -f "$REMOTE_ENV_PATH" ]; then
+              docker run -d \
+                --name ai-5-backend \
+                --restart unless-stopped \
+                --network host \
+                --env-file $REMOTE_ENV_PATH \
+                $FIREBASE_MOUNT \
+                ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:latest
+            else
+              echo "⚠️ Warning: .env file not found. Running without env file."
+              docker run -d \
+                --name ai-5-backend \
+                --restart unless-stopped \
+                --network host \
+                $FIREBASE_MOUNT \
+                ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:latest
+            fi
             
             # Clean up old images
             docker image prune -f
