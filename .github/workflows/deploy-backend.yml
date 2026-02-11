@@ -34,12 +34,16 @@ jobs:
           MQ_USER=guest
           MQ_PASSWORD=guest
           EOF
-          
-          cat <<'EOF' > firebase-service-account.json
+          mv .env app.env
+
+          if [ ! -z "${{ secrets.FIREBASE_SERVICE_ACCOUNT }}" ]; then
+            cat <<'EOF' > firebase-service-account.json
           ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           EOF
-          
-          mv .env app.env
+          else
+            echo "Warning: FIREBASE_SERVICE_ACCOUNT secret is empty!"
+            echo "{}" > firebase-service-account.json
+          fi
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -86,6 +90,17 @@ jobs:
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
+            # --- 0. Optimize Memory (Add Swap if needed) ---
+            if [ ! -f /swapfile ]; then
+                echo "⚙️ Creating 2GB Swap file for memory optimization..."
+                sudo fallocate -l 2G /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=2048
+                sudo chmod 600 /swapfile
+                sudo mkswap /swapfile
+                sudo swapon /swapfile
+                echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+                free -m
+            fi
+
             # Pull latest image
             sudo docker pull ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:latest
             
@@ -148,7 +163,7 @@ jobs:
                 --env-file $REMOTE_ENV_PATH \
                 $FIREBASE_MOUNT \
                 ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:latest \
-                java -Xmx400m -jar app.jar
+                java -Xmx300m -jar app.jar
             else
               echo "⚠️ Warning: Env file not found at $REMOTE_ENV_PATH. Running without env file."
               sudo docker run -d \
@@ -157,11 +172,11 @@ jobs:
                 --network host \
                 $FIREBASE_MOUNT \
                 ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:latest \
-                java -Xmx400m -jar app.jar
+                java -Xmx300m -jar app.jar
             fi
 
-            echo "⏳ Waiting for startup (10s)..."
-            sleep 10
+            echo "⏳ Waiting for startup (20s)..."
+            sleep 20
             echo "📋 Backend Logs:"
             sudo docker logs ai-5-backend
             
