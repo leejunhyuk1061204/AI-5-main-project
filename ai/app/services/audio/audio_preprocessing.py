@@ -16,6 +16,15 @@ from scipy.signal import butter, sosfilt
 from typing import Tuple, Optional
 import io
 import soundfile as sf
+import logging
+
+# 로거 설정
+logger = logging.getLogger("AudioPreprocess")
+logger.setLevel(logging.INFO)
+if not logger.handlers:
+    ch = logging.StreamHandler()
+    ch.setFormatter(logging.Formatter('%(asctime)s - [%(name)s] [%(levelname)s] %(message)s'))
+    logger.addHandler(ch)
 
 
 # =============================================================================
@@ -27,7 +36,7 @@ def trim_silence_rms(audio: np.ndarray, sr: int, top_db: int = 20) -> np.ndarray
     librosa.effects.trim의 내부 로직과 유사.
     """
     trimmed, _ = librosa.effects.trim(audio, top_db=top_db)
-    print(f"[Preprocess] Silence Trim: {len(audio)} → {len(trimmed)} samples (top_db: {top_db})")
+    logger.debug(f"Silence Trim: {len(audio)} → {len(trimmed)} samples (top_db: {top_db})")
     return trimmed
 
 
@@ -36,7 +45,7 @@ def trim_silence_rms(audio: np.ndarray, sr: int, top_db: int = 20) -> np.ndarray
 # =============================================================================
 def apply_bandpass_filter(
     audio: np.ndarray, sr: int, 
-    low_freq: int = 200, high_freq: int = 7500, order: int = 3
+    low_freq: int = 80, high_freq: int = 7500, order: int = 3
 ) -> np.ndarray:
     """
     차량 결함음 주파수 대역(80Hz~7.5kHz)만 통과시키는 Band-pass 필터.
@@ -52,7 +61,7 @@ def apply_bandpass_filter(
     sos = butter(order, [low, high], btype='band', output='sos')
     filtered = sosfilt(sos, audio)
     
-    print(f"[Preprocess] Band-pass Applied: {low_freq}Hz ~ {high_freq}Hz (Order: {order})")
+    logger.debug(f"Band-pass Applied: {low_freq}Hz ~ {high_freq}Hz (Order: {order})")
     return filtered.astype(np.float32)
 
 
@@ -74,14 +83,15 @@ def calculate_speech_ratio(audio: np.ndarray, sr: int) -> Tuple[float, np.ndarra
     
     rms = librosa.feature.rms(y=audio, frame_length=frame_length, hop_length=hop_length)[0]
     
-    # 적응형 임계값 (평균 RMS의 1.5배)
-    threshold = np.mean(rms) * 1.5
+    # 적응형 임계값 (평균 RMS의 1.5배, 최소 1e-4 안전핀 적용)
+    # [개선] 조용한 환경에서 threshold가 너무 낮아져 speech로 오인 방지
+    threshold = max(np.mean(rms) * 1.5, 1e-4)
     
     # VAD 마스크 생성
     vad_mask = (rms > threshold).astype(np.float32)
     
     speech_ratio = np.mean(vad_mask)
-    print(f"[Preprocess] VAD Speech Ratio: {speech_ratio:.2%}")
+    logger.info(f"VAD Speech Ratio: {speech_ratio:.2%}")
     
     return speech_ratio, vad_mask
 
@@ -130,7 +140,7 @@ def apply_speech_soft_masking(
     masked_stft = magnitude * phase
     masked_audio = librosa.istft(masked_stft)
     
-    print(f"[Preprocess] Speech Soft Masking Applied (base_attenuation: {base_attenuation})")
+    logger.debug(f"Speech Soft Masking Applied (base_attenuation: {base_attenuation})")
     return masked_audio
 
 
@@ -167,74 +177,111 @@ def apply_spectral_gating(
     gated_stft = gated_magnitude * phase
     gated_audio = librosa.istft(gated_stft)
     
-    print(f"[Preprocess] Soft Spectral Gating Applied (min_gain: {min_gain})")
+    logger.debug(f"Soft Spectral Gating Applied (min_gain: {min_gain})")
     return gated_audio
 
 
 # =============================================================================
 # 통합 파이프라인
 # =============================================================================
+def preprocess_array(
+    audio: np.ndarray, 
+    sr: int = 16000,
+    *,
+    top_db: int = 20,
+    low_freq: int = 80,
+    high_freq: int = 7500,
+    min_gain: float = 0.2,
+    base_attenuation: float = 0.3,
+    enable_speech_mask: bool = True,
+    enable_spectral_gate: bool = True,
+    label_name: str = "normal"  # [Refinement] 라벨 기반 조건부 전처리 지원
+) -> Tuple[np.ndarray, float]:
+    """
+    numpy array를 직접 전처리하는 핵심 로직 (Single Source of Truth).
+    훈련, 검증, 추론에서 공통으로 사용됩니다.
+    
+    Returns:
+        (processed_audio, speech_ratio)
+    """
+    # 1. Silence Trim
+    audio = trim_silence_rms(audio, sr, top_db=top_db)
+    
+    # 2. Band-pass Filter
+    audio = apply_bandpass_filter(audio, sr, low_freq=low_freq, high_freq=high_freq)
+    
+    # 3. VAD & Speech Masking
+    speech_ratio, vad_mask = calculate_speech_ratio(audio, sr)
+    
+    # [Refinement] 정상 데이터이거나 라벨값이 명시적으로 normal일 때만 마스킹 활성화
+    is_normal = (label_name.lower() == "normal")
+    
+    if enable_speech_mask and is_normal and speech_ratio > 0.05:
+        # 음성 데이터가 유의미하고 '정상' 클래스일 때만 마스킹 적용
+        audio = apply_speech_soft_masking(audio, sr, vad_mask, base_attenuation=base_attenuation)
+        
+    # 4. Spectral Gating
+    if enable_spectral_gate:
+        audio = apply_spectral_gating(audio, sr, min_gain=min_gain)
+        
+    return audio, speech_ratio
+
+
 async def preprocess_audio_pipeline(
     audio_bytes: bytes, 
     enable_speech_mask: bool = True,
-    enable_spectral_gate: bool = True
+    enable_spectral_gate: bool = True,
+    top_db: int = 35,          # [Inference] Defect 보존을 위해 약간 완화 (기본 20 -> 35)
+    min_gain: float = 0.6,     # [Inference] Defect Roughness 보존을 위해 완화 (기본 0.2 -> 0.6)
+    base_attenuation: float = 0.4  # [Inference] 목소리 감쇠 강도 소폭 완화 (오탐 방지)
 ) -> bytes:
     """
     전체 전처리 파이프라인 실행.
+    (Sliding Window 추론을 지원하기 위해 길이를 제한하지 않고 보존합니다)
     
     Args:
         audio_bytes: 원본 오디오 바이트
-        enable_speech_mask: 음성 마스킹 활성화 여부
-        enable_spectral_gate: 스펙트럴 게이팅 활성화 여부
-    
     Returns:
-        전처리된 오디오 WAV 바이트
+        bytes: 전처리된 16kHz WAV 바이트
     """
-    import asyncio
-    loop = asyncio.get_running_loop()
-    
-    def _sync_pipeline(data: bytes) -> bytes:
-        try:
+    try:
+        # 비동기 실행을 위해 루프 활용
+        import asyncio
+        loop = asyncio.get_running_loop()
+
+        def _process(data):
             # 1. Load & Resample to 16kHz
             audio_stream = io.BytesIO(data)
             audio, sr = librosa.load(audio_stream, sr=16000)
-            print(f"[Preprocess] Loaded Audio: {len(audio)/sr:.2f}s at {sr}Hz")
+            logger.info(f"Loaded Audio: {len(audio)/sr:.2f}s at {sr}Hz")
             
-            # 2. RMS Silence Trim
-            audio = trim_silence_rms(audio, sr)
+            # 2. 통합 전처리 (Single Source of Truth 호출)
+            audio, speech_ratio = preprocess_array(
+                audio, sr,
+                top_db=top_db,
+                min_gain=min_gain,
+                base_attenuation=base_attenuation,
+                enable_speech_mask=enable_speech_mask,
+                enable_spectral_gate=enable_spectral_gate,
+                label_name="normal" # 추론 시에는 보수적으로 normal 처리 (음성 마스킹 적용 가능성 열어둠)
+            )
             
-            # 3. Band-pass Filter (Light)
-            audio = apply_bandpass_filter(audio, sr)
-            
-            # 4. VAD & Speech Ratio
-            speech_ratio, vad_mask = calculate_speech_ratio(audio, sr)
-            
-            # 5. Speech Soft Masking (조건부)
-            if enable_speech_mask and speech_ratio > 0.2:
-                # 음성 비율이 20% 이상일 때만 마스킹 적용
-                audio = apply_speech_soft_masking(audio, sr, vad_mask)
-            
-            # 6. Spectral Gating (Light)
-            if enable_spectral_gate:
-                audio = apply_spectral_gating(audio, sr)
-            
-            # 7. [추가] Per-sample RMS Normalization (모델 입력 스케일 보정)
+            # 3. Per-sample RMS Normalization (모델 입력 스케일 보정)
             target_rms = 0.1  # 목표 RMS 레벨
             current_rms = np.sqrt(np.mean(audio**2)) + 1e-8
             audio = audio * (target_rms / current_rms)
-            print(f"[Preprocess] RMS Normalized: {current_rms:.4f} → {target_rms}")
+            logger.debug(f"RMS Normalized: {current_rms:.4f} → {target_rms}")
             
-            # 8. Output to WAV Bytes
+            # 4. Output to WAV Bytes
             buffer = io.BytesIO()
             sf.write(buffer, audio, 16000, format='WAV')
             buffer.seek(0)
             
-            print(f"[Preprocess] Pipeline Complete. Output Length: {len(audio)/sr:.2f}s")
+            logger.info(f"Pipeline Complete. Output Length: {len(audio)/sr:.2f}s")
             return buffer.getvalue()
             
-        except Exception as e:
-            print(f"[Preprocess Error] {e}")
-            # 실패 시 원본 반환 (Graceful Degradation)
-            return data
-    
-    return await loop.run_in_executor(None, _sync_pipeline, audio_bytes)
+        return await loop.run_in_executor(None, _process, audio_bytes)
+        
+    except Exception as e:
+        logger.error(f"Pipeline Error: {e}")
+        return audio_bytes

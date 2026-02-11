@@ -33,11 +33,11 @@ SAVE_PATH = "ai/weights/router/best.pt"
 # [Environment Config] 환경 변수로 제어 가능
 DEFAULT_BATCH_SIZE = int(os.getenv("BATCH_SIZE", "64"))  # Classification은 큰 batch 가능
 DEFAULT_IMG_SIZE = int(os.getenv("IMG_SIZE", "640"))  # Router는 640으로도 충분
-WORKERS = 8 if platform.system() != "Windows" else 0  # 자동 감지
+WORKERS = 4 if platform.system() != "Windows" else 0  # 자동 감지
 
 # RunPod 환경 감지
 IS_RUNPOD = os.path.exists(RUNPOD_DATA_PATH)
-CACHE = True if IS_RUNPOD else False
+CACHE = False
 
 # Training Hyperparameters
 DEFAULT_EPOCHS = 150
@@ -169,34 +169,11 @@ def train_model(mode="train", epochs=DEFAULT_EPOCHS, batch_size=None):
         print("-" * 70)
         print(f"   Top-1 Accuracy:  {metrics.top1:.4f}")
         print(f"   Top-5 Accuracy:  {metrics.top5:.4f}")
-
-        # 클래스별 정확도 (가능하다면)
-        if hasattr(metrics, 'results_dict'):
-            print("\n📊 Per-Class Performance:")
-            class_names = ['dashboard', 'engine', 'exterior', 'tire']
-            for i, name in enumerate(class_names):
-                if f'metrics/accuracy_class_{i}' in metrics.results_dict:
-                    acc = metrics.results_dict[f'metrics/accuracy_class_{i}']
-                    print(f"   {name:12s}: {acc:.4f} ({acc*100:.2f}%)")
         print("=" * 70)
         
         print(f"\n📈 Results & Plots Saved at:")
         print(f"   {os.path.join(OUTPUT_DIR, f'val_{mode}')}")
-        print(f"\n📊 Key Plots:")
-        print(f"   [Confusion Matrix]  {os.path.join(OUTPUT_DIR, f'val_{mode}', 'confusion_matrix.png')}")
-    print(f"   [Normalized CM]     {os.path.join(OUTPUT_DIR, f'val_{mode}', 'confusion_matrix_normalized.png')}")
-
-    # 성능 요약
-    print(f"\n💡 Performance Summary:")
-    if metrics.top1 >= 0.98:
-        print(f"   ✅ Excellent! (>98% accuracy)")
-    elif metrics.top1 >= 0.95:
-        print(f"   ✅ Very Good! (>95% accuracy)")
-    elif metrics.top1 >= 0.90:
-        print(f"   ⚠️  Good, but can improve (>90% accuracy)")
-    else:
-        print(f"   ❌ Needs improvement (<90% accuracy)")
-        
+        print(f"   [Confusion Matrix] {os.path.join(OUTPUT_DIR, f'val_{mode}', 'confusion_matrix.png')}")
         print("=" * 70 + "\n")
 
 

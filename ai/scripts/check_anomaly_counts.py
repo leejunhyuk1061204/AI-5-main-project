@@ -1,21 +1,22 @@
 import os
+import json
 from pathlib import Path
 
-def check_anomaly_data(root_path):
-    print(f"{'Part Name':<30} | {'Good (Train)':<12} | {'Good (Test)':<12} | {'Defect (Test)':<12}")
-    print("-" * 75)
-    
-    root = Path(root_path)
-    if not root.exists():
-        print(f"Path not found: {root_path}")
-        return
+root = Path("ai/data/anomaly")
+extensions = (".jpg", ".png", ".jpeg")
 
-    for part in sorted([d for d in root.iterdir() if d.is_dir()]):
-        train_good = len(list((part / "train" / "good").glob("*"))) if (part / "train" / "good").exists() else 0
-        test_good = len(list((part / "test" / "good").glob("*"))) if (part / "test" / "good").exists() else 0
-        test_defect = len(list((part / "test" / "defect").glob("*"))) if (part / "test" / "defect").exists() else 0
-        
-        print(f"{part.name:<30} | {train_good:<12} | {test_good:<12} | {test_defect:<12}")
+results = {}
+total_images = 0
 
-if __name__ == "__main__":
-    check_anomaly_data("ai/data/anomaly")
+for d in sorted(root.iterdir()):
+    if d.is_dir():
+        count = sum(1 for p in d.rglob("*") if p.suffix.lower() in extensions)
+        results[d.name] = count
+        total_images += count
+
+results["_TOTAL_"] = total_images
+
+with open("ai/scripts/anomaly_counts.json", "w", encoding="utf-8") as f:
+    json.dump(results, f, indent=4)
+
+print("SUCCESS: Counts written to ai/scripts/anomaly_counts.json")
