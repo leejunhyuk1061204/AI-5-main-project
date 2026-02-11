@@ -44,6 +44,9 @@ jobs:
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:${{ github.ref_name }}
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:latest
 
+      - name: Create Firebase Service Account file
+        run: echo "${{ secrets.FIREBASE_SERVICE_ACCOUNT }}" > backend/firebase-service-account.json
+
       - name: Copy Firebase Config to EC2
         uses: appleboy/scp-action@v0.1.7
         with:
