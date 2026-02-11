@@ -91,7 +91,13 @@ jobs:
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            # --- 0. Optimize Memory (Add Swap if needed) ---
+            # --- 0. Optimize Memory & Disk (Critical for t2.micro) ---
+            echo "🧹 Cleaning up old Docker images to free space..."
+            sudo docker image prune -a -f
+
+            echo "🧹 Dropping caches to free RAM..."
+            sudo sh -c 'echo 3 > /proc/sys/vm/drop_caches'
+
             if [ ! -f /swapfile ]; then
                 echo "⚙️ Creating 2GB Swap file for memory optimization..."
                 sudo fallocate -l 2G /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=2048
@@ -193,8 +199,8 @@ jobs:
                 ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:latest
             fi
 
-            echo "⏳ Waiting for Backend to bind port 8080 (max 20min)..."
-            MAX_RETRIES=120
+            echo "⏳ Waiting for Backend to bind port 8080 (max 10min)..."
+            MAX_RETRIES=60
             for ((i=1; i<=MAX_RETRIES; i++)); do
               if sudo ss -tulpn | grep ':8080 ' > /dev/null; then
                   echo "✅ Backend is listening on port 8080!"
@@ -206,7 +212,7 @@ jobs:
             
             # Check if port is actually open after loop
             if ! sudo ss -tulpn | grep ':8080 ' > /dev/null; then
-                echo "❌ Backend failed to start within 20 minutes."
+                echo "❌ Backend failed to start within 10 minutes."
                 echo "📋 Container Logs (Last 50 lines):"
                 sudo docker logs --tail 50 ai-5-backend
                 exit 1
