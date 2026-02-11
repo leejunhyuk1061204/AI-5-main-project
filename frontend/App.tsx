@@ -66,6 +66,7 @@ import ChatAudioScreen from './diagnosis/ChatAudioScreen';
 import MaintenanceBook from './maintenance/MaintenanceBook';
 import ReceiptScan from './maintenance/ReceiptScan';
 import ReceiptResult from './maintenance/ReceiptResult';
+import ReceiptGallery from './maintenance/ReceiptGallery';
 import PaymentSuccess from './payment/PaymentSuccess';
 import MaintenanceHistory from './history/MaintenanceHistory';
 import DrivingList from './history/DrivingList';
@@ -329,6 +330,7 @@ export default function App() {
                   <Stack.Screen name="MaintenanceBook" component={MaintenanceBook} />
                   <Stack.Screen name="ReceiptScan" component={ReceiptScan} />
                   <Stack.Screen name="ReceiptResult" component={ReceiptResult} />
+                  <Stack.Screen name="ReceiptGallery" component={ReceiptGallery} />
                   <Stack.Screen name="PaymentSuccess" component={PaymentSuccess} />
                   <Stack.Screen name="MaintenanceHistory" component={MaintenanceHistory} />
                   <Stack.Screen name="DrivingList" component={DrivingList} />

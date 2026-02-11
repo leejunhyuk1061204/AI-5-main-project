@@ -160,9 +160,14 @@ export default function AiDiagChat() {
                 msgs = data.interactiveData.conversation;
             }
             // AI의 마지막 메시지 추가 (서버 API 응답 구조 준수)
+            // AI의 마지막 메시지 추가 (서버 API 응답 구조 준수)
             if (data.interactiveData?.message) {
-                const lastMsg = msgs[msgs.length - 1];
-                if (!lastMsg || lastMsg.content !== data.interactiveData.message) {
+                // 중복 방지: 서버가 보낸 메시지가 이미 대화 목록(특히 끝부분)에 있는지 확인
+                const isMessageAlreadyExist = msgs.some((m, idx) =>
+                    idx >= msgs.length - 2 && m.role === 'ai' && m.content === data.interactiveData.message
+                );
+
+                if (!isMessageAlreadyExist) {
                     msgs.push({ role: 'ai', content: data.interactiveData.message });
                 }
             }
