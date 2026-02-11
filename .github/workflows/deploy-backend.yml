@@ -35,6 +35,7 @@ jobs:
           MQ_PASSWORD=guest
           EOF
           echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > firebase-service-account.json
+          mv .env app.env
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -70,7 +71,7 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          source: "backend/firebase-service-account.json,backend/.env"
+          source: "backend/firebase-service-account.json,backend/app.env"
           target: "/home/ubuntu/"
           strip_components: 1
 
@@ -122,7 +123,10 @@ jobs:
             sudo docker stop ai-5-backend || true
             sudo docker rm ai-5-backend || true
             
-            REMOTE_ENV_PATH="/home/ubuntu/.env"
+            echo "🔍 Checking configuration files..."
+            ls -la /home/ubuntu/
+            
+            REMOTE_ENV_PATH="/home/ubuntu/app.env"
             FIREBASE_MOUNT=""
             if [ -f "/home/ubuntu/firebase-service-account.json" ]; then
                 FIREBASE_MOUNT="-v /home/ubuntu/firebase-service-account.json:/app/firebase-service-account.json"
@@ -131,6 +135,7 @@ jobs:
             
             echo "▶️ Running new backend container..."
             if [ -f "$REMOTE_ENV_PATH" ]; then
+              echo "✅ Env file found at $REMOTE_ENV_PATH. Using it."
               sudo docker run -d \
                 --name ai-5-backend \
                 --restart unless-stopped \
@@ -139,7 +144,7 @@ jobs:
                 $FIREBASE_MOUNT \
                 ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:latest
             else
-              echo "⚠️ Warning: .env file not found. Running without env file."
+              echo "⚠️ Warning: Env file not found at $REMOTE_ENV_PATH. Running without env file."
               sudo docker run -d \
                 --name ai-5-backend \
                 --restart unless-stopped \
