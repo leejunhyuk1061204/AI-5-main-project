@@ -1,5 +1,14 @@
 # ai/app/services/visual/domains/engine/engine_llm_fallback.py
 """
+엔진룸 부품 분석용 LLM 폴백(Fall-back) 및 의사결정 레이어
+
+엔진룸 내 26종(또는 통합 8종) 주요 구성 요소의 상태를 YOLO 모델이 분석한 후,
+그 결과가 불충분하거나 오류 가능성이 보일 때 작동합니다.
+주요 기능:
+1. 부품 식별 점수가 임계치 미만일 때 LLM 상세 육안 검사 모드 전환
+2. 누유, 부식 등 미세 결함에 대한 다각도 검증 로직
+"""
+"""
 Production-Grade LLM Agreement Fallback for Engine Detection
 
 [핵심 원칙]
