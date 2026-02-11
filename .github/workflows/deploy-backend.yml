@@ -37,11 +37,12 @@ jobs:
           mv .env app.env
 
           if [ ! -z "${{ secrets.FIREBASE_SERVICE_ACCOUNT }}" ]; then
+            echo "✅ FIREBASE_SERVICE_ACCOUNT secret found."
             cat <<'EOF' > firebase-service-account.json
           ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           EOF
           else
-            echo "Warning: FIREBASE_SERVICE_ACCOUNT secret is empty!"
+            echo "⚠️ Warning: FIREBASE_SERVICE_ACCOUNT secret is empty or not defined!"
             echo "{}" > firebase-service-account.json
           fi
 
@@ -98,8 +99,8 @@ jobs:
                 sudo mkswap /swapfile
                 sudo swapon /swapfile
                 echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
-                free -m
             fi
+            free -m
 
             # Pull latest image
             sudo docker pull ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:latest
@@ -144,7 +145,6 @@ jobs:
             
             echo "🔍 Checking configuration files and memory..."
             ls -la /home/ubuntu/
-            free -m
             
             REMOTE_ENV_PATH="/home/ubuntu/app.env"
             FIREBASE_MOUNT=""
@@ -161,18 +161,18 @@ jobs:
                 --restart unless-stopped \
                 --network host \
                 --env-file $REMOTE_ENV_PATH \
+                -e JAVA_TOOL_OPTIONS="-Xmx300m" \
                 $FIREBASE_MOUNT \
-                ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:latest \
-                java -Xmx300m -jar app.jar
+                ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:latest
             else
               echo "⚠️ Warning: Env file not found at $REMOTE_ENV_PATH. Running without env file."
               sudo docker run -d \
                 --name ai-5-backend \
                 --restart unless-stopped \
                 --network host \
+                -e JAVA_TOOL_OPTIONS="-Xmx300m" \
                 $FIREBASE_MOUNT \
-                ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:latest \
-                java -Xmx300m -jar app.jar
+                ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:latest
             fi
 
             echo "⏳ Waiting for startup (20s)..."
