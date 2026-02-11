@@ -175,8 +175,11 @@ jobs:
                 ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:latest
             fi
 
-            echo "⏳ Waiting for startup (20s)..."
-            sleep 20
+            echo "⏳ Waiting for startup (30s)..."
+            sleep 30
+            echo "📋 Container Status:"
+            sudo docker ps -a -f name=ai-5-backend
+            
             echo "📋 Backend Logs:"
             sudo docker logs ai-5-backend
             

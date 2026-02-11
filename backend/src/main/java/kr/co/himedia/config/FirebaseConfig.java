@@ -80,8 +80,8 @@ public class FirebaseConfig {
                 FirebaseApp.initializeApp(options);
                 log.info("Firebase application has been initialized");
             }
-        } catch (IOException e) {
-            log.error("Failed to initialize Firebase: {}", e.getMessage());
+        } catch (Exception e) {
+            log.error("Failed to initialize Firebase (App will continue without Firebase): {}", e.getMessage());
         }
     }
 }
