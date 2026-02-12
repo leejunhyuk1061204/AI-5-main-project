@@ -1,5 +1,6 @@
 package kr.co.himedia.service;
 
+import kr.co.himedia.common.constants.ConsumableConstants;
 import kr.co.himedia.common.exception.BaseException;
 import kr.co.himedia.common.exception.ErrorCode;
 import kr.co.himedia.entity.ObdLog;
@@ -94,6 +95,8 @@ public class TripService {
             int driveScore = 100;
 
             // 추가 통계 변수 초기화
+            int highRpmCount = 0;
+            int totalCount = 0;
             double sumRpm = 0.0;
             double sumEngineLoad = 0.0;
             double sumMaf = 0.0;
@@ -111,6 +114,12 @@ public class TripService {
             double prevSpeed = -1.0; // -1 for initial state
 
             for (ObdLog log : tripLogs) {
+                totalCount++;
+
+                if (log.getRpm() != null && log.getRpm() > ConsumableConstants.HIGH_RPM_THRESHOLD) {
+                    highRpmCount++;
+                }
+
                 double speed = log.getSpeed() != null ? log.getSpeed() : 0.0;
                 double rpm = log.getRpm() != null ? log.getRpm() : 0.0;
                 double coolant = log.getCoolantTemp() != null ? log.getCoolantTemp() : 0.0;
@@ -142,7 +151,7 @@ public class TripService {
                     minBatteryVoltage = voltage; // 0이 아닌 최소값
 
                 // 과열 지속 시간 (95도 이상)
-                if (coolant >= 95.0)
+                if (coolant >= ConsumableConstants.COOLANT_OVERHEAT_THRESHOLD)
                     overheatDurationSec++;
 
                 // 공회전 시간 (속도 0, RPM > 0)
@@ -156,13 +165,13 @@ public class TripService {
                 // 급가속/급감속 (이전 데이터와 비교)
                 if (prevSpeed != -1.0) {
                     double speedDelta = speed - prevSpeed; // km/h per sec (assuming 1hz)
-                    if (speedDelta >= 10.0) {
+                    if (speedDelta >= ConsumableConstants.HARD_ACCEL_THRESHOLD) {
                         hardAccelCount++; // 초당 10km/h 증가
                         driveScore = Math.max(0, driveScore - 5); // 급가속 -5점
                     }
-                    if (speedDelta <= -10.0) {
+                    if (speedDelta <= -ConsumableConstants.HARD_BRAKE_THRESHOLD) {
                         hardBrakeCount++; // 초당 10km/h 감소
-                        driveScore = Math.max(0, driveScore - 5); // 급측정 -5점
+                        driveScore = Math.max(0, driveScore - 5); // 급감속 -5점
                     }
                 }
                 prevSpeed = speed;
@@ -198,6 +207,13 @@ public class TripService {
             trip.setAvgThrottlePos(sumThrottlePos / count);
             trip.setAvgFuelTrim(sumFuelTrim / count);
 
+            // Calculate highRpmRatio
+            Double highRpmRatio = null;
+            if (totalCount > 0) {
+                highRpmRatio = (double) highRpmCount / totalCount;
+            }
+            trip.setHighRpmRatio(highRpmRatio);
+
             trip.setMaxCoolantTemp(maxCoolantTemp);
             trip.setMaxEngineLoad(maxEngineLoad);
             trip.setMinBatteryVoltage(minBatteryVoltage);
@@ -221,9 +237,10 @@ public class TripService {
                     log.info("[TripEnd] Updated Vehicle Total Mileage: {} -> {}", currentTotal, newTotal);
 
                     try {
-                        // [Mod] 통계가 모두 계산된 trip 객체를 직접 전달하여 데이터 정합성 보장
-                        wearFactorService.calculateAndSaveWearFactors(trip.getVehicleId(), newTotal, trip);
-                        log.info("Successfully triggered wear factor calculation for vehicle: {}", trip.getVehicleId());
+                        // [Migration] 규칙 기반 로컬 마모 계수 계산 (AI 서버 호출 제거)
+                        wearFactorService.calculateWearFactorsLocal(trip);
+                        log.info("Successfully triggered local wear factor calculation for vehicle: {}",
+                                trip.getVehicleId());
                     } catch (Exception e) {
                         log.error("Wear factor trigger failed", e);
                     }
@@ -293,7 +310,8 @@ public class TripService {
         TripSummary trip = tripSummaryRepository.findByTripId(tripId)
                 .orElseThrow(() -> new BaseException(ErrorCode.TRIP_NOT_FOUND));
 
-        kr.co.himedia.entity.Vehicle oldVehicle = vehicleRepository.findByVehicleIdAndDeletedAtIsNull(trip.getVehicleId())
+        kr.co.himedia.entity.Vehicle oldVehicle = vehicleRepository
+                .findByVehicleIdAndDeletedAtIsNull(trip.getVehicleId())
                 .orElseThrow(() -> new BaseException(ErrorCode.VEHICLE_NOT_FOUND));
         if (!oldVehicle.getUserId().equals(userId))
             throw new BaseException(ErrorCode.VEHICLE_NOT_FOUND);
@@ -308,12 +326,14 @@ public class TripService {
             return trip;
         }
 
-        java.time.OffsetDateTime startOffset = trip.getStartTime().atZone(java.time.ZoneId.systemDefault()).toOffsetDateTime();
+        java.time.OffsetDateTime startOffset = trip.getStartTime().atZone(java.time.ZoneId.systemDefault())
+                .toOffsetDateTime();
         java.time.OffsetDateTime endOffset = (trip.getEndTime() != null)
                 ? trip.getEndTime().atZone(java.time.ZoneId.systemDefault()).toOffsetDateTime()
                 : java.time.OffsetDateTime.now();
 
-        List<ObdLog> oldLogs = obdLogRepository.findByVehicleIdAndTimeBetweenOrderByTimeAsc(oldVehicleId, startOffset, endOffset);
+        List<ObdLog> oldLogs = obdLogRepository.findByVehicleIdAndTimeBetweenOrderByTimeAsc(oldVehicleId, startOffset,
+                endOffset);
         List<ObdLog> newLogs = oldLogs.stream()
                 .map(log -> ObdLog.builder()
                         .time(log.getTime())
@@ -365,32 +385,48 @@ public class TripService {
                 double throttle = log.getThrottlePos() != null ? log.getThrottlePos() : 0.0;
                 double fuelTrim = log.getFuelTrimShort() != null ? log.getFuelTrimShort() : 0.0;
 
-                if (speed > maxSpeed) maxSpeed = speed;
+                if (speed > maxSpeed)
+                    maxSpeed = speed;
                 sumSpeed += speed;
                 sumRpm += rpm;
                 sumEngineLoad += load;
                 sumMaf += maf;
                 sumThrottlePos += throttle;
                 sumFuelTrim += fuelTrim;
-                if (coolant > maxCoolantTemp) maxCoolantTemp = coolant;
-                if (load > maxEngineLoad) maxEngineLoad = load;
-                if (voltage > 0 && (minBatteryVoltage == 0 || voltage < minBatteryVoltage)) minBatteryVoltage = voltage;
-                if (coolant >= 95.0) overheatDurationSec++;
+                if (coolant > maxCoolantTemp)
+                    maxCoolantTemp = coolant;
+                if (load > maxEngineLoad)
+                    maxEngineLoad = load;
+                if (voltage > 0 && (minBatteryVoltage == 0 || voltage < minBatteryVoltage))
+                    minBatteryVoltage = voltage;
+                if (coolant >= ConsumableConstants.COOLANT_OVERHEAT_THRESHOLD)
+                    overheatDurationSec++;
                 if (speed < 1.0 && rpm > 0) {
                     idleTime++;
-                    if (idleTime % 60 == 0) driveScore = Math.max(0, driveScore - 1);
+                    if (idleTime % 60 == 0)
+                        driveScore = Math.max(0, driveScore - 1);
                 }
                 if (prevSpeed != -1.0) {
                     double speedDelta = speed - prevSpeed;
-                    if (speedDelta >= 10.0) { hardAccelCount++; driveScore = Math.max(0, driveScore - 5); }
-                    if (speedDelta <= -10.0) { hardBrakeCount++; driveScore = Math.max(0, driveScore - 5); }
+                    if (speedDelta >= ConsumableConstants.HARD_ACCEL_THRESHOLD) {
+                        hardAccelCount++;
+                        driveScore = Math.max(0, driveScore - 5);
+                    }
+                    if (speedDelta <= -ConsumableConstants.HARD_BRAKE_THRESHOLD) {
+                        hardBrakeCount++;
+                        driveScore = Math.max(0, driveScore - 5);
+                    }
                 }
                 prevSpeed = speed;
                 distance += (speed / 3600.0);
-                if (speed > 140) driveScore = Math.max(0, driveScore - 1);
-                if (rpm > 5000) driveScore = Math.max(0, driveScore - 1);
-                if (throttle > 90) driveScore = Math.max(0, driveScore - 1);
-                if (load > 90) driveScore = Math.max(0, driveScore - 1);
+                if (speed > 140)
+                    driveScore = Math.max(0, driveScore - 1);
+                if (rpm > 5000)
+                    driveScore = Math.max(0, driveScore - 1);
+                if (throttle > 90)
+                    driveScore = Math.max(0, driveScore - 1);
+                if (load > 90)
+                    driveScore = Math.max(0, driveScore - 1);
             }
 
             int count = newLogs.size();
@@ -432,4 +468,5 @@ public class TripService {
         tripSummaryRepository.delete(trip);
         return tripSummaryRepository.save(newTrip);
     }
+
 }

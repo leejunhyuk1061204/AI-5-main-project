@@ -67,6 +67,9 @@ public class TripSummary {
     @Column(name = "hard_brake_count")
     private Integer hardBrakeCount;
 
+    @Column(name = "high_rpm_ratio")
+    private Double highRpmRatio; // Nullable for backward compatibility
+
     @Column(name = "avg_rpm")
     private Double avgRpm;
 
