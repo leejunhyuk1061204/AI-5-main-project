@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface CarModelMasterRepository extends JpaRepository<CarModelMaster, Long> {
 
@@ -26,4 +27,7 @@ public interface CarModelMasterRepository extends JpaRepository<CarModelMaster, 
                         @Param("modelYear") Integer modelYear);
 
         List<CarModelMaster> findByManufacturerKoOrderByModelNameKoAscModelYearDesc(String manufacturer);
+
+    Optional<CarModelMaster> findOneByManufacturerKoAndModelNameKoAndModelYear(
+            String manufacturerKo, String modelNameKo, Integer modelYear);
 }

@@ -45,6 +45,7 @@ from ai.app.api.v1.routes.visual_router import router as visual_router
 from ai.app.api.v1.routes.audio_router import router as audio_router
 from ai.app.api.v1.routes.obd_anomaly_router import router as obd_anomaly_router
 from ai.app.api.v1.routes.wear_factor import router as wear_factor_router
+from ai.app.api.v1.routes.embedding_router import router as embedding_router
 
 # =============================================================================
 # Model Loading Functions
@@ -237,6 +238,7 @@ def create_app() -> FastAPI:
     app.include_router(audio_router, prefix="/api/v1", tags=["audio"])
     app.include_router(wear_factor_router, prefix="/api/v1", tags=["wear-factor"])
     app.include_router(obd_anomaly_router, prefix="/api/v1", tags=["anomaly"])
+    app.include_router(embedding_router, prefix="/api/v1", tags=["embedding"])
 
     # 테스트 라우터
     from ai.app.api.v1.routes.test_router import router as test_router

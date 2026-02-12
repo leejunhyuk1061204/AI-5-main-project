@@ -10,7 +10,7 @@ spring:
       max-request-size: 50MB
 
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:car_sentry}?stringtype=unspecified
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:car_sentry}?stringtype=unspecified&sslmode=disable
     username: ${DB_USER:postgres}
     password: ${DB_PASSWORD:postgres}
     driver-class-name: org.postgresql.Driver
@@ -79,6 +79,10 @@ app:
     type: ${STORAGE_TYPE:local} # local or s3
   firebase:
     config-path: ${FIREBASE_CONFIG_PATH:firebase-service-account.json}
+  openai:
+    api-key: ${OPENAI_API_KEY:}
+    diagnosis:
+      model: ${OPENAI_DIAGNOSIS_MODEL:gpt-4o}
 
 logging:
   file:

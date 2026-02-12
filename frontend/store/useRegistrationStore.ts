@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { getManufacturers, getModelNames, getModelYears, getAvailableFuelTypes, getAllConsumableItems, ConsumableMaster } from '../api/masterApi';
+import { getManufacturers, getModels, getModelYears, getAvailableFuelTypes, getAllConsumableItems, ConsumableMaster, CarModelDto } from '../api/masterApi';
 import { registerVehicle } from '../api/vehicleApi';
 import maintenanceApi from '../api/maintenanceApi';
 import { useVehicleStore } from './useVehicleStore';
@@ -10,7 +10,9 @@ interface RegistrationState {
     vehicleNumber: string;
     vin: string;
     manufacturer: string;
+    manufacturerEn: string;
     modelName: string;
+    modelNameEn: string;
     modelYear: string;
     fuelType: string;
     totalMileage: string;
@@ -28,6 +30,7 @@ interface RegistrationState {
     // Master Data Options
     manufacturers: string[];
     models: string[];
+    modelsFull: CarModelDto[];
     years: string[];
     availableFuels: string[];
     consumableMasterList: ConsumableMaster[];
@@ -37,6 +40,7 @@ interface RegistrationState {
 
     // Actions
     setVehicleInfo: (field: string, value: string) => void;
+    setModelSelection: (modelNameKo: string) => void;
     addMaintenanceRecord: (item: ConsumableMaster) => void;
     removeMaintenanceRecord: (itemCode: string) => void;
     updateMaintenanceRecord: (itemCode: string, field: 'date' | 'mileage', value: string) => void;
@@ -60,7 +64,9 @@ export const useRegistrationStore = create<RegistrationState>((set, get) => ({
     vehicleNumber: '',
     vin: '',
     manufacturer: '',
+    manufacturerEn: '',
     modelName: '',
+    modelNameEn: '',
     modelYear: '',
     fuelType: '',
     totalMileage: '',
@@ -68,6 +74,7 @@ export const useRegistrationStore = create<RegistrationState>((set, get) => ({
 
     manufacturers: [],
     models: [],
+    modelsFull: [],
     years: [],
     availableFuels: [],
     consumableMasterList: [],
@@ -129,13 +136,27 @@ export const useRegistrationStore = create<RegistrationState>((set, get) => ({
     loadModels: async (make) => {
         set({ isLoading: true });
         try {
-            const data = await getModelNames(make);
-            set({ models: data });
+            const data = await getModels(make);
+            const distinctModelNames = [...new Set(data.map((d) => d.modelNameKo))];
+            const manufacturerEn = data.length > 0 ? (data[0].manufacturerEn ?? '') : '';
+            set({
+                modelsFull: data,
+                models: distinctModelNames,
+                manufacturerEn,
+                modelNameEn: ''
+            });
         } catch (e) {
             console.error(e);
         } finally {
             set({ isLoading: false });
         }
+    },
+
+    setModelSelection: (modelNameKo) => {
+        const { modelsFull } = get();
+        const match = modelsFull.find((d) => d.modelNameKo === modelNameKo);
+        const modelNameEn = match?.modelNameEn ?? '';
+        set({ modelName: modelNameKo, modelNameEn });
     },
 
     loadYears: async (make, model) => {
@@ -193,12 +214,12 @@ export const useRegistrationStore = create<RegistrationState>((set, get) => ({
                     lastReplacedMileage: r.lastReplacementMileage ? parseInt(r.lastReplacementMileage) : undefined
                 }));
 
-            // 2. Register Vehicle & Consumables together
-            const vehicleRes = await registerVehicle({
-                manufacturerKo: s.manufacturer, // Assuming input is Korean
-                // manufacturerEn: undefined, 
-                modelNameKo: s.modelName,       // Assuming input is Korean
-                // modelNameEn: undefined,
+            // 2. Register Vehicle & Consumables together (영문 포함 전송, 백엔드 fallback 보완)
+            await registerVehicle({
+                manufacturerKo: s.manufacturer,
+                manufacturerEn: s.manufacturerEn || undefined,
+                modelNameKo: s.modelName,
+                modelNameEn: s.modelNameEn || undefined,
                 modelYear: parseInt(s.modelYear),
                 fuelType: s.fuelType as any,
                 carNumber: s.vehicleNumber,
@@ -229,16 +250,17 @@ export const useRegistrationStore = create<RegistrationState>((set, get) => ({
             vehicleNumber: '',
             vin: '',
             manufacturer: '',
+            manufacturerEn: '',
             modelName: '',
+            modelNameEn: '',
             modelYear: '',
             fuelType: '',
             totalMileage: '',
             maintenanceRecords: [],
-            // manufacturers: [],  // Keep cached - 제조사 목록은 캐싱 유지
             models: [],
+            modelsFull: [],
             years: [],
             availableFuels: []
-            // Keep consumableMasterList cached
         });
     },
 
