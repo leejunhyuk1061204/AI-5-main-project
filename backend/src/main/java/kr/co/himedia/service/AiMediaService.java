@@ -32,4 +32,16 @@ public class AiMediaService {
         log.info("Media uploaded successfully [Folder: {}]: {}", folder, fileUrl);
         return fileUrl;
     }
+
+    /**
+     * 지정된 파일명으로 미디어 저장
+     */
+    public String storeMedia(MultipartFile file, String folder, String filename) throws IOException {
+        if (file == null || file.isEmpty()) {
+            return null;
+        }
+        String fileUrl = fileStorageService.storeFile(file, folder, filename);
+        log.info("Media stored successfully [Folder: {}, Filename: {}]: {}", folder, filename, fileUrl);
+        return fileUrl;
+    }
 }

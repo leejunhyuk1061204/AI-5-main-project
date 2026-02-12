@@ -271,7 +271,12 @@ export default function DrivingHis() {
                                 {/* List Mapping - Show only 1 recent */}
                                 <View className="gap-3">
                                     {trips.slice(0, 1).map((trip, index) => (
-                                        <View key={index} className="bg-surface-dark rounded-xl border border-primary/30 p-4 relative overflow-hidden">
+                                        <TouchableOpacity
+                                            key={index}
+                                            activeOpacity={0.7}
+                                            onPress={() => (navigation as any).navigate('TripDetail', { tripId: trip.tripId })}
+                                            className="bg-surface-dark rounded-xl border border-primary/30 p-4 relative overflow-hidden"
+                                        >
                                             <View className="flex-row justify-between items-center mb-4">
                                                 <View className="flex-row items-center gap-3">
                                                     <View className="bg-primary/10 p-2 rounded-full border border-primary/20">
@@ -304,7 +309,7 @@ export default function DrivingHis() {
                                                 <MaterialIcons name="swap-horiz" size={16} color="#0d7ff2" />
                                                 <Text className="text-[#0d7ff2] text-xs font-medium">차량 변경</Text>
                                             </TouchableOpacity>
-                                        </View>
+                                        </TouchableOpacity>
                                     ))}
                                 </View>
                             </View>

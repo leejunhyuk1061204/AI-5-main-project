@@ -2,7 +2,7 @@ import api from './axios';
 
 // Type Definitions
 export interface VehicleConsumable {
-    item: string; // Enum Code (e.g., ENGINE_OIL)
+    itemCode: string; // Enum Code (e.g., ENGINE_OIL)
     itemDescription: string; // Display Name
     consumableItemId: number;
     remainingLifePercent: number;

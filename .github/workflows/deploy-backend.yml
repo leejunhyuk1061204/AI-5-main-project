@@ -2,8 +2,7 @@ name: Deploy Backend
 
 on:
   push:
-    tags:
-      - 'v*.*.*'
+    branches: [deploy, main]
 
 jobs:
   deploy:
@@ -13,6 +12,39 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Create Configuration Files
+        working-directory: backend
+        run: |
+          cat <<'EOF' > .env
+          JWT_SECRET=${{ secrets.JWT_SECRET }}
+          ENCRYPTION_KEY=${{ secrets.ENCRYPTION_KEY }}
+          NAVER_OCR_Secret_Key=${{ secrets.NAVER_OCR_SECRET_KEY }}
+          NAVER_OCR_Invoke_Url=${{ secrets.NAVER_OCR_INVOKE_URL }}
+          OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+          DB_HOST=localhost
+          DB_PORT=5432
+          DB_NAME=car_sentry
+          DB_USER=postgres
+          DB_PASSWORD=postgres
+          REDIS_HOST=localhost
+          REDIS_PORT=6379
+          MQ_HOST=localhost
+          MQ_PORT=5672
+          MQ_USER=guest
+          MQ_PASSWORD=guest
+          EOF
+          mv .env app.env
+
+          if [ ! -z "${{ secrets.FIREBASE_SERVICE_ACCOUNT }}" ]; then
+            echo "✅ FIREBASE_SERVICE_ACCOUNT secret found."
+            cat <<'EOF' > firebase-service-account.json
+          ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          EOF
+          else
+            echo "⚠️ Warning: FIREBASE_SERVICE_ACCOUNT secret is empty or not defined!"
+            echo "{}" > firebase-service-account.json
+          fi
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -42,29 +74,165 @@ jobs:
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:${{ github.ref_name }}
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:latest
 
+      - name: Copy Configuration Files to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "backend/firebase-service-account.json,backend/app.env"
+          target: "/home/ubuntu/"
+          strip_components: 1
+
       - name: Deploy to EC2
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
+          command_timeout: 30m
           script: |
+            # --- 0. Optimize Memory & Disk (Critical for t2.micro) ---
+            echo "🧹 Cleaning up old Docker images to free space..."
+            sudo docker image prune -a -f
+
+            echo "🧹 Dropping caches to free RAM..."
+            sudo sh -c 'echo 3 > /proc/sys/vm/drop_caches'
+
+            if [ ! -f /swapfile ]; then
+                echo "⚙️ Creating 2GB Swap file for memory optimization..."
+                sudo fallocate -l 2G /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=2048
+                sudo chmod 600 /swapfile
+                sudo mkswap /swapfile
+                sudo swapon /swapfile
+                echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+            fi
+            free -m
+
             # Pull latest image
-            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:latest
+            sudo docker pull ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:latest
             
-            # Stop and remove existing container
-            docker stop ai-5-backend || true
-            docker rm ai-5-backend || true
+            # --- 1. PostgreSQL ---
+            if [ ! "$(sudo docker ps -q -f name=ai-5-db)" ]; then
+                if [ "$(sudo docker ps -aq -f status=exited -f name=ai-5-db)" ]; then
+                    echo "🔄 Starting existing PostgreSQL container..."
+                    sudo docker start ai-5-db
+                else
+                    echo "🐘 Running new PostgreSQL container..."
+                    sudo docker run -d --name ai-5-db --restart unless-stopped --network host -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=car_sentry postgres:15
+                fi
+            fi
+
+            # --- 2. Redis ---
+            if [ ! "$(sudo docker ps -q -f name=ai-5-redis)" ]; then
+                if [ "$(sudo docker ps -aq -f status=exited -f name=ai-5-redis)" ]; then
+                    echo "🔄 Starting existing Redis container..."
+                    sudo docker start ai-5-redis
+                else
+                    echo "🔺 Running new Redis container..."
+                    sudo docker run -d --name ai-5-redis --restart unless-stopped --network host redis:alpine
+                fi
+            fi
+
+            # --- 3. RabbitMQ ---
+            if [ ! "$(sudo docker ps -q -f name=ai-5-mq)" ]; then
+                if [ "$(sudo docker ps -aq -f status=exited -f name=ai-5-mq)" ]; then
+                    echo "🔄 Starting existing RabbitMQ container..."
+                    sudo docker start ai-5-mq
+                else
+                    echo "🐰 Running new RabbitMQ container..."
+                    sudo docker run -d --name ai-5-mq --restart unless-stopped --network host -e RABBITMQ_DEFAULT_USER=guest -e RABBITMQ_DEFAULT_PASS=guest rabbitmq:3-management
+                fi
+            fi
             
-            # Run new container
-            docker run -d \
-              --name ai-5-backend \
-              -p 8080:8080 \
-              --restart unless-stopped \
-              ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:latest
+            # --- 4. Backend ---
+            echo "⏹️ Stopping existing backend container..."
+            sudo docker stop ai-5-backend || true
+            sudo docker rm ai-5-backend || true
+            
+            echo "🔍 Checking configuration files and memory..."
+            ls -la /home/ubuntu/
+            
+            echo "🌐 Checking port 8080 usage..."
+            sudo ss -tulpn | grep 8080 || echo "Port 8080 is free."
+            
+            # --- Install haveged for Entropy (Fix slow startup on t2.micro) ---
+            echo "🚀 Installing haveged to fix entropy issues..."
+            sudo apt-get update && sudo apt-get install -y haveged
+            sudo systemctl start haveged
+            sudo systemctl enable haveged
+            
+            # --- Wait for Services ---
+            echo "⏳ Waiting for RabbitMQ (5672) and Redis (6379) to be ready..."
+            timeout 60s bash -c 'until sudo ss -tulpn | grep 5672; do sleep 2; echo "Waiting for RabbitMQ..."; done'
+            timeout 30s bash -c 'until sudo ss -tulpn | grep 6379; do sleep 2; echo "Waiting for Redis..."; done'
+            echo "✅ Services are listening!"
+
+            REMOTE_ENV_PATH="/home/ubuntu/app.env"
+            FIREBASE_MOUNT=""
+            if [ -f "/home/ubuntu/firebase-service-account.json" ]; then
+                FIREBASE_MOUNT="-v /home/ubuntu/firebase-service-account.json:/app/firebase-service-account.json"
+                echo "🔥 Firebase config found. Mounting..."
+            fi
+            
+            echo "▶️ Running new backend container..."
+            # Add entropy fix to JAVA_TOOL_OPTIONS to prevent startup hangs
+            JAVA_OPTS="-Xmx300m -Djava.security.egd=file:/dev/./urandom"
+            
+            if [ -f "$REMOTE_ENV_PATH" ]; then
+              echo "✅ Env file found at $REMOTE_ENV_PATH. Using it."
+              sudo docker run -d \
+                --name ai-5-backend \
+                --restart unless-stopped \
+                --network host \
+                --env-file $REMOTE_ENV_PATH \
+                -e JAVA_TOOL_OPTIONS="$JAVA_OPTS" \
+                $FIREBASE_MOUNT \
+                ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:latest
+            else
+              echo "⚠️ Warning: Env file not found at $REMOTE_ENV_PATH. Running without env file."
+              sudo docker run -d \
+                --name ai-5-backend \
+                --restart unless-stopped \
+                --network host \
+                -e JAVA_TOOL_OPTIONS="$JAVA_OPTS" \
+                $FIREBASE_MOUNT \
+                ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:latest
+            fi
+
+            echo "⏳ Waiting for Backend to bind port 8080 (max 20min)..."
+            MAX_RETRIES=120
+            for ((i=1; i<=MAX_RETRIES; i++)); do
+              if sudo ss -tulpn | grep 8080 > /dev/null; then
+                  echo "✅ Backend is listening on port 8080!"
+                  break
+              fi
+              echo "   ... waiting for port 8080 ($((i*10))s/${MAX_RETRIES}0s)"
+              sleep 10
+            done
+            
+            # Check if port is actually open after loop
+            if ! sudo ss -tulpn | grep 8080 > /dev/null; then
+                echo "❌ Backend failed to start within 20 minutes."
+                echo "📋 Container Logs (Last 50 lines):"
+                sudo docker logs --tail 50 ai-5-backend
+                exit 1
+            fi
+
+            echo "📋 Database Status:"
+            sudo docker exec ai-5-db pg_isready || echo "Creating DB health check failed (container might be down)"
+            
+            echo "📋 Container Status:"
+            sudo docker ps -a -f name=ai-5-backend
+            
+            echo "📋 Docker Standard Logs:"
+            sudo docker logs ai-5-backend
+            
+            echo "📋 Internal Backend Logs (logs/backend.log):"
+            sudo docker exec ai-5-backend cat logs/backend.log || echo "Internal log file not found yet."
             
             # Clean up old images
-            docker image prune -f
+            sudo docker image prune -f
 
       - name: Deployment Complete
         run: |

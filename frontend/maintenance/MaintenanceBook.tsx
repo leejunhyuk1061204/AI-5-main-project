@@ -197,23 +197,34 @@ export default function MaintenanceBook() {
     // 입력 모달 열기 (스캔 vs 직접)
     const openInputTypeModal = (mode: 'SCAN' | 'MANUAL') => {
         setInputMode(mode);
+
+        // SCAN 모드인 경우: 유형 선택 없이 바로 카메라로 이동 (사용자 요청)
+        if (mode === 'SCAN') {
+            if (!selectedVehicle?.vehicleId) {
+                showAlert('알림', '차량을 먼저 선택해주세요.', 'WARNING');
+                return;
+            }
+            navigation.navigate('ReceiptScan', {
+                vehicleId: selectedVehicle?.vehicleId,
+                // initialType은 넘기지 않거나, 필요하다면 AI가 판단하도록 흐름 개선 (ReceiptResult에서 처리)
+            });
+            return;
+        }
+
+        // MANUAL 모드인 경우: 기존대로 유형 선택 모달 표시
         setIsInputTypeModalVisible(true);
     };
 
     // 입력 타입 선택 완료 핸들러
     const handleSelectInputType = (type: 'MAINTENANCE' | 'FUELING') => {
-        setIsInputTypeModalVisible(false);
         setSelectedFormType(type);
+        setIsInputTypeModalVisible(false);
 
-        if (inputMode === 'SCAN') {
-            navigation.navigate('ReceiptScan', {
-                vehicleId: selectedVehicle?.vehicleId,
-                initialType: type // ReceiptScan에서 이 타입을 활용하도록 추후 구현 필요
-            });
-        } else {
-            resetForm();
+        if (inputMode === 'MANUAL') {
+            resetForm(); // 폼 초기화
             setIsManualModalVisible(true);
         }
+        // SCAN 모드는 위에서 바로 처리되므로 여기로 올 일 없음
     };
 
     // 정비 항목 추가
@@ -437,20 +448,27 @@ export default function MaintenanceBook() {
                     // ================= 내역 탭 =================
                     <View className="py-2 gap-4">
                         {/* 1. 입력 버튼 그룹 */}
-                        <View className="flex-row gap-3 pt-4">
+                        <View className="flex-row gap-2 pt-4">
                             <TouchableOpacity
-                                className="flex-1 flex-row items-center justify-center gap-2 bg-primary py-4 rounded-2xl active:opacity-80"
+                                className="flex-1 flex-row items-center justify-center gap-1.5 bg-primary py-4 rounded-xl active:opacity-80"
                                 onPress={() => openInputTypeModal('SCAN')}
                             >
                                 <MaterialIcons name="document-scanner" size={18} color="white" />
-                                <Text className="text-white font-bold text-sm">영수증 스캔</Text>
+                                <Text className="text-white font-bold text-xs">영수증 스캔</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
-                                className="flex-1 flex-row items-center justify-center gap-2 bg-white/10 border border-white/5 py-4 rounded-2xl active:bg-white/20"
+                                className="flex-1 flex-row items-center justify-center gap-1.5 bg-white/10 border border-white/5 py-4 rounded-xl active:bg-white/20"
                                 onPress={() => openInputTypeModal('MANUAL')}
                             >
                                 <MaterialIcons name="edit-note" size={18} color="white" />
-                                <Text className="text-white font-bold text-sm">직접 입력</Text>
+                                <Text className="text-white font-bold text-xs">직접 입력</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                className="flex-1 flex-row items-center justify-center gap-1.5 bg-white/10 border border-white/5 py-4 rounded-xl active:bg-white/20"
+                                onPress={() => navigation.navigate('ReceiptGallery', { vehicleId: selectedVehicle?.vehicleId })}
+                            >
+                                <MaterialIcons name="grid-view" size={18} color="white" />
+                                <Text className="text-white font-bold text-xs">영수증 목록</Text>
                             </TouchableOpacity>
                         </View>
 

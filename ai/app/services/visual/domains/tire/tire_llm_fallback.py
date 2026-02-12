@@ -22,6 +22,15 @@ After YOLO multi-class retraining (cracked/flat/bulge), upgrade to detection fal
 2. Conservative Thresholds (wear is subjective)
 3. LLM Oracle Only (no agreement-based LLM in this domain yet)
 """
+"""
+계기판 경고등 분석 메인 서비스
+
+사용자가 촬영한 계기판 이미지를 수신하여 경고등의 종류를 식별하고 상태를 진단합니다.
+주요 프로세스:
+1. DashboardDomainService를 통한 전처리 및 ROI 추출
+2. YOLOv11 모델을 이용한 10종 경고등(ABS, 엔진 체크 등) 검출
+3. DashboardDecisionLayer를 통한 신뢰도 검증 및 필요 시 LLM(VLM) 협업 분석
+"""
 import logging
 from typing import List, Dict, Optional
 from PIL import Image

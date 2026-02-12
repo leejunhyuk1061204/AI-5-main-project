@@ -15,7 +15,11 @@ spring:
     password: ${DB_PASSWORD:postgres}
     driver-class-name: org.postgresql.Driver
 
+  main:
+    lazy-initialization: false # 🚀 Ensure RabbitMQ consumers start immediately
   jpa:
+    open-in-view: false # Disable OSIV for performance
+    defer-datasource-initialization: true # data.sql 실행을 Hibernate 테이블 이후로 미룸
     hibernate:
       ddl-auto: update
     show-sql: false
@@ -67,6 +71,8 @@ spring:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
       password: ${REDIS_PASSWORD:}
+      repositories:
+        enabled: false
 
 
 
@@ -76,7 +82,7 @@ app:
   cors:
     allowed-origins: ${ALLOWED_ORIGINS:http://localhost:8080,http://localhost:19006,http://10.0.2.2:8080}
   storage:
-    type: ${STORAGE_TYPE:local} # local or s3
+    type: ${STORAGE_TYPE:local}  # 환경변수 사용, 기본값 local
   firebase:
     config-path: ${FIREBASE_CONFIG_PATH:firebase-service-account.json}
   openai:
@@ -91,6 +97,7 @@ logging:
     "[org.hibernate.SQL]": INFO
     "[org.hibernate.type.descriptor.sql.BasicBinder]": INFO
     org.springframework.web: INFO # 404 디버깅용 로그 원복 (너무 많아서 INFO로 조정)
+    org.springframework.boot: INFO
 
 # 암호화 키(코드는 가짜를 들고 있고, 서버가 진짜를 넣어주는 방식"이므로 보안상 안전함)
 # 암호화 키 (환경변수 관리)
