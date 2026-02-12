@@ -4,7 +4,7 @@ import { View, Text, Platform, Keyboard, AppState } from 'react-native';
 import * as ExpoSplashScreen from 'expo-splash-screen';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { NavigationContainer, DarkTheme } from '@react-navigation/native';
+import { NavigationContainer, DarkTheme, useNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as NavigationBar from 'expo-navigation-bar';
@@ -114,6 +114,7 @@ const AppTheme = {
 };
 
 export default function App() {
+  const navigationRef = useNavigationContainerRef();
   const [appIsReady, setAppIsReady] = useState(false);
   const [initialRoute, setInitialRoute] = useState<string>('Tos');
   const [showCustomSplash, setShowCustomSplash] = useState(true);
@@ -208,6 +209,8 @@ export default function App() {
         // 로그인된 상태에서만 FCM 초기화
         await fcmService.initialize();
         fcmService.setupForegroundHandler();
+        // 알림 클릭 시 화면 이동 핸들러 (navigationRef 전달)
+        fcmService.setupNotificationOpenedHandler(navigationRef);
       }
     };
 
