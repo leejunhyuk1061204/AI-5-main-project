@@ -355,6 +355,12 @@ public class AiDiagnosisService {
             log.error("Unified Diagnosis Pipeline Failed [Session: {}]", sessionId, e);
             session.updateStatus(DiagStatus.FAILED, "진단 실패: " + e.getMessage());
             diagSessionRepository.save(session);
+            // 실패 시에도 SSE 구독자에게 명시적으로 알림을 보낸다.
+            try {
+                sseEmitters.send(sessionId.toString(), "failed", "진단 실패: " + e.getMessage());
+            } catch (Exception sseError) {
+                log.warn("Failed to send FAILED SSE event for session {}", sessionId, sseError);
+            }
             throw new RuntimeException("진단 파이프라인 오류", e);
         }
     }
