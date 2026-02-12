@@ -34,7 +34,7 @@ public interface KnowledgeRepository extends JpaRepository<Knowledge, UUID> {
          */
         @Query(value = "SELECT * FROM knowledge_vectors kv " +
                         "WHERE kv.metadata->>'manufacturer' = :manufacturer " +
-                        "AND kv.metadata->>'model' LIKE CONCAT('%', CAST(:modelName AS TEXT), '%') " +
+                        "AND kv.metadata->>'model' LIKE ('%' || :modelName || '%') " +
                         "AND (kv.embedding <=> cast(:embedding as vector)) <= :threshold " +
                         "ORDER BY kv.embedding <=> cast(:embedding as vector) " +
                         "LIMIT :limit", nativeQuery = true)

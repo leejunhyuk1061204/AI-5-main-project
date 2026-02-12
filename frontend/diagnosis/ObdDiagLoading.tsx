@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { View, Text, TouchableOpacity, ImageBackground, Dimensions, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, ImageBackground, Dimensions, Platform, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { CommonActions, useRoute, RouteProp } from '@react-navigation/native';
@@ -104,6 +104,26 @@ export default function ObdDiagLoading({ navigation }: any) {
             setStatusMessage("결함 원인 추론 및 지식 검색 완료");
             setProgress(0.8);
         };
+        const handleFailed = (event: any) => {
+            console.log("[SSE] Failed:", event.data);
+            const message = event?.data || "AI 분석 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.";
+            setStatusMessage(message);
+            setProgress(1.0);
+
+            Alert.alert(
+                "진단 실패",
+                message,
+                [
+                    {
+                        text: "확인",
+                        onPress: () => {
+                            // 이전 화면(진단 시작 화면 등)으로 복귀
+                            navigation.goBack();
+                        }
+                    }
+                ]
+            );
+        };
         const handleStep5 = async (event: any) => {
             console.log("[SSE] Step 5:", event.data);
             setStatusMessage("최종 진단 완료 (결과 확인 중)");
@@ -145,6 +165,7 @@ export default function ObdDiagLoading({ navigation }: any) {
         es.addEventListener("step3" as any, handleStep3);
         es.addEventListener("step4" as any, handleStep4);
         es.addEventListener("step5" as any, handleStep5);
+        es.addEventListener("failed" as any, handleFailed);
         es.addEventListener("error" as any, handleError);
 
         // Animations start
