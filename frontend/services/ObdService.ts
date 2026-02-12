@@ -533,7 +533,11 @@ class ObdService {
         console.log('[ObdService] polling started type=', this.connectionType);
         useBleStore.getState().setPolling(true);
         this.pollingLoop(intervalMs);
-        this.samplingLoop(1000); // 6단계: 1초 고정 샘플링 시작
+        // 일반 주행 모드: 1초 고정 스냅샷 (서버 업로드/주행 상태 머신용)
+        // ELM327 테스트 화면(testMode)에서는 응답이 올 때마다 스냅샷을 내보내도록 samplingLoop를 사용하지 않는다.
+        if (!this.testMode) {
+            this.samplingLoop(1000); // 6단계: 1초 고정 샘플링 시작
+        }
 
         // 안드로이드 백그라운드 서비스 시작 (P0: 권한은 호출 측에서 먼저 요청, 여기서는 체크만)
         if (Platform.OS === 'android') {
@@ -1060,6 +1064,17 @@ class ObdService {
                     this.tryResolveWhenIdentifiersReady();
                     break;
             }
+        }
+
+        // 테스트 모드(ELM327 테스트 화면)에서는 1초 타이머 대신
+        // 각 01 모드 응답이 올 때마다 최신 스냅샷을 바로 내보낸다.
+        if (this.testMode && this.currentPid && this.currentPid.mode === '01') {
+            const snapshot: ObdData = { timestamp: new Date().toISOString() };
+            Object.keys(this.currentData).forEach(key => {
+                if (key === 'timestamp') return;
+                (snapshot as any)[key] = (this.currentData as any)[key];
+            });
+            this.notifyListeners(snapshot);
         }
 
         this.logPidRoundTrip(pidKey, true);
