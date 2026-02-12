@@ -180,8 +180,9 @@ jobs:
             fi
             
             echo "▶️ Running new backend container..."
-            # Add entropy fix to JAVA_TOOL_OPTIONS to prevent startup hangs
-            JAVA_OPTS="-Xmx300m -Djava.security.egd=file:/dev/./urandom"
+            # Adjust memory: 512MB Max Heap (fits within 1GB RAM + 2GB Swap)
+            # -XX:+ExitOnOutOfMemoryError: Ensure container exits immediately on OOM so Docker restarts it (or we catch it)
+            JAVA_OPTS="-Xms256m -Xmx512m -XX:+ExitOnOutOfMemoryError -Djava.security.egd=file:/dev/./urandom"
             
             if [ -f "$REMOTE_ENV_PATH" ]; then
               echo "✅ Env file found at $REMOTE_ENV_PATH. Using it."
@@ -225,8 +226,10 @@ jobs:
             # Check if port is actually open after loop
             if ! sudo ss -tulpn | grep 8080 > /dev/null; then
                 echo "❌ Backend failed to start within 50 minutes."
-                echo "📋 Container Logs (Last 50 lines):"
-                sudo docker logs --tail 50 ai-5-backend
+                echo "📋 System Diagnostics (OOM Check):"
+                sudo dmesg | grep -i "kill" || echo "No OOM kills detected in dmesg."
+                echo "📋 Container Logs (Last 100 lines):"
+                sudo docker logs --tail 100 ai-5-backend
                 exit 1
             fi
 
