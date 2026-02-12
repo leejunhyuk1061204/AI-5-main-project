@@ -58,8 +58,8 @@ export const authService = {
         return response.data;
     },
 
-    updateProfile: async (token: string, nickname?: string, password?: string): Promise<ApiResponse<string>> => {
-        const payload: any = {};
+    updateProfile: async (nickname?: string, password?: string): Promise<ApiResponse<string>> => {
+        const payload: { nickname?: string; password?: string } = {};
         if (nickname) payload.nickname = nickname;
         if (password) payload.password = password;
 

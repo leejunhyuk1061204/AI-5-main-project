@@ -202,7 +202,7 @@ class ObdService {
                 // BLE 응답 리스너 (진단: 수신 여부 확인용)
                 bleManagerEmitter.addListener(
                     'BleManagerDidUpdateValueForCharacteristic',
-                    ({ value, peripheral, service, characteristic }: any) => {
+                    ({ value, peripheral, service, characteristic }: { value: number[], peripheral: string, service: string, characteristic: string }) => {
                         if (this.connectionType !== 'ble') return;
                         if (peripheral !== this.currentDeviceId) return;
 
@@ -749,7 +749,7 @@ class ObdService {
 
             // 마지막 업데이트가 없거나 임계값을 초과한 경우 null 처리
             if (!lastUpdate || (now - lastUpdate) > threshold) {
-                (snapshot as any)[key] = null;
+                (snapshot as any)[key] = undefined; // 타입 안정성을 위해 null 대신 undefined 또는 타입에 맞는 값 권장
             } else {
                 (snapshot as any)[key] = this.currentData[key as keyof ObdData];
             }

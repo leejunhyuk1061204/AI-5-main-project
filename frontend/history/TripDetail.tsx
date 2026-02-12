@@ -51,7 +51,7 @@ export default function TripDetail() {
     };
 
     const getScoreColor = (score: number) => {
-        if (score >= 80) return '#4ade80'; // Green
+        if (score >= 80) return '#0d7ff2'; // Blue (Primary)
         if (score >= 60) return '#fbbf24'; // Yellow
         return '#ef4444'; // Red
     };
@@ -222,7 +222,7 @@ export default function TripDetail() {
                 {/* 5. Vehicle Health Stats */}
                 <View className="bg-surface-dark p-5 rounded-2xl mb-8 border border-gray-800">
                     <Text className="text-white font-bold text-lg mb-4 flex-row items-center gap-2">
-                        <FontAwesome5 name="car-crash" size={18} color="#10b981" /> 차량 상태
+                        <FontAwesome5 name="car-crash" size={18} color="#0d7ff2" /> 차량 상태
                     </Text>
 
                     <View className="flex-row flex-wrap gap-3">
@@ -230,7 +230,7 @@ export default function TripDetail() {
                         <View className="w-[48%] bg-background-dark/50 p-3 rounded-xl border border-gray-700">
                             <View className="flex-row justify-between items-start mb-2">
                                 <Text className="text-gray-500 text-xs">최고 냉각수 온도</Text>
-                                <FontAwesome5 name="thermometer-half" size={12} color={trip.maxCoolantTemp && trip.maxCoolantTemp > 100 ? '#ef4444' : '#10b981'} />
+                                <FontAwesome5 name="thermometer-half" size={12} color={trip.maxCoolantTemp && trip.maxCoolantTemp > 100 ? '#ef4444' : '#0d7ff2'} />
                             </View>
                             <Text className="text-white font-bold text-lg">{trip.maxCoolantTemp ? trip.maxCoolantTemp.toFixed(1) : '-'} °C</Text>
                         </View>
@@ -239,7 +239,7 @@ export default function TripDetail() {
                         <View className="w-[48%] bg-background-dark/50 p-3 rounded-xl border border-gray-700">
                             <View className="flex-row justify-between items-start mb-2">
                                 <Text className="text-gray-500 text-xs">최저 배터리 전압</Text>
-                                <MaterialIcons name="battery-std" size={14} color={trip.minBatteryVoltage && trip.minBatteryVoltage < 11.5 ? '#ef4444' : '#10b981'} />
+                                <MaterialIcons name="battery-std" size={14} color={trip.minBatteryVoltage && trip.minBatteryVoltage < 11.5 ? '#ef4444' : '#0d7ff2'} />
                             </View>
                             <Text className="text-white font-bold text-lg">{trip.minBatteryVoltage ? trip.minBatteryVoltage.toFixed(1) : '-'} V</Text>
                         </View>

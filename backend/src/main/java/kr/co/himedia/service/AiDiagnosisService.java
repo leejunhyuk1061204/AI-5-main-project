@@ -219,7 +219,8 @@ public class AiDiagnosisService {
 
     /** type 문자열을 DtcType으로 변환. null/unknown 시 STORED fallback */
     private DtcHistory.DtcType parseDtcType(String type) {
-        if (type == null || type.isBlank()) return DtcHistory.DtcType.STORED;
+        if (type == null || type.isBlank())
+            return DtcHistory.DtcType.STORED;
         try {
             return DtcHistory.DtcType.valueOf(type.trim().toUpperCase());
         } catch (IllegalArgumentException e) {
@@ -230,7 +231,8 @@ public class AiDiagnosisService {
 
     /** status 문자열을 DtcStatus로 변환. null/unknown 시 ACTIVE fallback */
     private DtcHistory.DtcStatus parseDtcStatus(String status) {
-        if (status == null || status.isBlank()) return DtcHistory.DtcStatus.ACTIVE;
+        if (status == null || status.isBlank())
+            return DtcHistory.DtcStatus.ACTIVE;
         try {
             return DtcHistory.DtcStatus.valueOf(status.trim().toUpperCase());
         } catch (IllegalArgumentException e) {
@@ -267,7 +269,7 @@ public class AiDiagnosisService {
         User user = userRepository.findById(vehicle.getUserId())
                 .orElseThrow(() -> new BaseException(ErrorCode.USER_NOT_FOUND));
         notificationService.sendNotification(user, title, body, Notification.NotificationType.DTC_ALERT, data);
-        log.info("[Notification] Sent Batch DTC Alert: vehicle={}, userId={}, codes={}", 
+        log.info("[Notification] Sent Batch DTC Alert: vehicle={}, userId={}, codes={}",
                 vehicle.getVehicleId(), user.getUserId(), codes);
     }
 
@@ -461,7 +463,10 @@ public class AiDiagnosisService {
         // [Step 3] AI 병렬 분석 완료
         sseEmitters.send(sessionId.toString(), "step3", "[Step 3/5] AI 정밀 분석 완료 (시각/청각/데이터)");
 
-        // [Filter Logic] LLM 전송: 전부 정상이면 lstm_timeline=[], 하나라도 이상이면 is_anomaly + 해당 events만 한 덩어리로 전달
+        // [Filter Logic] LLM 전송: 전부 정상이면 lstm_timeline=[], 하나라도 이상이면 is_anomaly + 해당
+        // events만 한 덩어리로 전달
+        // [Filter Logic] LLM 전송: 전부 정상이면 lstm_timeline=[], 하나라도 이상이면 is_anomaly + 해당
+        // events만 한 덩어리로 전달
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> detailedResults = (List<Map<String, Object>>) anomalyResult.get("detailed_results");
         List<Map<String, Object>> lstmTimeline = new ArrayList<>();
@@ -524,7 +529,6 @@ public class AiDiagnosisService {
         List<String> knowledgeResults = new ArrayList<>();
 
         Optional<Vehicle> vehicleOpt = vehicleRepository.findById(requestDto.getVehicleId());
-
         // DTC 정의 정보 우선 추가 (DTC 모드일 경우)
         if (dtcInfo != null && dtcInfo.containsKey("dtc_list")) {
             @SuppressWarnings("unchecked")
@@ -567,7 +571,7 @@ public class AiDiagnosisService {
             }
             knowledgeResults.addAll(generalKnowledge);
         }
-        
+
         if (!knowledgeResults.isEmpty()) {
             aiRequestBuilder.knowledgeData(knowledgeResults);
         }
@@ -617,6 +621,7 @@ public class AiDiagnosisService {
         if (existingResult.getInteractiveJson() != null) {
             Map<String, Object> interactiveData = objectMapper.readValue(existingResult.getInteractiveJson(),
                     Map.class);
+            @SuppressWarnings("unchecked")
             List<Map<String, Object>> existingConv = (List<Map<String, Object>>) interactiveData.get("conversation");
             if (existingConv != null)
                 conversation.addAll(existingConv);
@@ -667,7 +672,7 @@ public class AiDiagnosisService {
                 .conversationHistory(conversation);
 
         populateVehicleAndConsumableInfo(aiRequestBuilder, session.getVehiclesId());
-        
+
         // DTC 모드일 경우 dtc_info 재사용
         if (session.getTriggerType() == DiagTriggerType.DTC) {
             Map<String, Object> dtcInfo = buildDtcInfoForSession(session);
@@ -676,7 +681,7 @@ public class AiDiagnosisService {
                 log.info("[DTC Mode Reply] Reusing dtc_info for session: {}", sessionId);
             }
         }
-        
+
         // 필요 시 신규 분석 결과도 최상위에 포함
         if (visualResult != null)
             aiRequestBuilder.visualAnalysis(visualResult);
@@ -701,7 +706,6 @@ public class AiDiagnosisService {
 
         // 6. 알림 발송 (Reply 단계에서는 불필요 - 이미 대화 중)
     }
-
 
     private String updateReplyResult(UUID sessionId, Map<String, Object> aiResponse,
             List<Map<String, Object>> conversation, long userTurnCount, DiagResult existingResult) throws Exception {
@@ -729,6 +733,7 @@ public class AiDiagnosisService {
 
         if ("REPORT".equalsIgnoreCase(mode)) {
             // ... (기존 REPORT 저장 로직과 동일하거나 간소화)
+            @SuppressWarnings("unchecked")
             Map<String, Object> reportData = (Map<String, Object>) aiResponse.get("report_data");
             resultBuilder
                     .finalReport(reportData != null ? (String) reportData.get("final_guide") : "원인 파악 중 오류가 발생했습니다.");
@@ -736,6 +741,7 @@ public class AiDiagnosisService {
                     .writeValueAsString(reportData != null ? reportData.get("suspected_causes") : List.of()));
             resultBuilder.riskLevel(DiagResult.RiskLevel.LOW);
         } else {
+            @SuppressWarnings("unchecked")
             Map<String, Object> interactiveData = (Map<String, Object>) aiResponse.get("interactive_data");
             if (interactiveData == null) {
                 interactiveData = new HashMap<>(); // Safeguard
@@ -783,7 +789,8 @@ public class AiDiagnosisService {
             // trip_id: 세션에 트립이 연결되어 있으면 사용, 없으면 session-{sessionId}
             UUID tripId = session.getTripId();
 
-            // 타이어 압력: vehicles.cloud_linked == true 일 때만 최신 cloud_telemetry에서 채움. null 컬럼은 제외
+            // 타이어 압력: vehicles.cloud_linked == true 일 때만 최신 cloud_telemetry에서 채움. null 컬럼은
+            // 제외
             final Map<String, Double> tirePressureForPayload = getTirePressureForVehicle(vehicleId);
 
             // 1. 데이터 수집 및 청크 분할
@@ -865,7 +872,8 @@ public class AiDiagnosisService {
                     .map(java.util.concurrent.CompletableFuture::join)
                     .collect(Collectors.toList());
 
-            // 3. 결과 취합: meta/domains/events/is_anomaly/anomaly_score만 사용 (window_results 미사용)
+            // 3. 결과 취합: meta/domains/events/is_anomaly/anomaly_score만 사용 (window_results
+            // 미사용)
             boolean isAnyAnomaly = results.stream()
                     .anyMatch(r -> r.get("is_anomaly") != null && (boolean) r.get("is_anomaly"));
 
@@ -927,13 +935,18 @@ public class AiDiagnosisService {
                 .filter(v -> Boolean.TRUE.equals(v.getCloudLinked()))
                 .flatMap(vehicle -> {
                     List<CloudTelemetry> list = cloudTelemetryRepository.findByVehicleOrderByLastSyncedAtDesc(vehicle);
-                    if (list.isEmpty()) return Optional.<Map<String, Double>>empty();
+                    if (list.isEmpty())
+                        return Optional.<Map<String, Double>>empty();
                     CloudTelemetry ct = list.get(0);
                     Map<String, Double> map = new HashMap<>();
-                    if (ct.getTirePressureFl() != null) map.put("tire_pressure_fl_kpa", ct.getTirePressureFl());
-                    if (ct.getTirePressureFr() != null) map.put("tire_pressure_fr_kpa", ct.getTirePressureFr());
-                    if (ct.getTirePressureRl() != null) map.put("tire_pressure_rl_kpa", ct.getTirePressureRl());
-                    if (ct.getTirePressureRr() != null) map.put("tire_pressure_rr_kpa", ct.getTirePressureRr());
+                    if (ct.getTirePressureFl() != null)
+                        map.put("tire_pressure_fl_kpa", ct.getTirePressureFl());
+                    if (ct.getTirePressureFr() != null)
+                        map.put("tire_pressure_fr_kpa", ct.getTirePressureFr());
+                    if (ct.getTirePressureRl() != null)
+                        map.put("tire_pressure_rl_kpa", ct.getTirePressureRl());
+                    if (ct.getTirePressureRr() != null)
+                        map.put("tire_pressure_rr_kpa", ct.getTirePressureRr());
                     return map.isEmpty() ? Optional.<Map<String, Double>>empty() : Optional.of(map);
                 })
                 .orElse(null);
@@ -941,7 +954,8 @@ public class AiDiagnosisService {
 
     /**
      * ObdAnomalyRequest 스키마에 맞는 페이로드 생성.
-     * tripId가 있으면 사용, 없으면 session-{sessionId}. cloud_linked 시 tirePressureKpa를 각 샘플 features에 넣음.
+     * tripId가 있으면 사용, 없으면 session-{sessionId}. cloud_linked 시 tirePressureKpa를 각 샘플
+     * features에 넣음.
      */
     private Map<String, Object> buildObdAnomalyRequestPayload(String vehicleId, String sessionId,
             List<Map<String, Object>> chunk, UUID tripIdOrNull, Map<String, Double> tirePressureKpa) {
@@ -986,7 +1000,8 @@ public class AiDiagnosisService {
         return payload;
     }
 
-    private void putIfNumber(Map<String, Object> source, Map<String, Object> target, String sourceKey, String targetKey) {
+    private void putIfNumber(Map<String, Object> source, Map<String, Object> target, String sourceKey,
+            String targetKey) {
         Object v = source.get(sourceKey);
         if (v instanceof Number) {
             target.put(targetKey, v);
@@ -1019,7 +1034,8 @@ public class AiDiagnosisService {
                 int size = wr instanceof List ? ((List<?>) wr).size() : 0;
                 forLog.put("window_results", "[size=" + size + "]");
             }
-            log.info("[Anomaly] Response (chunk {}/{}): {}", chunkIndex, totalChunks, objectMapper.writeValueAsString(forLog));
+            log.info("[Anomaly] Response (chunk {}/{}): {}", chunkIndex, totalChunks,
+                    objectMapper.writeValueAsString(forLog));
         } catch (Exception e) {
             log.warn("[Anomaly] Response log failed: {}", e.getMessage());
         }
@@ -1031,8 +1047,10 @@ public class AiDiagnosisService {
      */
     /**
      * AiUnifiedRequestDto 기반 Map을 OpenAI 진단 입력 스펙으로 변환한다.
-     * diagnosis_context는 보내지 않으며, vehicle_info, dtc_info, consumables_status, analysis_results, rag_context만 포함.
-     * consumables_status는 "관련 항목만" 필터: 주의 필요(잔여수명 이하) + DTC 시 엔진/배기 관련 + 핵심 항목 항상 포함.
+     * diagnosis_context는 보내지 않으며, vehicle_info, dtc_info, consumables_status,
+     * analysis_results, rag_context만 포함.
+     * consumables_status는 "관련 항목만" 필터: 주의 필요(잔여수명 이하) + DTC 시 엔진/배기 관련 + 핵심 항목 항상
+     * 포함.
      */
     private Map<String, Object> buildOpenAiPayload(Map<String, Object> llmPayload) {
         Map<String, Object> analysisResults = new HashMap<>();
@@ -1056,7 +1074,8 @@ public class AiDiagnosisService {
     }
 
     /**
-     * LLM에 보낼 소모품만 필터: 주의 필요(remaining_life_pct <= 80) + DTC 시 엔진/배기 관련 + 항상 포함 핵심 항목.
+     * LLM에 보낼 소모품만 필터: 주의 필요(remaining_life_pct <= 80) + DTC 시 엔진/배기 관련 + 항상 포함 핵심
+     * 항목.
      */
     @SuppressWarnings("unchecked")
     private List<Map<String, Object>> filterConsumablesForLlm(Object consumablesStatus, boolean hasDtc) {
@@ -1268,8 +1287,10 @@ public class AiDiagnosisService {
     }
 
     private static Double parseConfidenceScore(Object value) {
-        if (value == null) return null;
-        if (value instanceof Number) return ((Number) value).doubleValue();
+        if (value == null)
+            return null;
+        if (value instanceof Number)
+            return ((Number) value).doubleValue();
         try {
             return Double.valueOf(value.toString());
         } catch (NumberFormatException e) {
@@ -1278,8 +1299,10 @@ public class AiDiagnosisService {
     }
 
     /**
-     * interactive_data.request_type (CAPTURE_PHOTO | RECORD_SOUND | ANSWER_QUESTION) 또는
-     * requested_actions/ follow_up_questions에서 추론해 DB requested_action 컬럼용 DiagAction 반환.
+     * interactive_data.request_type (CAPTURE_PHOTO | RECORD_SOUND |
+     * ANSWER_QUESTION) 또는
+     * requested_actions/ follow_up_questions에서 추론해 DB requested_action 컬럼용
+     * DiagAction 반환.
      */
     @SuppressWarnings("unchecked")
     private DiagAction getRequestedActionForColumn(Map<String, Object> response) {
@@ -1288,9 +1311,12 @@ public class AiDiagnosisService {
             Object rt = interactiveData.get("request_type");
             if (rt != null && rt.toString().trim().length() > 0) {
                 String s = rt.toString().trim().toUpperCase();
-                if ("CAPTURE_PHOTO".equals(s)) return DiagAction.CAPTURE_PHOTO;
-                if ("RECORD_SOUND".equals(s)) return DiagAction.RECORD_AUDIO;
-                if ("ANSWER_QUESTION".equals(s)) return DiagAction.ANSWER_TEXT;
+                if ("CAPTURE_PHOTO".equals(s))
+                    return DiagAction.CAPTURE_PHOTO;
+                if ("RECORD_SOUND".equals(s))
+                    return DiagAction.RECORD_AUDIO;
+                if ("ANSWER_QUESTION".equals(s))
+                    return DiagAction.ANSWER_TEXT;
             }
             Object ra = interactiveData.get("requested_actions");
             if (ra instanceof List && !((List<?>) ra).isEmpty()) {
@@ -1299,9 +1325,12 @@ public class AiDiagnosisService {
                     Object at = ((Map<?, ?>) first).get("action_type");
                     if (at != null) {
                         String s = at.toString().trim().toUpperCase();
-                        if ("CAPTURE_PHOTO".equals(s)) return DiagAction.CAPTURE_PHOTO;
-                        if ("RECORD_SOUND".equals(s)) return DiagAction.RECORD_AUDIO;
-                        if ("ANSWER_QUESTION".equals(s)) return DiagAction.ANSWER_TEXT;
+                        if ("CAPTURE_PHOTO".equals(s))
+                            return DiagAction.CAPTURE_PHOTO;
+                        if ("RECORD_SOUND".equals(s))
+                            return DiagAction.RECORD_AUDIO;
+                        if ("ANSWER_QUESTION".equals(s))
+                            return DiagAction.ANSWER_TEXT;
                     }
                 }
             }
@@ -1313,13 +1342,17 @@ public class AiDiagnosisService {
         return null;
     }
 
-    /** requested_actions is inside interactive_data per prompt; fallback to root for compatibility. */
+    /**
+     * requested_actions is inside interactive_data per prompt; fallback to root for
+     * compatibility.
+     */
     @SuppressWarnings("unchecked")
     private List<String> getRequestedActionsFromResponse(Map<String, Object> response) {
         Map<String, Object> interactiveData = (Map<String, Object>) response.get("interactive_data");
         if (interactiveData != null && interactiveData.get("requested_actions") != null) {
             Object raw = interactiveData.get("requested_actions");
-            if (raw instanceof List) return (List<String>) raw;
+            if (raw instanceof List)
+                return (List<String>) raw;
         }
         if (response.get("requested_actions") != null && response.get("requested_actions") instanceof List) {
             return (List<String>) response.get("requested_actions");
@@ -1487,19 +1520,19 @@ public class AiDiagnosisService {
      * DTC 모드 진단 트리거
      */
     private void triggerDtcDiagnosis(UUID vehicleId, List<DtcBatchRequest.DtcInfo> dtcs) {
-        log.info("[DTC Trigger] Starting DTC diagnosis for vehicle: {}, DTCs: {}", vehicleId, 
-                 dtcs.stream().map(DtcBatchRequest.DtcInfo::getCode).collect(Collectors.toList()));
+        log.info("[DTC Trigger] Starting DTC diagnosis for vehicle: {}, DTCs: {}", vehicleId,
+                dtcs.stream().map(DtcBatchRequest.DtcInfo::getCode).collect(Collectors.toList()));
 
         // 1. DTC 컨텍스트 JSON 생성
         List<Map<String, Object>> dtcList = new ArrayList<>();
         for (DtcBatchRequest.DtcInfo info : dtcs) {
             Optional<DtcCode> master = dtcCodeRepository.findByCodeGeneric(info.getCode());
-            
+
             Map<String, Object> dtcItem = new HashMap<>();
             dtcItem.put("code", info.getCode());
             dtcItem.put("name_en", master.map(DtcCode::getDescriptionEn)
-                                          .filter(s -> s != null && !s.isBlank())
-                                          .orElse(master.map(DtcCode::getDescriptionKo).orElse("Unknown DTC")));
+                    .filter(s -> s != null && !s.isBlank())
+                    .orElse(master.map(DtcCode::getDescriptionKo).orElse("Unknown DTC")));
             dtcItem.put("status", info.getStatus() != null ? info.getStatus() : "ACTIVE");
             if (info.getType() != null) {
                 dtcItem.put("type", info.getType());
@@ -1583,7 +1616,7 @@ public class AiDiagnosisService {
     private String buildSearchQueryWithDtc(Map<String, Object> visualResult, Map<String, Object> audioResult,
             Map<String, Object> anomalyResult, Map<String, Object> dtcInfo) {
         StringBuilder searchQuery = new StringBuilder();
-        
+
         // 기존 이상탐지/이미지/소리 키워드
         if (visualResult != null && visualResult.containsKey("category")) {
             searchQuery.append(visualResult.get("category")).append(" ");

@@ -1,21 +1,65 @@
 import api from './axios';
 
-// AI 진단 결과 타입 정의
+// 진단 대화 메시지 타입
+export interface DiagnosisMessage {
+    role: 'user' | 'ai';
+    content: string;
+    mediaType?: 'image' | 'audio';
+    mediaUri?: string;
+    timestamp?: number;
+    isPending?: boolean;
+}
+
+// AI 진단 결과 타입
 export interface AiDiagnosisResponse {
-    diagnosisId: string;
-    result: string; // 'NORMAL' | 'WARNING' | 'DANGER'
-    description: string;
-    confidence: number;
+    sessionId: string;
+    vehicleId: string;
+    status: 'PENDING' | 'PROCESSING' | 'REPLY_PROCESSING' | 'ACTION_REQUIRED' | 'INTERACTIVE' | 'REPORT' | 'DONE' | 'COMPLETED' | 'FAILED' | 'ERROR';
+    response_mode: 'REPORT' | 'INTERACTIVE';
+    responseMode?: 'REPORT' | 'INTERACTIVE'; // 하위 호환성
+
+    // 리포트 데이터 (평가 결과)
+    summary?: string;
+    riskLevel?: 'NORMAL' | 'CAUTION' | 'DANGER';
+    description?: string;
+    finalReport?: string;
+    triggerType?: string;
+    createdAt?: string;
+
+    // 중첩된 리포트 구조 지원 (DiagnosisReport.tsx 대응)
+    report?: {
+        sessionId?: string;
+        summary?: string;
+        riskLevel?: 'NORMAL' | 'CAUTION' | 'DANGER';
+        description?: string;
+        finalReport?: string;
+        triggerType?: string;
+        createdAt?: string;
+    };
+
+    result?: any;
+    confidence?: number;
     parts?: {
         name: string;
         status: 'NORMAL' | 'WARNING' | 'DANGER';
         confidence: number;
     }[];
-    soundStatus?: string; // For sound diagnosis
+    soundStatus?: string;
     imageUrl?: string;
-    audioUrl?: string; // For sound diagnosis
-    sessionId?: string; // Unified Diagnosis Session ID
-    response_mode?: 'REPORT' | 'INTERACTIVE';
+    audioUrl?: string;
+
+    // 인터랙티브 진단 데이터
+    interactiveData?: {
+        message?: string;
+        conversation?: DiagnosisMessage[];
+    };
+
+    // 사용자에게 요청된 동작
+    requestedAction?: 'CAPTURE_PHOTO' | 'RECORD_AUDIO' | 'ANSWER_TEXT' | 'NONE';
+
+    // 진행 상태 메시지
+    progress?: number;
+    progressMessage?: string;
 }
 
 
@@ -69,7 +113,7 @@ export const diagnoseImage = async (imageUri: string, vehicleId: string): Promis
  * @param audioUri 녹음된 오디오 파일의 로컬 URI
  * @param vehicleId 차량 ID
  */
-export const diagnoseEngineSound = async (audioUri: string, vehicleId: string): Promise<any> => {
+export const diagnoseEngineSound = async (audioUri: string, vehicleId: string): Promise<AiDiagnosisResponse> => {
     try {
         const formData = new FormData();
         const filename = audioUri.split('/').pop() || 'engine_sound.m4a';
@@ -106,7 +150,7 @@ export const diagnoseEngineSound = async (audioUri: string, vehicleId: string): 
  * AI OBD 단독 진단 요청
  * @param vehicleId 차량 ID
  */
-export const diagnoseObdOnly = async (vehicleId: string): Promise<any> => {
+export const diagnoseObdOnly = async (vehicleId: string): Promise<AiDiagnosisResponse> => {
     try {
         const formData = new FormData();
 
@@ -119,7 +163,7 @@ export const diagnoseObdOnly = async (vehicleId: string): Promise<any> => {
             headers: { 'Content-Type': 'multipart/form-data' },
         });
 
-        return response.data;
+        return response.data.data;
     } catch (error) {
         console.error('[aiApi] OBD Only Diagnosis failed:', error);
         throw error;
@@ -129,7 +173,7 @@ export const diagnoseObdOnly = async (vehicleId: string): Promise<any> => {
 /**
  * 세션 상태/결과 조회
  */
-export const getDiagnosisSessionStatus = async (sessionId: string): Promise<any> => {
+export const getDiagnosisSessionStatus = async (sessionId: string): Promise<AiDiagnosisResponse> => {
     try {
         const response = await api.get(`/api/v1/ai/diagnose/session/${sessionId}`);
         return response.data.data;
@@ -142,7 +186,20 @@ export const getDiagnosisSessionStatus = async (sessionId: string): Promise<any>
 /**
  * INTERACTIVE 모드 답변 전송
  */
-export const replyToDiagnosisSession = async (sessionId: string, replyData: { userResponse?: string, vehicleId: string }, imageUri?: string, audioUri?: string): Promise<any> => {
+export interface ReplyResponse {
+    sessionId: string;
+    response_mode: 'REPORT' | 'INTERACTIVE';
+    result?: string;
+    description?: string;
+    interactive_question?: string;
+}
+
+export const replyToDiagnosisSession = async (
+    sessionId: string,
+    replyData: { userResponse?: string, vehicleId: string },
+    imageUri?: string,
+    audioUri?: string
+): Promise<ReplyResponse> => {
     try {
         const formData = new FormData();
 

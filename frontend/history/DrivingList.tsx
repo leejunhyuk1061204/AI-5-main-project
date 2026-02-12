@@ -138,7 +138,7 @@ export default function DrivingList() {
                             </View>
                             {/* Score Badge - Fixed text color */}
                             <View className="flex-row items-center gap-1 bg-surface-highlight/20 px-3 py-1.5 rounded-full border border-gray-700">
-                                <View className={`w-2 h-2 rounded-full ${item.driveScore >= 80 ? 'bg-success' : item.driveScore >= 60 ? 'bg-yellow-500' : 'bg-red-500'}`} style={{ shadowColor: '#0bda5b', shadowOpacity: 0.5, shadowRadius: 5 }} />
+                                <View className={`w-2 h-2 rounded-full ${item.driveScore >= 80 ? 'bg-primary' : item.driveScore >= 60 ? 'bg-yellow-500' : 'bg-red-500'}`} style={{ shadowColor: item.driveScore >= 80 ? '#0d7ff2' : item.driveScore >= 60 ? '#f59e0b' : '#ef4444', shadowOpacity: 0.5, shadowRadius: 5 }} />
                                 <Text className="text-sm font-bold text-white">{item.driveScore}점</Text>
                             </View>
                         </View>

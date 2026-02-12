@@ -75,7 +75,7 @@ export default function MyPage() {
             try {
                 const token = await AsyncStorage.getItem('accessToken');
                 if (token) {
-                    const res = await authService.updateProfile(token, tempInput);
+                    const res = await authService.updateProfile(tempInput);
                     if (res.success) {
                         setModalVisible(false);
                         setTimeout(() => {
@@ -106,7 +106,7 @@ export default function MyPage() {
             try {
                 const token = await AsyncStorage.getItem('accessToken');
                 if (token) {
-                    const res = await authService.updateProfile(token, undefined, tempInput);
+                    const res = await authService.updateProfile(undefined, tempInput);
                     if (res.success) {
                         setModalVisible(false);
                         setTimeout(() => {

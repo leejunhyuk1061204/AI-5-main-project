@@ -25,6 +25,7 @@ const { width } = Dimensions.get('window');
 // Route 파라미터 타입 정의
 type ActiveLoadingParams = {
     vehicleId?: string;
+    sessionId?: string;
 };
 
 export default function ObdDiagLoading({ navigation }: any) {
@@ -130,7 +131,7 @@ export default function ObdDiagLoading({ navigation }: any) {
             setProgress(1.0);
 
             if (!currentSessionId) {
-                setTimeout(() => navigation.replace('ObdDiagResult'), 1000);
+                setTimeout(() => navigation.replace('DiagnosisReport'), 1000);
                 return;
             }
             try {
@@ -139,17 +140,19 @@ export default function ObdDiagLoading({ navigation }: any) {
                 const responseMode = data?.responseMode || data?.response_mode || '';
 
                 const isInteractive = status === 'ACTION_REQUIRED' || status === 'INTERACTIVE' || responseMode === 'INTERACTIVE';
+                const reportData = data?.report || data?.result || data;
 
                 setTimeout(() => {
                     if (isInteractive) {
                         navigation.replace('AiDiagChat', { sessionId: currentSessionId, vehicleId: vehicleId ?? undefined });
                     } else {
-                        navigation.replace('ObdDiagResult');
+                        navigation.replace('DiagnosisReport', { reportData, sessionId: currentSessionId });
                     }
                 }, 800);
             } catch (e) {
                 console.warn("[ObdDiagLoading] Step5 status fetch failed, going to result:", e);
-                setTimeout(() => navigation.replace('ObdDiagResult'), 1000);
+                // 에러 발생 시에도 리포트 화면으로 이동 (빈 데이터라도 보여줌)
+                setTimeout(() => navigation.replace('DiagnosisReport', { sessionId: currentSessionId }), 1000);
             }
         };
 
