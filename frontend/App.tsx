@@ -19,7 +19,6 @@ import { useUIStore } from './store/useUIStore';
 import { useUserStore } from './store/useUserStore';
 import ObdService from './services/ObdService';
 import BackgroundService from './services/BackgroundService';
-import NotificationService from './services/NotificationService';
 import fcmService from './services/fcmService';
 import GlobalAlert from './components/common/GlobalAlert';
 import GlobalDatePicker from './components/common/GlobalDatePicker';
@@ -71,6 +70,7 @@ import PaymentSuccess from './payment/PaymentSuccess';
 import MaintenanceHistory from './history/MaintenanceHistory';
 import DrivingList from './history/DrivingList';
 import Elm327TestScreen from './obd-test/Elm327TestScreen';
+import TripDetail from './history/TripDetail';
 
 // Deep Linking Configuration
 const linking = {
@@ -160,7 +160,7 @@ export default function App() {
             });
 
             // FCM 토큰 발급 및 서버 동기화 (자동 로그인 시)
-            await NotificationService.registerFcmToken();
+            await fcmService.registerFcmToken();
 
             if (vehicles.length > 0) {
               setInitialRoute('MainPage');
@@ -191,7 +191,7 @@ export default function App() {
     prepare();
 
     // FCM 토큰 갱신 리스너 등록
-    const unsubscribe = NotificationService.setupTokenRefreshListener();
+    const unsubscribe = fcmService.setupTokenRefreshListener();
 
     return () => {
       showListener.remove();
@@ -334,6 +334,7 @@ export default function App() {
                   <Stack.Screen name="PaymentSuccess" component={PaymentSuccess} />
                   <Stack.Screen name="MaintenanceHistory" component={MaintenanceHistory} />
                   <Stack.Screen name="DrivingList" component={DrivingList} />
+                  <Stack.Screen name="TripDetail" component={TripDetail} />
                 </Stack.Navigator>
                 <GlobalAlert />
                 <GlobalDatePicker />
