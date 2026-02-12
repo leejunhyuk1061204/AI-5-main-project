@@ -16,6 +16,18 @@ export default function RegisterMain() {
     const logout = useUserStore(state => state.logout);
     const showAlert = useAlertStore(state => state.showAlert);
 
+    const handleBack = () => {
+        if (navigation.canGoBack()) {
+            navigation.goBack();
+        } else {
+            // 루트에서 뒤로가기 시에는 로그인 화면으로 보낸다.
+            navigation.reset({
+                index: 0,
+                routes: [{ name: 'Login' }],
+            });
+        }
+    };
+
     const handleLogout = async () => {
         Alert.alert(
             "로그아웃",
@@ -129,7 +141,7 @@ export default function RegisterMain() {
                 <TouchableOpacity
                     className="w-10 h-10 items-center justify-center rounded-full active:bg-white/10"
                     activeOpacity={0.7}
-                    onPress={() => navigation.goBack()}
+                    onPress={handleBack}
                 >
                     <MaterialIcons name="arrow-back" size={24} color="white" />
                 </TouchableOpacity>
