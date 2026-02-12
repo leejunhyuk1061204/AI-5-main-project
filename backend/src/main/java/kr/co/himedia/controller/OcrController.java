@@ -12,7 +12,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.util.UUID;
 
 @RestController
-@RequestMapping("/ocr")
+@RequestMapping("/api/v1/ocr")
 @RequiredArgsConstructor
 public class OcrController {
 
