@@ -102,13 +102,14 @@ export default function PassiveReg() {
             if (store.manufacturer !== item) {
                 store.setVehicleInfo('manufacturer', item);
                 store.setVehicleInfo('modelName', '');
+                store.setVehicleInfo('modelNameEn', '');
                 store.setVehicleInfo('modelYear', '');
                 store.setVehicleInfo('fuelType', '');
                 store.loadModels(item);
             }
         } else if (activeType === 'model') {
             if (store.modelName !== item) {
-                store.setVehicleInfo('modelName', item);
+                store.setModelSelection(item);
                 store.setVehicleInfo('modelYear', '');
                 store.setVehicleInfo('fuelType', '');
                 store.loadYears(store.manufacturer, item);

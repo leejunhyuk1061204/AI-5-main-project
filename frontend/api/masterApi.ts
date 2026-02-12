@@ -10,7 +10,27 @@ export const getManufacturers = async (): Promise<string[]> => {
 };
 
 /**
- * 특정 제조사의 모델명 목록 조회
+ * 제조사별 차량 모델 상세 목록 (한글/영문 포함, RAG·진단용 영문 전송에 사용)
+ */
+export interface CarModelDto {
+    modelName: string;
+    modelNameKo: string;
+    modelNameEn: string;
+    manufacturerKo: string;
+    manufacturerEn: string;
+    modelYear: number;
+    fuelType: string;
+}
+
+export const getModels = async (manufacturer: string): Promise<CarModelDto[]> => {
+    const response = await api.get('/api/v1/master/models', {
+        params: { manufacturer }
+    });
+    return response.data.data ?? [];
+};
+
+/**
+ * 특정 제조사의 모델명 목록 조회 (한글 이름만)
  */
 export const getModelNames = async (manufacturer: string): Promise<string[]> => {
     const response = await api.get('/api/v1/master/models/names', {

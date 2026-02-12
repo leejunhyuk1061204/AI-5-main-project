@@ -38,6 +38,8 @@ class RobustElmEmulator:
             '011F': '00 00',       # Engine Runtime (seconds)
         }
         self.vin = self.vehicle.get('vin', '1HM00000000000001')
+        self.calid = self.vehicle.get('calid', '')  # 09 04 응답용 (ASCII 문자열)
+        self.cvn = self.vehicle.get('cvn', '')      # 09 06 응답용 (4바이트 hex, 예: "12345678")
         self.dtcs = list(self.vehicle.get('dtcs', []))
         self.mil_on = len(self.dtcs) > 0
         self.voltage = 14.2
@@ -306,13 +308,28 @@ class RobustElmEmulator:
             # 여기선 간단히 03과 동일하게 처리하거나 빈 응답
             response = "47 00 00 00 00 00 00"
 
-        # 6. OBD 서비스 09 (차량 정보)
+        # 6. OBD 서비스 09 (차량 정보) — 차량 특정 로직(VIN/CALID/CVN) 테스트용
         elif cmd.startswith("0902"):
-            # VIN을 16진수 문자열로 변환 (예: '1' -> '31')
             vin_hex = " ".join([f"{ord(c):02X}" for c in self.vin])
-            # 49(응답 서비스) + 02(PID) + 01(데이터 인덱스) + VIN 데이터
             response = f"49 02 01 {vin_hex}"
-            
+        elif cmd.startswith("0904"):
+            # CALID: ASCII 문자열을 16진수로 (최대 4바이트 등 단위는 ECU에 따름)
+            if self.calid:
+                calid_hex = " ".join([f"{ord(c):02X}" for c in self.calid[:16]])
+                response = f"49 04 01 {calid_hex}"
+            else:
+                response = "NO DATA"
+        elif cmd.startswith("0906"):
+            # CVN: 4바이트 hex (공백 제거 후 8자 hex를 "XX XX XX XX" 형태로)
+            if self.cvn:
+                cvn_clean = self.cvn.replace(" ", "").upper()[:8].ljust(8, "0")
+                if len(cvn_clean) >= 8:
+                    response = f"49 06 01 {cvn_clean[0:2]} {cvn_clean[2:4]} {cvn_clean[4:6]} {cvn_clean[6:8]}"
+                else:
+                    response = "NO DATA"
+            else:
+                response = "NO DATA"
+
         # 7. 기타 명령어
         else:
             response = "OK"

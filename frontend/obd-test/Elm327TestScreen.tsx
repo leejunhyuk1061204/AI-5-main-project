@@ -57,6 +57,7 @@ export default function Elm327TestScreen() {
     const onConnected = useCallback(() => {
         setLogRows([]);
         ObdService.setTestMode(true);
+        ObdService.setManualConnectSession(true);
         ObdService.startPolling(1000);
         console.log('[Elm327Test] onConnected: log cleared, testMode on, polling started');
     }, []);
@@ -72,6 +73,7 @@ export default function Elm327TestScreen() {
         return () => {
             unsubscribe();
             ObdService.setTestMode(false);
+            ObdService.setManualConnectSession(false);
             console.log('[Elm327Test] unmount: unsubscribed, testMode off');
         };
     }, []);

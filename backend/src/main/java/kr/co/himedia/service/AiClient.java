@@ -118,7 +118,7 @@ public class AiClient {
         }
     }
 
-    @Value("${ai.server.url.embedding:http://localhost:8001/api/v1/connect/predict/embedding}")
+    @Value("${ai.server.url.embedding:http://localhost:8001/api/v1/predict/embedding}")
     private String aiServerEmbeddingUrl;
 
     /**
@@ -131,6 +131,9 @@ public class AiClient {
             return null;
         try {
             Map<String, String> request = Map.of("text", text);
+            log.info("[Embedding] Request url={}, textLength={}, textPreview={}",
+                    aiServerEmbeddingUrl, text.length(),
+                    text.length() > 200 ? text.substring(0, 200) + "..." : text);
             Map<String, Object> response = restTemplate.postForObject(aiServerEmbeddingUrl, request, Map.class);
 
             if (response != null && response.containsKey("embedding")) {

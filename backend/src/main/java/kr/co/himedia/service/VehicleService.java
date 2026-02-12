@@ -6,6 +6,7 @@ import kr.co.himedia.dto.vehicle.VehicleDto;
 import kr.co.himedia.entity.Vehicle;
 import kr.co.himedia.entity.ConsumableItem;
 import kr.co.himedia.entity.VehicleConsumable;
+import kr.co.himedia.repository.CarModelMasterRepository;
 import kr.co.himedia.repository.ConsumableItemRepository;
 import kr.co.himedia.repository.VehicleConsumableRepository;
 import kr.co.himedia.repository.VehicleRepository;
@@ -28,6 +29,7 @@ import java.util.stream.Collectors;
 public class VehicleService {
 
     private final VehicleRepository vehicleRepository;
+    private final CarModelMasterRepository carModelMasterRepository;
     private final ConsumableItemRepository consumableItemRepository;
     private final VehicleConsumableRepository vehicleConsumableRepository;
     private final VehicleSpecRepository vehicleSpecRepository;
@@ -62,6 +64,21 @@ public class VehicleService {
         Vehicle vehicle = request.toEntity(userId);
         if (request.getVin() != null && !request.getVin().isBlank()) {
             vehicle.updateVin(encryptionUtils.encrypt(request.getVin()));
+        }
+
+        // manufacturerEn 또는 modelNameEn이 null일 때만 car_model_master에서 조회해 채운다 (프론트 미전송·구버전 클라이언트 대응)
+        if ((vehicle.getManufacturerEn() == null || vehicle.getManufacturerEn().isBlank())
+                || (vehicle.getModelNameEn() == null || vehicle.getModelNameEn().isBlank())) {
+            if (request.getManufacturerKo() != null && request.getModelNameKo() != null && request.getModelYear() != null) {
+                carModelMasterRepository
+                        .findOneByManufacturerKoAndModelNameKoAndModelYear(
+                                request.getManufacturerKo(), request.getModelNameKo(), request.getModelYear())
+                        .ifPresent(master -> {
+                            vehicle.setManufacturerAndModelEn(master.getManufacturerEn(), master.getModelNameEn());
+                            log.info("[VehicleService] 차량 등록 시 En 미입력 → car_model_master 조회: manufacturerEn={}, modelNameEn={}",
+                                    master.getManufacturerEn(), master.getModelNameEn());
+                        });
+            }
         }
 
         if (!hasVehicles) {

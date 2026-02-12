@@ -1,4 +1,5 @@
-import api from '../api/axios';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import api, { BASE_URL } from '../api/axios';
 
 // DTO Interfaces based on Spec
 export interface SignupRequest {
@@ -77,5 +78,31 @@ export const authService = {
         return response.data;
     },
 
+    /**
+     * refreshToken으로 새 accessToken을 발급받아 저장한다.
+     * 차량/프로필 등 인증 API 호출 전에 호출하면 만료된 토큰으로 인한 401을 방지할 수 있다.
+     * @returns 새 accessToken 또는 실패 시 null
+     */
+    refreshAccessToken: async (): Promise<string | null> => {
+        const refreshToken = await AsyncStorage.getItem('refreshToken');
+        if (!refreshToken) return null;
 
+        const response = await fetch(`${BASE_URL}/api/v1/auth/refresh`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ refreshToken }),
+        });
+
+        if (!response.ok) return null;
+
+        const body = await response.json();
+        const data = body?.data;
+        if (!data?.accessToken) return null;
+
+        await AsyncStorage.setItem('accessToken', data.accessToken);
+        if (data.refreshToken) {
+            await AsyncStorage.setItem('refreshToken', data.refreshToken);
+        }
+        return data.accessToken;
+    },
 };
