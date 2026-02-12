@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { getDiagnosisSessionStatus, replyToDiagnosisSession, diagnoseObdOnly } from '../api/aiApi';
+import { getDiagnosisSessionStatus, replyToDiagnosisSession, diagnoseObdOnly, AiDiagnosisResponse, DiagnosisMessage } from '../api/aiApi';
 
 export type DiagMode = 'IDLE' | 'PROCESSING' | 'REPLY_PROCESSING' | 'INTERACTIVE' | 'REPORT' | 'ACTION_REQUIRED';
 
@@ -8,9 +8,9 @@ interface AiDiagnosisState {
     currentSessionId: string | null;
     selectedVehicleId: string | null;
     status: DiagMode;
-    messages: any[];
-    diagResult: any | null;
-    requestedAction: string | null;
+    messages: DiagnosisMessage[];
+    diagResult: AiDiagnosisResponse | null;
+    requestedAction: AiDiagnosisResponse['requestedAction'] | null;
     loadingMessage: string;
     isWaitingForAi: boolean;
 
@@ -19,7 +19,7 @@ interface AiDiagnosisState {
     startDiagnosis: (vehicleId: string) => Promise<string | null>;
     sendReply: (reply: string) => Promise<void>;
     updateStatus: (sessionId: string) => Promise<void>;
-    setMessages: (messages: any[]) => void;
+    setMessages: (messages: DiagnosisMessage[]) => void;
     reset: () => void;
 }
 
@@ -39,7 +39,7 @@ export const useAiDiagnosisStore = create<AiDiagnosisState>((set, get) => ({
         set({ status: 'PROCESSING', loadingMessage: 'OBD 스캔을 시작합니다...', messages: [], diagResult: null, requestedAction: null });
         try {
             const response = await diagnoseObdOnly(vehicleId);
-            const sessionId = response?.data?.sessionId || response?.sessionId;
+            const sessionId = response?.sessionId;
             if (sessionId) {
                 set({ currentSessionId: sessionId, selectedVehicleId: vehicleId });
                 return sessionId;
@@ -84,7 +84,7 @@ export const useAiDiagnosisStore = create<AiDiagnosisState>((set, get) => ({
             console.log("[useAiDiagnosisStore] Polling Status:", statusData.status, "Action:", statusData.requestedAction);
 
             // 메시지 동기화
-            let newMessages = statusData.messages || [];
+            let newMessages = statusData.interactiveData?.conversation || [];
             if (statusData.interactiveData) {
                 const combined = [...(statusData.interactiveData.conversation || [])];
                 if (statusData.interactiveData.message) {

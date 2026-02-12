@@ -39,7 +39,7 @@ import MaintenanceReg from './registration/passive/MaintenanceReg';
 import MyPage from './setting/MyPage';
 import DiagMain from './diagnosis/DiagMain';
 import ObdDiagLoading from './diagnosis/ObdDiagLoading';
-import ObdDiagResult from './diagnosis/ObdDiagResult';
+
 import EngineSoundDiag from './diagnosis/EngineSoundDiag';
 import AiCompositeDiag from './diagnosis/AiCompositeDiag';
 import AiProfessionalDiag from './diagnosis/AiProfessionalDiag';
@@ -300,7 +300,7 @@ export default function App() {
                   <Stack.Screen name="MaintenanceReg" component={MaintenanceReg} />
                   <Stack.Screen name="EngineSoundDiag" component={EngineSoundDiag} />
                   <Stack.Screen name="ObdDiagLoading" component={ObdDiagLoading} options={{ headerShown: false }} />
-                  <Stack.Screen name="ObdDiagResult" component={ObdDiagResult} options={{ headerShown: false }} />
+
                   <Stack.Screen
                     name="AiCompositeDiag"
                     component={AiCompositeDiag}

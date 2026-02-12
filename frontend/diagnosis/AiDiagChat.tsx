@@ -12,7 +12,7 @@ import { useUserStore } from '../store/useUserStore';
 import { useBleStore } from '../store/useBleStore';
 
 // API
-import { getDiagnosisSessionStatus, replyToDiagnosisSession } from '../api/aiApi';
+import { getDiagnosisSessionStatus, replyToDiagnosisSession, AiDiagnosisResponse, DiagnosisMessage } from '../api/aiApi';
 import Header from '../header/Header';
 
 // Types
@@ -129,8 +129,8 @@ export default function AiDiagChat() {
     // State
     const [userInput, setUserInput] = useState('');
     const [isMenuOpen, setIsMenuOpen] = useState(false);
-    const [sessionData, setSessionData] = useState<any>(null);
-    const [messages, setMessages] = useState<any[]>([]);
+    const [sessionData, setSessionData] = useState<AiDiagnosisResponse | null>(null);
+    const [messages, setMessages] = useState<DiagnosisMessage[]>([]);
     const [loading, setLoading] = useState(false);
     const [isWaitingForAi, setIsWaitingForAi] = useState(false);
 
@@ -164,7 +164,7 @@ export default function AiDiagChat() {
             if (data.interactiveData?.message) {
                 // 중복 방지: 서버가 보낸 메시지가 이미 대화 목록(특히 끝부분)에 있는지 확인
                 const isMessageAlreadyExist = msgs.some((m, idx) =>
-                    idx >= msgs.length - 2 && m.role === 'ai' && m.content === data.interactiveData.message
+                    idx >= msgs.length - 2 && m.role === 'ai' && m.content === data.interactiveData?.message
                 );
 
                 if (!isMessageAlreadyExist) {
@@ -173,14 +173,14 @@ export default function AiDiagChat() {
             }
 
             // 2. 서버에서 온 메시지들 (isPending 없음)
-            const serverMsgs = msgs.map((m: any) => ({ ...m, isPending: false }));
+            const serverMsgs = msgs.map((m: DiagnosisMessage) => ({ ...m, isPending: false }));
 
             // 3. 현재 로컬 상태에서 아직 서버에 반영 안 된(펜딩 중인) 사용자 메시지 추출
             // (서버 메시지와 내용이 겹치지 않는 것만 유지)
-            setMessages((prev: any[]) => {
+            setMessages((prev: DiagnosisMessage[]) => {
                 const pendingMsgs = prev.filter(m => m.isPending);
                 const filteredPending = pendingMsgs.filter(p =>
-                    !serverMsgs.some((s: any) => s.role === 'user' && s.content === p.content)
+                    !serverMsgs.some((s: DiagnosisMessage) => s.role === 'user' && s.content === p.content)
                 );
                 return [...serverMsgs, ...filteredPending];
             });
@@ -225,7 +225,7 @@ export default function AiDiagChat() {
             // 1. pendingMessage가 있으면 즉시 표시 (Optimistic UI)
             if (route.params?.pendingMessage) {
                 const pending = route.params.pendingMessage;
-                const newMessage = {
+                const newMessage: DiagnosisMessage = {
                     role: 'user',
                     content: pending.text,
                     mediaType: pending.type,
@@ -310,12 +310,13 @@ export default function AiDiagChat() {
 
         // 즉시 UI 반영 (timestamp와 isPending 추가)
         const timestamp = Date.now();
-        setMessages(prev => [...prev, {
+        const newUserMsg: DiagnosisMessage = {
             role: 'user',
             content: msg,
             timestamp,
             isPending: true
-        }]);
+        };
+        setMessages(prev => [...prev, newUserMsg]);
         setIsWaitingForAi(true);
 
         try {

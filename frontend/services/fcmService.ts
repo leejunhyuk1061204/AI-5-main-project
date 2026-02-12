@@ -6,8 +6,21 @@ import { authService } from './auth';
 import { useAlertStore } from '../store/useAlertStore';
 
 /**
+ * FCM 알림 데이터 타입
+ */
+export interface NotificationData {
+    type?: string;
+    sessionId?: string;
+    tripId?: string;
+    itemCode?: string;
+    remainingKm?: string;
+    score?: string;
+    distance?: string;
+    [key: string]: string | undefined;
+}
+
+/**
  * FCM 서비스
- * Firebase Cloud Messaging 초기화 및 토큰 관리
  */
 class FcmService {
     private initialized = false;
@@ -143,7 +156,7 @@ class FcmService {
 
             // 데이터 처리
             if (remoteMessage.data) {
-                this.handleNotificationData(remoteMessage.data as unknown as { [key: string]: string });
+                this.handleNotificationData(remoteMessage.data as NotificationData);
             }
         });
 
@@ -159,7 +172,7 @@ class FcmService {
             console.log('[FCM] Background message received:', remoteMessage);
 
             if (remoteMessage.data) {
-                this.handleNotificationData(remoteMessage.data as unknown as { [key: string]: string });
+                this.handleNotificationData(remoteMessage.data as NotificationData);
             }
         });
 
@@ -177,14 +190,14 @@ class FcmService {
             .then((remoteMessage) => {
                 if (remoteMessage) {
                     console.log('[FCM] Notification caused app to open:', remoteMessage);
-                    this.handleNotificationNavigation(remoteMessage.data as unknown as { [key: string]: string }, navigation);
+                    this.handleNotificationNavigation(remoteMessage.data as NotificationData, navigation);
                 }
             });
 
         // 앱이 백그라운드 상태에서 알림 클릭
         messaging().onNotificationOpenedApp((remoteMessage) => {
             console.log('[FCM] Notification opened app:', remoteMessage);
-            this.handleNotificationNavigation(remoteMessage.data as unknown as { [key: string]: string }, navigation);
+            this.handleNotificationNavigation(remoteMessage.data as NotificationData, navigation);
         });
 
         console.log('[FCM] Notification opened handler set up');
@@ -193,7 +206,7 @@ class FcmService {
     /**
      * 알림 데이터 처리
      */
-    private handleNotificationData(data: { [key: string]: string }) {
+    private handleNotificationData(data: NotificationData) {
         console.log('[FCM] Handling notification data:', data);
 
         const { type } = data;
@@ -219,7 +232,7 @@ class FcmService {
     /**
      * 알림 클릭 시 네비게이션 처리
      */
-    private handleNotificationNavigation(data: { [key: string]: string } | undefined, navigation: any) {
+    private handleNotificationNavigation(data: NotificationData | undefined, navigation: any) {
         if (!data || !navigation) return;
 
         const { type, sessionId, tripId } = data;

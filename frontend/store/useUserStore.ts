@@ -120,7 +120,7 @@ export const useUserStore = create<UserState>((set) => ({
 
             // 2. Then, fetch latest profile from server to sync (especially membership)
             if (accessToken) {
-                const profileResponse = await authService.getProfile(accessToken);
+                const profileResponse = await authService.getProfile();
                 if (profileResponse.success && profileResponse.data) {
                     const data = profileResponse.data;
                     set({
@@ -156,8 +156,8 @@ export const useUserStore = create<UserState>((set) => ({
                 // 200 OK but success: false
                 return { success: false, errorMessage: response.error?.message || "이메일 또는 비밀번호를 확인해주세요." };
             }
-        } catch (error: any) {
-            const friendlyMsg = resolveErrorMessage(error);
+        } catch (error) {
+            const friendlyMsg = resolveErrorMessage(error as Error | Record<string, unknown>);
             return { success: false, errorMessage: friendlyMsg };
         }
     },
@@ -170,16 +170,16 @@ export const useUserStore = create<UserState>((set) => ({
             } else {
                 return { success: false, errorMessage: response.error?.message || "소셜 로그인에 실패했습니다." };
             }
-        } catch (error: any) {
+        } catch (error) {
             console.error("Social Login Error", error);
-            const friendlyMsg = resolveErrorMessage(error);
+            const friendlyMsg = resolveErrorMessage(error as Error | Record<string, unknown>);
             return { success: false, errorMessage: friendlyMsg };
         }
     }
 }));
 
 // Helper function to handle common login success logic
-const handleLoginSuccess = async (data: any, set: any) => {
+const handleLoginSuccess = async (data: import('../services/auth').TokenResponse, set: (state: Partial<UserState> | ((state: UserState) => Partial<UserState>)) => void) => {
     try {
         // 1. Store Token
         console.log('[Auth] Access Token Issued:', data.accessToken);
@@ -223,13 +223,14 @@ const handleLoginSuccess = async (data: any, set: any) => {
 /**
  * 에러 객체를 분석하여 사용자 친화적인 메시지를 반환합니다.
  */
-const resolveErrorMessage = (error: any): string => {
+const resolveErrorMessage = (error: Error | Record<string, any>): string => {
     if (!error) return "알 수 없는 오류가 발생했습니다.";
 
     // 1. Axios Response Error
-    if (error.response) {
-        const status = error.response.status;
-        const serverMsg = error.response.data?.error?.message;
+    if ('response' in error && error.response) {
+        const response = error.response as any;
+        const status = response.status;
+        const serverMsg = response.data?.error?.message;
 
         switch (status) {
             case 400:
@@ -253,7 +254,8 @@ const resolveErrorMessage = (error: any): string => {
     }
 
     // 2. Network Error (Timeout, No connection)
-    if (error.code === 'ECONNABORTED' || error.message?.includes('Network Error')) {
+    const errorCode = (error as any).code;
+    if (errorCode === 'ECONNABORTED' || error.message?.includes('Network Error')) {
         return "네트워크 연결이 원활하지 않습니다. 인터넷 연결을 확인해주세요.";
     }
 

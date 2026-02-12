@@ -1,6 +1,9 @@
 package kr.co.himedia.smartcar.controller;
 
+import com.smartcar.sdk.SmartcarException;
 import com.smartcar.sdk.data.Auth;
+import com.smartcar.sdk.data.VehicleAttributes;
+import com.smartcar.sdk.data.VehicleIds;
 import kr.co.himedia.smartcar.service.SmartcarService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;

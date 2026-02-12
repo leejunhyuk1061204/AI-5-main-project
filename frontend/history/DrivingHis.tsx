@@ -127,7 +127,7 @@ export default function DrivingHis() {
     // Calculate score color
     const getScoreColor = (score: number) => {
         if (score >= 90) return '#0d7ff2';
-        if (score >= 70) return '#0bda5b';
+        if (score >= 70) return '#0d7ff2';
         return '#f59e0b';
     };
 
@@ -220,7 +220,7 @@ export default function DrivingHis() {
                                     <View className="w-px h-8 bg-gray-800" />
                                     <View className="items-center">
                                         <Text className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">안전 운행</Text>
-                                        <Text className="text-lg font-bold text-[#0bda5b]">{stats.safetyRate}%</Text>
+                                        <Text className="text-lg font-bold text-[#0d7ff2]">{stats.safetyRate}%</Text>
                                     </View>
                                     <View className="w-px h-8 bg-gray-800" />
                                     <View className="items-center">
@@ -248,7 +248,7 @@ export default function DrivingHis() {
                                                 className="w-2 rounded-full bg-blue-500"
                                                 style={{
                                                     height: `${Math.max(score, 10)}%`, // Minimum height for visibility
-                                                    backgroundColor: score >= 90 ? '#0d7ff2' : score > 0 ? '#0bda5b' : '#374151'
+                                                    backgroundColor: score >= 90 ? '#0d7ff2' : score > 0 ? '#0d7ff2' : '#374151'
                                                 }}
                                             />
                                             <Text className="text-[10px] text-gray-500">
@@ -286,7 +286,7 @@ export default function DrivingHis() {
                                                 </View>
                                                 {/* Score Badge */}
                                                 <View className="flex-row items-center gap-1 bg-surface-highlight/20 px-3 py-1.5 rounded-full border border-gray-700">
-                                                    <View className={`w-2 h-2 rounded-full ${trip.driveScore >= 80 ? 'bg-success' : trip.driveScore >= 60 ? 'bg-yellow-500' : 'bg-red-500'}`} style={{ shadowColor: '#0bda5b', shadowOpacity: 0.5, shadowRadius: 5 }} />
+                                                    <View className={`w-2 h-2 rounded-full ${trip.driveScore >= 80 ? 'bg-primary' : trip.driveScore >= 60 ? 'bg-yellow-500' : 'bg-red-500'}`} style={{ shadowColor: '#0d7ff2', shadowOpacity: 0.5, shadowRadius: 5 }} />
                                                     <Text className="text-sm font-bold text-white">{trip.driveScore}점</Text>
                                                 </View>
                                             </View>

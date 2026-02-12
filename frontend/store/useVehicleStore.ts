@@ -31,7 +31,7 @@ export const useVehicleStore = create<VehicleState>((set, get) => ({
         if (vehicles.length > 0) {
             const currentPrimary = get().primaryVehicle;
             if (!currentPrimary) {
-                const primary = vehicles.find((v: any) => v.isPrimary) || vehicles[0];
+                const primary = vehicles.find((v: VehicleResponse) => v.isPrimary) || vehicles[0];
                 get().setPrimaryVehicle(primary);
             }
         }
@@ -46,7 +46,7 @@ export const useVehicleStore = create<VehicleState>((set, get) => ({
 
             // 대표 차량이 설정되어 있지 않다면 첫 번째 차량이나 isPrimary인 차량을 설정
             if (data.length > 0) {
-                const primary = data.find((v: any) => v.isPrimary) || data[0];
+                const primary = data.find((v: VehicleResponse) => v.isPrimary) || data[0];
                 set({ primaryVehicle: primary });
                 await AsyncStorage.setItem('primaryVehicle', JSON.stringify(primary));
             } else {

@@ -29,6 +29,12 @@ export interface ResolveVehicleRequest {
     cvn?: string;
 }
 
+export interface ConnectionStatusResponse {
+    vehicleId: string;
+    isConnected: boolean;
+    lastHeartbeatAt?: string;
+}
+
 const obdDeviceApi = {
     getDevices: async (): Promise<ApiResponse<ObdDeviceDto[]>> => {
         const response = await api.get('/api/v1/obd/devices');
@@ -93,7 +99,7 @@ export const uploadObdBatch = async (data: ObdBatchRequest): Promise<void> => {
  * 차량 연결 상태 조회
  * @param vehicleId - 차량 UUID
  */
-export const getConnectionStatus = async (vehicleId: string) => {
+export const getConnectionStatus = async (vehicleId: string): Promise<ApiResponse<ConnectionStatusResponse>> => {
     const response = await api.get(`/api/v1/telemetry/status/${vehicleId}`);
     return response.data;
 };
