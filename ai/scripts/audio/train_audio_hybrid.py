@@ -12,6 +12,12 @@ AST + CNN14 Hybrid Ensemble 학습 도구
 - CNN이 놓치는 Global Context를 AST가 보완
 - Feature Fusion으로 인한 Abnormal Recall 향상
 
+[최적화 사항]
+- 전처리 캐싱 (.hybrid_v1.npz): 학습 속도 빨라짐
+- CNN14Lite 경량화 (1024-dim): 메모리 절약, 과적합 방지
+- Temperature Scaling: Fusion 모델의 Calibration 개선
+
+
 [사용법]
 python ai/scripts/audio/train_audio_hybrid.py --mode all --epochs 10
 """
@@ -49,15 +55,22 @@ SAVE_PATH_AST = "./ai/weights/audio/hybrid_ast"
 SAVE_PATH_CNN = "./ai/weights/audio/hybrid_cnn14"
 SAVE_PATH_ENSEMBLE = "./ai/weights/audio/hybrid_ensemble"
 
-TRAIN_DATA_DIR = "./ai/data/audio/train"
-TEST_DATA_DIR = "./ai/data/audio/test"
+TRAIN_DATA_DIR = "/workspace/large_data/audio/train"
+TEST_DATA_DIR  = "/workspace/large_data/audio/test"
+
 
 LABEL_LIST = ["normal", "engine", "brake", "starter"]
 label2id = {label: i for i, label in enumerate(LABEL_LIST)}
 id2label = {i: label for i, label in enumerate(LABEL_LIST)}
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 feature_extractor = None
+
+# 캐시 버전 (로직 변경 시 업데이트 필수)
+CACHE_SUFFIX = ".hybrid_v1.npz"
+cache_stats = {"hit": 0, "miss": 0}
+
 
 # =============================================================================
 # 1. CNN14 모델 정의 (PANNs 스타일 간소화 버전)
@@ -90,13 +103,16 @@ class CNN14Lite(nn.Module):
             ConvBlock(64, 128),
             ConvBlock(128, 256),
             ConvBlock(256, 512),
+            ConvBlock(128, 256),
+            ConvBlock(256, 512),
             ConvBlock(512, 1024),
-            ConvBlock(1024, 2048),
+            # ConvBlock(1024, 2048), # [Optimization] Removed to save VRAM & prevent overfitting
         )
         
-        self.fc1 = nn.Linear(2048, 512)
+        self.fc1 = nn.Linear(1024, 512) # 2048 -> 1024
         self.fc2 = nn.Linear(512, num_classes)
         self.dropout = nn.Dropout(0.3)
+
         
     def forward(self, x):
         # x: (batch, freq, time) -> (batch, 1, freq, time)
@@ -106,7 +122,8 @@ class CNN14Lite(nn.Module):
         x = self.conv_blocks(x)
         
         # Global Average Pooling
-        x = torch.mean(x, dim=(2, 3))  # (batch, 2048)
+        x = torch.mean(x, dim=(2, 3))  # (batch, 1024)
+
         
         x = self.dropout(F.relu(self.fc1(x)))
         x = self.fc2(x)
@@ -175,7 +192,7 @@ class CNN14Lite(nn.Module):
 # 2. Hybrid Ensemble 모델 및 Fusion Head
 # =============================================================================
 class FusionHead(nn.Module):
-    def __init__(self, ast_dim=768, cnn_dim=2048, num_classes=4):
+    def __init__(self, ast_dim=768, cnn_dim=1024, num_classes=4, temperature=2.0):
         super().__init__()
         self.head = nn.Sequential(
             nn.Linear(ast_dim + cnn_dim, 512),
@@ -183,10 +200,16 @@ class FusionHead(nn.Module):
             nn.Dropout(0.3),
             nn.Linear(512, num_classes)
         )
+        # Learnable parameter로 할지, fixed로 할지 선택. 
+        # 여기서는 "학습 중 스케일 조정"보다는 "고정된 스케일링"으로 안정성 확보
+        self.temperature = nn.Parameter(torch.tensor(temperature), requires_grad=False)
+
 
     def forward(self, ast_feat, cnn_feat):
         x = torch.cat([ast_feat, cnn_feat], dim=-1)
-        return self.head(x)
+        logits = self.head(x)
+        return logits / self.temperature
+
 
 class HybridEnsemble(nn.Module):
     """
@@ -196,7 +219,12 @@ class HybridEnsemble(nn.Module):
         super().__init__()
         self.ast_model = ast_model
         self.cnn_model = cnn_model
-        self.fusion_head = FusionHead(ast_dim=768, cnn_dim=2048, num_classes=num_classes)
+    def __init__(self, ast_model, cnn_model, num_classes=4):
+        super().__init__()
+        self.ast_model = ast_model
+        self.cnn_model = cnn_model
+        self.fusion_head = FusionHead(ast_dim=768, cnn_dim=1024, num_classes=num_classes)
+
         
     def forward(self, ast_input, cnn_input):
         # 1. AST Features (Official Feature Extraction)
@@ -209,7 +237,8 @@ class HybridEnsemble(nn.Module):
         ast_feat = ast_outputs.hidden_states[-1].mean(dim=1) # (batch, 768)
         
         # 2. CNN Features (Lite 구조 특성상 전이학습 효과는 수렴 속도 향상에 집중됨)
-        cnn_feat = self.cnn_model.get_features(cnn_input) # (batch, 2048)
+        cnn_feat = self.cnn_model.get_features(cnn_input) # (batch, 1024)
+
         
         # 3. Fusion Head를 통한 최종 결정 (Concatenation)
         return self.fusion_head(ast_feat, cnn_feat)
@@ -238,9 +267,27 @@ def load_data_from_dir(base_dir):
     return data_list
 
 def process_audio_for_hybrid(item):
-    """AST와 CNN 둘 다를 위한 feature 추출"""
+    """AST와 CNN 둘 다를 위한 feature 추출 (Caching 적용)"""
+    audio_path = item["audio"]
+    cache_path = audio_path.replace(".wav", CACHE_SUFFIX)
+    
+    # 1. 캐시 확인
+    if os.path.exists(cache_path):
+        try:
+            data = np.load(cache_path)
+            return {
+                "audio_array": data["audio_array"],
+                "mel_spec": data["mel_spec"],
+                "label": item["label"],
+                "path": audio_path,
+                "cached": True
+            }
+        except Exception:
+            pass # 캐시 로드 실패 시 재계산
+
     try:
-        y, sr = librosa.load(item["audio"], sr=16000)
+        y, sr = librosa.load(audio_path, sr=16000)
+
         
         # [전기차 소음 진단 최적화 전처리 - Single Source of Truth 활용]
         is_normal = (item["label"] == "normal")
@@ -270,12 +317,17 @@ def process_audio_for_hybrid(item):
         mel_spec = librosa.feature.melspectrogram(y=y, sr=sr, n_mels=128, fmax=7500)
         mel_spec_db = librosa.power_to_db(mel_spec, ref=np.max)
         
+        # 캐시 저장
+        np.savez_compressed(cache_path, audio_array=y, mel_spec=mel_spec_db)
+
         return {
             "audio_array": y,
             "mel_spec": mel_spec_db,
             "label": item["label"],
-            "path": item["audio"]
+            "path": item["audio"],
+            "cached": False
         }
+
     except Exception as e:
         return {"error": str(e), "path": item["audio"]}
 
@@ -303,7 +355,13 @@ def prepare_hybrid_datasets(data_list, desc="Data"):
                 print(f"[Error] Failed to process {res.get('path', 'unknown')}: {res['error']}")
                 continue
             
+            if res.get("cached"):
+                cache_stats["hit"] += 1
+            else:
+                cache_stats["miss"] += 1
+
             # AST features
+
             ast_input = feature_extractor(
                 res["audio_array"], sampling_rate=16000,
                 return_tensors="pt"
@@ -326,9 +384,11 @@ def prepare_hybrid_datasets(data_list, desc="Data"):
             })
             
             if (i + 1) % 100 == 0:
-                print(f"  > {desc}: {i+1}/{len(data_list)}")
+                print(f"  > {desc}: {i+1}/{len(data_list)} (Cache Hit: {cache_stats['hit']}, Miss: {cache_stats['miss']})")
     
+    print(f"[Cache Stats] Hit: {cache_stats['hit']}, Miss: {cache_stats['miss']}")
     return results
+
 
 # =============================================================================
 # 4. 학습 함수들
