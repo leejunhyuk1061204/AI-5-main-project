@@ -144,4 +144,16 @@ public class Vehicle {
     public void updateVin(String encryptedVin) {
         this.vin = encryptedVin;
     }
+
+    /**
+     * 제조사/모델 영문명 보정 (수동 등록 시 미입력이면 car_model_master에서 채울 때 사용)
+     */
+    public void setManufacturerAndModelEn(String manufacturerEn, String modelNameEn) {
+        if (manufacturerEn != null && !manufacturerEn.isBlank()) {
+            this.manufacturerEn = manufacturerEn;
+        }
+        if (modelNameEn != null && !modelNameEn.isBlank()) {
+            this.modelNameEn = modelNameEn;
+        }
+    }
 }
