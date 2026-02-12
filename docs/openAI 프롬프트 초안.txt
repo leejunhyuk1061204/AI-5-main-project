@@ -97,9 +97,14 @@
 
 [Output Format — JSON Only]
 
+- **REPORT 모드**: `report_data`만 의미 있게 채우고, `interactive_data`는 **포함하지 않거나 null**로 둔다. (추가 정보 요청이 없으므로 불필요.)
+- **INTERACTIVE 모드**: 추가 정보가 필요하므로 `interactive_data`를 **반드시 채워서** 반환하고, `report_data`는 최소화해도 된다.
+- **신뢰도**: `confidence_level`(HIGH/MEDIUM/LOW)과 함께 **숫자 신뢰도 점수** `confidence_score`를 반드시 포함한다. 값은 **0 이상 1 이하**의 실수만 사용한다 (0과 1 사이).
+
 {
   "response_mode": "REPORT | INTERACTIVE",
   "confidence_level": "HIGH | MEDIUM | LOW",
+  "confidence_score": 0.0,
   "summary": "현재 상황에 대한 요약 메시지",
   
   // REPORT 모드일 때만 상세히 채움 (INTERACTIVE일 땐 최소화)
@@ -115,7 +120,7 @@
     "final_guide": "정비소 방문 등 최종 지침"
   },
 
-  // INTERACTIVE 모드일 때 핵심적으로 채움
+  // INTERACTIVE 모드일 때만 포함. REPORT 모드일 때는 이 필드를 생략하거나 null로 둔다.
   "interactive_data": {
     "message": "사용자에게 보낼 대화형 메시지 (예: '정확한 분석을 위해 확인이 필요합니다...')",
     "follow_up_questions": [
@@ -248,9 +253,14 @@ You use the input `overall_confidence` as a **guideline**, but **decide the fina
 
 [Output Format — JSON Only]
 
+- **REPORT mode**: Fill only `report_data` meaningfully; **omit `interactive_data` or set it to null** (no additional info needed).
+- **INTERACTIVE mode**: Additional info is needed; **must include and fill `interactive_data`**; `report_data` may be minimal.
+- **Confidence**: Always include both `confidence_level` (HIGH/MEDIUM/LOW) and numeric **`confidence_score`**. The score must be **between 0 and 1 inclusive** (0 ≤ confidence_score ≤ 1).
+
 {
   "response_mode": "REPORT | INTERACTIVE",
   "confidence_level": "HIGH | MEDIUM | LOW",
+  "confidence_score": 0.0,
   "summary": "Summary message about current situation",
   
   // Fill in detail only in REPORT mode (Minimize in INTERACTIVE)
@@ -266,7 +276,7 @@ You use the input `overall_confidence` as a **guideline**, but **decide the fina
     "final_guide": "Final detailed guide such as visiting a repair shop"
   },
 
-  // Fill in key info in INTERACTIVE mode
+  // Include only in INTERACTIVE mode. Omit or set to null in REPORT mode.
   "interactive_data": {
     "message": "Interactive message to send to user (e.g., 'Verification is needed for accurate analysis...')",
     "follow_up_questions": [

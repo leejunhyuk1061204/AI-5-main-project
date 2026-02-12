@@ -78,9 +78,11 @@ export const useUserStore = create<UserState>((set) => ({
             const { useAlertStore } = await import('./useAlertStore');
             const { useRegistrationStore } = await import('./useRegistrationStore');
             const ObdService = (await import('../services/ObdService')).default;
+            const BackgroundService = (await import('../services/BackgroundService')).default;
 
             // 폴링/백그라운드 업로드/BT 연결 정리
             await ObdService.disconnect();
+            await BackgroundService.stop();
 
             await useVehicleStore.getState().reset();
             useAiDiagnosisStore.getState().reset();
@@ -187,7 +189,7 @@ const handleLoginSuccess = async (data: any, set: any) => {
             await AsyncStorage.setItem('refreshToken', data.refreshToken);
         }
 
-        // 2. Fetch Profile & Update Store
+        // 2. Fetch Profile & Update Store (axios uses token from AsyncStorage set above)
         const profileResponse = await authService.getProfile(data.accessToken);
         if (profileResponse.success && profileResponse.data) {
             const { nickname, email, membership, membershipExpiry } = profileResponse.data;
@@ -198,7 +200,7 @@ const handleLoginSuccess = async (data: any, set: any) => {
             if (membershipExpiry) await AsyncStorage.setItem('userMembershipExpiry', membershipExpiry.toString());
         }
 
-        // 3. Check Vehicles
+        // 3. Load vehicles only after token is stored and profile is synced (avoids 401 on vehicle API)
         const vehicles = await getVehicleList();
         useVehicleStore.getState().setVehicles(vehicles); // Store update
         const hasVehicle = vehicles && vehicles.length > 0;

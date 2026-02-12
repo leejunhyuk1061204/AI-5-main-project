@@ -30,11 +30,11 @@ public interface KnowledgeRepository extends JpaRepository<Knowledge, UUID> {
 
         /**
          * 제조사, 모델 필터링 및 유사도 임계값을 적용한 벡터 유사도 검색
-         * distance 가 threshold 이하인 문서만 반환함
+         * model은 부분 일치(LIKE '%modelName%')로 매칭 (car_model_master "MDX" vs 매뉴얼 "MDX V6-3.7L" 등)
          */
         @Query(value = "SELECT * FROM knowledge_vectors kv " +
                         "WHERE kv.metadata->>'manufacturer' = :manufacturer " +
-                        "AND kv.metadata->>'model_name' = :modelName " +
+                        "AND kv.metadata->>'model' LIKE CONCAT('%', CAST(:modelName AS TEXT), '%') " +
                         "AND (kv.embedding <=> cast(:embedding as vector)) <= :threshold " +
                         "ORDER BY kv.embedding <=> cast(:embedding as vector) " +
                         "LIMIT :limit", nativeQuery = true)

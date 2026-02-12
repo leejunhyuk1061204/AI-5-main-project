@@ -15,6 +15,7 @@ public class DiagnosisResponseDto {
 
     private String responseMode; // REPORT | INTERACTIVE
     private String confidenceLevel; // HIGH | MEDIUM | LOW
+    private Double confidenceScore; // 0.0 ~ 1.0 (numeric)
     private String summary;
 
     // REPORT Mode Data

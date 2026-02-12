@@ -42,6 +42,7 @@ public class AiDiagnosisService {
     private final DtcCodeRepository dtcCodeRepository;
     private final CloudTelemetryRepository cloudTelemetryRepository;
     private final AiClient aiClient;
+    private final OpenAiDiagnosisService openAiDiagnosisService;
     private final ObjectMapper objectMapper;
 
     private final FcmService fcmService;
@@ -53,6 +54,15 @@ public class AiDiagnosisService {
 
     // 글로벌 AI 리소스 통합 제어 (RTX 3090 안정성을 위해 최대 6개 요청 제한)
     private final java.util.concurrent.Semaphore globalAiSemaphore = new java.util.concurrent.Semaphore(6);
+
+    /** LLM에 보낼 소모품: 이 수치 이하면 "주의 필요"로 포함 */
+    private static final double CONSUMABLE_ATTENTION_THRESHOLD_PCT = 80.0;
+    /** DTC 진단 시 함께 보낼 엔진/배기 관련 소모품 코드 */
+    private static final Set<String> CONSUMABLE_CODES_DTC_RELATED = Set.of(
+            "ENGINE_OIL", "AIR_FILTER", "FUEL_FILTER", "SPARK_PLUG", "COOLANT", "CABIN_FILTER");
+    /** 항상 포함할 핵심 소모품 (안전/엔진) */
+    private static final Set<String> CONSUMABLE_CODES_ALWAYS = Set.of(
+            "ENGINE_OIL", "BRAKE_PAD_FRONT", "BRAKE_PAD_REAR", "BATTERY_12V");
 
     public AiDiagnosisService(DtcHistoryRepository dtcHistoryRepository,
             RabbitTemplate rabbitTemplate,
@@ -67,6 +77,7 @@ public class AiDiagnosisService {
             DtcCodeRepository dtcCodeRepository,
             CloudTelemetryRepository cloudTelemetryRepository,
             AiClient aiClient,
+            OpenAiDiagnosisService openAiDiagnosisService,
             ObjectMapper objectMapper,
             FcmService fcmService,
             UserService userService,
@@ -87,6 +98,7 @@ public class AiDiagnosisService {
         this.dtcCodeRepository = dtcCodeRepository;
         this.cloudTelemetryRepository = cloudTelemetryRepository;
         this.aiClient = aiClient;
+        this.openAiDiagnosisService = openAiDiagnosisService;
         this.objectMapper = objectMapper;
         this.fcmService = fcmService;
         this.userService = userService;
@@ -205,7 +217,7 @@ public class AiDiagnosisService {
         }
     }
 
-    /** type 문자열을 DtcType으로 변환. null/unknown 시 STORED 폴백 */
+    /** type 문자열을 DtcType으로 변환. null/unknown 시 STORED fallback */
     private DtcHistory.DtcType parseDtcType(String type) {
         if (type == null || type.isBlank()) return DtcHistory.DtcType.STORED;
         try {
@@ -216,7 +228,7 @@ public class AiDiagnosisService {
         }
     }
 
-    /** status 문자열을 DtcStatus로 변환. null/unknown 시 ACTIVE 폴백 */
+    /** status 문자열을 DtcStatus로 변환. null/unknown 시 ACTIVE fallback */
     private DtcHistory.DtcStatus parseDtcStatus(String status) {
         if (status == null || status.isBlank()) return DtcHistory.DtcStatus.ACTIVE;
         try {
@@ -501,36 +513,49 @@ public class AiDiagnosisService {
             }
         }
 
-        // RAG 검색 (DTC 키워드 포함)
-        String query = buildSearchQueryWithDtc(visualResult, audioResult, anomalyResult, dtcInfo);
+        // RAG 검색: 검색에 쓰는 키워드만 정제해 임베딩, 제조사/모델 있으면 필터 검색
+        String searchKeywords = buildSearchKeywordsForRag(visualResult, audioResult, anomalyResult, dtcInfo);
         List<String> knowledgeResults = new ArrayList<>();
-        
+
+        Optional<Vehicle> vehicleOpt = vehicleRepository.findById(requestDto.getVehicleId());
+
         // DTC 정의 정보 우선 추가 (DTC 모드일 경우)
         if (dtcInfo != null && dtcInfo.containsKey("dtc_list")) {
             @SuppressWarnings("unchecked")
             List<Map<String, Object>> dtcList = (List<Map<String, Object>>) dtcInfo.get("dtc_list");
-            if (dtcList != null && !dtcList.isEmpty()) {
-                vehicleRepository.findById(requestDto.getVehicleId()).ifPresent(vehicle -> {
-                    String manufacturer = vehicle.getManufacturerEn();
-                    for (Map<String, Object> dtcItem : dtcList) {
-                        String code = (String) dtcItem.get("code");
-                        if (code != null) {
-                            List<String> dtcDefs = knowledgeService.searchDtcInformation(code, manufacturer, 2);
-                            log.info("[RAG-DTC] Code={}, Manufacturer={}, Results={}", code, manufacturer, dtcDefs.size());
-                            if (!dtcDefs.isEmpty()) {
-                                log.debug("[RAG-DTC] Contents: {}", dtcDefs);
-                            }
-                            knowledgeResults.addAll(dtcDefs);
+            if (dtcList != null && !dtcList.isEmpty() && vehicleOpt.isPresent()) {
+                String manufacturer = vehicleOpt.get().getManufacturerEn();
+                for (Map<String, Object> dtcItem : dtcList) {
+                    String code = (String) dtcItem.get("code");
+                    if (code != null) {
+                        List<String> dtcDefs = knowledgeService.searchDtcInformation(code, manufacturer, 2);
+                        log.info("[RAG-DTC] Code={}, Manufacturer={}, Results={}", code, manufacturer, dtcDefs.size());
+                        if (!dtcDefs.isEmpty()) {
+                            log.debug("[RAG-DTC] Contents: {}", dtcDefs);
                         }
+                        knowledgeResults.addAll(dtcDefs);
                     }
-                });
+                }
             }
         }
-        
-        // 일반 RAG 검색 결과 추가
-        if (!query.isEmpty()) {
-            List<String> generalKnowledge = knowledgeService.searchKnowledge(query, 3);
-            log.info("[RAG-General] Query='{}', Results={}", query, generalKnowledge.size());
+
+        // 일반 RAG: 제조사/모델 있으면 필터 검색, 없으면 전체 유사도 검색
+        if (!searchKeywords.isEmpty()) {
+            String manufacturer = vehicleOpt.map(Vehicle::getManufacturerEn).orElse(null);
+            String modelName = vehicleOpt.map(Vehicle::getModelNameEn).orElse(null);
+            boolean useFilter = manufacturer != null && !manufacturer.isBlank()
+                    && modelName != null && !modelName.isBlank();
+
+            List<String> generalKnowledge;
+            if (useFilter) {
+                generalKnowledge = knowledgeService.searchKnowledgeWithFilter(
+                        searchKeywords, manufacturer, modelName, 3, 0.4);
+                log.info("[RAG-General] Filtered query='{}', mfr='{}', model='{}', Results={}",
+                        searchKeywords, manufacturer, modelName, generalKnowledge.size());
+            } else {
+                generalKnowledge = knowledgeService.searchKnowledge(searchKeywords, 3);
+                log.info("[RAG-General] Query='{}', Results={}", searchKeywords, generalKnowledge.size());
+            }
             if (!generalKnowledge.isEmpty()) {
                 log.debug("[RAG-General] Contents: {}", generalKnowledge);
             }
@@ -548,8 +573,8 @@ public class AiDiagnosisService {
         AiUnifiedRequestDto aiRequest = aiRequestBuilder.build();
         Map<String, Object> llmPayload = objectMapper.convertValue(aiRequest, Map.class);
         logLlmRequest(llmPayload, sessionId);
-        @SuppressWarnings("unchecked")
-        Map<String, Object> finalResponse = aiClient.callComprehensiveDiagnosis(llmPayload);
+        Map<String, Object> openAiPayload = buildOpenAiPayload(llmPayload);
+        Map<String, Object> finalResponse = openAiDiagnosisService.generateDiagnosisReport(openAiPayload);
 
         // 4. 결과 저장 및 상태 결정
         DiagStatus finalStatus = saveDiagnosisResult(sessionId, finalResponse, imageFile, audioFile, visualResult,
@@ -654,8 +679,8 @@ public class AiDiagnosisService {
 
         Map<String, Object> replyLlmPayload = objectMapper.convertValue(aiRequestBuilder.build(), Map.class);
         logLlmRequest(replyLlmPayload, sessionId);
-        @SuppressWarnings("unchecked")
-        Map<String, Object> aiResponse = aiClient.callComprehensiveDiagnosis(replyLlmPayload);
+        Map<String, Object> openAiPayload = buildOpenAiPayload(replyLlmPayload);
+        Map<String, Object> aiResponse = openAiDiagnosisService.generateReplyResponse(openAiPayload, conversation);
 
         // 5. 결과 저장 및 상태 업데이트
         long userTurnCount = conversation.stream().filter(t -> "user".equals(t.get("role"))).count();
@@ -683,22 +708,17 @@ public class AiDiagnosisService {
         }
 
         diagResultRepository.delete(existingResult);
+        Double confidenceScore = parseConfidenceScore(aiResponse.get("confidence_score"));
         DiagResult.DiagResultBuilder resultBuilder = DiagResult.builder()
                 .diagSessionId(sessionId)
                 .responseMode(mode)
                 .confidenceLevel((String) aiResponse.getOrDefault("confidence_level", "LOW"))
+                .confidenceScore(confidenceScore)
                 .summary((String) aiResponse.getOrDefault("summary", ""));
 
-        if (aiResponse.containsKey("requested_actions") && aiResponse.get("requested_actions") != null) {
-            @SuppressWarnings("unchecked")
-            List<String> actions = (List<String>) aiResponse.get("requested_actions");
-            if (!actions.isEmpty()) {
-                try {
-                    resultBuilder.requestedAction(DiagAction.valueOf(actions.get(0).toUpperCase()));
-                } catch (Exception e) {
-                    log.warn("[Reply] Unknown action requested: {}", actions.get(0));
-                }
-            }
+        DiagAction requestedAction = getRequestedActionForColumn(aiResponse);
+        if (requestedAction != null) {
+            resultBuilder.requestedAction(requestedAction);
         }
 
         if ("REPORT".equalsIgnoreCase(mode)) {
@@ -1003,6 +1023,104 @@ public class AiDiagnosisService {
      * 요약/통합 처리 후 LLM(Comprehensive Diagnosis)에 보내는 요청 payload 로깅.
      * knowledge_data, conversation_history는 길이만 [size=N]으로 표기.
      */
+    /**
+     * AiUnifiedRequestDto 기반 Map을 OpenAI 진단 입력 스펙으로 변환한다.
+     * diagnosis_context는 보내지 않으며, vehicle_info, dtc_info, consumables_status, analysis_results, rag_context만 포함.
+     * consumables_status는 "관련 항목만" 필터: 주의 필요(잔여수명 이하) + DTC 시 엔진/배기 관련 + 핵심 항목 항상 포함.
+     */
+    private Map<String, Object> buildOpenAiPayload(Map<String, Object> llmPayload) {
+        Map<String, Object> analysisResults = new HashMap<>();
+        analysisResults.put("sound", getOrNull(llmPayload, "audio_analysis", "audioAnalysis"));
+        analysisResults.put("image", getOrNull(llmPayload, "visual_analysis", "visualAnalysis"));
+        analysisResults.put("lstm", getOrNull(llmPayload, "anomaly_analysis", "anomalyAnalysis"));
+
+        Object rawConsumables = getOrNull(llmPayload, "consumables_status", "consumablesStatus");
+        Object dtcInfo = getOrNull(llmPayload, "dtc_info", "dtcInfo");
+        List<Map<String, Object>> filteredConsumables = filterConsumablesForLlm(rawConsumables, dtcInfo != null);
+
+        Map<String, Object> openAiPayload = new LinkedHashMap<>();
+        putIfNotNull(openAiPayload, "vehicle_info", getOrNull(llmPayload, "vehicle_info", "vehicleInfo"));
+        putIfNotNull(openAiPayload, "dtc_info", dtcInfo);
+        if (!filteredConsumables.isEmpty()) {
+            openAiPayload.put("consumables_status", filteredConsumables);
+        }
+        openAiPayload.put("analysis_results", analysisResults);
+        putIfNotNull(openAiPayload, "rag_context", getOrNull(llmPayload, "knowledge_data", "knowledgeData"));
+        return openAiPayload;
+    }
+
+    /**
+     * LLM에 보낼 소모품만 필터: 주의 필요(remaining_life_pct <= 80) + DTC 시 엔진/배기 관련 + 항상 포함 핵심 항목.
+     */
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> filterConsumablesForLlm(Object consumablesStatus, boolean hasDtc) {
+        if (consumablesStatus == null) {
+            return Collections.emptyList();
+        }
+        if (!(consumablesStatus instanceof List)) {
+            return Collections.emptyList();
+        }
+        List<Map<String, Object>> list = (List<Map<String, Object>>) consumablesStatus;
+        Set<String> included = new HashSet<>();
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (Map<String, Object> item : list) {
+            Object codeObj = item.get("item");
+            String code = codeObj != null ? codeObj.toString() : null;
+            if (code == null || code.isBlank()) {
+                continue;
+            }
+            double pct = parseRemainingLifePct(item.get("remaining_life_pct"));
+            boolean needsAttention = pct <= CONSUMABLE_ATTENTION_THRESHOLD_PCT;
+            boolean alwaysInclude = CONSUMABLE_CODES_ALWAYS.contains(code);
+            boolean dtcRelated = hasDtc && CONSUMABLE_CODES_DTC_RELATED.contains(code);
+            if (needsAttention || alwaysInclude || dtcRelated) {
+                if (included.add(code)) {
+                    result.add(new LinkedHashMap<>(item));
+                }
+            }
+        }
+        if (log.isDebugEnabled()) {
+            log.debug("[Consumables] Filtered for LLM: {} items (hasDtc={})", result.size(), hasDtc);
+        }
+        return result;
+    }
+
+    private static double parseRemainingLifePct(Object value) {
+        if (value == null) {
+            return 100.0;
+        }
+        if (value instanceof Number) {
+            return ((Number) value).doubleValue();
+        }
+        if (value instanceof String) {
+            String s = ((String) value).trim();
+            if (s.equalsIgnoreCase("NaN") || s.isEmpty()) {
+                return 100.0;
+            }
+            try {
+                return Double.parseDouble(s);
+            } catch (NumberFormatException e) {
+                return 100.0;
+            }
+        }
+        return 100.0;
+    }
+
+    private static Object getOrNull(Map<String, Object> map, String... keys) {
+        for (String key : keys) {
+            if (map.containsKey(key) && map.get(key) != null) {
+                return map.get(key);
+            }
+        }
+        return null;
+    }
+
+    private static void putIfNotNull(Map<String, Object> target, String key, Object value) {
+        if (value != null) {
+            target.put(key, value);
+        }
+    }
+
     private void logLlmRequest(Map<String, Object> payload, UUID sessionId) {
         try {
             Map<String, Object> forLog = new HashMap<>(payload);
@@ -1087,6 +1205,7 @@ public class AiDiagnosisService {
 
             String mode = (String) response.getOrDefault("response_mode", "REPORT");
             String confidence = (String) response.getOrDefault("confidence_level", "LOW");
+            Double confidenceScore = parseConfidenceScore(response.get("confidence_score"));
             String summary = (String) response.getOrDefault("summary", "");
 
             DiagResult.DiagResultBuilder resultBuilder;
@@ -1103,6 +1222,7 @@ public class AiDiagnosisService {
 
             resultBuilder.responseMode(mode)
                     .confidenceLevel(confidence)
+                    .confidenceScore(confidenceScore)
                     .summary(summary);
 
             if ("REPORT".equalsIgnoreCase(mode)) {
@@ -1127,16 +1247,9 @@ public class AiDiagnosisService {
 
                 return DiagStatus.DONE;
             } else {
-                if (response.containsKey("requested_actions") && response.get("requested_actions") != null) {
-                    @SuppressWarnings("unchecked")
-                    List<String> actions = (List<String>) response.get("requested_actions");
-                    if (!actions.isEmpty()) {
-                        try {
-                            resultBuilder.requestedAction(DiagAction.valueOf(actions.get(0).toUpperCase()));
-                        } catch (Exception e) {
-                            log.warn("[Diagnosis] Unknown action requested: {}", actions.get(0));
-                        }
-                    }
+                DiagAction requestedAction = getRequestedActionForColumn(response);
+                if (requestedAction != null) {
+                    resultBuilder.requestedAction(requestedAction);
                 }
                 resultBuilder.interactiveJson(objectMapper.writeValueAsString(response.get("interactive_data")));
                 diagResultRepository.save(resultBuilder.build());
@@ -1146,6 +1259,66 @@ public class AiDiagnosisService {
             log.error("Failed to save diagnosis result", e);
             throw new RuntimeException("진단 결과 저장 실패", e);
         }
+    }
+
+    private static Double parseConfidenceScore(Object value) {
+        if (value == null) return null;
+        if (value instanceof Number) return ((Number) value).doubleValue();
+        try {
+            return Double.valueOf(value.toString());
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    /**
+     * interactive_data.request_type (CAPTURE_PHOTO | RECORD_SOUND | ANSWER_QUESTION) 또는
+     * requested_actions/ follow_up_questions에서 추론해 DB requested_action 컬럼용 DiagAction 반환.
+     */
+    @SuppressWarnings("unchecked")
+    private DiagAction getRequestedActionForColumn(Map<String, Object> response) {
+        Map<String, Object> interactiveData = (Map<String, Object>) response.get("interactive_data");
+        if (interactiveData != null) {
+            Object rt = interactiveData.get("request_type");
+            if (rt != null && rt.toString().trim().length() > 0) {
+                String s = rt.toString().trim().toUpperCase();
+                if ("CAPTURE_PHOTO".equals(s)) return DiagAction.CAPTURE_PHOTO;
+                if ("RECORD_SOUND".equals(s)) return DiagAction.RECORD_AUDIO;
+                if ("ANSWER_QUESTION".equals(s)) return DiagAction.ANSWER_TEXT;
+            }
+            Object ra = interactiveData.get("requested_actions");
+            if (ra instanceof List && !((List<?>) ra).isEmpty()) {
+                Object first = ((List<?>) ra).get(0);
+                if (first instanceof Map) {
+                    Object at = ((Map<?, ?>) first).get("action_type");
+                    if (at != null) {
+                        String s = at.toString().trim().toUpperCase();
+                        if ("CAPTURE_PHOTO".equals(s)) return DiagAction.CAPTURE_PHOTO;
+                        if ("RECORD_SOUND".equals(s)) return DiagAction.RECORD_AUDIO;
+                        if ("ANSWER_QUESTION".equals(s)) return DiagAction.ANSWER_TEXT;
+                    }
+                }
+            }
+            if (interactiveData.get("follow_up_questions") instanceof List
+                    && !((List<?>) interactiveData.get("follow_up_questions")).isEmpty()) {
+                return DiagAction.ANSWER_TEXT;
+            }
+        }
+        return null;
+    }
+
+    /** requested_actions is inside interactive_data per prompt; fallback to root for compatibility. */
+    @SuppressWarnings("unchecked")
+    private List<String> getRequestedActionsFromResponse(Map<String, Object> response) {
+        Map<String, Object> interactiveData = (Map<String, Object>) response.get("interactive_data");
+        if (interactiveData != null && interactiveData.get("requested_actions") != null) {
+            Object raw = interactiveData.get("requested_actions");
+            if (raw instanceof List) return (List<String>) raw;
+        }
+        if (response.get("requested_actions") != null && response.get("requested_actions") instanceof List) {
+            return (List<String>) response.get("requested_actions");
+        }
+        return Collections.emptyList();
     }
 
     private void saveEvidences(UUID sessionId, String imageFile, String audioFile,
@@ -1204,6 +1377,7 @@ public class AiDiagnosisService {
             }
             builder.responseMode(responseMode)
                     .confidenceLevel(result.getConfidenceLevel())
+                    .confidenceScore(result.getConfidenceScore())
                     .summary(result.getSummary())
                     .finalReport(result.getFinalReport())
                     .riskLevel(result.getRiskLevel() != null ? result.getRiskLevel().name() : null);
@@ -1438,6 +1612,57 @@ public class AiDiagnosisService {
         }
 
         return searchQuery.toString().trim();
+    }
+
+    /**
+     * RAG 검색용 키워드만 수집·정제 (중복 제거, 순서 고정). 이 문자열을 임베딩해 벡터 검색에 사용한다.
+     */
+    private String buildSearchKeywordsForRag(Map<String, Object> visualResult, Map<String, Object> audioResult,
+            Map<String, Object> anomalyResult, Map<String, Object> dtcInfo) {
+        Set<String> tokens = new LinkedHashSet<>();
+        if (visualResult != null && visualResult.containsKey("category")) {
+            Object cat = visualResult.get("category");
+            if (cat != null && !cat.toString().isBlank()) {
+                tokens.add(cat.toString().trim());
+            }
+        }
+        if (audioResult != null && audioResult.containsKey("status")) {
+            Object status = audioResult.get("status");
+            if (status != null && !status.toString().isBlank()) {
+                tokens.add(status.toString().trim());
+            }
+        }
+        if (anomalyResult != null && Boolean.TRUE.equals(anomalyResult.get("is_anomaly"))) {
+            @SuppressWarnings("unchecked")
+            List<String> factors = (List<String>) anomalyResult.get("contributing_factors");
+            if (factors != null) {
+                for (String f : factors) {
+                    if (f != null && !f.isBlank()) {
+                        tokens.add(f.trim());
+                    }
+                }
+                if (!factors.isEmpty()) {
+                    tokens.add("이상징후");
+                }
+            }
+        }
+        if (dtcInfo != null && dtcInfo.containsKey("dtc_list")) {
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> dtcList = (List<Map<String, Object>>) dtcInfo.get("dtc_list");
+            if (dtcList != null) {
+                for (Map<String, Object> dtc : dtcList) {
+                    String code = (String) dtc.get("code");
+                    if (code != null && !code.isBlank()) {
+                        tokens.add(code.trim());
+                    }
+                    String nameEn = (String) dtc.get("name_en");
+                    if (nameEn != null && !nameEn.isBlank()) {
+                        tokens.add(nameEn.trim());
+                    }
+                }
+            }
+        }
+        return String.join(" ", tokens);
     }
 
     @Transactional
