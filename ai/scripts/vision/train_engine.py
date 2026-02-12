@@ -25,7 +25,7 @@ print("✅ yolov8s 모델 다운로드 완료")
 # =============================================================================
 # [Configuration] GPU Optimized Settings
 # =============================================================================
-BASE_MODEL = "yolo8s.pt"
+BASE_MODEL = "yolov8s.pt"
 
 # [Path Config] RunPod과 로컬 환경 자동 감지
 RUNPOD_DATA_PATH = "/workspace/large_data"
@@ -38,8 +38,8 @@ SAVE_PATH = "ai/weights/engine/best.pt"
 
 # Training Hyperparameters (RunPod Optimized)
 DEFAULT_EPOCHS = 10
-BATCH_SIZE = int(os.getenv("BATCH_SIZE", "16"))  # RunPod 기본값 16 (로컬 2)
-IMG_SIZE = 1080
+BATCH_SIZE = int(os.getenv("BATCH_SIZE", "4"))  # RunPod 기본값 16 (로컬 4)
+IMG_SIZE = 640
 OPTIMIZER = "AdamW"
 LR0 = 0.001
 LRF = 0.01
