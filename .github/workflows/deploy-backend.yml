@@ -94,7 +94,7 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          command_timeout: 30m
+          command_timeout: 60m
           script: |
             # --- 0. Optimize Memory & Disk (Critical for t2.micro) ---
             echo "🧹 Cleaning up old Docker images to free space..."
@@ -212,6 +212,13 @@ jobs:
                   break
               fi
               echo "   ... waiting for port 8080 ($((i*10))s/${MAX_RETRIES}0s) - $(date)"
+              
+              # Print logs every 60s (every 6th iteration) to debug hangs
+              if (( i % 6 == 0 )); then
+                 echo "📋 [DEBUG] Tailing last 5 log lines:"
+                 sudo docker logs --tail 5 ai-5-backend
+              fi
+              
               sleep 10s
             done
             
