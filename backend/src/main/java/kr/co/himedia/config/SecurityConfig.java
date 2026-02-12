@@ -51,7 +51,12 @@ public class SecurityConfig {
                                 "/api/smartcar/callback",
                                 "/api/v1/ocr/**",
                                 "/api/v1/master/**",
+                                "/master/**", // MasterController (workaround for receipts)
                                 "/api/v1/payment/**",
+                                "/api/v1/uploads/**", // 정적 리소스 (영수증 이미지)
+                                "/api/v1/receipts/**", // 영수증 이미지 프록시 (deprecated)
+                                "/receipts/**", // 영수증 이미지 프록시 (deprecated)
+                                "/api/receipts/**", // 영수증 이미지 프록시
                                 "/error",
                                 "/v3/api-docs/**", // Swagger API Docs
                                 "/swagger-ui/**", // Swagger UI 자원

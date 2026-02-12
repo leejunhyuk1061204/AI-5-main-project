@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -18,8 +19,9 @@ import java.util.UUID;
  */
 @Slf4j
 @Service
+@Primary
 @RequiredArgsConstructor
-@ConditionalOnProperty(prefix = "app.storage", name = "type", havingValue = "s3")
+@ConditionalOnProperty(name = "storage.type", havingValue = "s3")
 public class S3FileStorageService implements FileStorageService {
 
     private final S3Template s3Template;
@@ -43,6 +45,41 @@ public class S3FileStorageService implements FileStorageService {
         } catch (Exception ex) {
             log.error("Error uploading to S3 or signing URL", ex);
             throw new IOException("Could not upload file to S3", ex);
+        }
+    }
+
+    @Override
+    public String storeFile(MultipartFile file, String folder, String filename) throws IOException {
+        String s3FileName = folder + "/" + filename;
+
+        try {
+            s3Template.upload(bucketName, s3FileName, file.getInputStream());
+
+            String fileUrl = s3Template.createSignedGetURL(bucketName, s3FileName, Duration.ofHours(1)).toString();
+
+            log.info("File stored in S3 and signed URL generated: {}", fileUrl);
+            return fileUrl;
+        } catch (Exception ex) {
+            log.error("Error uploading to S3 or signing URL", ex);
+            throw new IOException("Could not upload file to S3", ex);
+        }
+    }
+
+    @Override
+    public byte[] downloadFile(String folder, String filename) throws IOException {
+        String s3Key = folder + "/" + filename;
+
+        try {
+            log.info("Downloading file from S3: {}", s3Key);
+            var inputStream = s3Template.download(bucketName, s3Key).getInputStream();
+            byte[] data = inputStream.readAllBytes();
+            inputStream.close();
+
+            log.info("Successfully downloaded file from S3: {} ({} bytes)", s3Key, data.length);
+            return data;
+        } catch (Exception ex) {
+            log.error("Error downloading file from S3: {}", s3Key, ex);
+            throw new IOException("Could not download file from S3: " + s3Key, ex);
         }
     }
 }

@@ -167,7 +167,7 @@ export default function DiagnosisHistory() {
                                         if (item.responseMode === 'INTERACTIVE' || item.status === 'ACTION_REQUIRED') {
                                             navigation.navigate('AiDiagChat', { sessionId: item.sessionId });
                                         } else {
-                                            navigation.navigate('DiagnosisReport', { reportData: item });
+                                            navigation.navigate('DiagnosisReport', { reportData: item, fromHistory: true });
                                         }
                                     }}
                                 >

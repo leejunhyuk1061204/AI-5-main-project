@@ -1,3 +1,5 @@
+import { Platform, PermissionsAndroid } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import messaging from '@react-native-firebase/messaging';
 import firebase from '@react-native-firebase/app';
 import { authService } from './auth';
@@ -11,11 +13,32 @@ class FcmService {
     private initialized = false;
 
     /**
-     * FCM 초기화
-     * - 권한 요청
-     * - 토큰 가져오기
-     * - 백엔드에 토큰 등록
-     * - 토큰 갱신 리스너 등록
+     * FCM 권한 요청 및 초기화 (Android 13+ 대응)
+     */
+    public async requestUserPermission() {
+        if (Platform.OS === 'android' && Platform.Version >= 33) {
+            const granted = await PermissionsAndroid.request(
+                PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS
+            );
+            if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
+                console.log('[FCM] Permission for notifications denied');
+                return false;
+            }
+        }
+
+        const authStatus = await messaging().requestPermission();
+        const enabled =
+            authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
+            authStatus === messaging.AuthorizationStatus.PROVISIONAL;
+
+        if (enabled) {
+            console.log('[FCM] Authorization status:', authStatus);
+        }
+        return enabled;
+    }
+
+    /**
+     * FCM 초기화 및 토큰 등록
      */
     async initialize() {
         if (this.initialized) {
@@ -24,38 +47,16 @@ class FcmService {
         }
 
         try {
-            // 0. Firebase App 초기화 확인 (React Native Firebase는 자동 초기화됨)
             if (firebase.apps.length === 0) {
-                console.error('[FCM] Firebase App not initialized. Check google-services.json');
-                return;
-            }
-            console.log('[FCM] Firebase App already initialized');
-
-            // 1. 권한 요청
-            const authStatus = await messaging().requestPermission();
-            const enabled =
-                authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
-                authStatus === messaging.AuthorizationStatus.PROVISIONAL;
-
-            if (!enabled) {
-                console.log('[FCM] Permission denied');
+                console.error('[FCM] Firebase App not initialized');
                 return;
             }
 
-            console.log('[FCM] Permission granted');
+            const enabled = await this.requestUserPermission();
+            if (!enabled) return;
 
-            // 2. FCM 토큰 가져오기
-            const fcmToken = await messaging().getToken();
-            console.log('[FCM] Token obtained:', fcmToken.substring(0, 20) + '...');
-
-            // 3. 백엔드에 토큰 등록
-            await this.registerToken(fcmToken);
-
-            // 4. 토큰 갱신 리스너
-            messaging().onTokenRefresh(async (newToken) => {
-                console.log('[FCM] Token refreshed');
-                await this.registerToken(newToken);
-            });
+            await this.registerFcmToken();
+            this.setupTokenRefreshListener();
 
             this.initialized = true;
             console.log('[FCM] Initialization complete');
@@ -65,18 +66,60 @@ class FcmService {
     }
 
     /**
-     * 백엔드에 FCM 토큰 등록
+     * FCM 토큰 발급 및 서버 동기화 (AsyncStorage 캐싱 포함)
      */
-    private async registerToken(fcmToken: string) {
+    async registerFcmToken() {
         try {
-            const response = await authService.updateFcmToken(fcmToken);
-            if (response.success) {
-                console.log('[FCM] Token registered successfully');
+            // 1. 권한 확인
+            const hasPermission = await this.requestUserPermission();
+            if (!hasPermission) return;
+
+            // 2. 토큰 가져오기
+            const fcmToken = await messaging().getToken();
+
+            if (fcmToken) {
+                console.log('[FCM] Token issued:', fcmToken.substring(0, 20) + '...');
+
+                // 3. 서버에 저장되어 있는 토큰과 비교 (불필요한 네트워크 호출 방지)
+                const savedToken = await AsyncStorage.getItem('savedFcmToken');
+                const accessToken = await AsyncStorage.getItem('accessToken');
+
+                if (accessToken && fcmToken !== savedToken) {
+                    // 4. 서버로 토큰 전송
+                    const response = await authService.updateFcmToken(fcmToken);
+                    if (response.success) {
+                        console.log('[FCM] Successfully registered token to server');
+                        await AsyncStorage.setItem('savedFcmToken', fcmToken);
+                    }
+                }
             }
         } catch (error) {
-            console.error('[FCM] Token registration failed:', error);
+            console.error('[FCM] Failed to register token:', error);
         }
     }
+
+    /**
+     * 토큰 갱신 리스너 설정
+     */
+    setupTokenRefreshListener() {
+        try {
+            return messaging().onTokenRefresh(async (newToken) => {
+                console.log('[FCM] Token refreshed:', newToken.substring(0, 20) + '...');
+                const accessToken = await AsyncStorage.getItem('accessToken');
+                if (accessToken) {
+                    const response = await authService.updateFcmToken(newToken);
+                    if (response.success) {
+                        await AsyncStorage.setItem('savedFcmToken', newToken);
+                    }
+                }
+            });
+        } catch (error) {
+            console.error('[FCM] setupTokenRefreshListener failed:', error);
+            return () => { };
+        }
+    }
+
+
 
     /**
      * Foreground 알림 핸들러 설정

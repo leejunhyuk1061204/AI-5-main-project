@@ -31,6 +31,10 @@ console.error = (...args: unknown[]) => {
     originalError.apply(console, args);
 };
 
+// FCM Background Message Handler (Must be defined early and outside React lifecycle)
+import fcmService from './services/fcmService';
+fcmService.setupBackgroundHandler();
+
 import App from './App';
 
 // registerRootComponent calls AppRegistry.registerComponent('main', () => App);

@@ -121,7 +121,11 @@ export default function DrivingList() {
                     </View>
                 )}
                 renderItem={({ item }) => (
-                    <View className="bg-surface-dark rounded-xl border border-primary/30 p-4 mb-3 relative overflow-hidden">
+                    <TouchableOpacity
+                        activeOpacity={0.7}
+                        onPress={() => (navigation as any).navigate('TripDetail', { tripId: item.tripId })}
+                        className="bg-surface-dark rounded-xl border border-primary/30 p-4 mb-3 relative overflow-hidden"
+                    >
                         <View className="flex-row justify-between items-center mb-4">
                             <View className="flex-row items-center gap-3">
                                 <View className="bg-primary/10 p-2 rounded-full border border-primary/20">
@@ -158,7 +162,7 @@ export default function DrivingList() {
                             <MaterialIcons name="swap-horiz" size={16} color="#0d7ff2" />
                             <Text className="text-[#0d7ff2] text-xs font-medium">차량 변경</Text>
                         </TouchableOpacity>
-                    </View>
+                    </TouchableOpacity>
                 )}
                 ListEmptyComponent={
                     <View className="items-center justify-center py-20">

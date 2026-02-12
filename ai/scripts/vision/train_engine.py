@@ -17,30 +17,34 @@ import os
 import shutil
 import platform
 from ultralytics import YOLO
+import shutil
+
+model = YOLO("yolov8s.pt")
+print("✅ yolov8s 모델 다운로드 완료")
 
 # =============================================================================
 # [Configuration] GPU Optimized Settings
 # =============================================================================
-BASE_MODEL = "yolo11m.pt"
+BASE_MODEL = "yolov8s.pt"
 
 # [Path Config] RunPod과 로컬 환경 자동 감지
 RUNPOD_DATA_PATH = "/workspace/large_data"
 LOCAL_DATA_PATH = "ai/data"
 DATA_ROOT = RUNPOD_DATA_PATH if os.path.exists(RUNPOD_DATA_PATH) else LOCAL_DATA_PATH
 
-DATA_YAML_PATH = os.path.join(DATA_ROOT, "yolo/engine/data.yaml")
+DATA_YAML_PATH = os.path.join(DATA_ROOT, "yolo/engine/engine_merged.yaml")
 OUTPUT_DIR = "ai/runs/engine_model"
 SAVE_PATH = "ai/weights/engine/best.pt"
 
 # Training Hyperparameters (RunPod Optimized)
-DEFAULT_EPOCHS = 100
-BATCH_SIZE = int(os.getenv("BATCH_SIZE", "16"))  # RunPod 기본값 16 (로컬 2)
-IMG_SIZE = 1280
+DEFAULT_EPOCHS = 10
+BATCH_SIZE = int(os.getenv("BATCH_SIZE", "4"))  # RunPod 기본값 16 (로컬 4)
+IMG_SIZE = 640
 OPTIMIZER = "AdamW"
 LR0 = 0.001
 LRF = 0.01
 PATIENCE = 50
-WORKERS = 8 if platform.system() != "Windows" else 0  # 자동 감지
+WORKERS = 4 if platform.system() != "Windows" else 0  # 자동 감지
 
 # [Original RTX 4090 Reference]
 # DEFAULT_EPOCHS = 150
@@ -93,9 +97,9 @@ def evaluate_baseline():
 # =============================================================================
 # 2. Model Training (Optimized)
 # =============================================================================
-def train_model(epochs=DEFAULT_EPOCHS):
+def train_model(epochs=DEFAULT_EPOCHS, batch=BATCH_SIZE, imgsz=IMG_SIZE, workers=WORKERS, device=0):
     print("\n" + "="*60)
-    print(f"[Step 2] Training Model (YOLOv8m, {epochs} epochs, batch={BATCH_SIZE})...")
+    print(f"[Step 2] Training Model (YOLOv8s, {epochs} epochs, batch={BATCH_SIZE})...")
     print("="*60)
     
     if not os.path.exists(DATA_YAML_PATH):
@@ -114,9 +118,9 @@ def train_model(epochs=DEFAULT_EPOCHS):
     results = model.train(
         data=DATA_YAML_PATH,
         epochs=epochs,
-        imgsz=1280,
+        imgsz=imgsz,
         batch=BATCH_SIZE,  # 상수 사용 (일관성 유지)
-        device=0,  # GPU 0
+        device=device,  # GPU 0
         project=OUTPUT_DIR,
         name="run",
         exist_ok=True,
@@ -143,11 +147,13 @@ def train_model(epochs=DEFAULT_EPOCHS):
         
         # Performance
         workers=WORKERS,  # 환경 자동 감지
-        cache=True,  # RAM으로 데이터셋 캐싱 (속도 향상)
+        cache=False,  # RAM으로 데이터셋 캐싱 (속도 향상)
         
         # Logging
         verbose=True,
     )
+    # Save Best Model - 기존 best.pt 대신 새 이름 사용
+    NEW_SAVE_PATH = "ai/weights/engine/best_engine8s.pt"
     
     # Save Best Model - model.train() 결과 객체에서 실제 저장 경로를 가져옴 (가장 고신뢰 방식)
     if hasattr(results, 'save_dir'):
@@ -157,9 +163,9 @@ def train_model(epochs=DEFAULT_EPOCHS):
         best_model_run_path = os.path.join(OUTPUT_DIR, "run", "weights", "best.pt")
 
     if os.path.exists(best_model_run_path):
-        os.makedirs(os.path.dirname(SAVE_PATH), exist_ok=True)
-        shutil.copy(best_model_run_path, SAVE_PATH)
-        print(f"\n[✓] Model saved to: {SAVE_PATH}")
+        os.makedirs(os.path.dirname(NEW_SAVE_PATH), exist_ok=True)
+        shutil.copy(best_model_run_path, NEW_SAVE_PATH)
+        print(f"\n[✓] Model saved to: {NEW_SAVE_PATH}")
         print(f"[✓] Ready for deployment!")
     else:
         print(f"[Warning] Best model weight file not found at: {best_model_run_path}")
@@ -209,6 +215,10 @@ if __name__ == "__main__":
                         help="Execution Mode")
     parser.add_argument("--epochs", type=int, default=DEFAULT_EPOCHS,
                         help=f"Number of epochs (default: {DEFAULT_EPOCHS})")
+    parser.add_argument("--batch", type=int, default=BATCH_SIZE, help="Batch size")
+    parser.add_argument("--imgsz", type=int, default=IMG_SIZE, help="Image size")
+    parser.add_argument("--workers", type=int, default=WORKERS, help="Number of dataloader workers")
+    parser.add_argument("--device", type=int, default=0, help="CUDA device index")
     
     args = parser.parse_args()
     
@@ -223,7 +233,7 @@ if __name__ == "__main__":
         evaluate_baseline()
     
     elif args.mode == "train":
-        train_model(epochs=args.epochs)
+        train_model(epochs=args.epochs, batch=args.batch, imgsz=args.imgsz, workers=args.workers, device=args.device)
     
     elif args.mode == "test":
         evaluate_final()

@@ -11,6 +11,20 @@ export interface TripSummary {
     averageSpeed: number;
     topSpeed: number;
     fuelConsumed: number;
+
+    // Detailed stats
+    minBatteryVoltage?: number;
+    maxCoolantTemp?: number;
+    avgFuelTrim?: number;
+    maxEngineLoad?: number;
+    idleTime?: number;
+    hardAccelCount?: number;
+    hardBrakeCount?: number;
+    avgRpm?: number;
+    avgEngineLoad?: number;
+    avgMaf?: number;
+    avgThrottlePos?: number;
+    overheatDurationSec?: number;
 }
 
 const tripApi = {

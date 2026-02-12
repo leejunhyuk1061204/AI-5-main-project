@@ -4,7 +4,7 @@ import { View, Text, Platform, Keyboard, AppState } from 'react-native';
 import * as ExpoSplashScreen from 'expo-splash-screen';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { NavigationContainer, DarkTheme } from '@react-navigation/native';
+import { NavigationContainer, DarkTheme, useNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as NavigationBar from 'expo-navigation-bar';
@@ -19,7 +19,6 @@ import { useUIStore } from './store/useUIStore';
 import { useUserStore } from './store/useUserStore';
 import ObdService from './services/ObdService';
 import BackgroundService from './services/BackgroundService';
-import NotificationService from './services/NotificationService';
 import fcmService from './services/fcmService';
 import { authService } from './services/auth';
 import GlobalAlert from './components/common/GlobalAlert';
@@ -67,10 +66,12 @@ import ChatAudioScreen from './diagnosis/ChatAudioScreen';
 import MaintenanceBook from './maintenance/MaintenanceBook';
 import ReceiptScan from './maintenance/ReceiptScan';
 import ReceiptResult from './maintenance/ReceiptResult';
+import ReceiptGallery from './maintenance/ReceiptGallery';
 import PaymentSuccess from './payment/PaymentSuccess';
 import MaintenanceHistory from './history/MaintenanceHistory';
 import DrivingList from './history/DrivingList';
 import Elm327TestScreen from './obd-test/Elm327TestScreen';
+import TripDetail from './history/TripDetail';
 
 // Deep Linking Configuration
 const linking = {
@@ -114,6 +115,7 @@ const AppTheme = {
 };
 
 export default function App() {
+  const navigationRef = useNavigationContainerRef();
   const [appIsReady, setAppIsReady] = useState(false);
   const [initialRoute, setInitialRoute] = useState<string>('Tos');
   const [showCustomSplash, setShowCustomSplash] = useState(true);
@@ -146,12 +148,12 @@ export default function App() {
           await NavigationBar.setButtonStyleAsync("light");
         }
 
-        // 1) 약정 동의는 로그인 여부와 무관하게 앱 최초/미동의 시 먼저 표시
+        // 1) 약관 동의는 로그인 여부와 무관하게 앱 최초/미동의 시 먼저 표시
         const hasAgreed = await AsyncStorage.getItem('hasAgreedToTos');
         if (hasAgreed !== 'true') {
           setInitialRoute('Tos');
         } else {
-          // 2) 동의 후 로그인 유지 여부에 따라 초기 화면 결정
+          // 2) 동의 후 로그인 유지 여부에 따라 초기 화면 결정 (refreshToken 기준)
           const refreshToken = await AsyncStorage.getItem('refreshToken');
           if (refreshToken) {
             try {
@@ -168,7 +170,8 @@ export default function App() {
                   console.warn('[App] startBackgroundReconnectIfNeeded failed during auto-login', e);
                 });
 
-                await NotificationService.registerFcmToken();
+                // FCM 토큰 발급 및 서버 동기화 (자동 로그인 시)
+                await fcmService.registerFcmToken();
 
                 if (vehicles.length > 0) {
                   setInitialRoute('MainPage');
@@ -195,7 +198,7 @@ export default function App() {
     prepare();
 
     // FCM 토큰 갱신 리스너 등록
-    const unsubscribe = NotificationService.setupTokenRefreshListener();
+    const unsubscribe = fcmService.setupTokenRefreshListener();
 
     return () => {
       showListener.remove();
@@ -212,6 +215,8 @@ export default function App() {
         // 로그인된 상태에서만 FCM 초기화
         await fcmService.initialize();
         fcmService.setupForegroundHandler();
+        // 알림 클릭 시 화면 이동 핸들러 (navigationRef 전달)
+        fcmService.setupNotificationOpenedHandler(navigationRef);
       }
     };
 
@@ -328,9 +333,11 @@ export default function App() {
                   <Stack.Screen name="MaintenanceBook" component={MaintenanceBook} />
                   <Stack.Screen name="ReceiptScan" component={ReceiptScan} />
                   <Stack.Screen name="ReceiptResult" component={ReceiptResult} />
+                  <Stack.Screen name="ReceiptGallery" component={ReceiptGallery} />
                   <Stack.Screen name="PaymentSuccess" component={PaymentSuccess} />
                   <Stack.Screen name="MaintenanceHistory" component={MaintenanceHistory} />
                   <Stack.Screen name="DrivingList" component={DrivingList} />
+                  <Stack.Screen name="TripDetail" component={TripDetail} />
                 </Stack.Navigator>
                 <GlobalAlert />
                 <GlobalDatePicker />
