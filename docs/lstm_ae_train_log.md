@@ -1,23 +1,327 @@
-ï»¿# LSTM-AE Training Log
+# Engine Hybrid (Stat One-Class + LSTM-AE) Training Log
+
+ÀÌ ¹®¼­´Â ¿£Áø anomaly hybrid ½ÇÇè ·Î±×ÀÌ¸ç, legacy LSTM-AE-only ±â·ÏÀº ÇÏ´Ü¿¡ º¸°ü.
+¾ÕÀ¸·Î ½Å±Ô ½ÇÇè ±â·ÏÀº `Hybrid Engine Runs` ¼½¼ÇÀ» ¸ŞÀÎÀ¸·Î »ç¿ëÇÑ´Ù.
+
+## Hybrid Engine Runs
+
+### Run: <RUN_ID>
+#### Run Info
+- Date:
+- Env: Local | RunPod
+- Dataset: OBD normal | OBD normal+frei+stau | ...
+- Split: trip/session-based (train/val/test), leakage-prevention: enabled
+- window_sec:
+- stride_sec:
+- sampling_hz:
+- normalize: zscore (fit on train normal)
+- fill_method: ffill
+- min_coverage:
+- Schema: core10-v1 (list the 10 features)
+- Missing feature handling: align + mask; AE SKIPPED rules: <min_features>, <min_coverage>
+
+#### Model(s)
+- Stat One-Class:
+  - method: IsolationForest | RobustZ
+  - input: window summary stats + coverage
+- LSTM-AE:
+  - architecture: (brief)
+  - input: (T,F) aligned core features
+- Ensemble:
+  - final_score = w1*score_stat + w2*score_ae
+  - weights: w1=, w2=
+  - fallback: if AE SKIPPED => final_score=score_stat
+
+#### Training Params
+- Stat One-Class:
+  - params:
+- LSTM-AE:
+  - epochs:
+  - batch_size:
+  - lr:
+  - device:
+
+#### Loss Log (LSTM-AE)
+- epoch 01:
+...
+
+#### Eval
+- Threshold selection: method (val quantile / target alarm rate / etc)
+- threshold T:
+- K consecutive:
+- cooldown:
+- Normal test metrics:
+  - alarm/hour:
+  - false alarm rate:
+  - score distribution notes:
+- (optional) ROC-AUC:
+- (optional) PR-AUC:
+
+#### Policy
+- severity definition:
+- event generation rules (if any):
+
+#### Artifacts
+- schema_core.json:
+- scaler.json:
+- iforest.pkl (or stat params file):
+- lstm_ae.pt:
+- threshold_policy.json:
+- model_version:
+- schema_version:
+- policy_version:
+
+#### Notes / Next Actions
+- notes:
+- next:
+
+---
+
+### Run: Hybrid Run (OBD normal+frei+stau)
+#### Run Info
+- Date:
+- Env: Local | RunPod
+- Dataset: OBD normal+frei+stau
+- Split: trip/session-based (train/val/test), leakage-prevention: enabled
+- Train trips:
+- Val trips:
+- Test trips:
+- window_sec:
+- stride_sec:
+- sampling_hz:
+- normalize: zscore (fit on train normal)
+- fill_method: ffill
+- min_coverage:
+- Schema: core10-v1 (list the 10 features)
+- Missing feature handling: align + mask; AE SKIPPED rules: <min_features>, <min_coverage>
+
+#### Model(s)
+- Stat One-Class:
+  - method: IsolationForest | RobustZ
+  - input: window summary stats + coverage
+- LSTM-AE:
+  - architecture: (brief)
+  - input: (T,F) aligned core features
+- Ensemble:
+  - final_score = w1*score_stat + w2*score_ae
+  - weights: w1=, w2=
+  - fallback: if AE SKIPPED => final_score=score_stat
+
+#### Training Params
+- Stat One-Class:
+  - params:
+- LSTM-AE:
+  - epochs:
+  - batch_size:
+  - lr:
+  - device:
+
+#### Loss Log (LSTM-AE)
+- epoch 01:
+...
+
+#### Eval
+- Threshold selection: method (val quantile / target alarm rate / etc)
+- threshold T:
+- K consecutive:
+- cooldown:
+- Normal test metrics:
+  - alarm/hour:
+  - false alarm rate:
+  - score distribution notes:
+- (optional) ROC-AUC:
+- (optional) PR-AUC:
+
+#### Policy
+- severity definition:
+- event generation rules (if any):
+
+#### Artifacts
+- schema_core.json:
+- scaler.json:
+- iforest.pkl (or stat params file):
+- lstm_ae.pt:
+- threshold_policy.json:
+- model_version:
+- schema_version:
+- policy_version:
+
+#### Notes / Next Actions
+- notes:
+- next:
+
+---
+
+## RunPod Runs (Training/Inference)
+
+### RunPod: <RUN_ID>
+- Image/Repo commit:
+- RunPod instance type:
+- GPU:
+- vCPU/RAM:
+- Data source (S3):
+- Data upload location (S3 path):
+- Output artifacts (S3 or repo path):
+- Command:
+- Time: start/end, duration
+- Notes:
+
+---
+
+## Real-car Final Test (No Training)
+
+### Run: Hybrid Eval on Real-car cases (ÇĞ½ÀX, ÃÖÁ¾ Å×½ºÆ®)
+#### Run Info
+- Date:
+- Env: Local | RunPod
+- Dataset: real-car labeled/unlabeled cases
+- Split: no training (final test only)
+- Schema: core10-v1 (list the 10 features)
+- Missing feature handling: align + mask; AE SKIPPED rules: <min_features>, <min_coverage>
+
+#### Model(s)
+- Stat One-Class:
+  - method: IsolationForest | RobustZ
+- LSTM-AE:
+  - model_version:
+- Ensemble:
+  - final_score = w1*score_stat + w2*score_ae
+  - fallback: if AE SKIPPED => final_score=score_stat
+
+#### Eval
+- Threshold selection: fixed from validation (no re-fit)
+- threshold T:
+- K consecutive:
+- cooldown:
+- Case metrics:
+  - detection latency:
+  - false alarms outside anomaly window:
+  - score distribution notes:
+
+#### Policy
+- severity definition:
+- event generation rules (if any):
+
+#### Artifacts
+- threshold_policy.json:
+- model_version:
+- schema_version:
+- policy_version:
+
+#### Notes / Next Actions
+- notes:
+- next:
+
+### Case: Battery Discharge
+- data_source:
+- expected anomaly window:
+- observed anomaly_score:
+- notes:
+
+### Case: Engine Stall
+- data_source:
+- expected anomaly window:
+- observed anomaly_score:
+- notes:
+
+---
+
+## Optional Kaggle Bench (Not used for MVP)
+- Use for MVP? [ ] Yes  [x] No
+- reason:
+- results (if executed):
+
+### Run: Optional Kaggle Bench (Âü°í¿ë, MVP¿¡´Â ¹Ì»ç¿ë)
+#### Run Info
+- Date:
+- Env: Local | RunPod
+- Dataset: Kaggle benchmark
+- Split: trip/session-equivalent or source-provided split, leakage-prevention: enabled
+- window_sec:
+- stride_sec:
+- sampling_hz:
+- normalize: zscore (fit on train normal)
+- fill_method:
+- min_coverage:
+- Schema: core10-v1 mapping + fallback
+- Missing feature handling: align + mask; AE SKIPPED rules: <min_features>, <min_coverage>
+
+#### Model(s)
+- Stat One-Class:
+  - method: IsolationForest | RobustZ
+- LSTM-AE:
+  - architecture: (brief)
+- Ensemble:
+  - final_score = w1*score_stat + w2*score_ae
+  - fallback: if AE SKIPPED => final_score=score_stat
+
+#### Training Params
+- Stat One-Class:
+  - params:
+- LSTM-AE:
+  - epochs:
+  - batch_size:
+  - lr:
+  - device:
+
+#### Loss Log (LSTM-AE)
+- epoch 01:
+...
+
+#### Eval
+- Threshold selection: method (val quantile / target alarm rate / etc)
+- threshold T:
+- K consecutive:
+- cooldown:
+- Normal test metrics:
+  - alarm/hour:
+  - false alarm rate:
+  - score distribution notes:
+- (optional) ROC-AUC:
+- (optional) PR-AUC:
+
+#### Policy
+- severity definition:
+- event generation rules (if any):
+
+#### Artifacts
+- schema_core.json:
+- scaler.json:
+- iforest.pkl (or stat params file):
+- lstm_ae.pt:
+- threshold_policy.json:
+- model_version:
+- schema_version:
+- policy_version:
+
+#### Notes / Next Actions
+- notes:
+- next:
+
+---
+
+## Legacy: LSTM-AE-only Runs (kept for history)
+
+# LSTM-AE Training Log
 
 <!--
-ì‚¬ìš© ë°©ë²•:
-- Local/RunPod ì¤‘ ì‹¤ì œ ì‚¬ìš©í•œ í™˜ê²½ ì„¹ì…˜ë§Œ ê¸°ë¡í•©ë‹ˆë‹¤.
-- Training ParamsëŠ” ì‹¤í–‰ ì „ì—, Loss/Outputì€ ì‹¤í–‰ í›„ ì±„ì›ë‹ˆë‹¤.
+»ç¿ë ¹æ¹ı:
+- Local/RunPod Áß ½ÇÁ¦ »ç¿ëÇÑ È¯°æ ¼½¼Ç¸¸ ±â·ÏÇÕ´Ï´Ù.
+- Training Params´Â ½ÇÇà Àü¿¡, Loss/OutputÀº ½ÇÇà ÈÄ Ã¤¿ó´Ï´Ù.
 -->
 
 <!--
-ì„¹ì…˜ ì˜ë¯¸:
-- Run Info: ì´ë²ˆ ì‹¤í–‰ì˜ ë°ì´í„°/ì „ì²˜ë¦¬ ì¡°ê±´ ê¸°ë¡
-- Training Params: í•™ìŠµ í•˜ì´í¼íŒŒë¼ë¯¸í„° ê¸°ë¡
-- Loss Log: epochë³„ ì†ì‹¤ê°’ ê¸°ë¡
-- Output: ê²°ê³¼ ëª¨ë¸ ê²½ë¡œ/ì†Œìš”ì‹œê°„/íŠ¹ì´ì‚¬í•­ ê¸°ë¡
-- Eval: ê²€ì¦ ê²°ê³¼(AUC/threshold ë“±) ê¸°ë¡
+¼½¼Ç ÀÇ¹Ì:
+- Run Info: ÀÌ¹ø ½ÇÇàÀÇ µ¥ÀÌÅÍ/ÀüÃ³¸® Á¶°Ç ±â·Ï
+- Training Params: ÇĞ½À ÇÏÀÌÆÛÆÄ¶ó¹ÌÅÍ ±â·Ï
+- Loss Log: epochº° ¼Õ½Ç°ª ±â·Ï
+- Output: °á°ú ¸ğµ¨ °æ·Î/¼Ò¿ä½Ã°£/Æ¯ÀÌ»çÇ× ±â·Ï
+- Eval: °ËÁõ °á°ú(AUC/threshold µî) ±â·Ï
 -->
 
 <!--
-ì‹¤ì°¨ ë°ì´í„° ê´€ë ¨:
-- ì‹¤ì°¨ ë°ì´í„°ëŠ” ë³„ë„ í™•ë³´ëœ 2ê°œ ì¼€ì´ìŠ¤(ë°°í„°ë¦¬ ë°©ì „/ì‹œë™ êº¼ì§)ì´ë©°, ì „ì²˜ë¦¬ JSONLë§Œ S3ì— ì—…ë¡œë“œí•œë‹¤.
+½ÇÂ÷ µ¥ÀÌÅÍ °ü·Ã:
+- ½ÇÂ÷ µ¥ÀÌÅÍ´Â º°µµ È®º¸µÈ 2°³ ÄÉÀÌ½º(¹èÅÍ¸® ¹æÀü/½Ãµ¿ ²¨Áü)ÀÌ¸ç, ÀüÃ³¸® JSONL¸¸ S3¿¡ ¾÷·ÎµåÇÑ´Ù.
 -->
 
 ## Local (OBD)
@@ -56,7 +360,7 @@
 ### Output (Baseline)
 - model_path: ai/weights/runs/20260207_220501/lstm_ae.pt
 - time: 8238.8s (137m 19s)
-- notes: lossê°€ 0.49 â†’ 0.38ë¡œ ê°ì†Œí•˜ì—¬ ì •ìƒ íŒ¨í„´ ë³µì› ì˜¤ì°¨ê°€ ì¤„ê³  ìˆìŒ. ì¤‘ë°˜(5~7 epoch)ì—ì„œ ì†Œí­ í”ë“¤ë¦¼ ìˆìœ¼ë‚˜ ì´í›„ ë‹¤ì‹œ ê°ì†Œí•´ ìˆ˜ë ´ ê²½í–¥ í™•ì¸ë¨. ê²€ì¦ ì„¸íŠ¸ê°€ ì—†ìœ¼ë¯€ë¡œ ê³¼ì í•© ì—¬ë¶€ëŠ” ì•„ì§ íŒë‹¨ ë¶ˆê°€í•˜ë©°, ì •ìƒ/ì´ìƒ ë¶„í¬ ë¶„ë¦¬ í™•ì¸ì´ í•„ìš”í•¨.
+- notes: loss°¡ 0.49 ¡æ 0.38·Î °¨¼ÒÇÏ¿© Á¤»ó ÆĞÅÏ º¹¿ø ¿ÀÂ÷°¡ ÁÙ°í ÀÖÀ½. Áß¹İ(5~7 epoch)¿¡¼­ ¼ÒÆø Èçµé¸² ÀÖÀ¸³ª ÀÌÈÄ ´Ù½Ã °¨¼ÒÇØ ¼ö·Å °æÇâ È®ÀÎµÊ. °ËÁõ ¼¼Æ®°¡ ¾øÀ¸¹Ç·Î °úÀûÇÕ ¿©ºÎ´Â ¾ÆÁ÷ ÆÇ´Ü ºÒ°¡ÇÏ¸ç, Á¤»ó/ÀÌ»ó ºĞÆ÷ ºĞ¸® È®ÀÎÀÌ ÇÊ¿äÇÔ.
 
 ---
 
@@ -106,16 +410,16 @@
 ### Output
 - model_path: ai/weights/efd/runs/20260209_104949/lstm_ae_efd.pt
 - time: 3.3s (0m 3s)
-- notes: EFD ì›ì‹œ ìŠ¤ì¼€ì¼ë¡œ í•™ìŠµë˜ì–´ loss ì ˆëŒ€ê°’ì´ í¼(ì •ê·œí™” ë¯¸ì ìš©). ë¶„í¬ ë¹„êµ/AUCë¡œ ì„±ëŠ¥ í™•ì¸ í•„ìš”.
+- notes: EFD ¿ø½Ã ½ºÄÉÀÏ·Î ÇĞ½ÀµÇ¾î loss Àı´ë°ªÀÌ Å­(Á¤±ÔÈ­ ¹ÌÀû¿ë). ºĞÆ÷ ºñ±³/AUC·Î ¼º´É È®ÀÎ ÇÊ¿ä.
 
 ### EFD Eval (Baseline, no normalization)
 - AUC: 0.4770
 - threshold (q=0.99): 1,132,182.75
-- notes: ì •ê·œí™” ë¯¸ì ìš© ìƒíƒœì—ì„œ ì •ìƒ/ê³ ì¥ ë¶„ë¦¬ ì„±ëŠ¥ì´ ë‚®ìŒ â†’ ì •ê·œí™” ì ìš© í›„ ì¬í•™ìŠµ/ì¬í‰ê°€ í•„ìš”.
+- notes: Á¤±ÔÈ­ ¹ÌÀû¿ë »óÅÂ¿¡¼­ Á¤»ó/°íÀå ºĞ¸® ¼º´ÉÀÌ ³·À½ ¡æ Á¤±ÔÈ­ Àû¿ë ÈÄ ÀçÇĞ½À/ÀçÆò°¡ ÇÊ¿ä.
 
 ---
 
-### Normalized (zscore) ì¬í•™ìŠµ
+### Normalized (zscore) ÀçÇĞ½À
 
 ### Run Info (Normalized, zscore)
 - Date: 2026-02-09 12:04:30
@@ -125,7 +429,7 @@
 - window_sec: 60
 - stride_sec: 60
 - sampling_hz: 1
-- normalize: zscore (normal ê¸°ì¤€)
+- normalize: zscore (normal ±âÁØ)
 - min_coverage: n/a
 - fill_method: n/a
 - resample: none
@@ -152,31 +456,31 @@
 - model_path: ai/weights/efd/runs/20260209_120430/lstm_ae_efd.pt
 - scaler_path: ai/weights/efd/scaler_efd.json
 - time: 3.0s (0m 3s)
-- notes: ì •ê·œí™” ì ìš©ìœ¼ë¡œ loss ìŠ¤ì¼€ì¼ì´ ì•ˆì •í™”ë¨. ë‹¤ë§Œ ë¶„ë¦¬ ì„±ëŠ¥ì€ AUC ê¸°ì¤€ìœ¼ë¡œ ì¶”ê°€ ê°œì„  í•„ìš”.
+- notes: Á¤±ÔÈ­ Àû¿ëÀ¸·Î loss ½ºÄÉÀÏÀÌ ¾ÈÁ¤È­µÊ. ´Ù¸¸ ºĞ¸® ¼º´ÉÀº AUC ±âÁØÀ¸·Î Ãß°¡ °³¼± ÇÊ¿ä.
 
 ### EFD Eval (Normalized, zscore)
 - AUC: 0.4966
 - threshold (q=0.99): 1.067330
-- notes: ì •ê·œí™” í›„ AUCê°€ ì†Œí­ ê°œì„ ë˜ì—ˆìœ¼ë‚˜ ì—¬ì „íˆ ë¶„ë¦¬ ì„±ëŠ¥ì´ ë‚®ìŒ â†’ ì±„ë„/ì „ì²˜ë¦¬/ëª¨ë¸ êµ¬ì¡° ì¬ê²€í†  í•„ìš”.
+- notes: Á¤±ÔÈ­ ÈÄ AUC°¡ ¼ÒÆø °³¼±µÇ¾úÀ¸³ª ¿©ÀüÈ÷ ºĞ¸® ¼º´ÉÀÌ ³·À½ ¡æ Ã¤³Î/ÀüÃ³¸®/¸ğµ¨ ±¸Á¶ Àç°ËÅä ÇÊ¿ä.
 
 ---
 
-## Local (#2 Failure Detection) â€” Data Prep Only
+## Local (#2 Failure Detection) - Data Prep Only
 
 ### Data Prep
 - source_csv: ai/app/services/obd_anomaly/offline/raw/kaggle_efd2/engine_failure_dataset.csv
 - output_jsonl: ai/app/services/obd_anomaly/offline/datasets/kaggle_efd2/labeled.jsonl
 - label_col: Fault_Condition (values: 0,1,2,3)
-- channels: Temperature (âˆ‘C), RPM, Fuel_Efficiency, Vibration_X, Vibration_Y, Vibration_Z, Torque, Power_Output (kW)
+- channels: Temperature (¢²C), RPM, Fuel_Efficiency, Vibration_X, Vibration_Y, Vibration_Z, Torque, Power_Output (kW)
 - sampling_hz: 1
 - window_sec: 60
 - stride_sec: 60
 - rows_total: 1000
-- notes: ê²°ì¸¡/ì¤‘ë³µ 0% í™•ì¸. ë¼ë²¨ í¬í•¨ JSONLë¡œ ë³€í™˜ ì™„ë£Œ.
+- notes: °áÃø/Áßº¹ 0% È®ÀÎ. ¶óº§ Æ÷ÇÔ JSONL·Î º¯È¯ ¿Ï·á.
 
 ---
 
-## Local (#3 Engine Health) â€” Data Prep Only
+## Local (#3 Engine Health) - Data Prep Only
 
 ### Data Prep
 - source_csv: ai/app/services/obd_anomaly/offline/raw/kaggle_engine_health/engine_data.csv
@@ -187,4 +491,5 @@
 - window_sec: 60
 - stride_sec: 60
 - rows_total: 19535
-- notes: ê²°ì¸¡/ì¤‘ë³µ 0% í™•ì¸. ë¼ë²¨ í¬í•¨ JSONLë¡œ ë³€í™˜ ì™„ë£Œ.
+- notes: °áÃø/Áßº¹ 0% È®ÀÎ. ¶óº§ Æ÷ÇÔ JSONL·Î º¯È¯ ¿Ï·á.
+
