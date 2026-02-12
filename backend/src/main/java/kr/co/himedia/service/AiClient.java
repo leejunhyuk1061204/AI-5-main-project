@@ -15,9 +15,6 @@ import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
 
-import kr.co.himedia.dto.maintenance.ai.AiWearFactorRequest;
-import kr.co.himedia.dto.maintenance.ai.AiWearFactorResponse;
-
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Map;
@@ -43,9 +40,6 @@ public class AiClient {
 
     @Value("${ai.server.url.anomaly:http://localhost:8001/api/v1/predict/anomaly}")
     private String aiServerAnomalyUrl;
-
-    @Value("${ai.server.url.wear-factor:http://localhost:8001/api/v1/connect/predict/wear-factor}")
-    private String aiServerWearFactorUrl;
 
     public AiClient() {
         org.springframework.http.client.SimpleClientHttpRequestFactory factory = new org.springframework.http.client.SimpleClientHttpRequestFactory();
@@ -150,12 +144,4 @@ public class AiClient {
         return null;
     }
 
-    /**
-     * 소모품 마모율 예측 요청
-     */
-    @Retryable(retryFor = Exception.class, maxAttempts = 2, backoff = @Backoff(delay = 2000))
-    public AiWearFactorResponse getWearFactor(AiWearFactorRequest request) {
-        log.info("[Retryable] Requesting Batch Wear Factor Prediction");
-        return restTemplate.postForObject(aiServerWearFactorUrl, request, AiWearFactorResponse.class);
-    }
 }
