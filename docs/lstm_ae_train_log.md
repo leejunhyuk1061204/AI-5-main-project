@@ -15,6 +15,11 @@
 - Eval: 검증 결과(AUC/threshold 등) 기록
 -->
 
+<!--
+실차 데이터 관련:
+- 실차 데이터는 별도 확보된 2개 케이스(배터리 방전/시동 꺼짐)이며, 전처리 JSONL만 S3에 업로드한다.
+-->
+
 ## Local (OBD)
 
 ### Run Info (Baseline, no normalization)
@@ -56,6 +61,16 @@
 ---
 
 ## Local (#1 EFD)
+
+### S3 Upload (Kaggle EFD JSONL)
+- date: 2026-02-09
+- bucket: ai-5-main-project-car-bom
+- path: dataset/obd/jsonl/kaggle_efd/20260209/
+- files:
+  - normal.jsonl (1.2MB)
+  - fault.jsonl (632.5KB)
+- method: AWS Console (manual)
+- script: ai/scripts/obd_engine/upload_jsonl_to_s3.py
 
 ### Run Info
 - Date: 2026-02-09 10:49:49
@@ -143,3 +158,33 @@
 - AUC: 0.4966
 - threshold (q=0.99): 1.067330
 - notes: 정규화 후 AUC가 소폭 개선되었으나 여전히 분리 성능이 낮음 → 채널/전처리/모델 구조 재검토 필요.
+
+---
+
+## Local (#2 Failure Detection) — Data Prep Only
+
+### Data Prep
+- source_csv: ai/app/services/obd_anomaly/offline/raw/kaggle_efd2/engine_failure_dataset.csv
+- output_jsonl: ai/app/services/obd_anomaly/offline/datasets/kaggle_efd2/labeled.jsonl
+- label_col: Fault_Condition (values: 0,1,2,3)
+- channels: Temperature (∑C), RPM, Fuel_Efficiency, Vibration_X, Vibration_Y, Vibration_Z, Torque, Power_Output (kW)
+- sampling_hz: 1
+- window_sec: 60
+- stride_sec: 60
+- rows_total: 1000
+- notes: 결측/중복 0% 확인. 라벨 포함 JSONL로 변환 완료.
+
+---
+
+## Local (#3 Engine Health) — Data Prep Only
+
+### Data Prep
+- source_csv: ai/app/services/obd_anomaly/offline/raw/kaggle_engine_health/engine_data.csv
+- output_jsonl: ai/app/services/obd_anomaly/offline/datasets/kaggle_engine_health/labeled.jsonl
+- label_col: Engine Condition (values: 0,1)
+- channels: Engine rpm, Lub oil pressure, Fuel pressure, Coolant pressure, lub oil temp, Coolant temp
+- sampling_hz: 1
+- window_sec: 60
+- stride_sec: 60
+- rows_total: 19535
+- notes: 결측/중복 0% 확인. 라벨 포함 JSONL로 변환 완료.
