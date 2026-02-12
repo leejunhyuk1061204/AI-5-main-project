@@ -28,6 +28,6 @@ public interface CarModelMasterRepository extends JpaRepository<CarModelMaster, 
 
         List<CarModelMaster> findByManufacturerKoOrderByModelNameKoAscModelYearDesc(String manufacturer);
 
-    Optional<CarModelMaster> findOneByManufacturerKoAndModelNameKoAndModelYear(
-            String manufacturerKo, String modelNameKo, Integer modelYear);
+        Optional<CarModelMaster> findOneByManufacturerKoAndModelNameKoAndModelYearAndFuelType(
+                        String manufacturerKo, String modelNameKo, Integer modelYear, String fuelType);
 }
