@@ -69,9 +69,13 @@ jobs:
       - name: Build and Push Docker Image
         working-directory: backend
         run: |
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:${{ github.ref_name }} .
+          # Sanitize branch name (replace / with -) to make it valid for Docker tag
+          SAFE_BRANCH_NAME=$(echo "${{ github.ref_name }}" | tr '/' '-')
+          echo "Using Docker tag: $SAFE_BRANCH_NAME"
+
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:$SAFE_BRANCH_NAME .
           docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:latest .
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:${{ github.ref_name }}
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:$SAFE_BRANCH_NAME
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:latest
 
       - name: Copy Configuration Files to EC2
