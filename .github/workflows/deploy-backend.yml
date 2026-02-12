@@ -2,7 +2,7 @@ name: Deploy Backend
 
 on:
   push:
-    branches: [deploy, main]
+    branches: [deploy, main, csb/feature-CICD]
 
 jobs:
   deploy:
