@@ -16,7 +16,7 @@ spring:
     driver-class-name: org.postgresql.Driver
 
   main:
-    lazy-initialization: true # 🚀 t2.micro startup optimization
+    lazy-initialization: false # 🚀 Ensure RabbitMQ consumers start immediately
   jpa:
     open-in-view: false # Disable OSIV for performance
     defer-datasource-initialization: true # data.sql 실행을 Hibernate 테이블 이후로 미룸

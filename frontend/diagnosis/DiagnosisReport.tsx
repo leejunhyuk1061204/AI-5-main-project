@@ -39,9 +39,17 @@ export default function DiagnosisReport() {
         }
     };
 
+    const handleBack = () => {
+        navigation.goBack();
+    };
+
     const handleFinish = () => {
-        reset();
-        navigation.navigate('DiagTab');
+        if (route.params?.fromHistory) {
+            navigation.goBack();
+        } else {
+            reset();
+            navigation.navigate('DiagTab');
+        }
     };
 
     useEffect(() => {
@@ -67,7 +75,7 @@ export default function DiagnosisReport() {
     return (
         <View style={[styles.container, { paddingTop: insets.top }]}>
             <View style={styles.header}>
-                <TouchableOpacity onPress={handleFinish} style={{ padding: 8 }}>
+                <TouchableOpacity onPress={handleBack} style={{ padding: 8 }}>
                     <MaterialIcons name="arrow-back" size={24} color="white" />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>진단 결과 보고서</Text>
@@ -157,8 +165,8 @@ export default function DiagnosisReport() {
                         end={{ x: 1, y: 0 }}
                         style={styles.gradientButton}
                     >
-                        <Text style={styles.buttonText}>확인 (홈으로)</Text>
-                        <MaterialIcons name="home" size={24} color="white" />
+                        <Text style={styles.buttonText}>{route.params?.fromHistory ? '확인' : '확인 (홈으로)'}</Text>
+                        <MaterialIcons name={route.params?.fromHistory ? 'check' : 'home'} size={24} color="white" />
                     </LinearGradient>
                 </TouchableOpacity>
 
