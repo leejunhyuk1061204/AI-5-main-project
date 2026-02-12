@@ -111,6 +111,7 @@ smartcar:
   redirect-uri: ${SMARTCAR_REDIRECT_URI:http://localhost:8080/api/smartcar/callback}
   mode: ${SMARTCAR_MODE:test}
 
+
 ocr:
   naver:
     invoke-url: ${NAVER_OCR_INVOKE_URL:}

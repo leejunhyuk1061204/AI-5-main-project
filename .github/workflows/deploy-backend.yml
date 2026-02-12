@@ -22,6 +22,8 @@ jobs:
           NAVER_OCR_Secret_Key=${{ secrets.NAVER_OCR_SECRET_KEY }}
           NAVER_OCR_Invoke_Url=${{ secrets.NAVER_OCR_INVOKE_URL }}
           OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+          HM_CLIENT_ID=${{ secrets.HM_CLIENT_ID }}
+          HM_CLIENT_SECRET=${{ secrets.HM_CLIENT_SECRET }}
           DB_HOST=localhost
           DB_PORT=5432
           DB_NAME=car_sentry

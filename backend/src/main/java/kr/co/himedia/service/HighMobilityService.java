@@ -21,10 +21,10 @@ public class HighMobilityService {
     private final RestTemplate restTemplate = new RestTemplate();
     private final EncryptionUtils encryptionUtils;
 
-    @Value("${HM_CLIENT_ID}")
+    @Value("${HM_CLIENT_ID:}")
     private String clientId;
 
-    @Value("${HM_CLIENT_SECRET}")
+    @Value("${HM_CLIENT_SECRET:}")
     private String clientSecret;
 
     private static final String BASE_URL = "https://sandbox.api.high-mobility.com/v1";
