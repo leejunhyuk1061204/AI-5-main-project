@@ -200,20 +200,20 @@ jobs:
                 ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:latest
             fi
 
-            echo "⏳ Waiting for Backend to bind port 8080 (max 20min)..."
-            MAX_RETRIES=120
+            echo "⏳ Waiting for Backend to bind port 8080 (max 50min)..."
+            MAX_RETRIES=300
             for ((i=1; i<=MAX_RETRIES; i++)); do
               if sudo ss -tulpn | grep 8080 > /dev/null; then
                   echo "✅ Backend is listening on port 8080!"
                   break
               fi
-              echo "   ... waiting for port 8080 ($((i*10))s/${MAX_RETRIES}0s)"
-              sleep 10
+              echo "   ... waiting for port 8080 ($((i*10))s/${MAX_RETRIES}0s) - $(date)"
+              sleep 10s
             done
             
             # Check if port is actually open after loop
             if ! sudo ss -tulpn | grep 8080 > /dev/null; then
-                echo "❌ Backend failed to start within 20 minutes."
+                echo "❌ Backend failed to start within 50 minutes."
                 echo "📋 Container Logs (Last 50 lines):"
                 sudo docker logs --tail 50 ai-5-backend
                 exit 1
