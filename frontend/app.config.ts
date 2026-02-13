@@ -9,7 +9,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     orientation: "portrait",
     icon: "./assets/Gemini_Generated_Image_v1i03bv1i03bv1i0.png",
     userInterfaceStyle: "dark",
-    newArchEnabled: true,
+    newArchEnabled: false,
     splash: {
         image: "./assets/splash.png",
         resizeMode: "contain",
@@ -86,7 +86,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
             "expo-build-properties",
             {
                 "android": {
-                    "newArchEnabled": true,
+                    "newArchEnabled": false,
                     "bridgelessEnabled": false,
                     "extraMavenRepos": [
                         "https://devrepo.kakao.com/nexus/content/groups/public/"
