@@ -40,11 +40,11 @@ public final class ConsumableConstants {
     // ==================== 에어필터 (Air Filter) ====================
     /** 차량 모델별 기준 MAF (g/s) */
     public static final Map<String, Double> BASELINE_MAF = Map.of(
-            "Sonata 2.0", 18.0,
-            "Avante 1.6", 14.5,
-            "Grandeur 3.0", 22.0,
-            "Tucson 2.0", 19.0,
-            "default", 16.0);
+            // "Sonata 2.0", 18.0,
+            // "Avante 1.6", 14.5,
+            // "Grandeur 3.0", 22.0,
+            // "Tucson 2.0", 19.0,
+            "default", 18.0);
     public static final double AIR_FILTER_EFFICIENCY_BASE = 1.5;
     public static final double AIR_FILTER_EFFICIENCY_DIVISOR = 0.1;
 
@@ -57,21 +57,13 @@ public final class ConsumableConstants {
     public static final double HARD_ACCEL_THRESHOLD = 10.0; // km/h/s
     public static final double HARD_BRAKE_THRESHOLD = 10.0; // km/h/s
 
-    // ==================== 신뢰도 맵 (Confidence) ====================
-    public static final Map<String, Double> CONFIDENCE_MAP = Map.of(
-            "AIR_FILTER", 0.89,
-            "COOLANT", 0.95,
-            "TIRE", 0.82,
-            "BRAKE_PAD", 0.78,
-            "ENGINE_OIL", 0.71);
-
     // ==================== 유틸리티 메서드 ====================
 
     /**
      * 차량 모델에 맞는 기준 MAF 값을 반환합니다.
      *
      * @param vehicleModel 차량 모델명
-     * @return 기준 MAF 값 (g/s). 모델을 찾을 수 없으면 기본값 16.0 반환
+     * @return 기준 MAF 값 (g/s). 모델을 찾을 수 없으면 기본값 18.0 반환
      */
     public static Double getBaselineMaf(String vehicleModel) {
         if (vehicleModel == null) {
@@ -92,19 +84,9 @@ public final class ConsumableConstants {
             case "ENGINE_OIL" -> ENGINE_OIL_CYCLE;
             case "AIR_FILTER" -> AIR_FILTER_CYCLE;
             case "COOLANT" -> COOLANT_CYCLE;
-            case "TIRE" -> TIRE_CYCLE;
-            case "BRAKE_PAD" -> BRAKE_PAD_CYCLE;
+            case "TIRE_FL", "TIRE_FR", "TIRE_RL", "TIRE_RR" -> TIRE_CYCLE;
+            case "BRAKE_PAD_FRONT", "BRAKE_PAD_REAR" -> BRAKE_PAD_CYCLE;
             default -> throw new IllegalArgumentException("알 수 없는 소모품 코드: " + itemCode);
         };
-    }
-
-    /**
-     * 소모품 코드에 해당하는 신뢰도 값을 반환합니다.
-     *
-     * @param itemCode 소모품 코드 (예: "ENGINE_OIL", "TIRE")
-     * @return 신뢰도 값 (0.0 ~ 1.0). 코드를 찾을 수 없으면 0.5 반환
-     */
-    public static double getConfidence(String itemCode) {
-        return CONFIDENCE_MAP.getOrDefault(itemCode, 0.5);
     }
 }

@@ -57,9 +57,9 @@ public class AiDiagnosisService {
 
     /** LLM에 보낼 소모품: 이 수치 이하면 "주의 필요"로 포함 */
     private static final double CONSUMABLE_ATTENTION_THRESHOLD_PCT = 80.0;
-    /** DTC 진단 시 함께 보낼 엔진/배기 관련 소모품 코드 */
+    /** DTC 진단 시 함께 보낼 엔진/배기 관련 소모품 코드 (시드와 동일하게 유지) */
     private static final Set<String> CONSUMABLE_CODES_DTC_RELATED = Set.of(
-            "ENGINE_OIL", "AIR_FILTER", "FUEL_FILTER", "SPARK_PLUG", "COOLANT", "CABIN_FILTER");
+            "ENGINE_OIL", "AIR_FILTER", "FUEL_FILTER", "SPARK_PLUG", "COOLANT");
     /** 항상 포함할 핵심 소모품 (안전/엔진) */
     private static final Set<String> CONSUMABLE_CODES_ALWAYS = Set.of(
             "ENGINE_OIL", "BRAKE_PAD_FRONT", "BRAKE_PAD_REAR", "BATTERY_12V");
