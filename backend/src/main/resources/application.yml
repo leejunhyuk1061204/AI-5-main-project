@@ -71,6 +71,8 @@ spring:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
       password: ${REDIS_PASSWORD:}
+      repositories:
+        enabled: false
 
 
 
@@ -108,6 +110,7 @@ smartcar:
   client-secret: ${SMARTCAR_CLIENT_SECRET:dummy}
   redirect-uri: ${SMARTCAR_REDIRECT_URI:http://localhost:8080/api/smartcar/callback}
   mode: ${SMARTCAR_MODE:test}
+
 
 ocr:
   naver:

@@ -2,7 +2,7 @@ name: Deploy Backend
 
 on:
   push:
-    branches: [deploy, main]
+    branches: [deploy, main, csb/feature-CICD]
 
 jobs:
   deploy:
@@ -22,6 +22,8 @@ jobs:
           NAVER_OCR_Secret_Key=${{ secrets.NAVER_OCR_SECRET_KEY }}
           NAVER_OCR_Invoke_Url=${{ secrets.NAVER_OCR_INVOKE_URL }}
           OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+          HM_CLIENT_ID=${{ secrets.HM_CLIENT_ID }}
+          HM_CLIENT_SECRET=${{ secrets.HM_CLIENT_SECRET }}
           DB_HOST=localhost
           DB_PORT=5432
           DB_NAME=car_sentry
@@ -69,9 +71,13 @@ jobs:
       - name: Build and Push Docker Image
         working-directory: backend
         run: |
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:${{ github.ref_name }} .
+          # Sanitize branch name (replace / with -) to make it valid for Docker tag
+          SAFE_BRANCH_NAME=$(echo "${{ github.ref_name }}" | tr '/' '-')
+          echo "Using Docker tag: $SAFE_BRANCH_NAME"
+
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:$SAFE_BRANCH_NAME .
           docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:latest .
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:${{ github.ref_name }}
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:$SAFE_BRANCH_NAME
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:latest
 
       - name: Copy Configuration Files to EC2
@@ -90,7 +96,7 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          command_timeout: 30m
+          command_timeout: 60m
           script: |
             # --- 0. Optimize Memory & Disk (Critical for t2.micro) ---
             echo "🧹 Cleaning up old Docker images to free space..."
@@ -176,8 +182,9 @@ jobs:
             fi
             
             echo "▶️ Running new backend container..."
-            # Add entropy fix to JAVA_TOOL_OPTIONS to prevent startup hangs
-            JAVA_OPTS="-Xmx300m -Djava.security.egd=file:/dev/./urandom"
+            # Adjust memory: 512MB Max Heap (fits within 1GB RAM + 2GB Swap)
+            # -XX:+ExitOnOutOfMemoryError: Ensure container exits immediately on OOM so Docker restarts it (or we catch it)
+            JAVA_OPTS="-Xms256m -Xmx512m -XX:+ExitOnOutOfMemoryError -Djava.security.egd=file:/dev/./urandom"
             
             if [ -f "$REMOTE_ENV_PATH" ]; then
               echo "✅ Env file found at $REMOTE_ENV_PATH. Using it."
@@ -200,22 +207,31 @@ jobs:
                 ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:latest
             fi
 
-            echo "⏳ Waiting for Backend to bind port 8080 (max 20min)..."
-            MAX_RETRIES=120
+            echo "⏳ Waiting for Backend to bind port 8080 (max 50min)..."
+            MAX_RETRIES=300
             for ((i=1; i<=MAX_RETRIES; i++)); do
               if sudo ss -tulpn | grep 8080 > /dev/null; then
                   echo "✅ Backend is listening on port 8080!"
                   break
               fi
-              echo "   ... waiting for port 8080 ($((i*10))s/${MAX_RETRIES}0s)"
-              sleep 10
+              echo "   ... waiting for port 8080 ($((i*10))s/${MAX_RETRIES}0s) - $(date)"
+              
+              # Print logs every 60s (every 6th iteration) to debug hangs
+              if (( i % 6 == 0 )); then
+                 echo "📋 [DEBUG] Tailing last 5 log lines:"
+                 sudo docker logs --tail 5 ai-5-backend
+              fi
+              
+              sleep 10s
             done
             
             # Check if port is actually open after loop
             if ! sudo ss -tulpn | grep 8080 > /dev/null; then
-                echo "❌ Backend failed to start within 20 minutes."
-                echo "📋 Container Logs (Last 50 lines):"
-                sudo docker logs --tail 50 ai-5-backend
+                echo "❌ Backend failed to start within 50 minutes."
+                echo "📋 System Diagnostics (OOM Check):"
+                sudo dmesg | grep -i "kill" || echo "No OOM kills detected in dmesg."
+                echo "📋 Container Logs (Last 100 lines):"
+                sudo docker logs --tail 100 ai-5-backend
                 exit 1
             fi
 

@@ -15,7 +15,7 @@ import java.util.UUID;
 
 @Slf4j
 @RestController
-@RequestMapping("/ai")
+@RequestMapping("/api/v1/ai")
 @RequiredArgsConstructor
 public class AiController {
 
