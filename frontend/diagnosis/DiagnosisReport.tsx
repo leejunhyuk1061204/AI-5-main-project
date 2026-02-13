@@ -121,23 +121,12 @@ export default function DiagnosisReport() {
                     locations={[0, 0.7, 1]}
                     className="absolute inset-x-0 bottom-0 h-full"
                 />
-
-                {/* Top Navigation */}
-                <View className="absolute top-0 inset-x-0 z-20 px-4 flex-row items-center justify-between" style={{ paddingTop: insets.top + 10 }}>
-                    <TouchableOpacity onPress={handleBack} className="w-10 h-10 items-center justify-center bg-black/40 rounded-full border border-white/10 backdrop-blur-md">
-                        <MaterialIcons name="arrow-back" size={24} color="white" />
-                    </TouchableOpacity>
-                    <View className="px-3 py-1 bg-black/40 rounded-full border border-white/10 backdrop-blur-md">
-                        <Text className="text-white/90 text-xs font-bold tracking-widest uppercase">AI Diagnosis Report</Text>
-                    </View>
-                    <View className="w-10" />
-                </View>
             </View>
 
             <ScrollView
                 className="flex-1 z-10"
                 showsVerticalScrollIndicator={false}
-                contentContainerStyle={{ paddingTop: '55%', paddingBottom: 160 }}
+                contentContainerStyle={{ paddingTop: '55%', paddingBottom: 240 }}
             >
                 <View className="px-5">
                     {/* 2. Main Title Only (No Icon) */}
@@ -226,8 +215,19 @@ export default function DiagnosisReport() {
                 </View>
             </ScrollView>
 
+            {/* Top Navigation - Moved outside ScrollView and Image container */}
+            <View className="absolute top-0 inset-x-0 z-50 px-4 flex-row items-center justify-between" style={{ paddingTop: insets.top + 10 }}>
+                <TouchableOpacity onPress={handleBack} className="w-10 h-10 items-center justify-center bg-black/40 rounded-full border border-white/10 backdrop-blur-md">
+                    <MaterialIcons name="arrow-back" size={24} color="white" />
+                </TouchableOpacity>
+                <View className="px-3 py-1 bg-black/40 rounded-full border border-white/10 backdrop-blur-md">
+                    <Text className="text-white/90 text-xs font-bold tracking-widest uppercase">AI Diagnosis Report</Text>
+                </View>
+                <View className="w-10" />
+            </View>
+
             {/* Bottom Action Button (Fixed) */}
-            <View className="absolute bottom-0 inset-x-0 p-5 bg-background-dark/80 backdrop-blur-xl border-t border-white/5" style={{ paddingBottom: insets.bottom + 20 }}>
+            <View className="absolute bottom-0 inset-x-0 z-50 p-5 bg-background-dark/80 backdrop-blur-xl border-t border-white/5" style={{ paddingBottom: insets.bottom + 20 }}>
                 <TouchableOpacity
                     onPress={handleFinish}
                     activeOpacity={0.9}
