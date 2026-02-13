@@ -817,10 +817,10 @@ class ObdService {
         const isSpeedZero = snapshot.speed !== undefined && snapshot.speed === 0;
 
         if (this.tripState === 'RUNNING') {
-            // Case A (IDLE): RPM=0 && Speed=0 연속 10분 (600초)
+            // Case A (IDLE): RPM=0 && Speed=0 연속 1분 (60초)
             if (isRpmZero && isSpeedZero) {
                 this.idleCount++;
-                if (this.idleCount >= 600) { // 10분 = 600초
+                if (this.idleCount >= 60) { // 1분 = 60초
                     this.tripState = 'SUSPECT_END';
                     this.suspectReason = 'IDLE';
                     this.suspectStartedAt = now;

@@ -173,12 +173,13 @@ class WearFactorIntegrationTest {
     // ==================== 헬퍼: 5개 소모품 생성 ====================
 
     private List<VehicleConsumable> createAllConsumables() {
+        // 실제 도메인 코드 및 시드 데이터(db/seed_consumable.sql)에 맞춘 5개 대표 소모품
         return List.of(
-                createConsumable("TIRE", "타이어", 40000),
+                createConsumable("TIRE_FL", "앞왼쪽 타이어", 50000),     // 타이어 (대표 1개)
                 createConsumable("ENGINE_OIL", "엔진 오일", 10000),
                 createConsumable("COOLANT", "냉각수", 40000),
                 createConsumable("AIR_FILTER", "에어필터", 15000),
-                createConsumable("BRAKE_PAD", "브레이크패드", 30000));
+                createConsumable("BRAKE_PAD_FRONT", "앞 브레이크 패드", 30000)); // 브레이크 패드 (대표 1개)
     }
 
     private VehicleConsumable createConsumable(String code, String name, int intervalMileage) {
