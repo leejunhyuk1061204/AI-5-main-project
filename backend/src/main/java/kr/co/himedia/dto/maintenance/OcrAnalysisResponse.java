@@ -21,6 +21,8 @@ public class OcrAnalysisResponse {
     // Maintenance Specific
     private String consumableItemCode;
     private String consumableItemName;
+    /** 수량 (영수증에 "2개" 등 표기 시, 없으면 null → 1로 처리) */
+    private Integer quantity;
 
     // Fueling Specific
     private String fuelType;

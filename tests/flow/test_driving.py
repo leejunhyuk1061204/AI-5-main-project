@@ -6,8 +6,8 @@ from datetime import datetime, timedelta
 
 # 설정
 BASE_URL = "http://localhost:8080/api/v1"
-ACCESS_TOKEN = "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiIzZGI0NjVjMy1lNThhLTQzYWQtOTUxNy02MTRmNDhjOGVmZjMiLCJpYXQiOjE3NzA2MTI0MDksImV4cCI6MTc3MDYxNjAwOX0.L5alysYSEYAwo-rgiX2MR7vlFLndNbTxVaMsYAe6AKl4dgsGyY-dCFYbeT8MAbh9QwQvp4OVEq8ZTIhy73HecA"
-VEHICLE_ID = "690713b3-34ee-45c8-adfe-73af1ad5d798"
+ACCESS_TOKEN = "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiI5ZmM0OTMyYi04ZjI2LTRkOGItOGZjZC02MWNkOGNjZDc4OTgiLCJpYXQiOjE3NzA5NjQ5MjksImV4cCI6MTc3MDk2ODUyOX0.7nlkF6Z2WbMz8sP0mE956dz7K5bENmlsGdDO12fJdxk8oAMjNSxUBL0WYJ67SLIhpJHX6680ByWuspwPCy4jnA"
+VEHICLE_ID = "3437b1fd-ba3d-4d0e-ab72-cfdd9c586e75"
 
 def get_headers():
     return {
@@ -50,23 +50,29 @@ def start_trip(vehicle_id):
         print(f"[-] Trip Start Failed: {res.text}")
         return None
 
-def send_bulk_logs(vehicle_id, target_duration_min, start_time_base, target_s):
+def send_bulk_logs(vehicle_id, target_duration_min, start_time_base, target_s_min, target_s_max):
     headers = get_headers()
-    # 1초당 1건, 실제 주행 시간 구간에 맞춤 (LSTM/이상감지가 시간 구간 사용)
     log_count = int(target_duration_min * 60)
-    print(f"[*] Sending Bulk Logs ({log_count} EA, {target_duration_min}min span / Target {target_s}km/h)...")
+    target_mid = (target_s_min + target_s_max) / 2.0
+    print(f"[*] Sending Bulk Logs ({log_count} EA, {target_duration_min}min / Avg {target_mid:.0f}km/h, Score 80~90)...")
     
     logs = []
     base_time = start_time_base + timedelta(milliseconds=10)
     current_speed = 0.0
+    # 급가속 감점 방지: 초당 10km/h 미만으로 가속 (백엔드 HARD_ACCEL_THRESHOLD)
+    max_accel_per_sec = 8.0
 
     for i in range(log_count):
         ts = (base_time + timedelta(seconds=i)).isoformat()
         
-        if current_speed < target_s:
-            current_speed += random.uniform(2.0, 5.0)
+        if current_speed < target_s_min:
+            current_speed += random.uniform(2.0, min(max_accel_per_sec, target_s_min - current_speed))
         else:
-            current_speed = target_s + random.uniform(-0.1, 0.1)
+            current_speed = current_speed + random.uniform(
+                max(target_s_min - current_speed, -1.5),
+                min(target_s_max - current_speed, 1.5)
+            )
+            current_speed = max(target_s_min, min(target_s_max, current_speed))
         
         current_rpm = current_speed * 18 + 1200 + random.uniform(-10, 10)
 
@@ -107,19 +113,20 @@ def end_trip(trip_id):
         print("="*35)
 
 def main():
-    print("[*] 20분 주행 시뮬레이션 (단일 트립)")
+    duration_min = 10.0
+    speed_min, speed_max = 80.0, 90.0
+    print(f"[*] {duration_min:.0f}분 주행 시뮬레이션 (평균 {speed_min:.0f}~{speed_max:.0f} km/h, 목표 점수 80~90)")
     vid = VEHICLE_ID
-    target_speed = 80.0
 
     start_time = datetime.now()
     tid = start_trip(vid)
     if not tid:
         return
     time.sleep(0.5)
-    send_bulk_logs(vid, 20.0, start_time, target_speed)
+    send_bulk_logs(vid, duration_min, start_time, speed_min, speed_max)
     time.sleep(1.0)
     end_trip(tid)
-    print("\n[+] 20분 주행 시뮬레이션 완료.")
+    print(f"\n[+] {duration_min:.0f}분 주행 시뮬레이션 완료.")
 
 if __name__ == "__main__":
     main()

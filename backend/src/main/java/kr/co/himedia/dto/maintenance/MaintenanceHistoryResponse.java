@@ -15,6 +15,7 @@ public class MaintenanceHistoryResponse {
     private Boolean isStandardized;
     private String shopName;
     private Integer cost;
+    private Integer quantity;
     private String ocrData;
     private String memo;
     private UUID receiptId;
@@ -33,6 +34,7 @@ public class MaintenanceHistoryResponse {
         this.isStandardized = history.getIsStandardized();
         this.shopName = history.getShopName();
         this.cost = history.getCost();
+        this.quantity = history.getQuantity() != null ? history.getQuantity() : 1;
         this.ocrData = history.getOcrData();
         this.memo = history.getMemo();
         this.receiptId = history.getReceiptId();

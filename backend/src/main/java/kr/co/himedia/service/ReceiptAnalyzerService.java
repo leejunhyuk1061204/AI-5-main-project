@@ -180,7 +180,8 @@ public class ReceiptAnalyzerService {
                     + "- cost: number (Total amount, integer only)\n"
                     + "- mileageAtMaintenance: number (Odometer value if present, otherwise null)\n\n"
                     + "For MAINTENANCE receipts (General repairs or consumable replacement):\n"
-                    + "- consumableItemCode: string (Match one of: " + itemsList + ", or UNKNOWN)\n\n"
+                    + "- consumableItemCode: string (Match one of: " + itemsList + ", or UNKNOWN)\n"
+                    + "- quantity: number (optional, e.g. 2 for '타이어 2개' or '브레이크패드 2세트'; omit or 1 if not stated)\n\n"
                     + "For FUELING receipts (Gas station, EV charging):\n"
                     + "- fuelType: string ('GASOLINE', 'DIESEL', 'EV', 'LPG', 'premium_gasoline')\n"
                     + "- unitPrice: number (Price per unit)\n"
@@ -227,6 +228,9 @@ public class ReceiptAnalyzerService {
                                         ? parsedJson.path("mileageAtMaintenance").asDouble()
                                         : null)
                         .consumableItemCode(parsedJson.path("consumableItemCode").asText("UNKNOWN"))
+                        .quantity(parsedJson.has("quantity") && !parsedJson.path("quantity").isNull()
+                                ? parsedJson.path("quantity").asInt(1)
+                                : null)
                         .receiptType(parsedJson.path("receiptType").asText("MAINTENANCE"))
                         .fuelType(parsedJson.path("fuelType").asText(null))
                         .unitPrice(parsedJson.has("unitPrice") && !parsedJson.path("unitPrice").isNull()

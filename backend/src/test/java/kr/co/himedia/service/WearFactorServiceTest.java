@@ -263,10 +263,10 @@ class WearFactorServiceTest {
         @Test
         @DisplayName("정상 효율: efficiency=1.0 → factor=1.0")
         void testAirFilterNormalEfficiency() {
-            // avgMaf=16, baseline=16, throttle=100% → efficiency=16/(16*1.0)=1.0
+            // avgMaf=18, baseline=18(default), throttle=100% → efficiency=18/(18*1.0)=1.0
             // factor = 1.5 ^ (max(0, 1.0-1.0)/0.1) = 1.5^0 = 1.0
-            TripSummary trip = createTripWithMafThrottle(16.0, 100.0);
-            Vehicle vehicle = createVehicleWithModel("unknown"); // baseline=16.0 (default)
+            TripSummary trip = createTripWithMafThrottle(18.0, 100.0);
+            Vehicle vehicle = createVehicleWithModel("unknown"); // baseline=18.0 (default)
             Double factor = invokeCalculateAirFilterFactor(trip, vehicle);
             assertEquals(1.0, factor, 0.001);
         }
@@ -274,9 +274,9 @@ class WearFactorServiceTest {
         @Test
         @DisplayName("효율 저하: efficiency=0.8 → factor 계산")
         void testAirFilterReducedEfficiency() {
-            // avgMaf=12.8, baseline=16, throttle=100% → efficiency=12.8/(16*1.0)=0.8
+            // avgMaf=14.4, baseline=18(default), throttle=100% → efficiency=14.4/(18*1.0)=0.8
             // loss=0.2, factor = 1.5 ^ (0.2/0.1) = 1.5^2 = 2.25
-            TripSummary trip = createTripWithMafThrottle(12.8, 100.0);
+            TripSummary trip = createTripWithMafThrottle(14.4, 100.0);
             Vehicle vehicle = createVehicleWithModel("unknown");
             Double factor = invokeCalculateAirFilterFactor(trip, vehicle);
             assertEquals(2.25, factor, 0.001);
@@ -285,9 +285,9 @@ class WearFactorServiceTest {
         @Test
         @DisplayName("스로틀 정규화: throttle 50% (0~100 → 0~1)")
         void testAirFilterThrottleNormalization() {
-            // avgMaf=8, baseline=16, throttle=50% → normalized=0.5
-            // efficiency = 8 / (16 * 0.5) = 1.0 → factor = 1.0
-            TripSummary trip = createTripWithMafThrottle(8.0, 50.0);
+            // avgMaf=9, baseline=18(default), throttle=50% → normalized=0.5
+            // efficiency = 9 / (18 * 0.5) = 1.0 → factor = 1.0
+            TripSummary trip = createTripWithMafThrottle(9.0, 50.0);
             Vehicle vehicle = createVehicleWithModel("unknown");
             Double factor = invokeCalculateAirFilterFactor(trip, vehicle);
             assertEquals(1.0, factor, 0.001);

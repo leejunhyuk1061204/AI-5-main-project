@@ -13,6 +13,7 @@ export interface OcrAnalysisResponse {
     // Maintenance Specific
     consumableItemCode: string | null;
     consumableItemName: string | null;
+    quantity: number | null;
 
     // Fueling Specific
     fuelType: string | null;
@@ -32,6 +33,7 @@ export interface MaintenanceHistoryResponse {
     isStandardized: boolean;
     shopName: string | null;
     cost: number | null;
+    quantity: number | null;
     ocrData: string | null;
     memo: string | null;
     receiptId: string | null;
