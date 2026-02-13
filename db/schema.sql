@@ -354,6 +354,7 @@ CREATE TABLE IF NOT EXISTS maintenance_logs (
     part_name VARCHAR(50),
     is_standardized BOOLEAN,
     cost INT,
+    quantity INT DEFAULT 1,
     shop_name VARCHAR(100),
     mileage_at_work FLOAT,
     receipts_s3_key TEXT,

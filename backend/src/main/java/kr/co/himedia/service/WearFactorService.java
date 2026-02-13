@@ -12,7 +12,6 @@ import kr.co.himedia.repository.VehicleConsumableRepository;
 import kr.co.himedia.repository.VehicleRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -42,11 +41,10 @@ public class WearFactorService {
     // ==================== 메인 통합 메서드 ====================
 
     /**
-     * 주행 종료 시 호출 - 해당 차량의 모든 소모품에 대해 규칙 기반 마모 계수 계산 (비동기)
+     * 주행 종료 시 호출 - 해당 차량의 모든 소모품에 대해 규칙 기반 마모 계수 계산 (동기)
      *
      * @param trip 완료된 주행 요약 (통계가 계산된 상태)
      */
-    @Async
     @Transactional
     public void calculateWearFactorsLocal(TripSummary trip) {
         log.info("[WearFactor] 규칙 기반 마모 계수 계산 시작 [Vehicle: {}, Distance: {} km]",
@@ -119,11 +117,11 @@ public class WearFactorService {
     private Double calculateFactorByItemCode(String itemCode, TripSummary trip,
             Vehicle vehicle, Double highRpmRatio, Double idleRatio) {
         return switch (itemCode) {
-            case "TIRE" -> calculateTireFactor(trip);
+            case "TIRE_FL", "TIRE_FR", "TIRE_RL", "TIRE_RR" -> calculateTireFactor(trip);
             case "ENGINE_OIL" -> calculateEngineOilFactor(trip, highRpmRatio, idleRatio);
             case "COOLANT" -> calculateCoolantFactor(trip);
             case "AIR_FILTER" -> calculateAirFilterFactor(trip, vehicle);
-            case "BRAKE_PAD" -> calculateBrakePadFactor(trip);
+            case "BRAKE_PAD_FRONT", "BRAKE_PAD_REAR" -> calculateBrakePadFactor(trip);
             default -> null;
         };
     }

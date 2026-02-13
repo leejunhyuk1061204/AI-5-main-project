@@ -102,12 +102,13 @@ public class MaintenanceService {
                                 .vehicle(vehicle)
                                 .maintenanceDate(request.getMaintenanceDate())
                                 .mileageAtMaintenance(request.getMileageAtMaintenance())
-                                .consumableItem(item) // FK로 저장
+                                .consumableItem(item)
                                 .isStandardized(request.getIsStandardized())
                                 .shopName(request.getShopName())
                                 .cost(request.getCost())
+                                .quantity(request.getQuantity() != null ? request.getQuantity() : 1)
                                 .ocrData(request.getOcrData())
-                                .receiptId(request.getReceiptId()) // 영수증 ID 저장
+                                .receiptId(request.getReceiptId())
                                 .memo(request.getMemo())
                                 .build();
 
@@ -374,17 +375,19 @@ public class MaintenanceService {
                                 : vehicle.getTotalMileage());
                 request.setShopName(ocrResult.getShopName());
                 request.setCost(ocrResult.getCost());
+                request.setQuantity(ocrResult.getQuantity() != null ? ocrResult.getQuantity() : 1);
                 request.setConsumableItemCode(ocrResult.getConsumableItemCode());
                 request.setOcrData(ocrResult.getOcrData());
                 request.setIsStandardized(true);
 
-                // 메모 처리 (JSON에 있으면 주입)
                 try {
                         if (manualDataJson != null) {
                                 com.fasterxml.jackson.databind.JsonNode node = new com.fasterxml.jackson.databind.ObjectMapper()
                                                 .readTree(manualDataJson);
                                 if (node.has("memo"))
                                         request.setMemo(node.get("memo").asText());
+                                if (node.has("quantity") && !node.get("quantity").isNull())
+                                        request.setQuantity(node.get("quantity").asInt(1));
                         }
                 } catch (Exception ignored) {
                 }
@@ -408,6 +411,8 @@ public class MaintenanceService {
                 history.setShopName(request.getShopName());
                 history.setCost(request.getCost());
                 history.setMemo(request.getMemo());
+                if (request.getQuantity() != null)
+                        history.setQuantity(request.getQuantity());
 
                 // 소모품 항목이 변경된 경우
                 if (request.getConsumableItemCode() != null

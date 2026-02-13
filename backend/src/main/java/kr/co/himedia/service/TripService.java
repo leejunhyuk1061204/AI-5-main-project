@@ -239,7 +239,7 @@ public class TripService {
                     try {
                         // [Migration] 규칙 기반 로컬 마모 계수 계산 (AI 서버 호출 제거)
                         wearFactorService.calculateWearFactorsLocal(trip);
-                        log.info("Successfully triggered local wear factor calculation for vehicle: {}",
+                        log.info("Completed local wear factor calculation for vehicle: {}",
                                 trip.getVehicleId());
                     } catch (Exception e) {
                         log.error("Wear factor trigger failed", e);

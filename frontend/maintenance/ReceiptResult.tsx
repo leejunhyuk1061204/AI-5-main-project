@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, Image, TextInput, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, Image, TextInput, ActivityIndicator, KeyboardAvoidingView, Platform, Modal, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -7,28 +7,37 @@ import { useAlertStore } from '../store/useAlertStore';
 import ocrApi, { OcrAnalysisResponse } from '../api/ocrApi';
 import { formatInputWithCommas, parseFormattedNumber } from '../utils/formatNumber';
 
-// 소모품 항목 목록
+// 시드와 동일: 대표 소모품 + 위치 선택용 가상 항목
 const CONSUMABLE_ITEMS = [
     { code: 'ENGINE_OIL', name: '엔진 오일' },
-    { code: 'AIR_FILTER', name: '에어클리너' },
-    { code: 'CABIN_FILTER', name: '에어컨 필터' },
-    { code: 'BRAKE_FLUID', name: '브레이크 오일' },
-    { code: 'MISSION_OIL', name: '미션 오일' },
-    { code: 'FUEL_FILTER', name: '연료 필터' },
-    { code: 'COOLANT', name: '냉각수' },
-    { code: 'TIRES', name: '타이어 (전체)' },
-    { code: 'TIRE_FRONT', name: '앞 타이어' },
-    { code: 'TIRE_REAR', name: '뒤 타이어' },
-    { code: 'BRAKE_PADS', name: '브레이크 패드 (전체)' },
+    { code: 'TIRE_POSITION', name: '타이어 (위치 선택)' },
+    { code: 'TIRE_FL', name: '앞왼쪽 타이어' },
+    { code: 'TIRE_FR', name: '앞오른쪽 타이어' },
+    { code: 'TIRE_RL', name: '뒤왼쪽 타이어' },
+    { code: 'TIRE_RR', name: '뒤오른쪽 타이어' },
+    { code: 'BRAKE_POSITION', name: '브레이크 패드 (위치 선택)' },
     { code: 'BRAKE_PAD_FRONT', name: '앞 브레이크 패드' },
     { code: 'BRAKE_PAD_REAR', name: '뒤 브레이크 패드' },
-    { code: 'SPARK_PLUG', name: '점화 플러그' },
-    { code: 'DRIVE_BELT', name: '구동 벨트 (겉벨트)' },
-    { code: 'WHEEL_ALIGNMENT', name: '휠 얼라인먼트' },
     { code: 'BATTERY_12V', name: '12V 배터리' },
-    { code: 'WIPER', name: '와이퍼' },
-    { code: 'AIR_CON_REFRIGERANT', name: '에어컨 가스' },
+    { code: 'COOLANT', name: '냉각수' },
+    { code: 'AIR_FILTER', name: '에어클리너' },
+    { code: 'BRAKE_FLUID', name: '브레이크 오일' },
+    { code: 'SPARK_PLUG', name: '점화 플러그' },
+    { code: 'MISSION_OIL', name: '미션 오일' },
+    { code: 'FUEL_FILTER', name: '연료 필터' },
     { code: 'OTHER', name: '기타 정비' },
+];
+
+const TIRE_POSITION_OPTIONS: { code: string; name: string }[] = [
+    { code: 'TIRE_FL', name: '앞왼쪽' },
+    { code: 'TIRE_FR', name: '앞오른쪽' },
+    { code: 'TIRE_RL', name: '뒤왼쪽' },
+    { code: 'TIRE_RR', name: '뒤오른쪽' },
+];
+
+const BRAKE_POSITION_OPTIONS: { code: string; name: string }[] = [
+    { code: 'BRAKE_PAD_FRONT', name: '앞' },
+    { code: 'BRAKE_PAD_REAR', name: '뒤' },
 ];
 
 const FUEL_TYPE_NAMES: { [key: string]: string } = {
@@ -45,6 +54,9 @@ export default function ReceiptResult({ navigation, route }: { navigation?: any;
     // 초기 타입 결정 (파라미터 > OCR 결과 > 기본값)
     const isFueling = initialType === 'FUELING' || result.receiptType === 'FUELING';
 
+    // OCR 코드 → 위치 선택 항목 매핑 (영수증에 "타이어"/"브레이크 패드"만 나올 때)
+    const initialCode = result.consumableItemCode === 'TIRES' ? 'TIRE_POSITION' : result.consumableItemCode === 'BRAKE_PADS' ? 'BRAKE_POSITION' : result.consumableItemCode || 'OTHER';
+
     // 공통 상태
     const [shopName, setShopName] = useState(result.shopName || '');
     const [date, setDate] = useState(result.maintenanceDate || new Date().toISOString().split('T')[0]);
@@ -54,26 +66,41 @@ export default function ReceiptResult({ navigation, route }: { navigation?: any;
     const [isSaving, setIsSaving] = useState(false);
 
     // 정비 전용 상태
-    const [selectedItem, setSelectedItem] = useState(result.consumableItemCode || 'OTHER');
+    const [selectedItem, setSelectedItem] = useState(initialCode);
     const [showItemPicker, setShowItemPicker] = useState(false);
+    // 위치 선택 (타이어/브레이크 패드): 저장 시 이 코드들로 각각 이력 생성
+    const [selectedPositions, setSelectedPositions] = useState<string[]>([]);
+    const [showPositionModal, setShowPositionModal] = useState(false);
 
     // 주유 전용 상태
     const [fuelType, setFuelType] = useState(result.fuelType || 'GASOLINE');
     const [unitPrice, setUnitPrice] = useState(result.unitPrice ? formatInputWithCommas(result.unitPrice.toString()) : '');
     const [fuelAmount, setFuelAmount] = useState(result.fuelAmount ? result.fuelAmount.toString() : '');
 
-    // 저장 핸들러
+    const isPositionType = selectedItem === 'TIRE_POSITION' || selectedItem === 'BRAKE_POSITION';
+    const positionOptions = selectedItem === 'TIRE_POSITION' ? TIRE_POSITION_OPTIONS : BRAKE_POSITION_OPTIONS;
+
+    const togglePosition = (code: string) => {
+        setSelectedPositions(prev => prev.includes(code) ? prev.filter(c => c !== code) : [...prev, code]);
+    };
+
     const handleSave = async () => {
         if (!vehicleId) {
             useAlertStore.getState().showAlert('오류', '차량 정보가 없습니다.', 'ERROR');
             return;
         }
 
+        if (!isFueling && isPositionType) {
+            if (selectedPositions.length === 0) {
+                setShowPositionModal(true);
+                useAlertStore.getState().showAlert('위치 선택', '교체한 위치를 선택해 주세요.', 'INFO');
+                return;
+            }
+        }
+
         setIsSaving(true);
         try {
             if (isFueling) {
-                // 주유 내역 저장 (수동 API 사용)
-                // TODO: 이미지 업로드 API가 있다면 추가 구현 필요
                 const payload = {
                     fuelingDate: date,
                     mileageAtFueling: parseFormattedNumber(mileage),
@@ -83,18 +110,26 @@ export default function ReceiptResult({ navigation, route }: { navigation?: any;
                     totalCost: parseFormattedNumber(cost),
                     shopName,
                     memo,
-                    receiptId: null // 이미지 연동 불가 시 null
+                    receiptId: null
                 };
                 await ocrApi.registerFuelingManual(vehicleId, payload);
+            } else if (isPositionType && selectedPositions.length > 0) {
+                const base = {
+                    maintenanceDate: date,
+                    mileageAtMaintenance: parseFormattedNumber(mileage) || null,
+                    cost: cost != null && cost !== '' ? Math.round(parseFormattedNumber(cost)) : null,
+                    shopName: shopName || null,
+                    memo: memo || null,
+                };
+                const requests = selectedPositions.map(consumableItemCode => ({ ...base, consumableItemCode }));
+                await ocrApi.registerMaintenanceManual(vehicleId, requests);
             } else {
-                // 정비 내역 저장 (OCR 분석 저장 API 사용)
                 const formData = new FormData();
                 formData.append('file', {
                     uri: imageUri,
                     type: 'image/jpeg',
                     name: 'receipt.jpg',
                 } as any);
-
                 const manualData = {
                     shopName,
                     maintenanceDate: date,
@@ -104,7 +139,6 @@ export default function ReceiptResult({ navigation, route }: { navigation?: any;
                     memo
                 };
                 formData.append('manualData', JSON.stringify(manualData));
-
                 await ocrApi.analyzeAndSaveReceipt(vehicleId, formData);
             }
 
@@ -312,6 +346,10 @@ export default function ReceiptResult({ navigation, route }: { navigation?: any;
                                                             onPress={() => {
                                                                 setSelectedItem(item.code);
                                                                 setShowItemPicker(false);
+                                                                if (item.code === 'TIRE_POSITION' || item.code === 'BRAKE_POSITION') {
+                                                                    setSelectedPositions([]);
+                                                                    setShowPositionModal(true);
+                                                                }
                                                             }}
                                                         >
                                                             <Text className={`${selectedItem === item.code ? 'text-primary font-bold' : 'text-white'}`}>
@@ -322,6 +360,72 @@ export default function ReceiptResult({ navigation, route }: { navigation?: any;
                                                 </ScrollView>
                                             </View>
                                         )}
+
+                                        {isPositionType && selectedPositions.length > 0 && (
+                                            <TouchableOpacity
+                                                className="mt-2 bg-white/5 border border-white/10 rounded-xl px-4 py-2 flex-row items-center gap-2"
+                                                onPress={() => setShowPositionModal(true)}
+                                            >
+                                                <MaterialIcons name="edit" size={18} color="#94a3b8" />
+                                                <Text className="text-text-dim text-sm">
+                                                    선택됨: {selectedPositions.map(c => positionOptions.find(o => o.code === c)?.name).join(', ')}
+                                                </Text>
+                                            </TouchableOpacity>
+                                        )}
+
+                                        <Modal
+                                            visible={showPositionModal}
+                                            transparent
+                                            animationType="fade"
+                                            onRequestClose={() => setShowPositionModal(false)}
+                                        >
+                                            <Pressable className="flex-1 bg-black/60 justify-center px-6" onPress={() => setShowPositionModal(false)}>
+                                                <Pressable className="bg-surface-dark border border-white/10 rounded-2xl p-5" onPress={e => e.stopPropagation()}>
+                                                    <Text className="text-white font-bold text-lg mb-1">
+                                                        {selectedItem === 'TIRE_POSITION' ? '어느 타이어를 교체했나요?' : '어느 브레이크 패드를 교체했나요?'}
+                                                    </Text>
+                                                    <Text className="text-text-dim text-sm mb-4">
+                                                        {result?.quantity != null && result.quantity > 1
+                                                            ? `영수증에 수량 ${result.quantity}개로 인식됨. 해당 개수만큼 선택해 주세요.`
+                                                            : '복수 선택 가능'}
+                                                    </Text>
+                                                    <View className="gap-2 mb-5">
+                                                        {positionOptions.map((opt) => (
+                                                            <TouchableOpacity
+                                                                key={opt.code}
+                                                                className={`flex-row items-center gap-3 px-4 py-3 rounded-xl border ${selectedPositions.includes(opt.code) ? 'bg-primary/20 border-primary' : 'bg-white/5 border-white/10'}`}
+                                                                onPress={() => togglePosition(opt.code)}
+                                                            >
+                                                                <MaterialIcons
+                                                                    name={selectedPositions.includes(opt.code) ? 'check-box' : 'check-box-outline-blank'}
+                                                                    size={24}
+                                                                    color={selectedPositions.includes(opt.code) ? '#3b82f6' : '#64748b'}
+                                                                />
+                                                                <Text className={selectedPositions.includes(opt.code) ? 'text-white font-semibold' : 'text-text-dim'}>{opt.name}</Text>
+                                                            </TouchableOpacity>
+                                                        ))}
+                                                    </View>
+                                                    <View className="flex-row gap-3">
+                                                        <TouchableOpacity
+                                                            className="flex-1 py-3 rounded-xl bg-white/10 items-center"
+                                                            onPress={() => setShowPositionModal(false)}
+                                                        >
+                                                            <Text className="text-white">취소</Text>
+                                                        </TouchableOpacity>
+                                                        <TouchableOpacity
+                                                            className="flex-1 py-3 rounded-xl bg-primary items-center"
+                                                            onPress={() => {
+                                                                if (selectedPositions.length > 0) setShowPositionModal(false);
+                                                                else useAlertStore.getState().showAlert('알림', '최소 1개 위치를 선택해 주세요.', 'INFO');
+                                                            }}
+                                                            disabled={selectedPositions.length === 0}
+                                                        >
+                                                            <Text className="text-white font-bold">선택 완료</Text>
+                                                        </TouchableOpacity>
+                                                    </View>
+                                                </Pressable>
+                                            </Pressable>
+                                        </Modal>
                                     </View>
 
                                     <View>

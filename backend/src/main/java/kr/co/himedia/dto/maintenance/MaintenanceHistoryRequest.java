@@ -16,6 +16,7 @@ public class MaintenanceHistoryRequest {
     private Boolean isStandardized;
     private String shopName;
     private Integer cost;
+    private Integer quantity;
     private String ocrData;
     private String memo;
     private java.util.UUID receiptId;
