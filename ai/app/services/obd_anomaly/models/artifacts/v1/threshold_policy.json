@@ -1,4 +1,4 @@
-﻿{
+{
   "version": "obd-anomaly-policy-v1",
   "threshold": 0.7,
   "k_consecutive": 2,
@@ -21,3 +21,4 @@
     "error_max": 0.2
   }
 }
+

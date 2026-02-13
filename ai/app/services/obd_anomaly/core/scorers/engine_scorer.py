@@ -1,9 +1,7 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import json
 import math
-import os
-import pickle
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -11,7 +9,9 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 
 from ai.app.schemas.obd_anomaly_schema import CommonEnvelope, EnvelopeMethod, EnvelopeStatus, ObdAnomalyRequest
-from ai.app.services.obd_anomaly.core.feature_alignment import QualityMeta, align_window
+from ai.app.services.obd_anomaly.core.artifacts.loader import load_artifact_json, load_artifact_pickle
+from ai.app.services.obd_anomaly.core.artifacts.registry import ArtifactRegistry
+from ai.app.services.obd_anomaly.core.scorers.feature_alignment import QualityMeta, align_window
 from ai.app.services.obd_anomaly.windowing import Window
 
 
@@ -23,40 +23,17 @@ class GateDecision:
 
 class EngineScorer:
     def __init__(self) -> None:
-        # artifact 경로는 env 우선, 없으면 서비스 기본 artifacts 디렉터리 사용.
-        self._artifact_dir = Path(
-            os.getenv(
-                "OBD_ANOMALY_ARTIFACT_DIR",
-                str(Path(__file__).resolve().parent.parent / "artifacts"),
-            )
-        )
-        self._schema = self._load_json("schema_core.json", {"features": [], "core_min": 1})
-        self._policy = self._load_json("threshold_policy.json", {})
-        self._scaler = self._load_scaler()
-        self._iforest = self._load_pickle("iforest.pkl")
-        self._ae_model = self._load_torch_model()
+        base = Path(__file__).resolve().parents[2]
+        reg = ArtifactRegistry(base)
+        p = reg.paths()
 
-    def _load_json(self, name: str, default: Dict[str, Any]) -> Dict[str, Any]:
-        path = self._artifact_dir / name
-        if not path.exists():
-            return default
-        try:
-            return json.loads(path.read_text(encoding="utf-8"))
-        except Exception:
-            return default
+        self._schema = load_artifact_json(p["schema_core"], {"features": [], "core_min": 1})
+        self._policy = load_artifact_json(p["threshold_policy"], {})
+        self._scaler = self._load_scaler(p["scaler"])
+        self._iforest = load_artifact_pickle(p["iforest"])
+        self._ae_model = self._load_torch_model(p["lstm_ae"])
 
-    def _load_pickle(self, name: str) -> Any:
-        path = self._artifact_dir / name
-        if not path.exists():
-            return None
-        try:
-            with open(path, "rb") as f:
-                return pickle.load(f)
-        except Exception:
-            return None
-
-    def _load_scaler(self) -> Dict[str, Any] | None:
-        path = self._artifact_dir / "scaler.json"
+    def _load_scaler(self, path: Path) -> Dict[str, Any] | None:
         if not path.exists():
             return None
         try:
@@ -64,8 +41,7 @@ class EngineScorer:
         except Exception:
             return None
 
-    def _load_torch_model(self) -> Any:
-        path = self._artifact_dir / "lstm_ae.pt"
+    def _load_torch_model(self, path: Path) -> Any:
         if not path.exists():
             return None
         try:

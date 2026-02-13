@@ -1,4 +1,4 @@
-﻿{
+{
   "version": "obd-anomaly-vfinal-1",
   "core_min": 6,
   "features": [
@@ -14,3 +14,4 @@
     "acc_pedal_pos_e_pct"
   ]
 }
+
