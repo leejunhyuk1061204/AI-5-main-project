@@ -1,17 +1,16 @@
 from __future__ import annotations
 
 import json
-import math
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
-
-import numpy as np
+from typing import Any, Dict, List
 
 from ai.app.schemas.obd_anomaly_schema import CommonEnvelope, EnvelopeMethod, EnvelopeStatus, ObdAnomalyRequest
 from ai.app.services.obd_anomaly.core.artifacts.loader import load_artifact_json, load_artifact_pickle
 from ai.app.services.obd_anomaly.core.artifacts.registry import ArtifactRegistry
 from ai.app.services.obd_anomaly.core.scorers.feature_alignment import QualityMeta, align_window
+from ai.app.services.obd_anomaly.core.scorers.iforest_scorer import IForestScorer
+from ai.app.services.obd_anomaly.core.scorers.lstm_ae_scorer import LSTMAEScorer
 from ai.app.services.obd_anomaly.windowing import Window
 
 
@@ -32,6 +31,10 @@ class EngineScorer:
         self._scaler = self._load_scaler(p["scaler"])
         self._iforest = load_artifact_pickle(p["iforest"])
         self._ae_model = self._load_torch_model(p["lstm_ae"])
+
+        schema_features = self._schema_features()
+        self._if_scorer = IForestScorer(schema_features, self._iforest)
+        self._ae_scorer = LSTMAEScorer(schema_features, self._ae_model, self._scaler, self._policy)
 
     def _load_scaler(self, path: Path) -> Dict[str, Any] | None:
         if not path.exists():
@@ -74,7 +77,6 @@ class EngineScorer:
     def _decide_gate(self, q: QualityMeta) -> GateDecision:
         cfg = self._gating_cfg()
         core_ok = q.n_present >= self._core_min()
-        # AE는 데이터 품질이 충분할 때만 허용.
         ae_ok = (
             core_ok
             and q.coverage >= cfg["ae_min_coverage"]
@@ -84,7 +86,6 @@ class EngineScorer:
         if ae_ok:
             return GateDecision(mode="AE_ONLY", ae_weight=1.0)
 
-        # 품질이 낮거나 시계열 간격이 불안정하면 IF_ONLY로 안전 처리.
         if (not core_ok) or (q.coverage < cfg["both_min_coverage"]) or (not q.uniform_ts):
             return GateDecision(mode="IF_ONLY", ae_weight=0.0)
 
@@ -93,120 +94,6 @@ class EngineScorer:
         w = (q.coverage - c0) / (c1 - c0)
         w = min(1.0, max(0.0, w))
         return GateDecision(mode="BOTH", ae_weight=float(w))
-
-    def _impute(self, x: np.ndarray, mask: np.ndarray) -> np.ndarray:
-        out = x.copy()
-        for fi in range(out.shape[1]):
-            col = out[:, fi]
-            valid = mask[:, fi] > 0
-            if np.any(valid):
-                m = float(np.nanmean(col[valid]))
-            else:
-                m = 0.0
-            col[~valid] = m
-            out[:, fi] = col
-        return out
-
-    def _feature_stats(self, x: np.ndarray) -> tuple[np.ndarray, List[str]]:
-        vals: List[float] = []
-        names: List[str] = []
-        schema = self._schema_features()
-        # 시계열 원본 대신 통계 요약 벡터로 IF 입력을 구성한다.
-        for fi, feat in enumerate(schema):
-            col = x[:, fi]
-            mean = float(np.nanmean(col)) if np.any(np.isfinite(col)) else 0.0
-            std = float(np.nanstd(col)) if np.any(np.isfinite(col)) else 0.0
-            min_v = float(np.nanmin(col)) if np.any(np.isfinite(col)) else 0.0
-            max_v = float(np.nanmax(col)) if np.any(np.isfinite(col)) else 0.0
-            slope = float(col[-1] - col[0]) if np.isfinite(col[-1]) and np.isfinite(col[0]) else 0.0
-            dmean = float(np.nanmean(np.abs(np.diff(col)))) if len(col) > 1 else 0.0
-            vals.extend([mean, std, min_v, max_v, slope, dmean])
-            names.extend([
-                f"{feat}:mean",
-                f"{feat}:std",
-                f"{feat}:min",
-                f"{feat}:max",
-                f"{feat}:slope",
-                f"{feat}:diff_mean",
-            ])
-        return np.array(vals, dtype=np.float32), names
-
-    def _score_iforest(self, x: np.ndarray) -> tuple[float, str, List[Dict[str, float]]]:
-        stats, names = self._feature_stats(x)
-        if not np.any(np.isfinite(stats)):
-            return 0.0, "SKIPPED", []
-        stats = np.nan_to_num(stats, nan=0.0, posinf=0.0, neginf=0.0)
-
-        if self._iforest is not None:
-            try:
-                raw = float(self._iforest.decision_function(stats.reshape(1, -1))[0])
-                # decision_function이 낮을수록 이상치이므로 시그모이드로 0~1 매핑.
-                score = 1.0 / (1.0 + math.exp(4.0 * raw))
-            except Exception:
-                score = float(min(1.0, max(0.0, np.mean(np.abs(stats)) / 10.0)))
-        else:
-            score = float(min(1.0, max(0.0, np.mean(np.abs(stats)) / 10.0)))
-
-        top_idx = np.argsort(np.abs(stats))[-3:][::-1]
-        top = []
-        denom = float(np.sum(np.abs(stats[top_idx])) + 1e-6)
-        for i in top_idx:
-            feat = names[int(i)].split(":", 1)[0]
-            contrib = float(abs(stats[int(i)]) / denom)
-            top.append({"feature": feat, "contribution": contrib})
-        return score, "PROCESSED", top
-
-    def _apply_scaler(self, x: np.ndarray) -> np.ndarray:
-        if not self._scaler:
-            return x
-        mean = np.array(self._scaler.get("mean", []), dtype=np.float32)
-        std = np.array(self._scaler.get("std", []), dtype=np.float32)
-        if mean.shape[0] != x.shape[1] or std.shape[0] != x.shape[1]:
-            return x
-        std = np.where(std == 0, 1.0, std)
-        return (x - mean.reshape(1, -1)) / std.reshape(1, -1)
-
-    def _score_ae(self, x: np.ndarray, mask: np.ndarray) -> tuple[Optional[float], str, List[Dict[str, float]]]:
-        if self._ae_model is None:
-            # 모델 artifact가 없으면 AE는 건너뛰고 IF 경로로 fallback.
-            return None, "SKIPPED", []
-
-        x_imp = self._impute(x, mask)
-        x_scaled = self._apply_scaler(x_imp)
-
-        try:
-            import torch
-
-            if hasattr(self._ae_model, "eval") and hasattr(self._ae_model, "__call__"):
-                model = self._ae_model
-                model.eval()
-                inp = torch.from_numpy(x_scaled.astype(np.float32)).unsqueeze(0)
-                with torch.no_grad():
-                    recon = model(inp)
-                    rec = recon.detach().cpu().numpy()[0]
-            else:
-                # checkpoint 형식이 추론 호출 불가한 경우도 안전하게 skip 처리.
-                return None, "SKIPPED", []
-        except Exception:
-            return None, "SKIPPED", []
-
-        err_mat = (rec - x_scaled) ** 2
-        err = float(np.mean(err_mat))
-        ae_cfg = self._policy.get("ae_score", {})
-        e0 = float(ae_cfg.get("error_min", 0.0))
-        e1 = float(max(ae_cfg.get("error_max", 0.2), e0 + 1e-6))
-        score = float(min(1.0, max(0.0, (err - e0) / (e1 - e0))))
-
-        feat_err = np.mean(err_mat, axis=0)
-        top_idx = np.argsort(feat_err)[-3:][::-1]
-        schema = self._schema_features()
-        denom = float(np.sum(feat_err[top_idx]) + 1e-6)
-        top = []
-        for i in top_idx:
-            feat = schema[int(i)] if int(i) < len(schema) else f"f{int(i)}"
-            top.append({"feature": feat, "contribution": float(feat_err[int(i)] / denom)})
-
-        return score, "PROCESSED", top
 
     def score_window(self, req: ObdAnomalyRequest, w: Window) -> CommonEnvelope:
         try:
@@ -230,15 +117,14 @@ class EngineScorer:
             )
 
             gate = self._decide_gate(q)
-            score_if, st_if, top_if = self._score_iforest(x)
-            score_ae, st_ae, top_ae = self._score_ae(x, mask)
+            score_if, st_if, top_if = self._if_scorer.score(x)
+            score_ae, st_ae, top_ae = self._ae_scorer.score(x, mask)
 
             mode = gate.mode
             final = score_if
             top_signals = top_if
             details_status = {"ae": st_ae, "if": st_if}
 
-            # 게이트 모드에 따라 단일/앙상블 점수 선택.
             if mode == "AE_ONLY":
                 if score_ae is None:
                     mode = "IF_ONLY"
@@ -281,11 +167,21 @@ class EngineScorer:
                     },
                     "status": details_status,
                     "top_signals": top_signals,
-                    "events": ([{"type": "ENGINE_HYBRID_ANOMALY", "feature": "engine_hybrid_score", "value": float(final), "window_index": w.window_index}] if is_anom else []),
+                    "events": (
+                        [
+                            {
+                                "type": "ENGINE_HYBRID_ANOMALY",
+                                "feature": "engine_hybrid_score",
+                                "value": float(final),
+                                "window_index": w.window_index,
+                            }
+                        ]
+                        if is_anom
+                        else []
+                    ),
                 },
             )
         except Exception as exc:
-            # 어떤 예외가 나도 API를 죽이지 않고 엔진 envelope를 반환한다.
             return CommonEnvelope(
                 domain="engine",
                 status=EnvelopeStatus.ERROR,
@@ -295,3 +191,4 @@ class EngineScorer:
                 is_anomaly=False,
                 details={"reason": f"engine scorer error: {exc}", "events": []},
             )
+
