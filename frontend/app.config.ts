@@ -1,5 +1,7 @@
 import { ExpoConfig, ConfigContext } from 'expo/config';
 
+const API_URL = process.env.EXPO_PUBLIC_API_URL || "https://api.carbom.store";
+
 export default ({ config }: ConfigContext): ExpoConfig => ({
     ...config,
     name: "차봄",
