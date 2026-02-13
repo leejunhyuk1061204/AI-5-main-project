@@ -52,7 +52,7 @@ class Options(BaseModel):
     return_: Literal["raw", "summary"] = Field("summary", alias="return")
 
     window_sec: conint(ge=1) = 60
-    stride_sec: conint(ge=1) = 60
+    stride_sec: conint(ge=1) = 30
 
     @model_validator(mode="after")
     def merge_legacy_extensions(self):
