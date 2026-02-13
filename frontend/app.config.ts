@@ -37,9 +37,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
             "android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE",
             "android.permission.WAKE_LOCK"
         ],
-        package: "com.lee_kang_hyun.frontend",
-        googleServicesFile: process.env.GOOGLE_SERVICES_JSON ?? "./google-services.json",
-        softwareKeyboardLayoutMode: "resize"
+        softwareKeyboardLayoutMode: "resize",
+        // @ts-ignore
+        launchMode: "singleTask"
     },
     web: {
         favicon: "./assets/Gemini_Generated_Image_v1i03bv1i03bv1i0.png"
