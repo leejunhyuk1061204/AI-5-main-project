@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, Dict, List
 
 from ai.app.schemas.obd_anomaly_schema import (
@@ -17,6 +18,8 @@ from ai.app.schemas.obd_anomaly_schema import (
 )
 from ai.app.services.obd_anomaly.windowing import make_windows
 from ai.app.services.obd_anomaly.core.engine_lstm_ae import run_engine_lstm_ae
+from ai.app.services.obd_anomaly.core.artifacts.registry import ArtifactRegistry
+from ai.app.services.obd_anomaly.core.policy.threshold_policy import apply_engine_policy, load_threshold_policy
 from ai.app.services.obd_anomaly.domains.domain_registry import DOMAIN_REGISTRY
 
 
@@ -70,9 +73,11 @@ class ObdAnomalyService:
 
         summary_core = self._aggregate_core(window_results)
         summary_ext = self._aggregate_domains(window_results)
+        summary_core, engine_policy_events = self._apply_engine_policy(summary_core, window_results)
 
         domains = self._build_summary_domains(req, summary_core, summary_ext, selected_domains)
         events = self._collect_events({"engine": summary_core, **summary_ext}, selected_domains)
+        events.extend(engine_policy_events)
         is_anomaly = any(v.is_anomaly for v in domains.values())
         anomaly_score = self._calc_anomaly_score(summary_core, domains)
 
@@ -96,6 +101,66 @@ class ObdAnomalyService:
             events=events,
             window_results=self._build_raw_window_results(req, window_results, selected_domains) if include_raw else [],
         )
+
+    def _apply_engine_policy(
+        self,
+        summary_core: CommonEnvelope,
+        window_results: List[WindowResult],
+    ) -> tuple[CommonEnvelope, List[AnomalyEvent]]:
+        if summary_core.status != EnvelopeStatus.PROCESSED:
+            return summary_core, []
+
+        policy = self._load_engine_policy()
+        threshold = float(policy.get("threshold", summary_core.threshold if summary_core.threshold is not None else 0.7))
+        scores: List[float] = []
+        starts: List[int] = []
+        for w in window_results:
+            if w.core.status != EnvelopeStatus.PROCESSED or w.core.score is None:
+                continue
+            scores.append(float(w.core.score))
+            starts.append(int(w.start_t))
+
+        if not scores:
+            return summary_core, []
+
+        pe = apply_engine_policy(scores, starts, policy)
+        policy_events: List[AnomalyEvent] = []
+        for e in pe:
+            sev = self._severity_from_score(float(e.get("severity_score", 0.0)))
+            policy_events.append(
+                AnomalyEvent(
+                    type=str(e.get("type", "ENGINE_POLICY_ANOMALY")),
+                    domain="engine",
+                    feature=str(e.get("feature", "engine_hybrid_score")),
+                    value=e.get("value"),
+                    threshold=threshold,
+                    window_index=e.get("window_index"),
+                    severity=sev,
+                    message=f"engine anomaly confirmed by policy ({sev.value})",
+                )
+            )
+
+        summary_core.threshold = threshold
+        summary_core.is_anomaly = bool(policy_events)
+        summary_core.details["policy"] = {
+            "threshold": threshold,
+            "k_consecutive": int(policy.get("k_consecutive", 1)),
+            "cooldown_sec": int(policy.get("cooldown_sec", 0)),
+        }
+        return summary_core, policy_events
+
+    def _load_engine_policy(self) -> Dict[str, Any]:
+        base_dir = Path(__file__).resolve().parent
+        reg = ArtifactRegistry(base_dir)
+        paths = reg.paths()
+        return load_threshold_policy(paths["threshold_policy"])
+
+    def _severity_from_score(self, score: float) -> EventSeverity:
+        if score >= 0.85:
+            return EventSeverity.CRITICAL
+        if score >= 0.7:
+            return EventSeverity.WARNING
+        return EventSeverity.INFO
 
     def _validate(self, req: ObdAnomalyRequest) -> None:
         expected_len = req.duration_sec * req.sampling_hz
