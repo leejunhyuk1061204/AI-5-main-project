@@ -1,7 +1,7 @@
 ﻿from __future__ import annotations
 
 from ai.app.schemas.obd_anomaly_schema import CommonEnvelope, ObdAnomalyRequest
-from ai.app.services.obd_anomaly.core.engine_scorer import EngineScorer
+from ai.app.services.obd_anomaly.core.scorers.engine_scorer import EngineScorer
 from ai.app.services.obd_anomaly.windowing import Window
 
 

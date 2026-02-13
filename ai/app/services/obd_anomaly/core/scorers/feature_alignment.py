@@ -1,7 +1,7 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Sequence
+from typing import Any, List, Sequence
 
 import numpy as np
 
@@ -82,3 +82,4 @@ def align_window(window_samples: Sequence[Any], schema_features: Sequence[str], 
         uniform_ts=uniform_ts,
         present_features=sorted(present),
     )
+
