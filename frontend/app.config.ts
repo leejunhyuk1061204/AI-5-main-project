@@ -25,6 +25,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
             foregroundImage: "./assets/adaptive_icon_fixed.png",
             backgroundColor: "#101922"
         },
+        usesCleartextTraffic: true,
         edgeToEdgeEnabled: true,
         predictiveBackGestureEnabled: false,
         permissions: [
@@ -78,18 +79,19 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
             "@react-native-seoul/kakao-login",
             {
                 "kakaoAppKey": process.env.KAKAO_NATIVE_APP_KEY ?? "",
-                "kotlinVersion": "2.1.20"
+                "kotlinVersion": "2.1.0"
             }
         ],
         [
             "expo-build-properties",
             {
                 "android": {
+                    "newArchEnabled": true,
                     "bridgelessEnabled": false,
                     "extraMavenRepos": [
                         "https://devrepo.kakao.com/nexus/content/groups/public/"
                     ],
-                    "kotlinVersion": "2.1.20"
+                    "kotlinVersion": "2.1.0"
                 },
                 "ios": {
                     "bridgelessEnabled": false

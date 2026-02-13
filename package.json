@@ -12,7 +12,9 @@
     "keywords": [],
     "author": "",
     "license": "ISC",
-    "dependencies": {},
+    "dependencies": {
+        "react-native-worklets": "^0.7.3"
+    },
     "devDependencies": {
         "concurrently": "^8.2.2"
     }
