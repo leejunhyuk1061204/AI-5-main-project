@@ -24,10 +24,10 @@ def _to_float(value: Any) -> float:
 
 
 def align_window(window_samples: Sequence[Any], schema_features: Sequence[str], sampling_hz: int, timestamp_unit: str = "s") -> tuple[np.ndarray, np.ndarray, QualityMeta]:
-    # n_present: number of schema features that appear at least once as keys in this window.
-    # coverage: valid_ratio over [time, feature] mask where valid means finite numeric value.
-    # max_gap: maximum consecutive missing-length along time among all features.
-    # uniform_ts: whether timestamp delta is stable around expected_delta with <=20% jitter tolerance.
+    # n_present: this window에서 schema feature key가 1회 이상 등장한 개수.
+    # coverage: [time, feature] 마스크의 유효값(유한 숫자) 비율.
+    # max_gap: feature별 연속 결측 길이의 최댓값(전체 feature 중 최대).
+    # uniform_ts: 기대 간격 대비 timestamp jitter가 20% 이내인지 여부.
     t_len = len(window_samples)
     f_len = len(schema_features)
     x = np.full((t_len, f_len), np.nan, dtype=np.float32)
@@ -64,6 +64,7 @@ def align_window(window_samples: Sequence[Any], schema_features: Sequence[str], 
             else:
                 cur = 0
 
+    # timestamp_unit/sampling_hz 기반 기대 샘플 간격.
     expected_delta = (1000 if timestamp_unit == "ms" else 1) / max(sampling_hz, 1)
     uniform_ts = True
     if len(ts) >= 3:

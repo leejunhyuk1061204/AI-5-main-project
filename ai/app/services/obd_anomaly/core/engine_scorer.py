@@ -23,6 +23,7 @@ class GateDecision:
 
 class EngineScorer:
     def __init__(self) -> None:
+        # artifact 경로는 env 우선, 없으면 서비스 기본 artifacts 디렉터리 사용.
         self._artifact_dir = Path(
             os.getenv(
                 "OBD_ANOMALY_ARTIFACT_DIR",
@@ -97,6 +98,7 @@ class EngineScorer:
     def _decide_gate(self, q: QualityMeta) -> GateDecision:
         cfg = self._gating_cfg()
         core_ok = q.n_present >= self._core_min()
+        # AE는 데이터 품질이 충분할 때만 허용.
         ae_ok = (
             core_ok
             and q.coverage >= cfg["ae_min_coverage"]
@@ -106,6 +108,7 @@ class EngineScorer:
         if ae_ok:
             return GateDecision(mode="AE_ONLY", ae_weight=1.0)
 
+        # 품질이 낮거나 시계열 간격이 불안정하면 IF_ONLY로 안전 처리.
         if (not core_ok) or (q.coverage < cfg["both_min_coverage"]) or (not q.uniform_ts):
             return GateDecision(mode="IF_ONLY", ae_weight=0.0)
 
@@ -132,6 +135,7 @@ class EngineScorer:
         vals: List[float] = []
         names: List[str] = []
         schema = self._schema_features()
+        # 시계열 원본 대신 통계 요약 벡터로 IF 입력을 구성한다.
         for fi, feat in enumerate(schema):
             col = x[:, fi]
             mean = float(np.nanmean(col)) if np.any(np.isfinite(col)) else 0.0
@@ -160,6 +164,7 @@ class EngineScorer:
         if self._iforest is not None:
             try:
                 raw = float(self._iforest.decision_function(stats.reshape(1, -1))[0])
+                # decision_function이 낮을수록 이상치이므로 시그모이드로 0~1 매핑.
                 score = 1.0 / (1.0 + math.exp(4.0 * raw))
             except Exception:
                 score = float(min(1.0, max(0.0, np.mean(np.abs(stats)) / 10.0)))
@@ -187,6 +192,7 @@ class EngineScorer:
 
     def _score_ae(self, x: np.ndarray, mask: np.ndarray) -> tuple[Optional[float], str, List[Dict[str, float]]]:
         if self._ae_model is None:
+            # 모델 artifact가 없으면 AE는 건너뛰고 IF 경로로 fallback.
             return None, "SKIPPED", []
 
         x_imp = self._impute(x, mask)
@@ -203,6 +209,7 @@ class EngineScorer:
                     recon = model(inp)
                     rec = recon.detach().cpu().numpy()[0]
             else:
+                # checkpoint 형식이 추론 호출 불가한 경우도 안전하게 skip 처리.
                 return None, "SKIPPED", []
         except Exception:
             return None, "SKIPPED", []
@@ -255,6 +262,7 @@ class EngineScorer:
             top_signals = top_if
             details_status = {"ae": st_ae, "if": st_if}
 
+            # 게이트 모드에 따라 단일/앙상블 점수 선택.
             if mode == "AE_ONLY":
                 if score_ae is None:
                     mode = "IF_ONLY"
@@ -301,6 +309,7 @@ class EngineScorer:
                 },
             )
         except Exception as exc:
+            # 어떤 예외가 나도 API를 죽이지 않고 엔진 envelope를 반환한다.
             return CommonEnvelope(
                 domain="engine",
                 status=EnvelopeStatus.ERROR,
