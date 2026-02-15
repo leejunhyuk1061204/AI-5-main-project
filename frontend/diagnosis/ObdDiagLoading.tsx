@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { View, Text, TouchableOpacity, ImageBackground, Dimensions, Platform, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, ImageBackground, Dimensions, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { CommonActions, useRoute, RouteProp } from '@react-navigation/native';
@@ -19,6 +19,7 @@ import EventSource from "react-native-sse";
 import { BASE_URL } from '../api/axios';
 import { getDiagnosisSessionStatus } from '../api/aiApi';
 import { useAiDiagnosisStore } from '../store/useAiDiagnosisStore';
+import { useAlertStore } from '../store/useAlertStore';
 
 const { width } = Dimensions.get('window');
 
@@ -107,23 +108,11 @@ export default function ObdDiagLoading({ navigation }: any) {
         };
         const handleFailed = (event: any) => {
             console.log("[SSE] Failed:", event.data);
-            const message = event?.data || "AI 분석 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.";
+            const message = (event?.data && String(event.data).trim()) || "AI 분석 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.";
             setStatusMessage(message);
             setProgress(1.0);
-
-            Alert.alert(
-                "진단 실패",
-                message,
-                [
-                    {
-                        text: "확인",
-                        onPress: () => {
-                            // 이전 화면(진단 시작 화면 등)으로 복귀
-                            navigation.goBack();
-                        }
-                    }
-                ]
-            );
+            useAiDiagnosisStore.setState({ status: 'IDLE', currentSessionId: null });
+            useAlertStore.getState().showAlert('진단 실패', message, 'ERROR', () => navigation.goBack());
         };
         const handleStep5 = async (event: any) => {
             console.log("[SSE] Step 5:", event.data);
