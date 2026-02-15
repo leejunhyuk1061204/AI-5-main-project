@@ -9,7 +9,7 @@ import { useAlertStore } from '../store/useAlertStore';
 import MonthlyCostChart from './MonthlyCostChart';
 import AllHistoryList, { CombinedHistoryItem } from './AllHistoryList';
 import VehicleSelectModal from '../components/VehicleSelectModal';
-import ocrApi, { MaintenanceHistoryResponse, FuelingHistoryResponse } from '../api/ocrApi';
+import ocrApi, { MaintenanceHistoryResponse, FuelingHistoryResponse, FuelingHistoryRequest } from '../api/ocrApi';
 import { formatInputWithCommas, parseFormattedNumber } from '../utils/formatNumber';
 import { useConsumableStore } from '../store/useConsumableStore';
 import { isPositionTypeCode, getPositionOptions } from './consumableItems';
@@ -76,7 +76,7 @@ export default function MaintenanceBook() {
     // 타이어/브레이크 위치 선택 모달 (수동 입력)
     const [positionModalRowId, setPositionModalRowId] = useState<string | null>(null);
 
-    // 주유 입력 필드
+    // 주유 입력 필드 (총 결제금액만 필수, 단가·주유량은 선택·저장 시 2개 있으면 나머지 계산)
     const [formFuelType, setFormFuelType] = useState('GASOLINE');
     const [formUnitPrice, setFormUnitPrice] = useState('');
     const [formFuelAmount, setFormFuelAmount] = useState('');
@@ -246,22 +246,11 @@ export default function MaintenanceBook() {
         ));
     };
 
-    // 주유 금액 자동 계산
-    const handleFuelPriceChange = (field: 'unitPrice' | 'amount', value: string) => {
-        const formattedValue = formatInputWithCommas(value);
-        if (field === 'unitPrice') {
-            setFormUnitPrice(formattedValue);
-            if (formFuelAmount) {
-                const total = parseFormattedNumber(formattedValue) * parseFloat(formFuelAmount);
-                setFormTotalCost(formatInputWithCommas(Math.round(total).toString()));
-            }
-        } else {
-            setFormFuelAmount(value);
-            if (formUnitPrice) {
-                const total = parseFormattedNumber(formUnitPrice) * parseFloat(value);
-                setFormTotalCost(formatInputWithCommas(Math.round(total).toString()));
-            }
-        }
+    const handleFuelPriceChange = (field: 'unitPrice' | 'amount' | 'totalCost', value: string) => {
+        const formattedValue = field === 'amount' ? value.replace(/[^0-9.]/g, '') : formatInputWithCommas(value);
+        if (field === 'unitPrice') setFormUnitPrice(formattedValue);
+        else if (field === 'amount') setFormFuelAmount(formattedValue);
+        else setFormTotalCost(formattedValue);
     };
 
     // 저장 핸들러
@@ -315,19 +304,30 @@ export default function MaintenanceBook() {
                 await ocrApi.registerMaintenanceManual(selectedVehicle.vehicleId, payload);
                 await loadMaintenanceHistory();
             } else {
-                if (!formUnitPrice || !formFuelAmount) {
-                    showAlert('알림', '단가와 주유량을 입력해주세요.', 'WARNING');
+                const unitPriceNum = parseFormattedNumber(formUnitPrice);
+                const totalCostNum = parseFormattedNumber(formTotalCost);
+                const amountNum = parseFloat(formFuelAmount) || 0;
+                const hasUnitPrice = unitPriceNum > 0;
+                const hasTotalCost = totalCostNum > 0;
+                const hasAmount = amountNum > 0;
+                if (!hasTotalCost) {
+                    showAlert('알림', '총 결제금액을 입력해주세요.', 'WARNING');
                     setLoading(false);
                     return;
                 }
+                let amount: number | null = hasAmount ? amountNum : null;
+                let unitPrice: number | null = hasUnitPrice ? unitPriceNum : null;
+                const totalCost = totalCostNum;
+                if (!hasAmount && hasUnitPrice && hasTotalCost) amount = Math.round((totalCostNum / unitPriceNum) * 100) / 100;
+                else if (!hasUnitPrice && hasTotalCost && hasAmount) unitPrice = Math.round(totalCostNum / amountNum);
 
-                const payload = {
+                const payload: FuelingHistoryRequest = {
                     fuelingDate: formDate,
-                    mileageAtFueling: parseFormattedNumber(formMileage),
+                    mileageAtFueling: null,
                     fuelType: formFuelType,
-                    amount: parseFloat(formFuelAmount) || 0,
-                    unitPrice: parseFormattedNumber(formUnitPrice),
-                    totalCost: parseFormattedNumber(formTotalCost),
+                    amount: amount ?? null,
+                    unitPrice: unitPrice ?? null,
+                    totalCost,
                     shopName: formShopName,
                     memo: formMemo,
                     receiptId: null
@@ -700,7 +700,9 @@ export default function MaintenanceBook() {
                                             <View className="flex-row justify-between">
                                                 <Text className="text-text-muted">주행거리</Text>
                                                 <Text className="text-white">
-                                                    {selectedGroup.mileageAtMaintenance ? `${selectedGroup.mileageAtMaintenance.toLocaleString()} km` : '-'}
+                                                    {(selectedGroup.mileageAtMaintenance ?? selectedGroup.mileage) != null
+                                                        ? `${(selectedGroup.mileageAtMaintenance ?? selectedGroup.mileage).toLocaleString()} km`
+                                                        : '-'}
                                                 </Text>
                                             </View>
                                             <View className="h-[1px] bg-white/10 my-1" />
@@ -769,21 +771,23 @@ export default function MaintenanceBook() {
                                 />
                             </View>
 
-                            {/* 주행거리 */}
-                            <View>
-                                <Text className="text-text-dim text-xs mb-2 uppercase tracking-wider">현재 주행거리</Text>
-                                <View className="flex-row items-center bg-white/5 rounded-2xl border border-white/10">
-                                    <TextInput
-                                        className="flex-1 text-white p-4"
-                                        value={formMileage}
-                                        onChangeText={(v) => setFormMileage(formatInputWithCommas(v))}
-                                        keyboardType="numeric"
-                                        placeholder="0"
-                                        placeholderTextColor="#64748b"
-                                    />
-                                    <Text className="text-text-dim mr-4">km</Text>
+                            {/* 주행거리 - 정비만 (주유는 미사용) */}
+                            {selectedFormType === 'MAINTENANCE' && (
+                                <View>
+                                    <Text className="text-text-dim text-xs mb-2 uppercase tracking-wider">정비 시점 주행거리</Text>
+                                    <View className="flex-row items-center bg-white/5 rounded-2xl border border-white/10">
+                                        <TextInput
+                                            className="flex-1 text-white p-4"
+                                            value={formMileage}
+                                            onChangeText={(v) => setFormMileage(formatInputWithCommas(v))}
+                                            keyboardType="numeric"
+                                            placeholder="0"
+                                            placeholderTextColor="#64748b"
+                                        />
+                                        <Text className="text-text-dim mr-4">km</Text>
+                                    </View>
                                 </View>
-                            </View>
+                            )}
 
                             {/* 장소 */}
                             <View>
@@ -938,7 +942,7 @@ export default function MaintenanceBook() {
                                                     placeholder="0"
                                                     placeholderTextColor="#64748b"
                                                 />
-                                                <Text className="text-text-dim mr-4">원</Text>
+                                                <Text className="text-text-dim mr-4">원/L</Text>
                                             </View>
                                         </View>
                                         <View className="flex-1">
@@ -948,7 +952,7 @@ export default function MaintenanceBook() {
                                                     className="flex-1 text-white p-4"
                                                     value={formFuelAmount}
                                                     onChangeText={(v) => handleFuelPriceChange('amount', v)}
-                                                    keyboardType="numeric"
+                                                    keyboardType="decimal-pad"
                                                     placeholder="0"
                                                     placeholderTextColor="#64748b"
                                                 />
@@ -963,16 +967,14 @@ export default function MaintenanceBook() {
                                             <TextInput
                                                 className="flex-1 text-white p-4 font-bold text-lg"
                                                 value={formTotalCost}
-                                                onChangeText={(v) => {
-                                                    setFormTotalCost(formatInputWithCommas(v));
-                                                    // 총액 변경 시 역계산 로직은 복잡해지므로 생략 혹은 필요 시 구현
-                                                }}
+                                                onChangeText={(v) => handleFuelPriceChange('totalCost', v)}
                                                 keyboardType="numeric"
                                                 placeholder="0"
                                                 placeholderTextColor="#64748b"
                                             />
                                             <Text className="text-text-dim mr-4">원</Text>
                                         </View>
+                                        <Text className="text-text-dim text-xs mt-2">총 결제금액만 넣으면 됩니다. 단가·주유량을 함께 입력하면 저장 시 자동 계산됩니다.</Text>
                                     </View>
                                 </View>
                             )}

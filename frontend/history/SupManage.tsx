@@ -27,12 +27,10 @@ export default function SupManage() {
         }
     }, [primaryVehicle, vehicles]);
 
-    // 선택된 차량이 변경되면 소모품 조회
+    // 선택된 차량이 변경되면 소모품 조회 (초기 마운트 시 selectedVehicle은 아직 null일 수 있음)
     useEffect(() => {
         if (selectedVehicle?.vehicleId) {
             loadConsumables(selectedVehicle.vehicleId);
-        } else {
-            console.log("No vehicleId available in SupManage", selectedVehicle);
         }
     }, [selectedVehicle]);
 
@@ -41,7 +39,7 @@ export default function SupManage() {
             setLoading(true);
             const response = await maintenanceApi.getConsumableStatus(vehicleId);
             if (response.success && response.data) {
-                setConsumables(response.data);
+                setConsumables(response.data.filter((c: { itemCode?: string }) => c.itemCode !== 'OTHER'));
             } else {
                 setConsumables([]);
             }
@@ -76,6 +74,10 @@ export default function SupManage() {
             'CABIN_FILTER': { icon: 'air-filter', family: 'MaterialCommunityIcons' },
             'TIRE': { icon: 'tire', family: 'MaterialCommunityIcons' },
             'TIRES': { icon: 'tire', family: 'MaterialCommunityIcons' },
+            'TIRE_FL': { icon: 'tire', family: 'MaterialCommunityIcons' },
+            'TIRE_FR': { icon: 'tire', family: 'MaterialCommunityIcons' },
+            'TIRE_RL': { icon: 'tire', family: 'MaterialCommunityIcons' },
+            'TIRE_RR': { icon: 'tire', family: 'MaterialCommunityIcons' },
             'TIRE_FRONT': { icon: 'tire', family: 'MaterialCommunityIcons' },
             'TIRE_REAR': { icon: 'tire', family: 'MaterialCommunityIcons' },
             'BRAKE_PAD': { icon: 'stop-circle', family: 'MaterialIcons' },
@@ -112,7 +114,6 @@ export default function SupManage() {
         return <MaterialIcons name={icon as any} size={24} color={color} />;
     };
 
-    // 차량 선택 핸들러
     const handleSelectVehicle = (vehicle: VehicleResponse) => {
         setSelectedVehicle(vehicle);
         setModalVisible(false);

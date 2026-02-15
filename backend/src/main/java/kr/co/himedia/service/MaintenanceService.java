@@ -256,19 +256,22 @@ public class MaintenanceService {
 
         /**
          * 정비 이력 및 소모품 상태 업데이트 (통합 등록용 내부 메소드)
+         * maintenance_logs NOT NULL 컬럼 대응: date/mileage null 시 기본값 적용
          */
         @Transactional
         public void registerHistory(Vehicle vehicle, ConsumableItem item, LocalDate maintenanceDate, Double mileage) {
+                LocalDate safeDate = maintenanceDate != null ? maintenanceDate : java.time.LocalDate.now();
+                Double safeMileage = mileage != null ? mileage : (vehicle.getTotalMileage() != null ? vehicle.getTotalMileage() : 0.0);
                 MaintenanceHistory history = MaintenanceHistory.builder()
                                 .vehicle(vehicle)
-                                .maintenanceDate(maintenanceDate)
-                                .mileageAtMaintenance(mileage)
+                                .maintenanceDate(safeDate)
+                                .mileageAtMaintenance(safeMileage)
                                 .consumableItem(item)
                                 .isStandardized(true)
                                 .build();
                 maintenanceHistoryRepository.save(history);
 
-                double remainingLife = computeRemainingLifePercent(vehicle, mileage, item);
+                double remainingLife = computeRemainingLifePercent(vehicle, mileage != null ? mileage : safeMileage, item);
                 vehicleConsumableRepository.findByVehicleAndConsumableItem_Id(vehicle, item.getId())
                                 .ifPresentOrElse(vc -> {
                                         if (maintenanceDate != null) {
