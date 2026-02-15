@@ -263,7 +263,7 @@ export default function SupManage() {
                             onPress={() => setModalVisible(true)}
                         >
                             <Text className="text-white font-bold text-sm">
-                                {selectedVehicle?.modelNameKo || selectedVehicle?.modelName || '차량 선택'}
+                                {selectedVehicle?.modelNameKo || selectedVehicle?.modelNameKo || '차량 선택'}
                             </Text>
                             <MaterialIcons name="keyboard-arrow-down" size={16} color="#94a3b8" />
                         </TouchableOpacity>

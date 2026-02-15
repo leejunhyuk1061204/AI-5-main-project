@@ -91,7 +91,8 @@ export default function MaintenanceReg() {
             return;
         }
         selectedPositionCodes.forEach(code => {
-            store.addMaintenanceRecord(getConsumableMasterItem(code));
+            const item = getConsumableMasterItem(code);
+            if (item) store.addMaintenanceRecord(item);
         });
         setPositionModalVisible(false);
         setModalVisible(false);
@@ -258,8 +259,8 @@ export default function MaintenanceReg() {
                                             onPress={() => {
                                                 if (isPosition) {
                                                     openPositionModal(item.code as 'TIRE_POSITION' | 'BRAKE_POSITION');
-                                                } else {
-                                                    store.addMaintenanceRecord(masterItem as any);
+                                                } else if (masterItem) {
+                                                    store.addMaintenanceRecord(masterItem);
                                                     setModalVisible(false);
                                                 }
                                             }}
@@ -267,7 +268,7 @@ export default function MaintenanceReg() {
                                             <View>
                                                 <Text style={styles.listItemName}>{item.name}</Text>
                                                 <Text style={styles.listItemSub}>
-                                                    {masterItem.replacementCycleKm != null
+                                                    {masterItem?.replacementCycleKm != null
                                                         ? `교체 주기: ${masterItem.replacementCycleKm.toLocaleString()}km`
                                                         : isPosition ? '위치 선택 시 개별 등록' : ''}
                                                 </Text>
