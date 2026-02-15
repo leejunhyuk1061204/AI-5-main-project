@@ -37,6 +37,8 @@ public class ReceiptAnalyzerService {
 
         // 1. Naver OCR 호출 (텍스트 추출)
         String rawText = extractText(file);
+        log.info("[OCR output] length={} chars, text={}", rawText.length(),
+                rawText.length() > 500 ? rawText.substring(0, 500) + "..." : rawText);
         if (rawText.isEmpty()) {
             return OcrAnalysisResponse.builder()
                     .ocrText("텍스트 추출 실패")
@@ -116,7 +118,8 @@ public class ReceiptAnalyzerService {
             requestBody.put("images", java.util.Collections.singletonList(imageMap));
 
             String requestJson = objectMapper.writeValueAsString(requestBody);
-            log.info("OCR Request Body size: {} bytes", requestJson.length());
+            log.info("[OCR input] imageSize={} bytes, requestBodySize={} bytes, format={}",
+                    file.getBytes().length, requestJson.length(), format);
 
             org.springframework.http.HttpEntity<String> requestEntity = new org.springframework.http.HttpEntity<>(
                     requestJson, headers);
@@ -124,7 +127,10 @@ public class ReceiptAnalyzerService {
             org.springframework.http.ResponseEntity<String> response = restTemplate.exchange(
                     naverInvokeUrl, org.springframework.http.HttpMethod.POST, requestEntity, String.class);
             log.info("Naver OCR Response Status: {}", response.getStatusCode());
-            log.info("Naver OCR Response Body: {}", response.getBody());
+            String ocrResponseBody = response.getBody() != null ? response.getBody() : "";
+            log.info("[OCR response body] length={} chars, body={}",
+                    ocrResponseBody.length(),
+                    ocrResponseBody.length() > 800 ? ocrResponseBody.substring(0, 800) + "..." : ocrResponseBody);
 
             if (response.getStatusCode() == org.springframework.http.HttpStatus.OK) {
                 com.fasterxml.jackson.databind.JsonNode root = objectMapper.readTree(response.getBody());
@@ -189,6 +195,9 @@ public class ReceiptAnalyzerService {
                     + "If a value is missing, use null. Be precise.\n\n"
                     + "Text: \n" + rawText;
 
+            log.info("[LLM input] promptLength={} chars, promptPreview={}", prompt.length(),
+                    prompt.length() > 600 ? prompt.substring(0, 600) + "..." : prompt);
+
             java.util.Map<String, Object> requestBody = new java.util.HashMap<>();
             requestBody.put("model", "gpt-4o-mini");
             requestBody.put("messages", java.util.Collections.singletonList(
@@ -204,6 +213,8 @@ public class ReceiptAnalyzerService {
             if (response.getStatusCode() == org.springframework.http.HttpStatus.OK) {
                 com.fasterxml.jackson.databind.JsonNode root = objectMapper.readTree(response.getBody());
                 String content = root.path("choices").path(0).path("message").path("content").asText();
+                log.info("[LLM output] contentLength={} chars, content={}", content.length(),
+                        content.length() > 500 ? content.substring(0, 500) + "..." : content);
 
                 // Markdown block 제거
                 if (content.contains("```json")) {

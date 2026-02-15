@@ -65,6 +65,9 @@ export interface FuelingHistoryRequest {
     receiptId: string | null;
 }
 
+/** OCR/LLM 처리 시간 고려 타임아웃 (초) */
+const OCR_REQUEST_TIMEOUT_MS = 60000;
+
 /**
  * OCR 분석만 수행 (저장 X)
  */
@@ -73,6 +76,7 @@ export const analyzeReceipt = async (file: FormData): Promise<OcrAnalysisRespons
         headers: {
             'Content-Type': 'multipart/form-data',
         },
+        timeout: OCR_REQUEST_TIMEOUT_MS,
     });
     return response.data.data;
 };
@@ -88,6 +92,7 @@ export const analyzeAndSaveReceipt = async (
         headers: {
             'Content-Type': 'multipart/form-data',
         },
+        timeout: OCR_REQUEST_TIMEOUT_MS,
     });
     return response.data.data;
 };
