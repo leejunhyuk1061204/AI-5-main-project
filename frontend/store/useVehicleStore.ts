@@ -53,6 +53,11 @@ export const useVehicleStore = create<VehicleState>((set, get) => ({
                 set({ primaryVehicle: null });
                 await AsyncStorage.removeItem('primaryVehicle');
             }
+
+            // 차량 목록과 함께 소모품 마스터 로드 (앱 전역에서 한 시점에)
+            const { useConsumableStore } = require('./useConsumableStore');
+            useConsumableStore.getState().loadConsumableMaster().catch(() => {});
+
             return data;
         } catch (e) {
             console.error('Failed to fetch vehicles', e);
