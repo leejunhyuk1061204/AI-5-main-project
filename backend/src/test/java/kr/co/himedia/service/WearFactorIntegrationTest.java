@@ -141,9 +141,12 @@ class WearFactorIntegrationTest {
                 .startTime(LocalDateTime.of(2026, 1, 1, 12, 0))
                 .endTime(LocalDateTime.of(2026, 1, 1, 12, 30))
                 .distance(3.0) // 짧은 거리 (cold start)
+                .avgRpm(3500.0) // RPM 있음 → 엔진오일/스파크플러그 공식 적용
+                .avgEngineLoad(75.0)
                 .hardAccelCount(20)
                 .hardBrakeCount(15)
                 .maxCoolantTemp(105.0) // 과열
+                .maxEngineLoad(90.0)
                 .avgMaf(10.0) // 낮은 MAF (에어필터 열화)
                 .avgThrottlePos(80.0)
                 .averageSpeed(20.0) // 시내 주행

@@ -757,21 +757,22 @@ public class AiDiagnosisService {
     private void sendDiagnosisNotification(UUID vehicleId, UUID sessionId, String responseMode) {
         try {
             vehicleRepository.findById(vehicleId).ifPresent(vehicle -> {
-                String fcmToken = userService.getFcmToken(vehicle.getUserId());
-                if (fcmToken != null) {
-                    boolean isInteractive = "INTERACTIVE".equalsIgnoreCase(responseMode);
-                    String title = isInteractive ? "[확인 필요] 차량 진단 추가 요청" : "차량 정밀 진단 완료";
-                    String body = isInteractive ? "정확한 분석을 위해 사진 촬영이나 소음 녹음이 필요합니다. 대화를 이어가보세요."
-                            : "요청하신 차량의 AI 정밀 진단 분석이 완료되었습니다. 결과를 확인해보세요.";
-
-                    Map<String, String> data = new HashMap<>();
-                    data.put("type", isInteractive ? "DIAG_INTERACTIVE" : "DIAG_COMPLETE");
-                    data.put("sessionId", sessionId.toString());
-                    data.put("mode", responseMode);
-
-                    fcmService.sendMessage("User-" + vehicle.getUserId(), fcmToken, title, body, data);
-                    log.info("Sent Diagnosis Notification [Vehicle: {}, Mode: {}]", vehicleId, responseMode);
+                User user = userRepository.findById(vehicle.getUserId()).orElse(null);
+                if (user == null) {
+                    return;
                 }
+                boolean isInteractive = "INTERACTIVE".equalsIgnoreCase(responseMode);
+                String title = isInteractive ? "[확인 필요] 차량 진단 추가 요청" : "차량 정밀 진단 완료";
+                String body = isInteractive ? "정확한 분석을 위해 사진 촬영이나 소음 녹음이 필요합니다. 대화를 이어가보세요."
+                        : "요청하신 차량의 AI 정밀 진단 분석이 완료되었습니다. 결과를 확인해보세요.";
+
+                Map<String, String> data = new HashMap<>();
+                data.put("type", isInteractive ? "DIAG_INTERACTIVE" : "DIAG_COMPLETE");
+                data.put("sessionId", sessionId.toString());
+                data.put("mode", responseMode);
+
+                notificationService.sendNotification(user, title, body, Notification.NotificationType.DIAG_ALERT, data);
+                log.info("Sent Diagnosis Notification (saved + push) [Vehicle: {}, Mode: {}]", vehicleId, responseMode);
             });
         } catch (Exception e) {
             log.error("Failed to send diagnosis notification", e);
