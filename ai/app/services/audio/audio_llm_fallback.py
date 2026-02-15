@@ -8,10 +8,9 @@
 1. AST 예측 점수에 따른 4단계 게이트(Gate) 분류
 2. 저확신 또는 모호한 상황 발생 시 LLM(GPT-4o) 분석 트리거
 3. 능동 학습(Active Learning) 대상 선별 (Gate 4)
-"""
-[Decision Layer] Pure Logic for Audio Anomaly Detection (Standard v1.0)
 
-⚠️ ARCHITECTURAL RULE:
+[Decision Layer] Pure Logic for Audio Anomaly Detection (Standard v1.0)
+ARCHITECTURAL RULE:
 - PURE LOGIC ONLY (No LLM, No I/O).
 - Returns type-safe AudioDecisionResult dataclass.
 - Gate must be an integer (0-4).
