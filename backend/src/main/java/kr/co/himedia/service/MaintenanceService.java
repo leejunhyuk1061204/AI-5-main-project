@@ -376,34 +376,56 @@ public class MaintenanceService {
                 }
 
                 // 4. OCR/수동 데이터 → MaintenanceHistoryRequest로 변환
-                MaintenanceHistoryRequest request = new MaintenanceHistoryRequest();
-                request.setMaintenanceDate(ocrResult.getMaintenanceDate() != null
+                java.time.LocalDate commonDate = ocrResult.getMaintenanceDate() != null
                                 ? ocrResult.getMaintenanceDate()
-                                : LocalDate.now());
-                request.setMileageAtMaintenance(ocrResult.getMileageAtMaintenance() != null
+                                : LocalDate.now();
+                Double commonMileage = ocrResult.getMileageAtMaintenance() != null
                                 ? ocrResult.getMileageAtMaintenance()
-                                : vehicle.getTotalMileage());
+                                : vehicle.getTotalMileage();
+                String commonMemo = null;
+                try {
+                        if (manualDataJson != null) {
+                                com.fasterxml.jackson.databind.JsonNode node = new com.fasterxml.jackson.databind.ObjectMapper()
+                                                .readTree(manualDataJson);
+                                if (node.has("memo") && !node.get("memo").isNull())
+                                        commonMemo = node.get("memo").asText();
+                        }
+                } catch (Exception ignored) {
+                }
+
+                if (ocrResult.getItems() != null && !ocrResult.getItems().isEmpty()) {
+                        java.util.List<MaintenanceHistoryRequest> requests = new java.util.ArrayList<>();
+                        for (kr.co.himedia.dto.maintenance.MaintenanceLineItemDto item : ocrResult.getItems()) {
+                                MaintenanceHistoryRequest req = new MaintenanceHistoryRequest();
+                                req.setMaintenanceDate(commonDate);
+                                req.setMileageAtMaintenance(commonMileage);
+                                req.setShopName(ocrResult.getShopName());
+                                req.setCost(item.getAmount());
+                                req.setQuantity(item.getQuantity() != null ? item.getQuantity() : 1);
+                                req.setConsumableItemCode(item.getConsumableItemCode());
+                                req.setOcrData(ocrResult.getOcrData());
+                                req.setIsStandardized(true);
+                                req.setReceiptId(receiptId);
+                                req.setMemo(commonMemo);
+                                requests.add(req);
+                        }
+                        java.util.List<MaintenanceHistoryResponse> responses = registerMaintenanceList(vehicleId, requests);
+                        return responses.isEmpty() ? null : responses.get(0);
+                }
+
+                MaintenanceHistoryRequest request = new MaintenanceHistoryRequest();
+                request.setMaintenanceDate(commonDate);
+                request.setMileageAtMaintenance(commonMileage);
                 request.setShopName(ocrResult.getShopName());
                 request.setCost(ocrResult.getCost());
                 request.setQuantity(ocrResult.getQuantity() != null ? ocrResult.getQuantity() : 1);
                 request.setConsumableItemCode(ocrResult.getConsumableItemCode());
                 request.setOcrData(ocrResult.getOcrData());
                 request.setIsStandardized(true);
-
-                try {
-                        if (manualDataJson != null) {
-                                com.fasterxml.jackson.databind.JsonNode node = new com.fasterxml.jackson.databind.ObjectMapper()
-                                                .readTree(manualDataJson);
-                                if (node.has("memo"))
-                                        request.setMemo(node.get("memo").asText());
-                                if (node.has("quantity") && !node.get("quantity").isNull())
-                                        request.setQuantity(node.get("quantity").asInt(1));
-                        }
-                } catch (Exception ignored) {
-                }
+                request.setReceiptId(receiptId);
+                request.setMemo(commonMemo);
 
                 // 5. 정비 이력 저장 (소모품 상태 갱신 포함)
-                request.setReceiptId(receiptId);
                 return registerMaintenance(vehicleId, request);
         }
 
