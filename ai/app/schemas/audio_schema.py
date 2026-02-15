@@ -10,6 +10,7 @@ class AudioRequest(BaseModel):
 class AudioDetail(BaseModel):
     """오디오 상세 분석 내용"""
     diagnosed_label: str = Field(..., description="진단된 소리 레이블 (예: NORMAL_SOUND, FAULTY_SOUND)")
+    description: Optional[str] = Field(None, description="상세 설명")
 
 class AudioResponse(BaseModel):
     """오디오 분석 최종 응답"""
