@@ -22,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -98,10 +99,16 @@ public class MaintenanceService {
 
                 final ConsumableItem item = (searchItem != null) ? searchItem : getOrCreateOtherItem();
 
+                // 미입력·0이면 vehicles.total_mileage로 대체 (registerHistory와 동일)
+                Double requestedMileage = request.getMileageAtMaintenance();
+                Double mileageAtMaintenance = (requestedMileage != null && requestedMileage > 0)
+                                ? requestedMileage
+                                : (vehicle.getTotalMileage() != null ? vehicle.getTotalMileage() : 0.0);
+
                 MaintenanceHistory history = MaintenanceHistory.builder()
                                 .vehicle(vehicle)
                                 .maintenanceDate(request.getMaintenanceDate())
-                                .mileageAtMaintenance(request.getMileageAtMaintenance())
+                                .mileageAtMaintenance(mileageAtMaintenance)
                                 .consumableItem(item)
                                 .isStandardized(request.getIsStandardized())
                                 .shopName(request.getShopName())
@@ -116,7 +123,6 @@ public class MaintenanceService {
 
                 // 2. 소모품 상태 갱신 (UPSERT)
                 // request.getConsumableItemId()가 null일 수 있으므로, 위에서 조회한 item.getId()를 사용해야 함
-                Double mileageAtMaintenance = request.getMileageAtMaintenance();
                 double remainingLife = computeRemainingLifePercent(vehicle, mileageAtMaintenance, item);
                 vehicleConsumableRepository.findByVehicleAndConsumableItem_Id(vehicle, item.getId())
                                 .ifPresentOrElse(vc -> {
@@ -493,16 +499,40 @@ public class MaintenanceService {
                                                                 vehicleConsumableRepository.save(vc);
                                                         });
                                 }, () -> {
-                                        // 이력이 하나도 없으면 상태 초기화
+                                        // 이력이 하나도 없으면 차량 등록 시와 동일한 미입력 추론 로직 적용
                                         vehicleConsumableRepository
                                                         .findByVehicleAndConsumableItem_Id(vehicle, item.getId())
                                                         .ifPresent(vc -> {
-                                                                vc.setLastReplacedAt(null);
-                                                                vc.setLastReplacedMileage(0.0);
-                                                                vc.setRemainingLife(100.0);
+                                                                applyInferredConsumableStatus(vehicle, item, vc);
                                                                 vehicleConsumableRepository.save(vc);
                                                         });
                                 });
+        }
+
+        /**
+         * 차량 등록 시 소모품 미입력 시 사용하는 추론 로직과 동일.
+         * 현재 주행거리·교체 주기로 "마지막 교체 시점"을 추정하고 잔존 수명(%)을 계산한다.
+         */
+        private void applyInferredConsumableStatus(Vehicle vehicle, ConsumableItem item, VehicleConsumable vc) {
+                double currentMileage = vehicle.getTotalMileage() != null ? vehicle.getTotalMileage() : 0.0;
+                Integer interval = item.getDefaultIntervalMileage();
+                if (interval == null || interval <= 0) {
+                        vc.setLastReplacedAt(null);
+                        vc.setLastReplacedMileage(0.0);
+                        vc.setRemainingLife(100.0);
+                        vc.setIsInferred(true);
+                        return;
+                }
+                double dailyMileage = 41.0;
+                Double lastMileage = currentMileage - (currentMileage % interval);
+                long daysDiff = Math.abs(Math.round((currentMileage - lastMileage) / dailyMileage));
+                LocalDateTime lastAt = LocalDateTime.now().minusDays(daysDiff);
+                vc.setLastReplacedAt(lastAt);
+                vc.setLastReplacedMileage(lastMileage);
+                vc.setIsInferred(true);
+                double distanceDriven = currentMileage - lastMileage;
+                double lifePercentage = 100.0 - (distanceDriven / interval * 100.0);
+                vc.updateRemainingLife(Math.max(0.0, Math.min(100.0, lifePercentage)));
         }
 
         /**

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, RefreshControl, Modal, Pressable, TextInput, Alert, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -70,8 +70,10 @@ export default function MaintenanceBook() {
         { id: '1', itemCode: '', itemName: '', cost: '' }
     ]);
 
-    // 드롭다운 상태 (직접 입력 폼 내부)
+    // 드롭다운 상태 (직접 입력 폼 내부). 리스트는 오버레이로 렌더해 스크롤 충돌 방지
     const [activeDropdownId, setActiveDropdownId] = useState<string | null>(null);
+    const [dropdownLayout, setDropdownLayout] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+    const itemTriggerRefs = useRef<Record<string, View | null>>({});
 
     // 타이어/브레이크 위치 선택 모달 (수동 입력)
     const [positionModalRowId, setPositionModalRowId] = useState<string | null>(null);
@@ -175,6 +177,7 @@ export default function MaintenanceBook() {
         setFormFuelAmount('');
         setFormTotalCost('');
         setActiveDropdownId(null);
+        setDropdownLayout(null);
         setPositionModalRowId(null);
     };
 
@@ -260,9 +263,10 @@ export default function MaintenanceBook() {
         try {
             setLoading(true);
             if (selectedFormType === 'MAINTENANCE') {
+                const mileageNum = formMileage.trim() ? parseFormattedNumber(formMileage) : null;
                 const basePayload = {
                     maintenanceDate: formDate,
-                    mileageAtMaintenance: parseFormattedNumber(formMileage),
+                    mileageAtMaintenance: mileageNum,
                     shopName: formShopName,
                     memo: formMemo,
                 };
@@ -813,10 +817,25 @@ export default function MaintenanceBook() {
                                     {maintenanceItems.map((item, index) => (
                                         <View key={item.id} className="gap-2">
                                             <View className="flex-row gap-2 z-10">
-                                                {/* 항목 선택 드롭다운 */}
-                                                <View className="flex-1 relative z-50">
+                                                {/* 항목 선택 드롭다운 (리스트는 오버레이로 렌더 → 스크롤 충돌 없음) */}
+                                                <View
+                                                    ref={(r) => { itemTriggerRefs.current[item.id] = r; }}
+                                                    collapsable={false}
+                                                    className="flex-1"
+                                                >
                                                     <TouchableOpacity
-                                                        onPress={() => setActiveDropdownId(activeDropdownId === item.id ? null : item.id)}
+                                                        onPress={() => {
+                                                            if (activeDropdownId === item.id) {
+                                                                setActiveDropdownId(null);
+                                                                setDropdownLayout(null);
+                                                                return;
+                                                            }
+                                                            const ref = itemTriggerRefs.current[item.id];
+                                                            ref?.measureInWindow((x, y, width, height) => {
+                                                                setDropdownLayout({ x, y, width, height });
+                                                                setActiveDropdownId(item.id);
+                                                            });
+                                                        }}
                                                         className="bg-white/5 p-4 rounded-2xl border border-white/10 flex-row justify-between items-center"
                                                     >
                                                         <Text className={item.itemCode ? 'text-white' : 'text-text-dim'}>
@@ -824,29 +843,6 @@ export default function MaintenanceBook() {
                                                         </Text>
                                                         <MaterialIcons name="arrow-drop-down" size={24} color="#64748b" />
                                                     </TouchableOpacity>
-
-                                                    {/* 드롭다운 메뉴 */}
-                                                    {activeDropdownId === item.id && (
-                                                        <View className="absolute top-full left-0 right-0 mt-1 bg-surface-dark border border-white/10 rounded-xl z-50 max-h-48 overflow-hidden shadow-lg shadow-black">
-                                                            <ScrollView nestedScrollEnabled showsVerticalScrollIndicator>
-                                                                {consumablePickerList.map((data) => (
-                                                                    <TouchableOpacity
-                                                                        key={data.code}
-                                                                        onPress={() => {
-                                                                            updateMaintenanceItem(item.id, 'itemCode', data.code);
-                                                                            setActiveDropdownId(null);
-                                                                            if (isPositionTypeCode(data.code)) {
-                                                                                setPositionModalRowId(item.id);
-                                                                            }
-                                                                        }}
-                                                                        className="p-3 border-b border-white/5 active:bg-white/10"
-                                                                    >
-                                                                        <Text className="text-white">{data.name}</Text>
-                                                                    </TouchableOpacity>
-                                                                ))}
-                                                            </ScrollView>
-                                                        </View>
-                                                    )}
                                                 </View>
 
                                                 {/* 비용 입력 */}
@@ -1008,6 +1004,54 @@ export default function MaintenanceBook() {
                             </TouchableOpacity>
                         </View>
                     </ScrollView>
+
+                    {/* 드롭다운 리스트 오버레이: 폼 ScrollView 밖에 렌더해 스크롤만 이 영역에서 동작 */}
+                    {activeDropdownId && dropdownLayout && (
+                        <View
+                            style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, zIndex: 100 }}
+                            pointerEvents="box-none"
+                        >
+                            <Pressable
+                                style={{ flex: 1 }}
+                                onPress={() => {
+                                    setActiveDropdownId(null);
+                                    setDropdownLayout(null);
+                                }}
+                            >
+                                <View
+                                    style={{
+                                        position: 'absolute',
+                                        left: dropdownLayout.x,
+                                        top: dropdownLayout.y + dropdownLayout.height + 4,
+                                        width: dropdownLayout.width,
+                                        maxHeight: 192,
+                                    }}
+                                    onStartShouldSetResponder={() => true}
+                                >
+                                    <View className="bg-surface-dark border border-white/10 rounded-xl overflow-hidden shadow-lg">
+                                        <ScrollView style={{ maxHeight: 192 }} showsVerticalScrollIndicator>
+                                            {consumablePickerList.map((data) => (
+                                                <TouchableOpacity
+                                                    key={data.code}
+                                                    onPress={() => {
+                                                        updateMaintenanceItem(activeDropdownId, 'itemCode', data.code);
+                                                        setActiveDropdownId(null);
+                                                        setDropdownLayout(null);
+                                                        if (isPositionTypeCode(data.code)) {
+                                                            setPositionModalRowId(activeDropdownId);
+                                                        }
+                                                    }}
+                                                    className="p-3 border-b border-white/5 active:bg-white/10"
+                                                >
+                                                    <Text className="text-white">{data.name}</Text>
+                                                </TouchableOpacity>
+                                            ))}
+                                        </ScrollView>
+                                    </View>
+                                </View>
+                            </Pressable>
+                        </View>
+                    )}
                 </SafeAreaView>
             </Modal>
 
