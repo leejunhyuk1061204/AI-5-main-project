@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, RefreshControl, Modal, Pressable, TextInput, Alert, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -9,46 +9,26 @@ import { useAlertStore } from '../store/useAlertStore';
 import MonthlyCostChart from './MonthlyCostChart';
 import AllHistoryList, { CombinedHistoryItem } from './AllHistoryList';
 import VehicleSelectModal from '../components/VehicleSelectModal';
-import ocrApi, { MaintenanceHistoryResponse, FuelingHistoryResponse } from '../api/ocrApi';
+import ocrApi, { MaintenanceHistoryResponse, FuelingHistoryResponse, FuelingHistoryRequest } from '../api/ocrApi';
 import { formatInputWithCommas, parseFormattedNumber } from '../utils/formatNumber';
+import { useConsumableStore } from '../store/useConsumableStore';
+import { isPositionTypeCode, getPositionOptions } from './consumableItems';
 
-// 정비 항목 마스터 데이터
-const MAINTENANCE_ITEMS_DATA = [
-    { code: 'ENGINE_OIL', name: '엔진 오일' },
-    { code: 'AIR_FILTER', name: '에어클리너' },
-    { code: 'CABIN_FILTER', name: '에어컨 필터' },
-    { code: 'BRAKE_FLUID', name: '브레이크 오일' },
-    { code: 'MISSION_OIL', name: '미션 오일' },
-    { code: 'FUEL_FILTER', name: '연료 필터' },
-    { code: 'COOLANT', name: '냉각수' },
-    { code: 'TIRES', name: '타이어 (전체)' },
-    { code: 'TIRE_FRONT', name: '앞 타이어' },
-    { code: 'TIRE_REAR', name: '뒤 타이어' },
-    { code: 'BRAKE_PADS', name: '브레이크 패드 (전체)' },
-    { code: 'BRAKE_PAD_FRONT', name: '앞 브레이크 패드' },
-    { code: 'BRAKE_PAD_REAR', name: '뒤 브레이크 패드' },
-    { code: 'SPARK_PLUG', name: '점화 플러그' },
-    { code: 'DRIVE_BELT', name: '구동 벨트' },
-    { code: 'WHEEL_ALIGNMENT', name: '휠 얼라인먼트' },
-    { code: 'BATTERY_12V', name: '12V 배터리' },
-    { code: 'WIPER', name: '와이퍼' },
-    { code: 'AIR_CON_REFRIGERANT', name: '에어컨 가스' },
-    { code: 'OTHER', name: '기타 정비' },
-];
-
-// 정비 항목 입력 인터페이스
+// 정비 항목 입력 인터페이스 (타이어/브레이크는 positionCodes로 실제 위치 코드 저장)
 interface MaintenanceFormItem {
     id: string;
     itemCode: string;
     itemName: string;
-    cost: string; // 포맷된 문자열
+    cost: string;
+    positionCodes?: string[];
 }
 
 export default function MaintenanceBook() {
-    // Force reload comment
     const navigation = useNavigation<any>();
     const { vehicles, primaryVehicle, setPrimaryVehicle } = useVehicleStore();
     const { showAlert } = useAlertStore();
+    const consumablePickerList = useConsumableStore((s) => s.consumablePickerList);
+    const getItemNameByCode = useConsumableStore((s) => s.getItemNameByCode);
 
     const [selectedVehicle, setSelectedVehicle] = useState<any>(null);
     const [isVehicleModalVisible, setIsVehicleModalVisible] = useState(false);
@@ -90,10 +70,15 @@ export default function MaintenanceBook() {
         { id: '1', itemCode: '', itemName: '', cost: '' }
     ]);
 
-    // 드롭다운 상태 (직접 입력 폼 내부)
+    // 드롭다운 상태 (직접 입력 폼 내부). 리스트는 오버레이로 렌더해 스크롤 충돌 방지
     const [activeDropdownId, setActiveDropdownId] = useState<string | null>(null);
+    const [dropdownLayout, setDropdownLayout] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+    const itemTriggerRefs = useRef<Record<string, View | null>>({});
 
-    // 주유 입력 필드
+    // 타이어/브레이크 위치 선택 모달 (수동 입력)
+    const [positionModalRowId, setPositionModalRowId] = useState<string | null>(null);
+
+    // 주유 입력 필드 (총 결제금액만 필수, 단가·주유량은 선택·저장 시 2개 있으면 나머지 계산)
     const [formFuelType, setFormFuelType] = useState('GASOLINE');
     const [formUnitPrice, setFormUnitPrice] = useState('');
     const [formFuelAmount, setFormFuelAmount] = useState('');
@@ -192,6 +177,8 @@ export default function MaintenanceBook() {
         setFormFuelAmount('');
         setFormTotalCost('');
         setActiveDropdownId(null);
+        setDropdownLayout(null);
+        setPositionModalRowId(null);
     };
 
     // 입력 모달 열기 (스캔 vs 직접)
@@ -244,7 +231,7 @@ export default function MaintenanceBook() {
         setMaintenanceItems(maintenanceItems.map(item => {
             if (item.id === id) {
                 if (field === 'itemCode') {
-                    const found = MAINTENANCE_ITEMS_DATA.find(m => m.code === value);
+                    const found = consumablePickerList.find(m => m.code === value);
                     return { ...item, itemCode: value, itemName: found?.name || '' };
                 }
                 if (field === 'cost') {
@@ -256,22 +243,17 @@ export default function MaintenanceBook() {
         }));
     };
 
-    // 주유 금액 자동 계산
-    const handleFuelPriceChange = (field: 'unitPrice' | 'amount', value: string) => {
-        const formattedValue = formatInputWithCommas(value);
-        if (field === 'unitPrice') {
-            setFormUnitPrice(formattedValue);
-            if (formFuelAmount) {
-                const total = parseFormattedNumber(formattedValue) * parseFloat(formFuelAmount);
-                setFormTotalCost(formatInputWithCommas(Math.round(total).toString()));
-            }
-        } else {
-            setFormFuelAmount(value);
-            if (formUnitPrice) {
-                const total = parseFormattedNumber(formUnitPrice) * parseFloat(value);
-                setFormTotalCost(formatInputWithCommas(Math.round(total).toString()));
-            }
-        }
+    const setMaintenanceItemPositions = (id: string, codes: string[]) => {
+        setMaintenanceItems(maintenanceItems.map(item =>
+            item.id === id ? { ...item, positionCodes: codes } : item
+        ));
+    };
+
+    const handleFuelPriceChange = (field: 'unitPrice' | 'amount' | 'totalCost', value: string) => {
+        const formattedValue = field === 'amount' ? value.replace(/[^0-9.]/g, '') : formatInputWithCommas(value);
+        if (field === 'unitPrice') setFormUnitPrice(formattedValue);
+        else if (field === 'amount') setFormFuelAmount(formattedValue);
+        else setFormTotalCost(formattedValue);
     };
 
     // 저장 핸들러
@@ -281,39 +263,75 @@ export default function MaintenanceBook() {
         try {
             setLoading(true);
             if (selectedFormType === 'MAINTENANCE') {
-                // 유효한 항목만 필터링
-                const validItems = maintenanceItems.filter(item => item.itemCode && item.cost);
-                if (validItems.length === 0) {
+                const mileageNum = formMileage.trim() ? parseFormattedNumber(formMileage) : null;
+                const basePayload = {
+                    maintenanceDate: formDate,
+                    mileageAtMaintenance: mileageNum,
+                    shopName: formShopName,
+                    memo: formMemo,
+                };
+                const payload: Array<typeof basePayload & { cost: number; consumableItemCode: string; itemDescription: string }> = [];
+
+                for (const item of maintenanceItems) {
+                    if (!item.itemCode || !item.cost) continue;
+                    const costNum = parseFormattedNumber(item.cost);
+                    if (isPositionTypeCode(item.itemCode)) {
+                        if (!item.positionCodes?.length) {
+                            showAlert('위치 선택', '타이어/브레이크 패드는 교체한 위치를 선택해주세요.', 'WARNING');
+                            setLoading(false);
+                            return;
+                        }
+                        for (const code of item.positionCodes) {
+                            payload.push({
+                                ...basePayload,
+                                cost: costNum,
+                                consumableItemCode: code,
+                                itemDescription: getItemNameByCode(code),
+                            });
+                        }
+                    } else {
+                        payload.push({
+                            ...basePayload,
+                            cost: costNum,
+                            consumableItemCode: item.itemCode,
+                            itemDescription: item.itemName,
+                        });
+                    }
+                }
+
+                if (payload.length === 0) {
                     showAlert('알림', '정비 항목을 하나 이상 입력해주세요.', 'WARNING');
                     setLoading(false);
                     return;
                 }
 
-                const payload = validItems.map(item => ({
-                    maintenanceDate: formDate,
-                    mileageAtMaintenance: parseFormattedNumber(formMileage),
-                    shopName: formShopName,
-                    cost: parseFormattedNumber(item.cost),
-                    consumableItemCode: item.itemCode,
-                    itemDescription: item.itemName,
-                    memo: formMemo
-                }));
                 await ocrApi.registerMaintenanceManual(selectedVehicle.vehicleId, payload);
                 await loadMaintenanceHistory();
             } else {
-                if (!formUnitPrice || !formFuelAmount) {
-                    showAlert('알림', '단가와 주유량을 입력해주세요.', 'WARNING');
+                const unitPriceNum = parseFormattedNumber(formUnitPrice);
+                const totalCostNum = parseFormattedNumber(formTotalCost);
+                const amountNum = parseFloat(formFuelAmount) || 0;
+                const hasUnitPrice = unitPriceNum > 0;
+                const hasTotalCost = totalCostNum > 0;
+                const hasAmount = amountNum > 0;
+                if (!hasTotalCost) {
+                    showAlert('알림', '총 결제금액을 입력해주세요.', 'WARNING');
                     setLoading(false);
                     return;
                 }
+                let amount: number | null = hasAmount ? amountNum : null;
+                let unitPrice: number | null = hasUnitPrice ? unitPriceNum : null;
+                const totalCost = totalCostNum;
+                if (!hasAmount && hasUnitPrice && hasTotalCost) amount = Math.round((totalCostNum / unitPriceNum) * 100) / 100;
+                else if (!hasUnitPrice && hasTotalCost && hasAmount) unitPrice = Math.round(totalCostNum / amountNum);
 
-                const payload = {
+                const payload: FuelingHistoryRequest = {
                     fuelingDate: formDate,
-                    mileageAtFueling: parseFormattedNumber(formMileage),
+                    mileageAtFueling: null,
                     fuelType: formFuelType,
-                    amount: parseFloat(formFuelAmount) || 0,
-                    unitPrice: parseFormattedNumber(formUnitPrice),
-                    totalCost: parseFormattedNumber(formTotalCost),
+                    amount: amount ?? null,
+                    unitPrice: unitPrice ?? null,
+                    totalCost,
                     shopName: formShopName,
                     memo: formMemo,
                     receiptId: null
@@ -686,7 +704,9 @@ export default function MaintenanceBook() {
                                             <View className="flex-row justify-between">
                                                 <Text className="text-text-muted">주행거리</Text>
                                                 <Text className="text-white">
-                                                    {selectedGroup.mileageAtMaintenance ? `${selectedGroup.mileageAtMaintenance.toLocaleString()} km` : '-'}
+                                                    {(selectedGroup.mileageAtMaintenance ?? selectedGroup.mileage) != null
+                                                        ? `${(selectedGroup.mileageAtMaintenance ?? selectedGroup.mileage).toLocaleString()} km`
+                                                        : '-'}
                                                 </Text>
                                             </View>
                                             <View className="h-[1px] bg-white/10 my-1" />
@@ -755,21 +775,23 @@ export default function MaintenanceBook() {
                                 />
                             </View>
 
-                            {/* 주행거리 */}
-                            <View>
-                                <Text className="text-text-dim text-xs mb-2 uppercase tracking-wider">현재 주행거리</Text>
-                                <View className="flex-row items-center bg-white/5 rounded-2xl border border-white/10">
-                                    <TextInput
-                                        className="flex-1 text-white p-4"
-                                        value={formMileage}
-                                        onChangeText={(v) => setFormMileage(formatInputWithCommas(v))}
-                                        keyboardType="numeric"
-                                        placeholder="0"
-                                        placeholderTextColor="#64748b"
-                                    />
-                                    <Text className="text-text-dim mr-4">km</Text>
+                            {/* 주행거리 - 정비만 (주유는 미사용) */}
+                            {selectedFormType === 'MAINTENANCE' && (
+                                <View>
+                                    <Text className="text-text-dim text-xs mb-2 uppercase tracking-wider">정비 시점 주행거리</Text>
+                                    <View className="flex-row items-center bg-white/5 rounded-2xl border border-white/10">
+                                        <TextInput
+                                            className="flex-1 text-white p-4"
+                                            value={formMileage}
+                                            onChangeText={(v) => setFormMileage(formatInputWithCommas(v))}
+                                            keyboardType="numeric"
+                                            placeholder="0"
+                                            placeholderTextColor="#64748b"
+                                        />
+                                        <Text className="text-text-dim mr-4">km</Text>
+                                    </View>
                                 </View>
-                            </View>
+                            )}
 
                             {/* 장소 */}
                             <View>
@@ -795,10 +817,25 @@ export default function MaintenanceBook() {
                                     {maintenanceItems.map((item, index) => (
                                         <View key={item.id} className="gap-2">
                                             <View className="flex-row gap-2 z-10">
-                                                {/* 항목 선택 드롭다운 */}
-                                                <View className="flex-1 relative z-50">
+                                                {/* 항목 선택 드롭다운 (리스트는 오버레이로 렌더 → 스크롤 충돌 없음) */}
+                                                <View
+                                                    ref={(r) => { itemTriggerRefs.current[item.id] = r; }}
+                                                    collapsable={false}
+                                                    className="flex-1"
+                                                >
                                                     <TouchableOpacity
-                                                        onPress={() => setActiveDropdownId(activeDropdownId === item.id ? null : item.id)}
+                                                        onPress={() => {
+                                                            if (activeDropdownId === item.id) {
+                                                                setActiveDropdownId(null);
+                                                                setDropdownLayout(null);
+                                                                return;
+                                                            }
+                                                            const ref = itemTriggerRefs.current[item.id];
+                                                            ref?.measureInWindow((x, y, width, height) => {
+                                                                setDropdownLayout({ x, y, width, height });
+                                                                setActiveDropdownId(item.id);
+                                                            });
+                                                        }}
                                                         className="bg-white/5 p-4 rounded-2xl border border-white/10 flex-row justify-between items-center"
                                                     >
                                                         <Text className={item.itemCode ? 'text-white' : 'text-text-dim'}>
@@ -806,26 +843,6 @@ export default function MaintenanceBook() {
                                                         </Text>
                                                         <MaterialIcons name="arrow-drop-down" size={24} color="#64748b" />
                                                     </TouchableOpacity>
-
-                                                    {/* 드롭다운 메뉴 */}
-                                                    {activeDropdownId === item.id && (
-                                                        <View className="absolute top-full left-0 right-0 mt-1 bg-surface-dark border border-white/10 rounded-xl z-50 max-h-48 overflow-hidden shadow-lg shadow-black">
-                                                            <ScrollView nestedScrollEnabled>
-                                                                {MAINTENANCE_ITEMS_DATA.map((data) => (
-                                                                    <TouchableOpacity
-                                                                        key={data.code}
-                                                                        onPress={() => {
-                                                                            updateMaintenanceItem(item.id, 'itemCode', data.code);
-                                                                            setActiveDropdownId(null);
-                                                                        }}
-                                                                        className="p-3 border-b border-white/5 active:bg-white/10"
-                                                                    >
-                                                                        <Text className="text-white">{data.name}</Text>
-                                                                    </TouchableOpacity>
-                                                                ))}
-                                                            </ScrollView>
-                                                        </View>
-                                                    )}
                                                 </View>
 
                                                 {/* 비용 입력 */}
@@ -853,6 +870,24 @@ export default function MaintenanceBook() {
                                                     </TouchableOpacity>
                                                 )}
                                             </View>
+
+                                            {/* 타이어/브레이크 위치 선택 표시 및 편집 */}
+                                            {isPositionTypeCode(item.itemCode) && (
+                                                <TouchableOpacity
+                                                    onPress={() => setPositionModalRowId(item.id)}
+                                                    className="mt-2 flex-row items-center gap-2 bg-white/5 border border-white/10 rounded-xl px-4 py-2"
+                                                >
+                                                    <MaterialIcons name="edit" size={18} color="#94a3b8" />
+                                                    <Text className="text-text-dim text-sm">
+                                                        {item.positionCodes?.length
+                                                            ? `선택: ${(item.positionCodes || [])
+                                                                  .map(c => getPositionOptions(item.itemCode).find(o => o.code === c)?.name)
+                                                                  .filter(Boolean)
+                                                                  .join(', ')}`
+                                                            : '위치 선택 (탭하여 선택)'}
+                                                    </Text>
+                                                </TouchableOpacity>
+                                            )}
                                         </View>
                                     ))}
 
@@ -903,7 +938,7 @@ export default function MaintenanceBook() {
                                                     placeholder="0"
                                                     placeholderTextColor="#64748b"
                                                 />
-                                                <Text className="text-text-dim mr-4">원</Text>
+                                                <Text className="text-text-dim mr-4">원/L</Text>
                                             </View>
                                         </View>
                                         <View className="flex-1">
@@ -913,7 +948,7 @@ export default function MaintenanceBook() {
                                                     className="flex-1 text-white p-4"
                                                     value={formFuelAmount}
                                                     onChangeText={(v) => handleFuelPriceChange('amount', v)}
-                                                    keyboardType="numeric"
+                                                    keyboardType="decimal-pad"
                                                     placeholder="0"
                                                     placeholderTextColor="#64748b"
                                                 />
@@ -928,16 +963,14 @@ export default function MaintenanceBook() {
                                             <TextInput
                                                 className="flex-1 text-white p-4 font-bold text-lg"
                                                 value={formTotalCost}
-                                                onChangeText={(v) => {
-                                                    setFormTotalCost(formatInputWithCommas(v));
-                                                    // 총액 변경 시 역계산 로직은 복잡해지므로 생략 혹은 필요 시 구현
-                                                }}
+                                                onChangeText={(v) => handleFuelPriceChange('totalCost', v)}
                                                 keyboardType="numeric"
                                                 placeholder="0"
                                                 placeholderTextColor="#64748b"
                                             />
                                             <Text className="text-text-dim mr-4">원</Text>
                                         </View>
+                                        <Text className="text-text-dim text-xs mt-2">총 결제금액만 넣으면 됩니다. 단가·주유량을 함께 입력하면 저장 시 자동 계산됩니다.</Text>
                                     </View>
                                 </View>
                             )}
@@ -971,7 +1004,125 @@ export default function MaintenanceBook() {
                             </TouchableOpacity>
                         </View>
                     </ScrollView>
+
+                    {/* 드롭다운 리스트 오버레이: 폼 ScrollView 밖에 렌더해 스크롤만 이 영역에서 동작 */}
+                    {activeDropdownId && dropdownLayout && (
+                        <View
+                            style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, zIndex: 100 }}
+                            pointerEvents="box-none"
+                        >
+                            <Pressable
+                                style={{ flex: 1 }}
+                                onPress={() => {
+                                    setActiveDropdownId(null);
+                                    setDropdownLayout(null);
+                                }}
+                            >
+                                <View
+                                    style={{
+                                        position: 'absolute',
+                                        left: dropdownLayout.x,
+                                        top: dropdownLayout.y + dropdownLayout.height + 4,
+                                        width: dropdownLayout.width,
+                                        maxHeight: 192,
+                                    }}
+                                    onStartShouldSetResponder={() => true}
+                                >
+                                    <View className="bg-surface-dark border border-white/10 rounded-xl overflow-hidden shadow-lg">
+                                        <ScrollView style={{ maxHeight: 192 }} showsVerticalScrollIndicator>
+                                            {consumablePickerList.map((data) => (
+                                                <TouchableOpacity
+                                                    key={data.code}
+                                                    onPress={() => {
+                                                        updateMaintenanceItem(activeDropdownId, 'itemCode', data.code);
+                                                        setActiveDropdownId(null);
+                                                        setDropdownLayout(null);
+                                                        if (isPositionTypeCode(data.code)) {
+                                                            setPositionModalRowId(activeDropdownId);
+                                                        }
+                                                    }}
+                                                    className="p-3 border-b border-white/5 active:bg-white/10"
+                                                >
+                                                    <Text className="text-white">{data.name}</Text>
+                                                </TouchableOpacity>
+                                            ))}
+                                        </ScrollView>
+                                    </View>
+                                </View>
+                            </Pressable>
+                        </View>
+                    )}
                 </SafeAreaView>
+            </Modal>
+
+            {/* 타이어/브레이크 위치 선택 모달 (수동 입력) */}
+            <Modal
+                visible={positionModalRowId != null}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setPositionModalRowId(null)}
+            >
+                <Pressable
+                    className="flex-1 bg-black/60 justify-center px-6"
+                    onPress={() => setPositionModalRowId(null)}
+                >
+                    <Pressable className="bg-surface-dark border border-white/10 rounded-2xl p-5" onPress={(e) => e.stopPropagation()}>
+                        {positionModalRowId && (() => {
+                            const row = maintenanceItems.find((i) => i.id === positionModalRowId);
+                            if (!row || !isPositionTypeCode(row.itemCode)) return null;
+                            const options = getPositionOptions(row.itemCode);
+                            const selected = row.positionCodes || [];
+                            const toggle = (code: string) => {
+                                setMaintenanceItemPositions(
+                                    positionModalRowId,
+                                    selected.includes(code) ? selected.filter((c) => c !== code) : [...selected, code]
+                                );
+                            };
+                            return (
+                                <>
+                                    <Text className="text-white font-bold text-lg mb-1">
+                                        {row.itemCode === 'TIRE_POSITION' ? '어느 타이어를 교체했나요?' : '어느 브레이크 패드를 교체했나요?'}
+                                    </Text>
+                                    <Text className="text-text-dim text-sm mb-4">복수 선택 가능</Text>
+                                    <View className="gap-2 mb-5">
+                                        {options.map((opt) => (
+                                            <TouchableOpacity
+                                                key={opt.code}
+                                                className={`flex-row items-center gap-3 px-4 py-3 rounded-xl border ${selected.includes(opt.code) ? 'bg-primary/20 border-primary' : 'bg-white/5 border-white/10'}`}
+                                                onPress={() => toggle(opt.code)}
+                                            >
+                                                <MaterialIcons
+                                                    name={selected.includes(opt.code) ? 'check-box' : 'check-box-outline-blank'}
+                                                    size={24}
+                                                    color={selected.includes(opt.code) ? '#3b82f6' : '#64748b'}
+                                                />
+                                                <Text className={selected.includes(opt.code) ? 'text-white font-semibold' : 'text-text-dim'}>{opt.name}</Text>
+                                            </TouchableOpacity>
+                                        ))}
+                                    </View>
+                                    <View className="flex-row gap-3">
+                                        <TouchableOpacity
+                                            className="flex-1 py-3 rounded-xl bg-white/10 items-center"
+                                            onPress={() => setPositionModalRowId(null)}
+                                        >
+                                            <Text className="text-white">취소</Text>
+                                        </TouchableOpacity>
+                                        <TouchableOpacity
+                                            className="flex-1 py-3 rounded-xl bg-primary items-center"
+                                            onPress={() => {
+                                                if (selected.length > 0) setPositionModalRowId(null);
+                                                else showAlert('알림', '최소 1개 위치를 선택해주세요.', 'INFO');
+                                            }}
+                                            disabled={selected.length === 0}
+                                        >
+                                            <Text className="text-white font-bold">선택 완료</Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                </>
+                            );
+                        })()}
+                    </Pressable>
+                </Pressable>
             </Modal>
 
             {/* 차량 선택 모달 */}

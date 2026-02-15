@@ -32,10 +32,10 @@ public class FuelingHistory extends BaseEntity {
     @Column(name = "fueling_date", nullable = false)
     private LocalDate fuelingDate;
 
-    @Column(name = "amount", nullable = false)
-    private Double amount; // L or kWh
+    @Column(name = "amount")
+    private Double amount; // L or kWh (nullable; 총액·단가로 역산 가능)
 
-    @Column(name = "unit_price", nullable = false)
+    @Column(name = "unit_price")
     private Integer unitPrice;
 
     @Column(name = "total_cost", nullable = false)

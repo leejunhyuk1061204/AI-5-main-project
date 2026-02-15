@@ -346,20 +346,43 @@ CREATE TABLE IF NOT EXISTS vehicle_consumables (
     )
 );
 
--- 정비 차계부 (2.4.4)
+-- 정비 차계부 (2.4.4) - MaintenanceHistory 엔티티와 동일
 CREATE TABLE IF NOT EXISTS maintenance_logs (
     maintenance_id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
-    vehicles_id UUID REFERENCES vehicles (vehicles_id),
-    maintenance_date DATE,
-    part_name VARCHAR(50),
+    vehicle_id UUID NOT NULL REFERENCES vehicles (vehicles_id),
+    maintenance_date DATE NOT NULL,
+    mileage_at_maintenance DOUBLE PRECISION NOT NULL,
+    consumable_item_id INT REFERENCES consumable_items (id),
     is_standardized BOOLEAN,
+    shop_name VARCHAR(100),
     cost INT,
     quantity INT DEFAULT 1,
-    shop_name VARCHAR(100),
-    mileage_at_work FLOAT,
-    receipts_s3_key TEXT,
-    memo TEXT
+    ocr_data JSONB,
+    receipt_id UUID,
+    memo TEXT,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
+
+-- 주유 차계부 (2.4.5) - FuelingHistory 엔티티와 동기화 (백엔드가 이 스키마를 단일 소스로 관리)
+CREATE TABLE IF NOT EXISTS fueling_logs (
+    fueling_id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
+    vehicle_id UUID NOT NULL REFERENCES vehicles (vehicles_id),
+    fuel_type fuel_type NOT NULL,
+    fueling_date DATE NOT NULL,
+    amount DOUBLE PRECISION,
+    unit_price INT,
+    total_cost INT NOT NULL,
+    mileage_at_fueling DOUBLE PRECISION,
+    shop_name VARCHAR(100),
+    station_name VARCHAR(100),
+    memo TEXT,
+    receipt_id UUID,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_fueling_logs_vehicle_date ON fueling_logs (vehicle_id, fueling_date DESC);
 
 -- 7. 알림 및 지식 베이스 (Notification & Knowledge)
 
