@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Image, TextInput, ActivityIndicator, KeyboardAvoidingView, Platform, Modal, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -6,39 +6,8 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useAlertStore } from '../store/useAlertStore';
 import ocrApi, { OcrAnalysisResponse } from '../api/ocrApi';
 import { formatInputWithCommas, parseFormattedNumber } from '../utils/formatNumber';
-
-// 시드와 동일: 대표 소모품 + 위치 선택용 가상 항목
-const CONSUMABLE_ITEMS = [
-    { code: 'ENGINE_OIL', name: '엔진 오일' },
-    { code: 'TIRE_POSITION', name: '타이어 (위치 선택)' },
-    { code: 'TIRE_FL', name: '앞왼쪽 타이어' },
-    { code: 'TIRE_FR', name: '앞오른쪽 타이어' },
-    { code: 'TIRE_RL', name: '뒤왼쪽 타이어' },
-    { code: 'TIRE_RR', name: '뒤오른쪽 타이어' },
-    { code: 'BRAKE_POSITION', name: '브레이크 패드 (위치 선택)' },
-    { code: 'BRAKE_PAD_FRONT', name: '앞 브레이크 패드' },
-    { code: 'BRAKE_PAD_REAR', name: '뒤 브레이크 패드' },
-    { code: 'BATTERY_12V', name: '12V 배터리' },
-    { code: 'COOLANT', name: '냉각수' },
-    { code: 'AIR_FILTER', name: '에어클리너' },
-    { code: 'BRAKE_FLUID', name: '브레이크 오일' },
-    { code: 'SPARK_PLUG', name: '점화 플러그' },
-    { code: 'MISSION_OIL', name: '미션 오일' },
-    { code: 'FUEL_FILTER', name: '연료 필터' },
-    { code: 'OTHER', name: '기타 정비' },
-];
-
-const TIRE_POSITION_OPTIONS: { code: string; name: string }[] = [
-    { code: 'TIRE_FL', name: '앞왼쪽' },
-    { code: 'TIRE_FR', name: '앞오른쪽' },
-    { code: 'TIRE_RL', name: '뒤왼쪽' },
-    { code: 'TIRE_RR', name: '뒤오른쪽' },
-];
-
-const BRAKE_POSITION_OPTIONS: { code: string; name: string }[] = [
-    { code: 'BRAKE_PAD_FRONT', name: '앞' },
-    { code: 'BRAKE_PAD_REAR', name: '뒤' },
-];
+import { useConsumableStore } from '../store/useConsumableStore';
+import { TIRE_POSITION_OPTIONS, BRAKE_POSITION_OPTIONS } from './consumableItems';
 
 const FUEL_TYPE_NAMES: { [key: string]: string } = {
     'GASOLINE': '휘발유',
@@ -50,12 +19,20 @@ const FUEL_TYPE_NAMES: { [key: string]: string } = {
 export default function ReceiptResult({ navigation, route }: { navigation?: any; route?: any }) {
     const { vehicleId, imageUri, ocrResult, initialType } = route?.params || {};
     const result: OcrAnalysisResponse = ocrResult || {};
+    const consumablePickerList = useConsumableStore((s) => s.consumablePickerList);
 
     // 초기 타입 결정 (파라미터 > OCR 결과 > 기본값)
     const isFueling = initialType === 'FUELING' || result.receiptType === 'FUELING';
 
-    // OCR 코드 → 위치 선택 항목 매핑 (영수증에 "타이어"/"브레이크 패드"만 나올 때)
-    const initialCode = result.consumableItemCode === 'TIRES' ? 'TIRE_POSITION' : result.consumableItemCode === 'BRAKE_PADS' ? 'BRAKE_POSITION' : result.consumableItemCode || 'OTHER';
+    // OCR 코드 → 위치 선택 항목 매핑 (TIRES/타이어 위치 코드 → TIRE_POSITION, BRAKE_PADS/앞뒤 코드 → BRAKE_POSITION)
+    const rawCode = result.consumableItemCode || '';
+    const initialCode = rawCode === 'TIRES' || ['TIRE_FL', 'TIRE_FR', 'TIRE_RL', 'TIRE_RR'].includes(rawCode)
+        ? 'TIRE_POSITION'
+        : rawCode === 'BRAKE_PADS' || ['BRAKE_PAD_FRONT', 'BRAKE_PAD_REAR'].includes(rawCode)
+            ? 'BRAKE_POSITION'
+            : consumablePickerList.some((i) => i.code === rawCode)
+                ? rawCode
+                : 'OTHER';
 
     // 공통 상태
     const [shopName, setShopName] = useState(result.shopName || '');
@@ -68,8 +45,13 @@ export default function ReceiptResult({ navigation, route }: { navigation?: any;
     // 정비 전용 상태
     const [selectedItem, setSelectedItem] = useState(initialCode);
     const [showItemPicker, setShowItemPicker] = useState(false);
-    // 위치 선택 (타이어/브레이크 패드): 저장 시 이 코드들로 각각 이력 생성
-    const [selectedPositions, setSelectedPositions] = useState<string[]>([]);
+    // 위치 선택 (타이어/브레이크 패드): 저장 시 이 코드들로 각각 이력 생성. OCR이 개별 위치 코드 반환 시 해당 위치로 초기화
+    const initialPositions = (() => {
+        if (['TIRE_FL', 'TIRE_FR', 'TIRE_RL', 'TIRE_RR'].includes(rawCode)) return [rawCode];
+        if (['BRAKE_PAD_FRONT', 'BRAKE_PAD_REAR'].includes(rawCode)) return [rawCode];
+        return [];
+    })();
+    const [selectedPositions, setSelectedPositions] = useState<string[]>(initialPositions);
     const [showPositionModal, setShowPositionModal] = useState(false);
 
     // 주유 전용 상태
@@ -163,7 +145,7 @@ export default function ReceiptResult({ navigation, route }: { navigation?: any;
     };
 
     const getSelectedItemName = () => {
-        const item = CONSUMABLE_ITEMS.find(i => i.code === selectedItem);
+        const item = consumablePickerList.find(i => i.code === selectedItem);
         return item?.name || '선택하세요';
     };
 
@@ -339,7 +321,7 @@ export default function ReceiptResult({ navigation, route }: { navigation?: any;
                                         {showItemPicker && (
                                             <View className="bg-surface-dark border border-white/10 rounded-xl mt-2 overflow-hidden max-h-48">
                                                 <ScrollView nestedScrollEnabled>
-                                                    {CONSUMABLE_ITEMS.map((item) => (
+                                                    {consumablePickerList.map((item) => (
                                                         <TouchableOpacity
                                                             key={item.code}
                                                             className={`px-4 py-3 border-b border-white/5 ${selectedItem === item.code ? 'bg-primary/20' : ''}`}

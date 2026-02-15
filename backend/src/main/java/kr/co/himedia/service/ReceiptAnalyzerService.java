@@ -37,6 +37,8 @@ public class ReceiptAnalyzerService {
 
         // 1. Naver OCR 호출 (텍스트 추출)
         String rawText = extractText(file);
+        log.info("[OCR output] length={} chars, text={}", rawText.length(),
+                rawText.length() > 500 ? rawText.substring(0, 500) + "..." : rawText);
         if (rawText.isEmpty()) {
             return OcrAnalysisResponse.builder()
                     .ocrText("텍스트 추출 실패")
@@ -189,6 +191,9 @@ public class ReceiptAnalyzerService {
                     + "If a value is missing, use null. Be precise.\n\n"
                     + "Text: \n" + rawText;
 
+            log.info("[LLM input] promptLength={} chars, promptPreview={}", prompt.length(),
+                    prompt.length() > 600 ? prompt.substring(0, 600) + "..." : prompt);
+
             java.util.Map<String, Object> requestBody = new java.util.HashMap<>();
             requestBody.put("model", "gpt-4o-mini");
             requestBody.put("messages", java.util.Collections.singletonList(
@@ -204,6 +209,8 @@ public class ReceiptAnalyzerService {
             if (response.getStatusCode() == org.springframework.http.HttpStatus.OK) {
                 com.fasterxml.jackson.databind.JsonNode root = objectMapper.readTree(response.getBody());
                 String content = root.path("choices").path(0).path("message").path("content").asText();
+                log.info("[LLM output] contentLength={} chars, content={}", content.length(),
+                        content.length() > 500 ? content.substring(0, 500) + "..." : content);
 
                 // Markdown block 제거
                 if (content.contains("```json")) {

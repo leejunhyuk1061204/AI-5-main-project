@@ -23,6 +23,10 @@ import java.util.List;
  *
  * AI 서버 의존성을 제거하고, Python 공식과 동일한 규칙 기반 계산을 Java로 구현합니다.
  * 5가지 소모품(타이어, 엔진오일, 냉각수, 에어필터, 브레이크패드)의 마모 계수를 계산합니다.
+ *
+ * <p>미지원 PID: obd_logs에는 해당 컬럼이 null로 저장됨. TripService 집계 시 null은 0으로 취급해
+ * trip_summaries에 반영하므로, 집계값이 0이 될 수 있음. 공식에서 필수 입력이 null/무의미하면
+ * factor=1.0(주행거리만 반영)으로 fallback.
  */
 @Slf4j
 @Service
@@ -76,15 +80,13 @@ public class WearFactorService {
                 continue;
 
             String itemCode = vc.getConsumableItem().getCode();
+            if ("OTHER".equals(itemCode)) {
+                continue;
+            }
 
             try {
                 // 3-1. 마모 계수(multiplier) 계산
                 Double factor = calculateFactorByItemCode(itemCode, trip, vehicle, highRpmRatio, idleRatio);
-
-                if (factor == null) {
-                    log.warn("[WearFactor] 알 수 없는 소모품 코드, 스킵: {}", itemCode);
-                    continue;
-                }
 
                 // 3-2. 마모 계수 저장
                 vc.setWearFactor(factor);
@@ -113,6 +115,7 @@ public class WearFactorService {
 
     /**
      * 소모품 코드에 따라 적절한 계산 메서드를 호출합니다.
+     * 공식이 없는 소모품은 factor=1.0(주행거리만 반영)으로 수명 차감.
      */
     private Double calculateFactorByItemCode(String itemCode, TripSummary trip,
             Vehicle vehicle, Double highRpmRatio, Double idleRatio) {
@@ -122,7 +125,10 @@ public class WearFactorService {
             case "COOLANT" -> calculateCoolantFactor(trip);
             case "AIR_FILTER" -> calculateAirFilterFactor(trip, vehicle);
             case "BRAKE_PAD_FRONT", "BRAKE_PAD_REAR" -> calculateBrakePadFactor(trip);
-            default -> null;
+            case "BATTERY_12V" -> calculateBatteryFactor(trip, idleRatio);
+            case "MISSION_OIL" -> calculateMissionOilFactor(trip);
+            case "SPARK_PLUG" -> calculateSparkPlugFactor(trip, highRpmRatio, idleRatio);
+            default -> 1.0;
         };
     }
 
@@ -133,11 +139,14 @@ public class WearFactorService {
      *
      * 공식: factor = 1.0 + (hard_accel + hard_brake) * 0.03
      * factor = min(factor, 3.0)
+     * 미지원(속도 등 없음)이면 주행거리만 반영 → 1.0
      */
     private Double calculateTireFactor(TripSummary trip) {
         Integer hardAccelCount = trip.getHardAccelCount();
         Integer hardBrakeCount = trip.getHardBrakeCount();
-
+        if (hardAccelCount == null && hardBrakeCount == null) {
+            return 1.0;
+        }
         if (hardAccelCount == null)
             hardAccelCount = 0;
         if (hardBrakeCount == null)
@@ -159,10 +168,12 @@ public class WearFactorService {
      * idle_penalty = 1.0 + idle_ratio * 0.5
      * factor = cold_penalty * rpm_penalty * idle_penalty
      * factor = min(factor, 2.5)
-     *
-     * ⭐ highRpmRatio 필수 사용!
+     * RPM 미지원(avgRpm null)이면 주행거리만 반영 → 1.0
      */
     private Double calculateEngineOilFactor(TripSummary trip, Double highRpmRatio, Double idleRatio) {
+        if (trip.getAvgRpm() == null) {
+            return 1.0;
+        }
         // 1. Cold start penalty
         Double tripDistanceKm = trip.getDistance();
         double coldPenalty = (tripDistanceKm != null
@@ -194,10 +205,10 @@ public class WearFactorService {
      *
      * 공식: overheat_damage = 2 ^ (max(0, max_coolant_temp - 90) / 10)
      * factor = overheat_damage
+     * 냉각수 온도 미지원(null 또는 0 이하)이면 주행거리만 반영 → 1.0
      */
     private Double calculateCoolantFactor(TripSummary trip) {
         Double maxCoolantTemp = trip.getMaxCoolantTemp();
-
         if (maxCoolantTemp == null || maxCoolantTemp <= ConsumableConstants.COOLANT_NORMAL_TEMP) {
             return 1.0;
         }
@@ -207,8 +218,7 @@ public class WearFactorService {
         double factor = Math.pow(
                 ConsumableConstants.COOLANT_ARRHENIUS_BASE,
                 tempExcess / ConsumableConstants.COOLANT_TEMP_DIVISOR);
-
-        return factor;
+        return Math.min(factor, ConsumableConstants.COOLANT_MAX_FACTOR);
     }
 
     /**
@@ -223,9 +233,9 @@ public class WearFactorService {
         Double avgMaf = trip.getAvgMaf();
         Double avgThrottle = trip.getAvgThrottlePos();
 
-        // MAF 센서 미탑재 차량 (EV 등)
+        // MAF/스로틀 미지원이면 주행거리만 반영
         if (avgMaf == null || avgThrottle == null) {
-            return 1.5; // 기본 계수
+            return 1.0;
         }
 
         String vehicleModel = vehicle.getModelNameKo();
@@ -237,9 +247,9 @@ public class WearFactorService {
             throttleNormalized = avgThrottle / 100.0;
         }
 
-        // 0으로 나누기 방지
+        // 0으로 나누기 방지 → 주행거리만 반영
         if (throttleNormalized <= 0.0 || baselineMaf <= 0.0) {
-            return 1.5;
+            return 1.0;
         }
 
         // 효율 계산
@@ -252,8 +262,7 @@ public class WearFactorService {
         double factor = Math.pow(
                 ConsumableConstants.AIR_FILTER_EFFICIENCY_BASE,
                 efficiencyLoss / ConsumableConstants.AIR_FILTER_EFFICIENCY_DIVISOR);
-
-        return factor;
+        return Math.min(factor, ConsumableConstants.AIR_FILTER_MAX_FACTOR);
     }
 
     /**
@@ -262,15 +271,16 @@ public class WearFactorService {
      * 공식: brake_energy = hard_brake_count * (avg_speed ^ 2) / 10000
      * city_mult = 1.3 if avg_speed < 30 else 1.0
      * factor = (1.0 + brake_energy) * city_mult
+     * 속도 미지원(avgSpeed null)이면 주행거리만 반영 → 1.0
      */
     private Double calculateBrakePadFactor(TripSummary trip) {
         Integer hardBrakeCount = trip.getHardBrakeCount();
         Double avgSpeed = trip.getAverageSpeed();
-
+        if (avgSpeed == null) {
+            return 1.0;
+        }
         if (hardBrakeCount == null)
             hardBrakeCount = 0;
-        if (avgSpeed == null)
-            avgSpeed = 0.0;
 
         // 브레이크 에너지 (속도 제곱에 비례)
         double brakeEnergy = hardBrakeCount * Math.pow(avgSpeed, 2)
@@ -282,8 +292,82 @@ public class WearFactorService {
                 : 1.0;
 
         double factor = (1.0 + brakeEnergy) * cityMult;
+        return Math.min(factor, ConsumableConstants.BRAKE_PAD_MAX_FACTOR);
+    }
 
-        return factor;
+    /**
+     * 6. 12V 배터리 마모 계수 계산
+     *
+     * 저전압·짧은 주행(부분충전)·공회전 비율로 보정.
+     * 전압 미지원(minBatteryVoltage null)이면 주행거리만 반영 → 1.0
+     */
+    private Double calculateBatteryFactor(TripSummary trip, Double idleRatio) {
+        Double minVoltage = trip.getMinBatteryVoltage();
+        if (minVoltage == null) {
+            return 1.0;
+        }
+        double factor = 1.0;
+        if (minVoltage > 0 && minVoltage < ConsumableConstants.BATTERY_LOW_VOLTAGE_THRESHOLD) {
+            factor *= ConsumableConstants.BATTERY_LOW_VOLTAGE_PENALTY;
+        }
+        Double distance = trip.getDistance();
+        if (distance != null && distance > 0 && distance < ConsumableConstants.BATTERY_SHORT_TRIP_THRESHOLD_KM) {
+            factor *= ConsumableConstants.BATTERY_SHORT_TRIP_PENALTY;
+        }
+        if (idleRatio != null && idleRatio > 0) {
+            factor *= (1.0 + idleRatio * ConsumableConstants.BATTERY_IDLE_PENALTY_COEF);
+        }
+        return Math.min(factor, ConsumableConstants.BATTERY_MAX_FACTOR);
+    }
+
+    /**
+     * 7. 미션 오일 마모 계수 계산
+     *
+     * 고온·고부하 시 열화 가속. max_coolant_temp(트랜스 열부하 대리), max_engine_load 사용.
+     * 둘 다 null이면 주행거리만 반영 → 1.0
+     */
+    private Double calculateMissionOilFactor(TripSummary trip) {
+        Double maxCoolantTemp = trip.getMaxCoolantTemp();
+        Double maxEngineLoad = trip.getMaxEngineLoad();
+        if (maxCoolantTemp == null && maxEngineLoad == null) {
+            return 1.0;
+        }
+        double factor = 1.0;
+        if (maxCoolantTemp != null && maxCoolantTemp > ConsumableConstants.MISSION_OIL_TEMP_THRESHOLD) {
+            double excess = maxCoolantTemp - ConsumableConstants.MISSION_OIL_TEMP_THRESHOLD;
+            factor += excess * ConsumableConstants.MISSION_OIL_TEMP_PENALTY_COEF;
+        }
+        if (maxEngineLoad != null && maxEngineLoad > ConsumableConstants.MISSION_OIL_LOAD_THRESHOLD) {
+            double excess = maxEngineLoad - ConsumableConstants.MISSION_OIL_LOAD_THRESHOLD;
+            factor += excess * ConsumableConstants.MISSION_OIL_LOAD_PENALTY_COEF;
+        }
+        return Math.min(factor, ConsumableConstants.MISSION_OIL_MAX_FACTOR);
+    }
+
+    /**
+     * 8. 스파크 플러그 마모 계수 계산
+     *
+     * 고RPM·고부하 구간 비율로 점화 부담 반영.
+     * RPM 미지원(avgRpm null)이면 주행거리만 반영 → 1.0
+     */
+    private Double calculateSparkPlugFactor(TripSummary trip, Double highRpmRatio, Double idleRatio) {
+        if (trip.getAvgRpm() == null) {
+            return 1.0;
+        }
+        if (highRpmRatio == null) {
+            highRpmRatio = 0.0;
+        }
+        Double avgLoad = trip.getAvgEngineLoad();
+        if (avgLoad == null) {
+            avgLoad = 0.0;
+        }
+        double rpmPenalty = 1.0 + highRpmRatio * ConsumableConstants.SPARK_PLUG_RPM_PENALTY_COEF;
+        double loadPenalty = 1.0 + avgLoad * ConsumableConstants.SPARK_PLUG_LOAD_PENALTY_COEF; // avgLoad 0~100
+        double factor = rpmPenalty * loadPenalty;
+        if (idleRatio != null && idleRatio > 0) {
+            factor *= (1.0 + idleRatio * 0.2);
+        }
+        return Math.min(factor, ConsumableConstants.SPARK_PLUG_MAX_FACTOR);
     }
 
     // ==================== 헬퍼 메서드 ====================
@@ -361,15 +445,18 @@ public class WearFactorService {
         if (tripDistance <= 0)
             return;
 
+        Integer interval = vc.getConsumableItem().getDefaultIntervalMileage();
+        if (interval == null || interval <= 0)
+            return;
+
         double currentLife = vc.getRemainingLife() != null ? vc.getRemainingLife() : 100.0;
-        int defaultInterval = vc.getConsumableItem().getDefaultIntervalMileage();
         double wearFactor = vc.getWearFactor() != null ? vc.getWearFactor() : 1.0;
 
         // 마모된 거리 (가중치 적용)
         double wornDistance = tripDistance * wearFactor;
 
         // 수명 감소량 (%)
-        double lifeDecreasePercent = (wornDistance / defaultInterval) * 100.0;
+        double lifeDecreasePercent = (wornDistance / interval) * 100.0;
 
         // 최종 수명 계산 (0% 미만 방지)
         double newLife = Math.max(0.0, currentLife - lifeDecreasePercent);

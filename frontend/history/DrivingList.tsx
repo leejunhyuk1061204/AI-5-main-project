@@ -40,6 +40,10 @@ export default function DrivingList() {
             const stored = await AsyncStorage.getItem('primaryVehicle');
             if (stored) {
                 const vehicle = JSON.parse(stored);
+                if (!vehicle?.vehicleId) {
+                    setTrips([]);
+                    return;
+                }
                 const response = await tripApi.getTrips(vehicle.vehicleId);
                 if (response.success && response.data) {
                     const sorted = [...response.data].sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());

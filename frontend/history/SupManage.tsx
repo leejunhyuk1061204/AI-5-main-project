@@ -77,6 +77,7 @@ export default function SupManage() {
         }
     }, [primaryVehicle, vehicles]);
 
+    // 선택된 차량이 변경되면 소모품 조회 (초기 마운트 시 selectedVehicle은 아직 null일 수 있음)
     // Fetch Data on Vehicle Change
     useEffect(() => {
         if (selectedVehicle?.vehicleId) {
@@ -176,6 +177,10 @@ export default function SupManage() {
             'CABIN_FILTER': { icon: 'air-filter', family: 'MaterialCommunityIcons' },
             'TIRE': { icon: 'tire', family: 'MaterialCommunityIcons' },
             'TIRES': { icon: 'tire', family: 'MaterialCommunityIcons' },
+            'TIRE_FL': { icon: 'tire', family: 'MaterialCommunityIcons' },
+            'TIRE_FR': { icon: 'tire', family: 'MaterialCommunityIcons' },
+            'TIRE_RL': { icon: 'tire', family: 'MaterialCommunityIcons' },
+            'TIRE_RR': { icon: 'tire', family: 'MaterialCommunityIcons' },
             'TIRE_FRONT': { icon: 'tire', family: 'MaterialCommunityIcons' },
             'TIRE_REAR': { icon: 'tire', family: 'MaterialCommunityIcons' },
             'BRAKE_PAD': { icon: 'stop-circle', family: 'MaterialIcons' },

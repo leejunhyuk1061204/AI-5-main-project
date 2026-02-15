@@ -36,6 +36,8 @@ public final class ConsumableConstants {
     public static final double COOLANT_OVERHEAT_THRESHOLD = 95.0; // °C - 과열 판단 기준
     public static final double COOLANT_ARRHENIUS_BASE = 2.0;
     public static final double COOLANT_TEMP_DIVISOR = 10.0;
+    /** 냉각수 wear_factor 상한 (극단 과열 시 무한 증가 방지) */
+    public static final double COOLANT_MAX_FACTOR = 4.0;
 
     // ==================== 에어필터 (Air Filter) ====================
     /** 차량 모델별 기준 MAF (g/s) */
@@ -47,11 +49,35 @@ public final class ConsumableConstants {
             "default", 18.0);
     public static final double AIR_FILTER_EFFICIENCY_BASE = 1.5;
     public static final double AIR_FILTER_EFFICIENCY_DIVISOR = 0.1;
+    /** 에어필터 wear_factor 상한 (극단 효율 손실 시 무한 증가 방지) */
+    public static final double AIR_FILTER_MAX_FACTOR = 3.0;
 
     // ==================== 브레이크패드 (Brake Pad) ====================
     public static final double BRAKE_ENERGY_DIVISOR = 10000.0;
     public static final double CITY_SPEED_THRESHOLD = 30.0; // km/h
     public static final double CITY_MULT = 1.3;
+    /** 브레이크패드 wear_factor 상한 (급정동·고속 다수 시 무한 증가 방지) */
+    public static final double BRAKE_PAD_MAX_FACTOR = 4.0;
+
+    // ==================== 12V 배터리 (Battery) ====================
+    public static final double BATTERY_LOW_VOLTAGE_THRESHOLD = 12.0; // V
+    public static final double BATTERY_LOW_VOLTAGE_PENALTY = 1.4;
+    public static final double BATTERY_SHORT_TRIP_THRESHOLD_KM = 5.0;
+    public static final double BATTERY_SHORT_TRIP_PENALTY = 1.2;
+    public static final double BATTERY_IDLE_PENALTY_COEF = 0.3;
+    public static final double BATTERY_MAX_FACTOR = 2.0;
+
+    // ==================== 미션 오일 (Transmission) ====================
+    public static final double MISSION_OIL_TEMP_THRESHOLD = 90.0; // °C
+    public static final double MISSION_OIL_LOAD_THRESHOLD = 80.0; // %
+    public static final double MISSION_OIL_TEMP_PENALTY_COEF = 0.015; // per °C over threshold
+    public static final double MISSION_OIL_LOAD_PENALTY_COEF = 0.008; // per % over threshold
+    public static final double MISSION_OIL_MAX_FACTOR = 2.0;
+
+    // ==================== 스파크 플러그 (Spark Plug) ====================
+    public static final double SPARK_PLUG_RPM_PENALTY_COEF = 1.0;
+    public static final double SPARK_PLUG_LOAD_PENALTY_COEF = 0.006;
+    public static final double SPARK_PLUG_MAX_FACTOR = 2.2;
 
     // ==================== 임계값 (Thresholds) ====================
     public static final double HARD_ACCEL_THRESHOLD = 10.0; // km/h/s
