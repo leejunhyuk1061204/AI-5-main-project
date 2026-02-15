@@ -57,8 +57,8 @@ export interface FuelingHistoryRequest {
     fuelingDate: string;
     mileageAtFueling: number | null;
     fuelType: string;
-    amount: number;
-    unitPrice: number;
+    amount: number | null;
+    unitPrice: number | null;
     totalCost: number;
     shopName: string | null;
     memo: string | null;

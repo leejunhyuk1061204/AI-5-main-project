@@ -118,8 +118,7 @@ public class ReceiptAnalyzerService {
             requestBody.put("images", java.util.Collections.singletonList(imageMap));
 
             String requestJson = objectMapper.writeValueAsString(requestBody);
-            log.info("[OCR input] imageSize={} bytes, requestBodySize={} bytes, format={}",
-                    file.getBytes().length, requestJson.length(), format);
+            log.info("OCR Request Body size: {} bytes", requestJson.length());
 
             org.springframework.http.HttpEntity<String> requestEntity = new org.springframework.http.HttpEntity<>(
                     requestJson, headers);
@@ -127,10 +126,7 @@ public class ReceiptAnalyzerService {
             org.springframework.http.ResponseEntity<String> response = restTemplate.exchange(
                     naverInvokeUrl, org.springframework.http.HttpMethod.POST, requestEntity, String.class);
             log.info("Naver OCR Response Status: {}", response.getStatusCode());
-            String ocrResponseBody = response.getBody() != null ? response.getBody() : "";
-            log.info("[OCR response body] length={} chars, body={}",
-                    ocrResponseBody.length(),
-                    ocrResponseBody.length() > 800 ? ocrResponseBody.substring(0, 800) + "..." : ocrResponseBody);
+            log.info("Naver OCR Response Body: {}", response.getBody());
 
             if (response.getStatusCode() == org.springframework.http.HttpStatus.OK) {
                 com.fasterxml.jackson.databind.JsonNode root = objectMapper.readTree(response.getBody());
