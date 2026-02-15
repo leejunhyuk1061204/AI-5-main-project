@@ -28,6 +28,10 @@ export default function HistoryMain() {
             const stored = await AsyncStorage.getItem('primaryVehicle');
             if (stored) {
                 const vehicle = JSON.parse(stored);
+                if (!vehicle?.vehicleId) {
+                    setTripStats({ totalScore: 0, avgSpeed: 0, totalFuel: 0, hasData: false });
+                    return;
+                }
                 const response = await tripApi.getTrips(vehicle.vehicleId);
                 if (response.success && response.data && response.data.length > 0) {
                     const trips = response.data;

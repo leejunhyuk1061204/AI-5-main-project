@@ -213,6 +213,8 @@ class FcmService {
 
         switch (type) {
             case 'DIAGNOSIS_COMPLETE':
+            case 'DIAG_COMPLETE':
+            case 'DIAG_INTERACTIVE':
                 console.log('[FCM] Diagnosis complete:', data.sessionId, 'Score:', data.score);
                 break;
 
@@ -240,6 +242,8 @@ class FcmService {
         try {
             switch (type) {
                 case 'DIAGNOSIS_COMPLETE':
+                case 'DIAG_COMPLETE':
+                case 'DIAG_INTERACTIVE':
                     if (sessionId) {
                         navigation.navigate('DiagnosisReport', { sessionId });
                     }
