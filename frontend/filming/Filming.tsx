@@ -1,8 +1,11 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, TouchableOpacity, Dimensions, StyleSheet, Image, ActivityIndicator, StatusBar as RNStatusBar } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import EventSource from 'react-native-sse';
 import { useAlertStore } from '../store/useAlertStore';
 import { useAiDiagnosisStore } from '../store/useAiDiagnosisStore';
 import { diagnoseImage, replyToDiagnosisSession } from '../api/aiApi';
+import { BASE_URL } from '../api/axios';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -95,7 +98,7 @@ export default function Filming({ navigation, route }: { navigation?: any; route
     };
 
     const executeAnalysis = async (sessionId: string | null) => {
-        const { updateStatus, setVehicleId } = useAiDiagnosisStore.getState();
+        const { setVehicleId } = useAiDiagnosisStore.getState();
         const vehicleId = route?.params?.vehicleId || useAiDiagnosisStore.getState().selectedVehicleId;
         if (!vehicleId) return;
         setIsAnalyzing(true);
@@ -131,9 +134,6 @@ export default function Filming({ navigation, route }: { navigation?: any; route
             if (result.sessionId) {
                 setVehicleId(vehicleId as string);
                 useAiDiagnosisStore.setState({ currentSessionId: result.sessionId });
-
-                // Trigger immediate update but rely on polling effect for navigation
-                await updateStatus(result.sessionId);
             } else {
                 // Fallback (Legacy)
                 setIsAnalyzing(false);
@@ -149,24 +149,51 @@ export default function Filming({ navigation, route }: { navigation?: any; route
         // Note: setIsAnalyzing(false) is handled effectively by navigation unmount or status change
     };
 
-    // Polling Effect and Status Watcher
     const { status, currentSessionId, updateStatus } = useAiDiagnosisStore();
+    const [sseToken, setSseToken] = useState<string | null>(null);
 
-    // 1. Polling
     useEffect(() => {
-        let intervalId: NodeJS.Timeout;
-        if (status === 'PROCESSING' && currentSessionId) {
-            intervalId = setInterval(() => {
-                updateStatus(currentSessionId);
-            }, 2000);
-        }
-        return () => {
-            if (intervalId) clearInterval(intervalId);
-        };
-    }, [status, currentSessionId]);
+        AsyncStorage.getItem('accessToken').then((t) => {
+            if (t) setSseToken(t);
+        });
+    }, []);
 
-    // 2. Navigation
-    // 2. Navigation
+    useEffect(() => {
+        if (!currentSessionId || !sseToken || status !== 'PROCESSING') return;
+
+        const url = `${BASE_URL}/api/v1/ai/diagnose/session/${currentSessionId}/sse`;
+        const es = new EventSource(url, {
+            headers: { Authorization: `Bearer ${sseToken}` }
+        });
+
+        const handleStatus = (event: { data: string }) => {
+            try {
+                const data = JSON.parse(event.data) as import('../api/aiApi').AiDiagnosisResponse;
+                if (data && (data.status || data.responseMode || data.response_mode)) {
+                    updateStatus(currentSessionId, { ...data, sessionId: data.sessionId ?? currentSessionId });
+                }
+            } catch (e) {
+                console.warn('[Filming] SSE status parse error:', e);
+            }
+        };
+
+        const handleFailed = (event: { data?: string }) => {
+            const msg = (event.data && String(event.data).trim()) || '진단에 실패했습니다.';
+            useAlertStore.getState().showAlert('진단 실패', msg, 'ERROR');
+            setIsAnalyzing(false);
+            useAiDiagnosisStore.setState({ status: 'IDLE', currentSessionId: null });
+        };
+
+        es.addEventListener('status' as any, handleStatus);
+        es.addEventListener('failed' as any, handleFailed);
+
+        return () => {
+            es.removeAllEventListeners?.();
+            es.close();
+        };
+    }, [currentSessionId, sseToken, status]);
+
+    // Status Watcher: 상태 변화에 따른 네비게이션
     const isInitialMount = useRef(true);
 
     useEffect(() => {
@@ -189,11 +216,8 @@ export default function Filming({ navigation, route }: { navigation?: any; route
             });
         } else if (status === 'REPORT') {
             setIsAnalyzing(false);
-            const { diagResult } = useAiDiagnosisStore.getState();
-            navigation.replace('VisualDiagnosis', {
-                diagnosisResult: diagResult,
-                capturedImage: capturedImage,
-                vehicleId: route?.params?.vehicleId || useAiDiagnosisStore.getState().selectedVehicleId
+            navigation.replace('DiagnosisReport', {
+                reportData: { sessionId: currentSessionId }
             });
         }
     }, [status, currentSessionId]);

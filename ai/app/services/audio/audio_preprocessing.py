@@ -278,10 +278,10 @@ async def preprocess_audio_pipeline(
             buffer.seek(0)
             
             logger.info(f"Pipeline Complete. Output Length: {len(audio)/sr:.2f}s")
-            return buffer.getvalue()
+            return buffer.getvalue(), speech_ratio
             
-        return await loop.run_in_executor(None, _process, audio_bytes)
-        
+        processed_bytes, speech_ratio = await loop.run_in_executor(None, _process, audio_bytes)
+        return processed_bytes, speech_ratio
     except Exception as e:
         logger.error(f"Pipeline Error: {e}")
-        return audio_bytes
+        return audio_bytes, 0.0

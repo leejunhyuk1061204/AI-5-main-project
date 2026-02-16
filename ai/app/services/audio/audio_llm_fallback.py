@@ -9,9 +9,12 @@
 2. 저확신 또는 모호한 상황 발생 시 LLM(GPT-4o) 분석 트리거
 3. 능동 학습(Active Learning) 대상 선별 (Gate 4)
 """
+"""
 [Decision Layer] Pure Logic for Audio Anomaly Detection (Standard v1.0)
 
-⚠️ ARCHITECTURAL RULE:
+
+[Decision Layer] Pure Logic for Audio Anomaly Detection (Standard v1.0)
+ARCHITECTURAL RULE:
 - PURE LOGIC ONLY (No LLM, No I/O).
 - Returns type-safe AudioDecisionResult dataclass.
 - Gate must be an integer (0-4).
@@ -47,11 +50,24 @@ AMBIGUITY_DELTA = 0.15
 def get_audio_decision(
     confidence: float,
     label: str,
-    all_probs: Optional[Dict[str, float]] = None
+    all_probs: Optional[Dict[str, float]] = None,
+    speech_ratio: float = 0.0 # [New] Metric to detect Out-of-Distribution (Speech)
 ) -> AudioDecisionResult:
     """
     Pure logic to decide whether to trust the audio model or escalate to LLM.
     """
+    
+    # 0. Speech (OOD) Analysis
+    # [Refinement] 음성 비율이 너무 높으면 모델이 overconfident 하더라도 UNCERTAIN 처리
+    if speech_ratio > 0.20:
+        return AudioDecisionResult(
+            status="UNCERTAIN",
+            gate=3,
+            confidence=confidence,
+            label=label,
+            reason=f"high_speech_ratio ({speech_ratio:.2%})",
+            is_ambiguous=False
+        )
     
     # 0. Ambiguity Analysis (2등과의 차이 검증)
     is_ambiguous = False

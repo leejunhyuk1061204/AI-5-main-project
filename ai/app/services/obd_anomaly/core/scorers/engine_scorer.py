@@ -40,9 +40,12 @@ class EngineScorer:
         if not path.exists():
             return None
         try:
-            return json.loads(path.read_text(encoding="utf-8"))
+            return json.loads(path.read_text(encoding="utf-8-sig"))
         except Exception:
-            return None
+            try:
+                return json.loads(path.read_text(encoding="utf-8"))
+            except Exception:
+                return None
 
     def _load_torch_model(self, path: Path) -> Any:
         if not path.exists():
@@ -95,6 +98,22 @@ class EngineScorer:
         w = min(1.0, max(0.0, w))
         return GateDecision(mode="BOTH", ae_weight=float(w))
 
+    def _normalize_top_signals(self, top: List[Dict[str, float]], top_k: int = 3) -> List[Dict[str, float]]:
+        merged: Dict[str, float] = {}
+        for item in top:
+            feat = item.get("feature")
+            contrib = item.get("contribution")
+            if isinstance(feat, str) and isinstance(contrib, (int, float)):
+                merged[feat] = merged.get(feat, 0.0) + max(0.0, float(contrib))
+        ranked = sorted(merged.items(), key=lambda kv: kv[1], reverse=True)[:top_k]
+        if not ranked:
+            return []
+        denom = float(sum(v for _, v in ranked))
+        if denom <= 0.0:
+            w = 1.0 / float(len(ranked))
+            return [{"feature": f, "contribution": w} for f, _ in ranked]
+        return [{"feature": f, "contribution": float(v / denom)} for f, v in ranked]
+
     def score_window(self, req: ObdAnomalyRequest, w: Window) -> CommonEnvelope:
         try:
             schema = self._schema_features()
@@ -117,23 +136,35 @@ class EngineScorer:
             )
 
             gate = self._decide_gate(q)
-            score_if, st_if, top_if = self._if_scorer.score(x)
-            score_ae, st_ae, top_ae = self._ae_scorer.score(x, mask)
+            score_if, st_if, top_if = 0.0, "SKIPPED", []
+            score_ae, st_ae, top_ae = None, "SKIPPED", []
 
             mode = gate.mode
-            final = score_if
-            top_signals = top_if
-            details_status = {"ae": st_ae, "if": st_if}
+            final = 0.0
+            top_signals: List[Dict[str, float]] = []
+
+            if mode in ("IF_ONLY", "BOTH"):
+                score_if, st_if, top_if = self._if_scorer.score(x)
+            if mode in ("AE_ONLY", "BOTH"):
+                score_ae, st_ae, top_ae = self._ae_scorer.score(x, mask)
 
             if mode == "AE_ONLY":
                 if score_ae is None:
                     mode = "IF_ONLY"
+                    score_if, st_if, top_if = self._if_scorer.score(x)
+                    final = float(score_if)
+                    top_signals = top_if
                 else:
                     final = float(score_ae)
-                    top_signals = top_ae
-            if mode == "BOTH":
+                    top_signals = self._normalize_top_signals(top_ae)
+            elif mode == "IF_ONLY":
+                final = float(score_if)
+                top_signals = self._normalize_top_signals(top_if)
+            elif mode == "BOTH":
                 if score_ae is None:
                     mode = "IF_ONLY"
+                    final = float(score_if)
+                    top_signals = self._normalize_top_signals(top_if)
                 else:
                     final = float(gate.ae_weight * score_ae + (1.0 - gate.ae_weight) * score_if)
                     merged: Dict[str, float] = {}
@@ -141,10 +172,11 @@ class EngineScorer:
                         merged[item["feature"]] = merged.get(item["feature"], 0.0) + gate.ae_weight * float(item["contribution"])
                     for item in top_if:
                         merged[item["feature"]] = merged.get(item["feature"], 0.0) + (1.0 - gate.ae_weight) * float(item["contribution"])
-                    top_signals = [
+                    top_signals = self._normalize_top_signals([
                         {"feature": k, "contribution": v}
                         for k, v in sorted(merged.items(), key=lambda kv: kv[1], reverse=True)[:3]
-                    ]
+                    ])
+            details_status = {"ae": st_ae, "if": st_if}
 
             threshold = self._threshold()
             is_anom = bool(final >= threshold)

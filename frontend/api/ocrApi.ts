@@ -1,5 +1,14 @@
 import api from './axios';
 
+// 정비 품목 1줄 (OCR items 배열 또는 편집용)
+export interface MaintenanceLineItem {
+    consumableItemCode: string;
+    consumableItemName?: string | null;
+    quantity: number;
+    amount?: number | null;
+    description?: string | null;
+}
+
 // OCR 분석 응답 타입
 export interface OcrAnalysisResponse {
     maintenanceDate: string | null;
@@ -10,10 +19,13 @@ export interface OcrAnalysisResponse {
     // Receipt Type
     receiptType: 'MAINTENANCE' | 'FUELING';
 
-    // Maintenance Specific
+    // Maintenance Specific (단일 품목, items 없을 때 사용)
     consumableItemCode: string | null;
     consumableItemName: string | null;
     quantity: number | null;
+
+    // Maintenance 다품목 (있으면 목록 UI에서 사용)
+    items?: MaintenanceLineItem[] | null;
 
     // Fueling Specific
     fuelType: string | null;

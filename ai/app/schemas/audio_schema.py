@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, Dict
 
 class AudioRequest(BaseModel):
     """오디오 분석 요청 스키마"""
@@ -10,6 +10,7 @@ class AudioRequest(BaseModel):
 class AudioDetail(BaseModel):
     """오디오 상세 분석 내용"""
     diagnosed_label: str = Field(..., description="진단된 소리 레이블 (예: NORMAL_SOUND, FAULTY_SOUND)")
+    description: Optional[str] = Field(None, description="상세 설명")
 
 class AudioResponse(BaseModel):
     """오디오 분석 최종 응답"""
@@ -18,4 +19,5 @@ class AudioResponse(BaseModel):
     category: str = Field(..., description="소리 카테고리: ENGINE, BRAKES, SUSPENSION 등")
     data: AudioDetail = Field(..., description="오디오 상세 분석 데이터 (Old: detail)")
     confidence: float = Field(..., description="분석 신뢰도 (0.0 ~ 1.0)")
+    all_probs: Optional[Dict[str, float]] = Field(None, description="모든 클래스별 확률 분포")
     is_critical: bool = Field(False, description="긴급 점검 필요 여부")
