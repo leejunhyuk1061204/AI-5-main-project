@@ -27,6 +27,9 @@ DEFAULT_DOMAINS = ["engine", "electrical", "brake", "tire", "idle"]
 
 
 class ObdAnomalyService:
+    def __init__(self) -> None:
+        self._engine_policy_cache: Dict[str, Any] | None = None
+
     def run(self, req: ObdAnomalyRequest) -> ObdAnomalyResponse:
         self._validate(req)
         selected_domains = self._resolve_domains(req)
@@ -126,7 +129,7 @@ class ObdAnomalyService:
         pe = apply_engine_policy(scores, starts, policy)
         policy_events: List[AnomalyEvent] = []
         for e in pe:
-            sev = self._severity_from_score(float(e.get("severity_score", 0.0)))
+            sev = self._severity_from_score(float(e.get("severity_score", 0.0)), policy)
             policy_events.append(
                 AnomalyEvent(
                     type=str(e.get("type", "ENGINE_POLICY_ANOMALY")),
@@ -150,15 +153,21 @@ class ObdAnomalyService:
         return summary_core, policy_events
 
     def _load_engine_policy(self) -> Dict[str, Any]:
+        if self._engine_policy_cache is not None:
+            return self._engine_policy_cache
         base_dir = Path(__file__).resolve().parent
         reg = ArtifactRegistry(base_dir)
         paths = reg.paths()
-        return load_threshold_policy(paths["threshold_policy"])
+        self._engine_policy_cache = load_threshold_policy(paths["threshold_policy"])
+        return self._engine_policy_cache
 
-    def _severity_from_score(self, score: float) -> EventSeverity:
-        if score >= 0.85:
+    def _severity_from_score(self, score: float, policy: Dict[str, Any] | None = None) -> EventSeverity:
+        sev_cfg = (policy or {}).get("severity", {})
+        critical = float(sev_cfg.get("critical", 0.85))
+        warning = float(sev_cfg.get("warning", 0.7))
+        if score >= critical:
             return EventSeverity.CRITICAL
-        if score >= 0.7:
+        if score >= warning:
             return EventSeverity.WARNING
         return EventSeverity.INFO
 
@@ -236,7 +245,16 @@ class ObdAnomalyService:
             contribution = item.get("contribution")
             if isinstance(feature, str) and isinstance(contribution, (int, float)):
                 out.append(TopSignal(feature=feature, contribution=float(contribution)))
-        return out[: req.options.top_k] if out else None
+        if not out:
+            return None
+        top = out[: req.options.top_k]
+        s = sum(max(0.0, t.contribution) for t in top)
+        if s > 0:
+            top = [TopSignal(feature=t.feature, contribution=max(0.0, t.contribution) / s) for t in top]
+        else:
+            w = 1.0 / float(len(top))
+            top = [TopSignal(feature=t.feature, contribution=w) for t in top]
+        return top
 
     def _collect_events(
         self,
