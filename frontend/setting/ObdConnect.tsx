@@ -158,8 +158,8 @@ export default function ObdConnect({
             })
         ]);
 
-    // 통합 연결 함수 (P0: 폴링 전에 알림 권한 요청, 1=connecting 표시 2=실패 시 setError 3=전체 타임아웃)
-    const connectToDevice = async (device: UnifiedDevice, retries = 3) => {
+    // 수동 연결 전용: 1회 시도, 실패 시 재시도 없음 (자동 연결은 BackgroundService/tryAutoConnectFromCache에서 별도 처리)
+    const connectToDevice = async (device: UnifiedDevice) => {
         setStatus('connecting');
         setError(null);
         console.log('[ObdConnect] connect start name=', device.name, 'type=', device.type, 'id=', device.id);
@@ -208,14 +208,7 @@ export default function ObdConnect({
             } else if (device.type === 'classic' && device.classicDevice) {
                 ClassicBtService.disconnect(device.classicDevice).catch(() => {});
             }
-            console.warn('[ObdConnect] connection failed reason=', msg, 'retriesLeft=', retries - 1);
-            if (retries > 0) {
-                console.log('[ObdConnect] retry in 2s...');
-                await delay(2000);
-                await connectToDevice(device, retries - 1);
-            } else {
-                console.error('[ObdConnect] connection failed after retries. reason=', msg);
-            }
+            console.warn('[ObdConnect] manual connect failed (no retry). reason=', msg);
         }
     };
 
