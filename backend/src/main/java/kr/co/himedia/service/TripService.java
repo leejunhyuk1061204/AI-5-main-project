@@ -27,6 +27,8 @@ public class TripService {
     private final AiDiagnosisService aiDiagnosisService;
     private final WearFactorService wearFactorService;
     private final kr.co.himedia.repository.VehicleRepository vehicleRepository;
+    private final kr.co.himedia.service.NotificationService notificationService;
+    private final kr.co.himedia.repository.UserRepository userRepository;
 
     // 최소 유효 주행 거리 (100m = 0.1km) - 이 미만의 주행은 분석 대상에서 제외
     private static final double MIN_TRIP_DISTANCE_KM = 0.1;
@@ -58,7 +60,20 @@ public class TripService {
                 .startTime(LocalDateTime.now())
                 .build();
 
-        return tripSummaryRepository.save(newTrip);
+        TripSummary saved = tripSummaryRepository.save(newTrip);
+
+        vehicleRepository.findById(vehicleId).ifPresent(vehicle -> {
+            userRepository.findById(vehicle.getUserId()).ifPresent(user -> {
+                java.util.Map<String, String> data = new java.util.HashMap<>();
+                data.put("type", "TRIP_START");
+                data.put("tripId", saved.getTripId().toString());
+                notificationService.sendNotification(user, "주행 시작", "차봄OBD 데이터 수집을 시작합니다.",
+                        kr.co.himedia.entity.Notification.NotificationType.TRIP_START, data);
+                log.info("[TripStart] FCM notification sent for trip: {}", saved.getTripId());
+            });
+        });
+
+        return saved;
     }
 
     /**
@@ -251,9 +266,9 @@ public class TripService {
                             "tripId", trip.getTripId().toString(),
                             "logCount", tripLogs.size(),
                             "logs", tripLogs.stream().limit(500).map(log -> Map.of(
-                                    "time", log.getTime().toString(),
-                                    "rpm", log.getRpm(),
-                                    "speed", log.getSpeed(),
+                                    "time", log.getTime() != null ? log.getTime().toString() : "",
+                                    "rpm", log.getRpm() != null ? log.getRpm() : 0.0,
+                                    "speed", log.getSpeed() != null ? log.getSpeed() : 0.0,
                                     "coolant", log.getCoolantTemp() != null ? log.getCoolantTemp() : 0.0,
                                     "load", log.getEngineLoad() != null ? log.getEngineLoad() : 0.0,
                                     "voltage", log.getVoltage() != null ? log.getVoltage() : 0.0))
@@ -298,7 +313,21 @@ public class TripService {
             log.info("[TripEnd] No logs found for trip {}. Setting stats to default (0).", tripId);
         }
 
-        return tripSummaryRepository.save(trip);
+        TripSummary saved = tripSummaryRepository.save(trip);
+
+        vehicleRepository.findById(trip.getVehicleId()).ifPresent(vehicle -> {
+            userRepository.findById(vehicle.getUserId()).ifPresent(user -> {
+                java.util.Map<String, String> data = new java.util.HashMap<>();
+                data.put("type", "TRIP_END");
+                data.put("tripId", saved.getTripId().toString());
+                data.put("distance", String.valueOf(saved.getDistance() != null ? saved.getDistance() : 0.0));
+                notificationService.sendNotification(user, "주행 종료", "차봄OBD 데이터 수집이 완료되었습니다. AI 진단이 자동으로 진행됩니다.",
+                        kr.co.himedia.entity.Notification.NotificationType.TRIP_END, data);
+                log.info("[TripEnd] FCM notification sent for trip: {}", saved.getTripId());
+            });
+        });
+
+        return saved;
     }
 
     /**
