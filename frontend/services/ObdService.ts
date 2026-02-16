@@ -165,8 +165,8 @@ class ObdService {
     private tripStartConditionCount: number = 0;
     private tripStartTriggered: boolean = false;
 
-    // [10단계] Grace Period
-    private readonly GRACE_PERIOD_IDLE_MS = 60000; // 60초
+    // [10단계] Grace Period (IDLE/DISCONNECT 동일 30초)
+    private readonly GRACE_PERIOD_IDLE_MS = 30000; // 30초
     private readonly GRACE_PERIOD_DISCONNECT_MS = 30000; // 30초
 
     // [11단계] PID 실패 관리 (Stability)
@@ -759,6 +759,23 @@ class ObdService {
             }
         });
 
+        // [10단계] SUSPECT_END 시 기록/전송용 스냅샷을 null로 — 배치에 키 포함·백엔드 NULL 기록
+        if (this.tripState === 'SUSPECT_END') {
+            const s = snapshot as unknown as Record<string, unknown>;
+            s.rpm = null;
+            s.speed = null;
+            s.voltage = null;
+            s.coolant_temp = null;
+            s.engine_load = null;
+            s.fuel_trim_short = null;
+            s.fuel_trim_long = null;
+            s.throttle = null;
+            s.map = null;
+            s.maf = null;
+            s.intake_temp = null;
+            s.engine_runtime = null;
+        }
+
         // 데이터 기록 및 알림
         this.notifyListeners(snapshot);
         this.collectData(snapshot);
@@ -803,11 +820,10 @@ class ObdService {
      * [10단계] 주행 종료 상태 머신 체크
      */
     private checkTripTermination(snapshot: ObdData, now: number) {
-        // 기존 데이터 기반 종료 로직(IDLE / highAgeMs) 비활성화.
-        // 현재는 연결 상태(재연결 시도 실패 등)에 의해 주행 종료 여부를 판단한다.
-        if (!this.isPolling || this.isEndingTrip || this.tripState !== 'RUNNING') return;
+        if (!this.isPolling || this.isEndingTrip) return;
+        if (this.tripState !== 'RUNNING' && this.tripState !== 'SUSPECT_END') return;
 
-        // highAgeMs 계산: RPM 또는 Speed 중 최근 갱신 기준
+        // highAgeMs 계산: RPM 또는 Speed 중 최근 갱신 기준 (실제 수신 데이터 갱신 시각)
         const rpmTs = this.lastUpdatedAt.get('rpm') || 0;
         const speedTs = this.lastUpdatedAt.get('speed') || 0;
         const lastHighUpdatedAt = Math.max(rpmTs, speedTs);
@@ -842,9 +858,11 @@ class ObdService {
             }
         }
         else if (this.tripState === 'SUSPECT_END') {
-            // 복귀 조건: rpm > 0 또는 speed > 0 또는 업데이트 재개
-            const isActuallyActive = (snapshot.rpm !== undefined && snapshot.rpm > 0) ||
-                (snapshot.speed !== undefined && snapshot.speed > 0) ||
+            // 복귀 조건: 실제 수신 데이터(currentData) 기준 — 스냅샷은 SUSPECT_END 시 0으로 덮어씌워져 DB용
+            const currentRpm = this.currentData.rpm;
+            const currentSpeed = this.currentData.speed;
+            const isActuallyActive = (currentRpm !== undefined && currentRpm > 0) ||
+                (currentSpeed !== undefined && currentSpeed > 0) ||
                 (highAgeMs <= 1000);
 
             if (isActuallyActive) {
