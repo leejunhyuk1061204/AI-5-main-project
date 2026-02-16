@@ -397,6 +397,26 @@ CREATE TABLE IF NOT EXISTS user_notifications (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
+-- 앱 내 알림 엔티티 매핑용 (JPA: kr.co.himedia.entity.Notification)
+CREATE TABLE IF NOT EXISTS notification (
+    id SERIAL PRIMARY KEY,
+    user_id UUID NOT NULL REFERENCES users (user_id),
+    title VARCHAR(255) NOT NULL,
+    body TEXT NOT NULL,
+    type VARCHAR(50) NOT NULL,
+    is_read BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    CONSTRAINT notification_type_check CHECK (type IN (
+        'MAINTENANCE_ALERT',
+        'COMMUNITY_ALERT',
+        'SYSTEM_ALERT',
+        'DTC_ALERT',
+        'DIAG_ALERT',
+        'TRIP_START',
+        'TRIP_END'
+    ))
+);
+
 -- 지식 베이스 벡터 (2.5.2) - RAG용 매뉴얼 청크 (charm.li)
 CREATE TABLE IF NOT EXISTS knowledge_vectors (
     knowledge_id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),

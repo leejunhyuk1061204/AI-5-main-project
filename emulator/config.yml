@@ -23,17 +23,19 @@ vehicles:
     cvn: "A1B2C3D4"
     csv_file: "scenarios/test_trip.csv"
     mappings:
-      "010C": { col: "rpm", formula: "x * 4" }
-      "010D": { col: "speed", formula: "x" }
-      "0105": { col: "temp", formula: "x + 40" }
-      "0104": { col: "load", formula: "x * 2.55" }
-      "0142": { col: "voltage", formula: "x * 1000" }
-      "010B": { col: "map", formula: "x" }
-      "0110": { col: "maf", formula: "x * 100" }
-      "010F": { col: "intake_temp", formula: "x + 40" }
-      "0111": { col: "throttle", formula: "x * 2.55" }
-      "0106": { col: "fuel_trim_short", formula: "x + 128" }
-      "0107": { col: "fuel_trim_long", formula: "x + 128" }
+      # CSV 값은 이미 '사람 단위'이므로 formula는 단순 전달만 하고,
+      # raw 바이트 스케일링은 run_emulator.py의 update_pids_from_dict에서만 처리하게 둔다.
+      "010C": { col: "rpm", formula: "x" }            # rpm 그대로 → 내부에서 *4 → 디코드 후 원래 rpm
+      "010D": { col: "speed", formula: "x" }          # km/h 그대로
+      "0105": { col: "temp", formula: "x" }           # °C 그대로 → 내부에서 +40
+      "0104": { col: "load", formula: "x" }           # % 그대로 → 내부에서 *2.55
+      "0142": { col: "voltage", formula: "x" }        # V 그대로 → 내부에서 *1000
+      "010B": { col: "map", formula: "x" }            # kPa 그대로
+      "0110": { col: "maf", formula: "x" }            # g/s 그대로 → 내부에서 *100
+      "010F": { col: "intake_temp", formula: "x" }    # °C 그대로 → 내부에서 +40
+      "0111": { col: "throttle", formula: "x" }       # % 그대로 → 내부에서 *2.55
+      "0106": { col: "fuel_trim_short", formula: "x" }# 현재는 사용하지 않지만 일관성 유지
+      "0107": { col: "fuel_trim_long", formula: "x" }
     dtcs: ["P0115", "P0300"]
 
   - id: "DEV_002"

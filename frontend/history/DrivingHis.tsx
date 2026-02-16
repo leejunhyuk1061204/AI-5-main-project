@@ -5,10 +5,11 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
 import Svg, { Circle } from 'react-native-svg';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import tripApi, { TripSummary } from '../api/tripApi';
 import VehicleSelectModal from '../components/VehicleSelectModal';
 import { useAlertStore } from '../store/useAlertStore';
+import { useVehicleStore } from '../store/useVehicleStore';
+import { VehicleResponse } from '../api/vehicleApi';
 
 const { width } = Dimensions.get('window');
 
@@ -23,11 +24,22 @@ const formatDate = (isoString: string) => {
 
 export default function DrivingHis() {
     const navigation = useNavigation();
+    const { vehicles, primaryVehicle } = useVehicleStore();
+    const [selectedVehicle, setSelectedVehicle] = useState<Partial<VehicleResponse> | null>(null);
     const [trips, setTrips] = useState<TripSummary[]>([]);
     const [loading, setLoading] = useState(true);
+    const [vehicleSelectModalVisible, setVehicleSelectModalVisible] = useState(false);
     const [vehicleChangeTripId, setVehicleChangeTripId] = useState<string | null>(null);
     const [changing, setChanging] = useState(false);
     const showAlert = useAlertStore((s) => s.showAlert);
+
+    useEffect(() => {
+        if (primaryVehicle) {
+            setSelectedVehicle(primaryVehicle);
+        } else if (vehicles.length > 0) {
+            setSelectedVehicle(vehicles[0]);
+        }
+    }, [primaryVehicle, vehicles]);
 
     // Derived State using useMemo
     const stats = useMemo(() => {
@@ -82,30 +94,36 @@ export default function DrivingHis() {
     }, [trips]);
 
     useEffect(() => {
-        loadTrips();
-    }, []);
+        if (selectedVehicle?.vehicleId) {
+            loadTrips();
+        } else {
+            setTrips([]);
+            setLoading(false);
+        }
+    }, [selectedVehicle?.vehicleId]);
 
     const loadTrips = async () => {
+        if (!selectedVehicle?.vehicleId) return;
+        setLoading(true);
         try {
-            const stored = await AsyncStorage.getItem('primaryVehicle');
-            if (stored) {
-                const vehicle = JSON.parse(stored);
-                if (!vehicle?.vehicleId) {
-                    setTrips([]);
-                    setLoading(false);
-                    return;
-                }
-                const response = await tripApi.getTrips(vehicle.vehicleId);
-                if (response.success && response.data) {
-                    const sorted = [...response.data].sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
-                    setTrips(sorted);
-                }
+            const response = await tripApi.getTrips(selectedVehicle.vehicleId);
+            if (response.success && response.data) {
+                const sorted = [...response.data].sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
+                setTrips(sorted);
+            } else {
+                setTrips([]);
             }
         } catch (e) {
             console.error('Failed to load trips', e);
+            setTrips([]);
         } finally {
             setLoading(false);
         }
+    };
+
+    const handleSelectVehicle = (vehicle: VehicleResponse) => {
+        setSelectedVehicle(vehicle);
+        setVehicleSelectModalVisible(false);
     };
 
     const handleChangeVehicleSelect = async (vehicle: { vehicleId: string }) => {
@@ -157,8 +175,14 @@ export default function DrivingHis() {
                     <MaterialIcons name="arrow-back-ios" size={20} color="white" />
                 </TouchableOpacity>
                 <Text className="text-white text-lg font-bold">주행 이력 분석</Text>
-                <TouchableOpacity className="w-10 h-10 items-center justify-center rounded-full active:bg-gray-800">
-                    <MaterialIcons name="more-vert" size={24} color="white" />
+                <TouchableOpacity
+                    onPress={() => setVehicleSelectModalVisible(true)}
+                    className="flex-row items-center gap-1.5 bg-white/5 py-2 px-3 rounded-xl border border-white/10 min-w-[80]"
+                >
+                    <Text className="text-white font-bold text-sm" numberOfLines={1}>
+                        {selectedVehicle?.modelNameKo || selectedVehicle?.manufacturerKo || '차량 선택'}
+                    </Text>
+                    <MaterialIcons name="keyboard-arrow-down" size={16} color="#94a3b8" />
                 </TouchableOpacity>
             </View>
 
@@ -275,7 +299,7 @@ export default function DrivingHis() {
 
                                 {/* List Mapping - Show only 1 recent */}
                                 <View className="gap-3">
-                                    {trips.slice(0, 1).map((trip, index) => (
+                                    {trips.slice(0, 5).map((trip, index) => (
                                         <TouchableOpacity
                                             key={index}
                                             activeOpacity={0.7}
@@ -323,6 +347,13 @@ export default function DrivingHis() {
                 </View>
             </ScrollView>
 
+            <VehicleSelectModal
+                visible={vehicleSelectModalVisible}
+                onClose={() => setVehicleSelectModalVisible(false)}
+                onSelect={handleSelectVehicle}
+                title="주행 이력 조회할 차량 선택"
+                description="선택한 차량의 주행 기록을 표시합니다."
+            />
             <VehicleSelectModal
                 visible={vehicleChangeTripId !== null}
                 onClose={() => !changing && setVehicleChangeTripId(null)}
