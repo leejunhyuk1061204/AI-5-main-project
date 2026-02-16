@@ -4,6 +4,7 @@ import kr.co.himedia.common.ApiResponse;
 import kr.co.himedia.dto.maintenance.FuelingHistoryRequest;
 import kr.co.himedia.service.FuelingService;
 import kr.co.himedia.dto.maintenance.FuelingHistoryResponse;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -20,7 +21,7 @@ public class FuelingController {
     @PostMapping("/{vehicleId}")
     public ApiResponse<FuelingHistoryResponse> registerFueling(
             @PathVariable("vehicleId") UUID vehicleId,
-            @RequestBody FuelingHistoryRequest request) {
+            @RequestBody @Valid FuelingHistoryRequest request) {
         return ApiResponse.success(fuelingService.registerFueling(vehicleId, request));
     }
 

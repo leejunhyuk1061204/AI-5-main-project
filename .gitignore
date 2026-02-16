@@ -16,6 +16,7 @@ out/
 *.iml
 *.ipr
 *.iws
+ai_personal/
 
 !gradle/wrapper/gradle-wrapper.jar
 !**/src/main/resources/ant-static-assets/
@@ -69,6 +70,7 @@ ai_env/
 logs/
 *.log
 backend/logs/
+elm.log.*
 
 # ==================================================
 # RAG / Data (Large or Generated)

@@ -28,6 +28,10 @@ export default function HistoryMain() {
             const stored = await AsyncStorage.getItem('primaryVehicle');
             if (stored) {
                 const vehicle = JSON.parse(stored);
+                if (!vehicle?.vehicleId) {
+                    setTripStats({ totalScore: 0, avgSpeed: 0, totalFuel: 0, hasData: false });
+                    return;
+                }
                 const response = await tripApi.getTrips(vehicle.vehicleId);
                 if (response.success && response.data && response.data.length > 0) {
                     const trips = response.data;
@@ -127,7 +131,7 @@ export default function HistoryMain() {
                                 <MaterialIcons name="build" size={10} color="#0d7ff2" />
                                 <Text className="text-xs font-bold text-primary uppercase tracking-wider">Prediction</Text>
                             </View>
-                            <Text className="text-base font-bold text-white mt-1.5">소모품 관리 및 예지</Text>
+                            <Text className="text-base font-bold text-white mt-1.5">소모품 수명 관리</Text>
                             <Text className="text-xs text-text-muted">엔진 오일 잔여 수명 예측</Text>
                         </View>
                     </View>

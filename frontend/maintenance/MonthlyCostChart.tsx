@@ -179,7 +179,7 @@ export default function MonthlyCostChart({ maintenanceList, fuelingList }: Month
                     id: item.id,
                     label: item.fuelingDate,
                     subLabel: item.shopName || '주유소',
-                    amount: item.totalCost,
+                    amount: item.totalCost ?? 0,
                     color: 'text-white'
                 }));
         }
@@ -368,7 +368,7 @@ export default function MonthlyCostChart({ maintenanceList, fuelingList }: Month
                                         </Text>
                                     </View>
                                     <Text className="text-white text-xs font-bold">
-                                        {item.amount.toLocaleString()}
+                                        {(item.amount ?? 0).toLocaleString()}
                                     </Text>
                                 </View>
                             ))}

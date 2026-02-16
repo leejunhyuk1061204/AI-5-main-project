@@ -1,5 +1,6 @@
 package kr.co.himedia.dto.maintenance;
 
+import jakarta.validation.constraints.NotNull;
 import kr.co.himedia.entity.FuelType;
 import lombok.*;
 
@@ -17,6 +18,7 @@ public class FuelingHistoryRequest {
     private FuelType fuelType;
     private Double amount;
     private Integer unitPrice;
+    @NotNull(message = "총 결제금액은 필수입니다")
     private Integer totalCost;
     private String shopName;
     private String memo;

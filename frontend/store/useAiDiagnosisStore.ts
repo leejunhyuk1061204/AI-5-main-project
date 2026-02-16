@@ -18,7 +18,7 @@ interface AiDiagnosisState {
     setVehicleId: (id: string | null) => void;
     startDiagnosis: (vehicleId: string) => Promise<string | null>;
     sendReply: (reply: string) => Promise<void>;
-    updateStatus: (sessionId: string) => Promise<void>;
+    updateStatus: (sessionId: string, cachedData?: AiDiagnosisResponse) => Promise<void>;
     setMessages: (messages: DiagnosisMessage[]) => void;
     reset: () => void;
 }
@@ -76,12 +76,14 @@ export const useAiDiagnosisStore = create<AiDiagnosisState>((set, get) => ({
         }
     },
 
-    updateStatus: async (sessionId) => {
+    updateStatus: async (sessionId, cachedData) => {
         try {
-            const statusData = await getDiagnosisSessionStatus(sessionId);
+            const statusData = cachedData ?? await getDiagnosisSessionStatus(sessionId);
             if (!statusData) return;
 
-            console.log("[useAiDiagnosisStore] Polling Status:", statusData.status, "Action:", statusData.requestedAction);
+            if (!cachedData) {
+                console.log("[useAiDiagnosisStore] Polling Status:", statusData.status, "Action:", statusData.requestedAction);
+            }
 
             // 메시지 동기화
             let newMessages = statusData.interactiveData?.conversation || [];

@@ -19,18 +19,25 @@ import { useNavigation } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
 import { format } from 'date-fns';
 import { useRegistrationStore } from '../../store/useRegistrationStore';
+import { useConsumableStore } from '../../store/useConsumableStore';
 import { useAlertStore } from '../../store/useAlertStore';
 import { useDatePickerStore } from '../../store/useDatePickerStore';
+import { isPositionTypeCode, getPositionOptions } from '../../maintenance/consumableItems';
 
 export default function MaintenanceReg() {
     const navigation = useNavigation<any>();
     const insets = useSafeAreaInsets();
     const store = useRegistrationStore();
     const datePickerStore = useDatePickerStore();
+    const consumablePickerList = useConsumableStore((s) => s.consumablePickerList);
+    const getConsumableMasterItem = useConsumableStore((s) => s.getConsumableMasterItem);
 
     // UI State
     const [modalVisible, setModalVisible] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
+    const [positionModalVisible, setPositionModalVisible] = useState(false);
+    const [positionTypeCode, setPositionTypeCode] = useState<'TIRE_POSITION' | 'BRAKE_POSITION' | null>(null);
+    const [selectedPositionCodes, setSelectedPositionCodes] = useState<string[]>([]);
 
     useEffect(() => {
         const init = async () => {
@@ -61,11 +68,37 @@ export default function MaintenanceReg() {
         }
     };
 
-    // Helper: Filter Master List
-    const filteredMasterList = store.consumableMasterList.filter(item => {
+    const filteredMasterList = consumablePickerList.filter(item => {
         const query = searchQuery.toLowerCase();
-        return item.name.toLowerCase().includes(query) || (item.category && item.category.toLowerCase().includes(query));
+        return item.name.toLowerCase().includes(query);
     });
+
+    const togglePosition = (code: string) => {
+        setSelectedPositionCodes(prev =>
+            prev.includes(code) ? prev.filter(c => c !== code) : [...prev, code]
+        );
+    };
+
+    const openPositionModal = (code: 'TIRE_POSITION' | 'BRAKE_POSITION') => {
+        setPositionTypeCode(code);
+        setSelectedPositionCodes([]);
+        setPositionModalVisible(true);
+    };
+
+    const confirmPositionSelection = () => {
+        if (!positionTypeCode || selectedPositionCodes.length === 0) {
+            useAlertStore.getState().showAlert('알림', '최소 1개 위치를 선택해주세요.', 'INFO');
+            return;
+        }
+        selectedPositionCodes.forEach(code => {
+            const item = getConsumableMasterItem(code);
+            if (item) store.addMaintenanceRecord(item);
+        });
+        setPositionModalVisible(false);
+        setModalVisible(false);
+        setPositionTypeCode(null);
+        setSelectedPositionCodes([]);
+    };
 
     // Helper: Date Picker
     const showDatePicker = (itemCode: string) => {
@@ -217,26 +250,90 @@ export default function MaintenanceReg() {
                             <FlatList
                                 data={filteredMasterList}
                                 keyExtractor={(item) => item.code}
-                                renderItem={({ item }) => (
-                                    <TouchableOpacity
-                                        style={styles.listItem}
-                                        onPress={() => {
-                                            store.addMaintenanceRecord(item);
-                                            setModalVisible(false);
-                                        }}
-                                    >
-                                        <View>
-                                            <Text style={styles.listItemName}>{item.name}</Text>
-                                            <Text style={styles.listItemSub}>
-                                                교체 주기: {item.replacementCycleKm?.toLocaleString()}km
-                                            </Text>
-                                        </View>
-                                    </TouchableOpacity>
-                                )}
+                                renderItem={({ item }) => {
+                                    const masterItem = getConsumableMasterItem(item.code);
+                                    const isPosition = isPositionTypeCode(item.code);
+                                    return (
+                                        <TouchableOpacity
+                                            style={styles.listItem}
+                                            onPress={() => {
+                                                if (isPosition) {
+                                                    openPositionModal(item.code as 'TIRE_POSITION' | 'BRAKE_POSITION');
+                                                } else if (masterItem) {
+                                                    store.addMaintenanceRecord(masterItem);
+                                                    setModalVisible(false);
+                                                }
+                                            }}
+                                        >
+                                            <View>
+                                                <Text style={styles.listItemName}>{item.name}</Text>
+                                                <Text style={styles.listItemSub}>
+                                                    {masterItem?.replacementCycleKm != null
+                                                        ? `교체 주기: ${masterItem.replacementCycleKm.toLocaleString()}km`
+                                                        : isPosition ? '위치 선택 시 개별 등록' : ''}
+                                                </Text>
+                                            </View>
+                                        </TouchableOpacity>
+                                    );
+                                }}
                             />
                         </Pressable>
                     </Pressable>
                 </KeyboardAvoidingView>
+            </Modal>
+
+            {/* 타이어/브레이크 위치 선택 모달 */}
+            <Modal
+                visible={positionModalVisible}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setPositionModalVisible(false)}
+            >
+                <Pressable style={styles.modalOverlay} onPress={() => setPositionModalVisible(false)}>
+                    <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
+                        <View style={styles.modalHeader}>
+                            <Text style={styles.modalTitle}>
+                                {positionTypeCode === 'TIRE_POSITION' ? '어느 타이어를 등록할까요?' : '어느 브레이크 패드를 등록할까요?'}
+                            </Text>
+                            <TouchableOpacity onPress={() => setPositionModalVisible(false)}>
+                                <MaterialIcons name="close" size={24} color="#94a3b8" />
+                            </TouchableOpacity>
+                        </View>
+                        <Text style={[styles.subTitle, { marginBottom: 16 }]}>복수 선택 가능</Text>
+                        {positionTypeCode && getPositionOptions(positionTypeCode).map((opt) => (
+                            <TouchableOpacity
+                                key={opt.code}
+                                style={[
+                                    styles.listItem,
+                                    selectedPositionCodes.includes(opt.code) && { backgroundColor: 'rgba(59, 130, 246, 0.2)', borderColor: 'rgba(59, 130, 246, 0.5)' }
+                                ]}
+                                onPress={() => togglePosition(opt.code)}
+                            >
+                                <Text style={styles.listItemName}>{opt.name}</Text>
+                                <MaterialIcons
+                                    name={selectedPositionCodes.includes(opt.code) ? 'check-box' : 'check-box-outline-blank'}
+                                    size={24}
+                                    color={selectedPositionCodes.includes(opt.code) ? '#3b82f6' : '#64748b'}
+                                />
+                            </TouchableOpacity>
+                        ))}
+                        <View style={{ flexDirection: 'row', gap: 12, marginTop: 16 }}>
+                            <TouchableOpacity
+                                style={[styles.listItem, { flex: 1, alignItems: 'center' }]}
+                                onPress={() => setPositionModalVisible(false)}
+                            >
+                                <Text style={styles.listItemName}>취소</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.listItem, { flex: 1, alignItems: 'center', backgroundColor: 'rgba(59, 130, 246, 0.3)' }]}
+                                onPress={confirmPositionSelection}
+                                disabled={selectedPositionCodes.length === 0}
+                            >
+                                <Text style={[styles.listItemName, selectedPositionCodes.length === 0 && { color: '#64748b' }]}>선택 완료</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </Pressable>
+                </Pressable>
             </Modal>
 
             {/* Loading Overlay */}
