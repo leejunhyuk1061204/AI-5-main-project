@@ -605,6 +605,10 @@ public class AiDiagnosisService {
         // [Step 5] 최종 완료
         sseEmitters.send(sessionId.toString(), "step5", "[Step 5/5] 최종 진단 리포트 생성 완료");
 
+        // 최종 상태 SSE 전송 (폴링 대체: 프론트에서 즉시 분기 가능)
+        DiagnosisResponseDto statusDto = getDiagnosisResult(sessionId);
+        sseEmitters.send(sessionId.toString(), "status", statusDto);
+
         // 5. 알림 발송 (DTC/AUTO만)
         DiagTriggerType triggerType = session.getTriggerType();
         if (triggerType == DiagTriggerType.DTC || triggerType == DiagTriggerType.AUTO) {

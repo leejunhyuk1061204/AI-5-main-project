@@ -9,9 +9,12 @@ def load_threshold_policy(path: Path) -> Dict[str, Any]:
     if not path.exists():
         return {}
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        return json.loads(path.read_text(encoding="utf-8-sig"))
     except Exception:
-        return {}
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            return {}
 
 
 def apply_engine_policy(
@@ -24,8 +27,8 @@ def apply_engine_policy(
     Returns generated event dicts.
     """
     t = float(policy.get("threshold", 0.7))
-    k = int(policy.get("k_consecutive", 1))
-    cooldown = int(policy.get("cooldown_sec", 0))
+    k = max(1, int(policy.get("k_consecutive", 1)))
+    cooldown = max(0, int(policy.get("cooldown_sec", 0)))
     sev_cfg = policy.get("severity", {})
     bonus_per = float(sev_cfg.get("duration_bonus_per_window", 0.05))
     max_bonus = float(sev_cfg.get("max_bonus", 0.3))
@@ -55,6 +58,8 @@ def apply_engine_policy(
                 "value": score,
                 "severity_score": severity_score,
                 "duration_bonus": bonus,
+                "streak": streak,
+                "start_t": now_ts,
             }
         )
         last_event_ts = now_ts

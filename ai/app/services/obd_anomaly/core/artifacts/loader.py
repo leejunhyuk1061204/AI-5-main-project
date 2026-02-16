@@ -10,9 +10,13 @@ def load_artifact_json(path: Path, default: Dict[str, Any] | None = None) -> Dic
     if not path.exists():
         return default or {}
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        # Windows 편집기/PowerShell 저장 시 UTF-8 BOM이 들어갈 수 있어 sig 우선 처리.
+        return json.loads(path.read_text(encoding="utf-8-sig"))
     except Exception:
-        return default or {}
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            return default or {}
 
 
 def load_artifact_pickle(path: Path) -> Any:
