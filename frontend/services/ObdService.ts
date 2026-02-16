@@ -551,7 +551,7 @@ class ObdService {
             this.samplingLoop(1000); // 6단계: 1초 고정 샘플링 시작
         }
 
-        // BackgroundService: 백그라운드 OBD 자동 재연결 (주행 시작/종료 알림은 백엔드 FCM)
+        // 안드로이드 백그라운드 서비스 시작 (P0: 권한은 호출 측에서 먼저 요청, 여기서는 체크만)
         if (Platform.OS === 'android') {
             (async () => {
                 try {
@@ -673,6 +673,7 @@ class ObdService {
             OBD_PIDS.THROTTLE
         ];
 
+        // anomaly + wear_factor + DTC + freezeFrame에 실제로 쓰는 PID만
         const normalPids = [
             OBD_PIDS.ENGINE_LOAD,
             OBD_PIDS.MAP,
@@ -680,19 +681,21 @@ class ObdService {
             OBD_PIDS.COOLANT_TEMP,
             OBD_PIDS.INTAKE_TEMP,
             OBD_PIDS.ENGINE_RUNTIME,
+            OBD_PIDS.FUEL_TRIM_SHORT,
+            OBD_PIDS.FUEL_TRIM_LONG,
             OBD_PIDS.VOLTAGE,
             OBD_PIDS.DTC_STATUS,
-            // 보조 지표 (Ircama car 지원)
-            OBD_PIDS.FUEL_STATUS,
-            OBD_PIDS.TIMING_ADVANCE,
-            OBD_PIDS.OBD_COMPLIANCE,
-            OBD_PIDS.DISTANCE_W_MIL,
-            OBD_PIDS.DISTANCE_SINCE_DTC_CLEAR,
-            OBD_PIDS.BAROMETRIC_PRESSURE,
-            OBD_PIDS.CATALYST_TEMP_B1S1,
-            OBD_PIDS.ABSOLUTE_LOAD,
-            OBD_PIDS.TIME_SINCE_DTC_CLEARED,
-            OBD_PIDS.FUEL_TYPE,
+            // --- 주석 처리 (미사용) ---
+            // OBD_PIDS.FUEL_STATUS,
+            // OBD_PIDS.TIMING_ADVANCE,
+            // OBD_PIDS.OBD_COMPLIANCE,
+            // OBD_PIDS.DISTANCE_W_MIL,
+            // OBD_PIDS.DISTANCE_SINCE_DTC_CLEAR,
+            // OBD_PIDS.BAROMETRIC_PRESSURE,
+            // OBD_PIDS.CATALYST_TEMP_B1S1,
+            // OBD_PIDS.ABSOLUTE_LOAD,
+            // OBD_PIDS.TIME_SINCE_DTC_CLEARED,
+            // OBD_PIDS.FUEL_TYPE,
         ];
 
         // 1. HIGH 그룹전체는 매 주기에 추가 (최신성 보장)
@@ -1031,6 +1034,8 @@ class ObdService {
                 case '010B': this.updateData('map', result); break;
                 case '0110': this.updateData('maf', result); break;
                 case '011F': this.updateData('engine_runtime', result); break;
+                case '0106': this.updateData('fuel_trim_short', result); break;
+                case '0107': this.updateData('fuel_trim_long', result); break;
                 case '0103': this.updateData('fuel_status', result); break;
                 case '010E': this.updateData('timing_advance', result); break;
                 case '011C': this.updateData('obd_compliance', result); break;

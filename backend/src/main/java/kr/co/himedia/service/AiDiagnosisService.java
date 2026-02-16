@@ -1001,12 +1001,15 @@ public class AiDiagnosisService {
         int t = 0;
         for (Map<String, Object> row : chunk) {
             Map<String, Object> features = new HashMap<>();
-            putIfNumber(row, features, "rpm", "rpm");
-            putIfNumber(row, features, "speed", "speed");
-            putIfNumber(row, features, "load", "engine_load");
-            putIfNumber(row, features, "engineLoad", "engine_load");
-            putIfNumber(row, features, "coolant", "coolant_temp");
-            putIfNumber(row, features, "coolantTemp", "coolant_temp");
+            // Core7 스키마에 맞게 키 매핑
+            putIfNumber(row, features, "rpm", "engine_rpm");
+            putIfNumber(row, features, "speed", "vehicle_speed_kmh");
+            putIfNumber(row, features, "coolant", "engine_coolant_temp_c");
+            putIfNumber(row, features, "coolantTemp", "engine_coolant_temp_c");
+            putIfNumber(row, features, "map", "imap_kpa");
+            putIfNumber(row, features, "intakeTemp", "intake_air_temp_c");
+            putIfNumber(row, features, "maf", "maf_gps");
+            putIfNumber(row, features, "throttlePos", "throttle_pos_pct");
             putIfNumber(row, features, "voltage", "battery_voltage_v");
             if (tirePressureKpa != null && !tirePressureKpa.isEmpty()) {
                 features.putAll(tirePressureKpa);
@@ -1245,10 +1248,15 @@ public class AiDiagnosisService {
         for (List<ObdLog> group : tripGroups) {
             List<Map<String, Object>> mappedLogs = group.stream().map(l -> {
                 Map<String, Object> p = new HashMap<>();
+                // OBD 로그에서 Core7 피처에 대응되는 값 추출
                 p.put("rpm", l.getRpm());
                 p.put("speed", l.getSpeed());
-                p.put("load", l.getEngineLoad());
                 p.put("coolant", l.getCoolantTemp());
+                p.put("map", l.getMap());
+                p.put("intakeTemp", l.getIntakeTemp());
+                p.put("maf", l.getMaf());
+                p.put("throttlePos", l.getThrottlePos());
+                // 기타 참조용 피처는 그대로 유지
                 p.put("voltage", l.getVoltage());
                 p.put("time", l.getTime().toString());
                 return p;
