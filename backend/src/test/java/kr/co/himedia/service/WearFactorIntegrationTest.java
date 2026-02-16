@@ -141,9 +141,12 @@ class WearFactorIntegrationTest {
                 .startTime(LocalDateTime.of(2026, 1, 1, 12, 0))
                 .endTime(LocalDateTime.of(2026, 1, 1, 12, 30))
                 .distance(3.0) // 짧은 거리 (cold start)
+                .avgRpm(3500.0) // RPM 있음 → 엔진오일/스파크플러그 공식 적용
+                .avgEngineLoad(75.0)
                 .hardAccelCount(20)
                 .hardBrakeCount(15)
                 .maxCoolantTemp(105.0) // 과열
+                .maxEngineLoad(90.0)
                 .avgMaf(10.0) // 낮은 MAF (에어필터 열화)
                 .avgThrottlePos(80.0)
                 .averageSpeed(20.0) // 시내 주행
@@ -173,12 +176,13 @@ class WearFactorIntegrationTest {
     // ==================== 헬퍼: 5개 소모품 생성 ====================
 
     private List<VehicleConsumable> createAllConsumables() {
+        // 실제 도메인 코드 및 시드 데이터(db/seed_consumable.sql)에 맞춘 5개 대표 소모품
         return List.of(
-                createConsumable("TIRE", "타이어", 40000),
+                createConsumable("TIRE_FL", "앞왼쪽 타이어", 50000),     // 타이어 (대표 1개)
                 createConsumable("ENGINE_OIL", "엔진 오일", 10000),
                 createConsumable("COOLANT", "냉각수", 40000),
                 createConsumable("AIR_FILTER", "에어필터", 15000),
-                createConsumable("BRAKE_PAD", "브레이크패드", 30000));
+                createConsumable("BRAKE_PAD_FRONT", "앞 브레이크 패드", 30000)); // 브레이크 패드 (대표 1개)
     }
 
     private VehicleConsumable createConsumable(String code, String name, int intervalMileage) {

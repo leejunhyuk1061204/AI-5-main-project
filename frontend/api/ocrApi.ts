@@ -1,5 +1,14 @@
 import api from './axios';
 
+// 정비 품목 1줄 (OCR items 배열 또는 편집용)
+export interface MaintenanceLineItem {
+    consumableItemCode: string;
+    consumableItemName?: string | null;
+    quantity: number;
+    amount?: number | null;
+    description?: string | null;
+}
+
 // OCR 분석 응답 타입
 export interface OcrAnalysisResponse {
     maintenanceDate: string | null;
@@ -10,9 +19,13 @@ export interface OcrAnalysisResponse {
     // Receipt Type
     receiptType: 'MAINTENANCE' | 'FUELING';
 
-    // Maintenance Specific
+    // Maintenance Specific (단일 품목, items 없을 때 사용)
     consumableItemCode: string | null;
     consumableItemName: string | null;
+    quantity: number | null;
+
+    // Maintenance 다품목 (있으면 목록 UI에서 사용)
+    items?: MaintenanceLineItem[] | null;
 
     // Fueling Specific
     fuelType: string | null;
@@ -32,6 +45,7 @@ export interface MaintenanceHistoryResponse {
     isStandardized: boolean;
     shopName: string | null;
     cost: number | null;
+    quantity: number | null;
     ocrData: string | null;
     memo: string | null;
     receiptId: string | null;
@@ -55,13 +69,16 @@ export interface FuelingHistoryRequest {
     fuelingDate: string;
     mileageAtFueling: number | null;
     fuelType: string;
-    amount: number;
-    unitPrice: number;
+    amount: number | null;
+    unitPrice: number | null;
     totalCost: number;
     shopName: string | null;
     memo: string | null;
     receiptId: string | null;
 }
+
+/** OCR/LLM 처리 시간 고려 타임아웃 (초) */
+const OCR_REQUEST_TIMEOUT_MS = 60000;
 
 /**
  * OCR 분석만 수행 (저장 X)
@@ -71,6 +88,7 @@ export const analyzeReceipt = async (file: FormData): Promise<OcrAnalysisRespons
         headers: {
             'Content-Type': 'multipart/form-data',
         },
+        timeout: OCR_REQUEST_TIMEOUT_MS,
     });
     return response.data.data;
 };
@@ -86,6 +104,7 @@ export const analyzeAndSaveReceipt = async (
         headers: {
             'Content-Type': 'multipart/form-data',
         },
+        timeout: OCR_REQUEST_TIMEOUT_MS,
     });
     return response.data.data;
 };

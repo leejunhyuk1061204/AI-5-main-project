@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { View, Text, TouchableOpacity, Animated, ActivityIndicator } from 'react-native';
 import { useAlertStore } from '../store/useAlertStore';
 import { useAiDiagnosisStore } from '../store/useAiDiagnosisStore';
@@ -6,7 +7,9 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Audio } from 'expo-av';
 import * as DocumentPicker from 'expo-document-picker';
+import EventSource from 'react-native-sse';
 import { diagnoseEngineSound, replyToDiagnosisSession } from '../api/aiApi';
+import { BASE_URL } from '../api/axios';
 import BaseScreen from '../components/layout/BaseScreen';
 
 const RecordingText = () => {
@@ -277,7 +280,6 @@ export default function EngineSoundDiag() {
             if (result.sessionId) {
                 setVehicleId(vehicleId as string);
                 useAiDiagnosisStore.setState({ currentSessionId: result.sessionId });
-                await updateStatus(result.sessionId);
             } else {
                 setStep(3);
             }
@@ -289,20 +291,49 @@ export default function EngineSoundDiag() {
         }
     };
 
-    // Polling Effect (소리 진단 화면용)
     const { status, currentSessionId, updateStatus } = useAiDiagnosisStore();
+    const [sseToken, setSseToken] = useState<string | null>(null);
 
     useEffect(() => {
-        let intervalId: NodeJS.Timeout;
-        if (status === 'PROCESSING' && currentSessionId) {
-            intervalId = setInterval(() => {
-                updateStatus(currentSessionId);
-            }, 2000);
-        }
-        return () => {
-            if (intervalId) clearInterval(intervalId);
+        AsyncStorage.getItem('accessToken').then((t) => {
+            if (t) setSseToken(t);
+        });
+    }, []);
+
+    useEffect(() => {
+        if (!currentSessionId || !sseToken || status !== 'PROCESSING') return;
+
+        const url = `${BASE_URL}/api/v1/ai/diagnose/session/${currentSessionId}/sse`;
+        const es = new EventSource(url, {
+            headers: { Authorization: `Bearer ${sseToken}` }
+        });
+
+        const handleStatus = (event: { data: string }) => {
+            try {
+                const data = JSON.parse(event.data) as import('../api/aiApi').AiDiagnosisResponse;
+                if (data && (data.status || data.responseMode || data.response_mode)) {
+                    updateStatus(currentSessionId, { ...data, sessionId: data.sessionId ?? currentSessionId });
+                }
+            } catch (e) {
+                console.warn('[EngineSoundDiag] SSE status parse error:', e);
+            }
         };
-    }, [status, currentSessionId]);
+
+        const handleFailed = (event: { data?: string }) => {
+            const msg = (event.data && String(event.data).trim()) || '진단에 실패했습니다.';
+            useAlertStore.getState().showAlert('진단 실패', msg, 'ERROR');
+            setStep(1);
+            useAiDiagnosisStore.setState({ status: 'IDLE', currentSessionId: null });
+        };
+
+        es.addEventListener('status' as any, handleStatus);
+        es.addEventListener('failed' as any, handleFailed);
+
+        return () => {
+            es.removeAllEventListeners?.();
+            es.close();
+        };
+    }, [currentSessionId, sseToken, status]);
 
     // Status Watcher: 상태 변화에 따른 네비게이션
     // Status Watcher: 상태 변화에 따른 네비게이션

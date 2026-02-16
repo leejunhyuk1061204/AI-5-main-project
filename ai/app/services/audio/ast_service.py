@@ -84,7 +84,7 @@ async def run_ast_inference(processed_audio_buffer, ast_model_payload=None) -> A
             status="FAULTY",
             analysis_type="AST_MOCK",
             category=category,
-            detail=AudioDetail(
+            data=AudioDetail(
                 diagnosed_label=label_name,
                 description="테스트용: 엔진 노킹 소음 감지 (Mock)"
             ),
@@ -97,7 +97,7 @@ async def run_ast_inference(processed_audio_buffer, ast_model_payload=None) -> A
 
     if model is None or feature_extractor is None:
         print("[AST Service] Model or FeatureExtractor is None! Returning Mock Response.")
-        return AudioResponse(status="ERROR", analysis_type="AST", category="ERROR", detail=AudioDetail(diagnosed_label="Error", description="Model not loaded"), confidence=0, is_critical=False)
+        return AudioResponse(status="ERROR", analysis_type="AST", category="ERROR", data=AudioDetail(diagnosed_label="Error", description="Model not loaded"), confidence=0, is_critical=False)
 
     # =========================================================================
     # 실제 추론 로직 (동기 함수) - Sliding Window 적용
@@ -188,7 +188,7 @@ async def run_ast_inference(processed_audio_buffer, ast_model_payload=None) -> A
                 status=status,
                 analysis_type="AST_WINDOW",
                 category=category,
-                detail=AudioDetail(
+                data=AudioDetail(
                     diagnosed_label=diagnosed_label,
                     description=description
                 ),
@@ -202,7 +202,7 @@ async def run_ast_inference(processed_audio_buffer, ast_model_payload=None) -> A
                 status="UNKNOWN",
                 analysis_type="AST",
                 category="UNKNOWN_AUDIO",
-                detail=AudioDetail(
+                data=AudioDetail(
                     diagnosed_label="Error",
                     description=f"추론 중 오류 발생: {str(e)}"
                 ),

@@ -229,6 +229,10 @@ public class VehicleService {
 
         for (ConsumableItem item : allMasterItems) {
             String itemCode = item.getCode().trim().toUpperCase();
+            // 기타(OTHER)는 vehicle_consumables에 미등록. 정비 이력 등록 시에만 getOrCreateOtherItem으로 사용
+            if ("OTHER".equals(itemCode)) {
+                continue;
+            }
             VehicleDto.ConsumableRegistrationRequest req = requestMap.get(itemCode);
 
             // 1. 명시적 입력 데이터가 있는 경우 (날짜 또는 주행거리)

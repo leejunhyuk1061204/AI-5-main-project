@@ -51,6 +51,9 @@ public class MaintenanceHistory extends BaseEntity {
     @Column(name = "cost")
     private Integer cost;
 
+    @Column(name = "quantity")
+    private Integer quantity;
+
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "ocr_data", columnDefinition = "jsonb")
     private String ocrData;
@@ -63,8 +66,8 @@ public class MaintenanceHistory extends BaseEntity {
 
     @Builder
     public MaintenanceHistory(Vehicle vehicle, LocalDate maintenanceDate, Double mileageAtMaintenance,
-            ConsumableItem consumableItem, Boolean isStandardized, String shopName, Integer cost, String ocrData,
-            String memo, UUID receiptId) {
+            ConsumableItem consumableItem, Boolean isStandardized, String shopName, Integer cost, Integer quantity,
+            String ocrData, String memo, UUID receiptId) {
         this.vehicle = vehicle;
         this.maintenanceDate = maintenanceDate;
         this.mileageAtMaintenance = mileageAtMaintenance;
@@ -72,6 +75,7 @@ public class MaintenanceHistory extends BaseEntity {
         this.isStandardized = isStandardized;
         this.shopName = shopName;
         this.cost = cost;
+        this.quantity = quantity != null ? quantity : 1;
         this.ocrData = ocrData;
         this.memo = memo;
         this.receiptId = receiptId;

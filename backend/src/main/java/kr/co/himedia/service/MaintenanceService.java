@@ -22,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -98,16 +99,23 @@ public class MaintenanceService {
 
                 final ConsumableItem item = (searchItem != null) ? searchItem : getOrCreateOtherItem();
 
+                // 미입력·0이면 vehicles.total_mileage로 대체 (registerHistory와 동일)
+                Double requestedMileage = request.getMileageAtMaintenance();
+                Double mileageAtMaintenance = (requestedMileage != null && requestedMileage > 0)
+                                ? requestedMileage
+                                : (vehicle.getTotalMileage() != null ? vehicle.getTotalMileage() : 0.0);
+
                 MaintenanceHistory history = MaintenanceHistory.builder()
                                 .vehicle(vehicle)
                                 .maintenanceDate(request.getMaintenanceDate())
-                                .mileageAtMaintenance(request.getMileageAtMaintenance())
-                                .consumableItem(item) // FK로 저장
+                                .mileageAtMaintenance(mileageAtMaintenance)
+                                .consumableItem(item)
                                 .isStandardized(request.getIsStandardized())
                                 .shopName(request.getShopName())
                                 .cost(request.getCost())
+                                .quantity(request.getQuantity() != null ? request.getQuantity() : 1)
                                 .ocrData(request.getOcrData())
-                                .receiptId(request.getReceiptId()) // 영수증 ID 저장
+                                .receiptId(request.getReceiptId())
                                 .memo(request.getMemo())
                                 .build();
 
@@ -115,18 +123,17 @@ public class MaintenanceService {
 
                 // 2. 소모품 상태 갱신 (UPSERT)
                 // request.getConsumableItemId()가 null일 수 있으므로, 위에서 조회한 item.getId()를 사용해야 함
+                double remainingLife = computeRemainingLifePercent(vehicle, mileageAtMaintenance, item);
                 vehicleConsumableRepository.findByVehicleAndConsumableItem_Id(vehicle, item.getId())
                                 .ifPresentOrElse(vc -> {
-                                        // 기존 데이터가 있으면 업데이트 (Update)
                                         if (request.getMaintenanceDate() != null) {
                                                 vc.setLastReplacedAt(request.getMaintenanceDate().atStartOfDay());
                                         }
-                                        vc.setLastReplacedMileage(request.getMileageAtMaintenance());
-                                        vc.updateRemainingLife(100.0); // 교체 직후는 100%
-                                        vc.setIsInferred(false); // 직접 정비했으므로 추론 데이터 아님
+                                        vc.setLastReplacedMileage(mileageAtMaintenance);
+                                        vc.updateRemainingLife(remainingLife);
+                                        vc.setIsInferred(false);
                                         vehicleConsumableRepository.save(vc);
                                 }, () -> {
-                                        // 기존 데이터가 없으면 신규 생성 (Insert)
                                         VehicleConsumable newVc = new VehicleConsumable();
                                         newVc.setVehicle(vehicle);
                                         newVc.setConsumableItem(item);
@@ -134,9 +141,9 @@ public class MaintenanceService {
                                         if (request.getMaintenanceDate() != null) {
                                                 newVc.setLastReplacedAt(request.getMaintenanceDate().atStartOfDay());
                                         }
-                                        newVc.setLastReplacedMileage(request.getMileageAtMaintenance());
-                                        newVc.setRemainingLife(100.0); // 교체 직후는 100%
-                                        newVc.setIsInferred(false); // 직접 정비했으므로 추론 데이터 아님
+                                        newVc.setLastReplacedMileage(mileageAtMaintenance);
+                                        newVc.setRemainingLife(remainingLife);
+                                        newVc.setIsInferred(false);
                                         vehicleConsumableRepository.save(newVc);
                                 });
 
@@ -255,25 +262,29 @@ public class MaintenanceService {
 
         /**
          * 정비 이력 및 소모품 상태 업데이트 (통합 등록용 내부 메소드)
+         * maintenance_logs NOT NULL 컬럼 대응: date/mileage null 시 기본값 적용
          */
         @Transactional
         public void registerHistory(Vehicle vehicle, ConsumableItem item, LocalDate maintenanceDate, Double mileage) {
+                LocalDate safeDate = maintenanceDate != null ? maintenanceDate : java.time.LocalDate.now();
+                Double safeMileage = mileage != null ? mileage : (vehicle.getTotalMileage() != null ? vehicle.getTotalMileage() : 0.0);
                 MaintenanceHistory history = MaintenanceHistory.builder()
                                 .vehicle(vehicle)
-                                .maintenanceDate(maintenanceDate)
-                                .mileageAtMaintenance(mileage)
+                                .maintenanceDate(safeDate)
+                                .mileageAtMaintenance(safeMileage)
                                 .consumableItem(item)
                                 .isStandardized(true)
                                 .build();
                 maintenanceHistoryRepository.save(history);
 
+                double remainingLife = computeRemainingLifePercent(vehicle, mileage != null ? mileage : safeMileage, item);
                 vehicleConsumableRepository.findByVehicleAndConsumableItem_Id(vehicle, item.getId())
                                 .ifPresentOrElse(vc -> {
                                         if (maintenanceDate != null) {
                                                 vc.setLastReplacedAt(maintenanceDate.atStartOfDay());
                                         }
                                         vc.setLastReplacedMileage(mileage);
-                                        vc.updateRemainingLife(100.0);
+                                        vc.updateRemainingLife(remainingLife);
                                         vc.setIsInferred(false);
                                         vehicleConsumableRepository.save(vc);
                                 }, () -> {
@@ -285,7 +296,7 @@ public class MaintenanceService {
                                                 newVc.setLastReplacedAt(maintenanceDate.atStartOfDay());
                                         }
                                         newVc.setLastReplacedMileage(mileage);
-                                        newVc.setRemainingLife(100.0);
+                                        newVc.setRemainingLife(remainingLife);
                                         newVc.setIsInferred(false);
                                         vehicleConsumableRepository.save(newVc);
                                 });
@@ -365,32 +376,56 @@ public class MaintenanceService {
                 }
 
                 // 4. OCR/수동 데이터 → MaintenanceHistoryRequest로 변환
-                MaintenanceHistoryRequest request = new MaintenanceHistoryRequest();
-                request.setMaintenanceDate(ocrResult.getMaintenanceDate() != null
+                java.time.LocalDate commonDate = ocrResult.getMaintenanceDate() != null
                                 ? ocrResult.getMaintenanceDate()
-                                : LocalDate.now());
-                request.setMileageAtMaintenance(ocrResult.getMileageAtMaintenance() != null
+                                : LocalDate.now();
+                Double commonMileage = ocrResult.getMileageAtMaintenance() != null
                                 ? ocrResult.getMileageAtMaintenance()
-                                : vehicle.getTotalMileage());
-                request.setShopName(ocrResult.getShopName());
-                request.setCost(ocrResult.getCost());
-                request.setConsumableItemCode(ocrResult.getConsumableItemCode());
-                request.setOcrData(ocrResult.getOcrData());
-                request.setIsStandardized(true);
-
-                // 메모 처리 (JSON에 있으면 주입)
+                                : vehicle.getTotalMileage();
+                String commonMemo = null;
                 try {
                         if (manualDataJson != null) {
                                 com.fasterxml.jackson.databind.JsonNode node = new com.fasterxml.jackson.databind.ObjectMapper()
                                                 .readTree(manualDataJson);
-                                if (node.has("memo"))
-                                        request.setMemo(node.get("memo").asText());
+                                if (node.has("memo") && !node.get("memo").isNull())
+                                        commonMemo = node.get("memo").asText();
                         }
                 } catch (Exception ignored) {
                 }
 
-                // 5. 정비 이력 저장 (소모품 상태 갱신 포함)
+                if (ocrResult.getItems() != null && !ocrResult.getItems().isEmpty()) {
+                        java.util.List<MaintenanceHistoryRequest> requests = new java.util.ArrayList<>();
+                        for (kr.co.himedia.dto.maintenance.MaintenanceLineItemDto item : ocrResult.getItems()) {
+                                MaintenanceHistoryRequest req = new MaintenanceHistoryRequest();
+                                req.setMaintenanceDate(commonDate);
+                                req.setMileageAtMaintenance(commonMileage);
+                                req.setShopName(ocrResult.getShopName());
+                                req.setCost(item.getAmount());
+                                req.setQuantity(item.getQuantity() != null ? item.getQuantity() : 1);
+                                req.setConsumableItemCode(item.getConsumableItemCode());
+                                req.setOcrData(ocrResult.getOcrData());
+                                req.setIsStandardized(true);
+                                req.setReceiptId(receiptId);
+                                req.setMemo(commonMemo);
+                                requests.add(req);
+                        }
+                        java.util.List<MaintenanceHistoryResponse> responses = registerMaintenanceList(vehicleId, requests);
+                        return responses.isEmpty() ? null : responses.get(0);
+                }
+
+                MaintenanceHistoryRequest request = new MaintenanceHistoryRequest();
+                request.setMaintenanceDate(commonDate);
+                request.setMileageAtMaintenance(commonMileage);
+                request.setShopName(ocrResult.getShopName());
+                request.setCost(ocrResult.getCost());
+                request.setQuantity(ocrResult.getQuantity() != null ? ocrResult.getQuantity() : 1);
+                request.setConsumableItemCode(ocrResult.getConsumableItemCode());
+                request.setOcrData(ocrResult.getOcrData());
+                request.setIsStandardized(true);
                 request.setReceiptId(receiptId);
+                request.setMemo(commonMemo);
+
+                // 5. 정비 이력 저장 (소모품 상태 갱신 포함)
                 return registerMaintenance(vehicleId, request);
         }
 
@@ -408,6 +443,8 @@ public class MaintenanceService {
                 history.setShopName(request.getShopName());
                 history.setCost(request.getCost());
                 history.setMemo(request.getMemo());
+                if (request.getQuantity() != null)
+                        history.setQuantity(request.getQuantity());
 
                 // 소모품 항목이 변경된 경우
                 if (request.getConsumableItemCode() != null
@@ -445,6 +482,27 @@ public class MaintenanceService {
         }
 
         /**
+         * 차량 현재 주행거리·교체 시점 주행거리·교체 주기로 잔존 수명(%) 계산.
+         * 계산 불가 시(주행거리/주기 없음) 100% 반환.
+         */
+        private double computeRemainingLifePercent(Vehicle vehicle, Double lastReplacedMileage, ConsumableItem item) {
+                Double currentMileage = vehicle.getTotalMileage();
+                if (currentMileage == null || lastReplacedMileage == null) {
+                        return 100.0;
+                }
+                Integer interval = item.getDefaultIntervalMileage();
+                if (interval == null || interval <= 0) {
+                        return 100.0;
+                }
+                double used = currentMileage - lastReplacedMileage;
+                if (used < 0) {
+                        used = 0;
+                }
+                double remaining = 100.0 * (1.0 - used / interval);
+                return Math.max(0.0, Math.min(100.0, remaining));
+        }
+
+        /**
          * 특정 소모품의 상태(마지막 교환일, 주행거리)를 최신 이력 기반으로 재계산
          */
         private void updateVehicleConsumableStatus(Vehicle vehicle, ConsumableItem item) {
@@ -457,20 +515,46 @@ public class MaintenanceService {
                                                                                 .atStartOfDay());
                                                                 vc.setLastReplacedMileage(
                                                                                 last.getMileageAtMaintenance());
-                                                                vc.updateRemainingLife(100.0); // 교체 이력이 있으면 100%
+                                                                double remaining = computeRemainingLifePercent(vehicle,
+                                                                                last.getMileageAtMaintenance(), item);
+                                                                vc.updateRemainingLife(remaining);
                                                                 vehicleConsumableRepository.save(vc);
                                                         });
                                 }, () -> {
-                                        // 이력이 하나도 없으면 상태 초기화
+                                        // 이력이 하나도 없으면 차량 등록 시와 동일한 미입력 추론 로직 적용
                                         vehicleConsumableRepository
                                                         .findByVehicleAndConsumableItem_Id(vehicle, item.getId())
                                                         .ifPresent(vc -> {
-                                                                vc.setLastReplacedAt(null);
-                                                                vc.setLastReplacedMileage(0.0);
-                                                                vc.setRemainingLife(100.0);
+                                                                applyInferredConsumableStatus(vehicle, item, vc);
                                                                 vehicleConsumableRepository.save(vc);
                                                         });
                                 });
+        }
+
+        /**
+         * 차량 등록 시 소모품 미입력 시 사용하는 추론 로직과 동일.
+         * 현재 주행거리·교체 주기로 "마지막 교체 시점"을 추정하고 잔존 수명(%)을 계산한다.
+         */
+        private void applyInferredConsumableStatus(Vehicle vehicle, ConsumableItem item, VehicleConsumable vc) {
+                double currentMileage = vehicle.getTotalMileage() != null ? vehicle.getTotalMileage() : 0.0;
+                Integer interval = item.getDefaultIntervalMileage();
+                if (interval == null || interval <= 0) {
+                        vc.setLastReplacedAt(null);
+                        vc.setLastReplacedMileage(0.0);
+                        vc.setRemainingLife(100.0);
+                        vc.setIsInferred(true);
+                        return;
+                }
+                double dailyMileage = 41.0;
+                Double lastMileage = currentMileage - (currentMileage % interval);
+                long daysDiff = Math.abs(Math.round((currentMileage - lastMileage) / dailyMileage));
+                LocalDateTime lastAt = LocalDateTime.now().minusDays(daysDiff);
+                vc.setLastReplacedAt(lastAt);
+                vc.setLastReplacedMileage(lastMileage);
+                vc.setIsInferred(true);
+                double distanceDriven = currentMileage - lastMileage;
+                double lifePercentage = 100.0 - (distanceDriven / interval * 100.0);
+                vc.updateRemainingLife(Math.max(0.0, Math.min(100.0, lifePercentage)));
         }
 
         /**

@@ -57,9 +57,9 @@ public class AiDiagnosisService {
 
     /** LLM에 보낼 소모품: 이 수치 이하면 "주의 필요"로 포함 */
     private static final double CONSUMABLE_ATTENTION_THRESHOLD_PCT = 80.0;
-    /** DTC 진단 시 함께 보낼 엔진/배기 관련 소모품 코드 */
+    /** DTC 진단 시 함께 보낼 엔진/배기 관련 소모품 코드 (시드와 동일하게 유지) */
     private static final Set<String> CONSUMABLE_CODES_DTC_RELATED = Set.of(
-            "ENGINE_OIL", "AIR_FILTER", "FUEL_FILTER", "SPARK_PLUG", "COOLANT", "CABIN_FILTER");
+            "ENGINE_OIL", "AIR_FILTER", "FUEL_FILTER", "SPARK_PLUG", "COOLANT");
     /** 항상 포함할 핵심 소모품 (안전/엔진) */
     private static final Set<String> CONSUMABLE_CODES_ALWAYS = Set.of(
             "ENGINE_OIL", "BRAKE_PAD_FRONT", "BRAKE_PAD_REAR", "BATTERY_12V");
@@ -596,6 +596,10 @@ public class AiDiagnosisService {
         // [Step 5] 최종 완료
         sseEmitters.send(sessionId.toString(), "step5", "[Step 5/5] 최종 진단 리포트 생성 완료");
 
+        // 최종 상태 SSE 전송 (폴링 대체: 프론트에서 즉시 분기 가능)
+        DiagnosisResponseDto statusDto = getDiagnosisResult(sessionId);
+        sseEmitters.send(sessionId.toString(), "status", statusDto);
+
         // 5. 알림 발송 (DTC/AUTO만)
         DiagTriggerType triggerType = session.getTriggerType();
         if (triggerType == DiagTriggerType.DTC || triggerType == DiagTriggerType.AUTO) {
@@ -757,21 +761,22 @@ public class AiDiagnosisService {
     private void sendDiagnosisNotification(UUID vehicleId, UUID sessionId, String responseMode) {
         try {
             vehicleRepository.findById(vehicleId).ifPresent(vehicle -> {
-                String fcmToken = userService.getFcmToken(vehicle.getUserId());
-                if (fcmToken != null) {
-                    boolean isInteractive = "INTERACTIVE".equalsIgnoreCase(responseMode);
-                    String title = isInteractive ? "[확인 필요] 차량 진단 추가 요청" : "차량 정밀 진단 완료";
-                    String body = isInteractive ? "정확한 분석을 위해 사진 촬영이나 소음 녹음이 필요합니다. 대화를 이어가보세요."
-                            : "요청하신 차량의 AI 정밀 진단 분석이 완료되었습니다. 결과를 확인해보세요.";
-
-                    Map<String, String> data = new HashMap<>();
-                    data.put("type", isInteractive ? "DIAG_INTERACTIVE" : "DIAG_COMPLETE");
-                    data.put("sessionId", sessionId.toString());
-                    data.put("mode", responseMode);
-
-                    fcmService.sendMessage("User-" + vehicle.getUserId(), fcmToken, title, body, data);
-                    log.info("Sent Diagnosis Notification [Vehicle: {}, Mode: {}]", vehicleId, responseMode);
+                User user = userRepository.findById(vehicle.getUserId()).orElse(null);
+                if (user == null) {
+                    return;
                 }
+                boolean isInteractive = "INTERACTIVE".equalsIgnoreCase(responseMode);
+                String title = isInteractive ? "[확인 필요] 차량 진단 추가 요청" : "차량 정밀 진단 완료";
+                String body = isInteractive ? "정확한 분석을 위해 사진 촬영이나 소음 녹음이 필요합니다. 대화를 이어가보세요."
+                        : "요청하신 차량의 AI 정밀 진단 분석이 완료되었습니다. 결과를 확인해보세요.";
+
+                Map<String, String> data = new HashMap<>();
+                data.put("type", isInteractive ? "DIAG_INTERACTIVE" : "DIAG_COMPLETE");
+                data.put("sessionId", sessionId.toString());
+                data.put("mode", responseMode);
+
+                notificationService.sendNotification(user, title, body, Notification.NotificationType.DIAG_ALERT, data);
+                log.info("Sent Diagnosis Notification (saved + push) [Vehicle: {}, Mode: {}]", vehicleId, responseMode);
             });
         } catch (Exception e) {
             log.error("Failed to send diagnosis notification", e);

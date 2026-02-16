@@ -242,15 +242,15 @@ class WearFactorServiceTest {
         }
 
         @Test
-        @DisplayName("극단 온도: 200°C → Infinity/NaN 없이 유한값 반환")
+        @DisplayName("극단 온도: 200°C → 상한(4.0) 적용, 유한값 반환")
         void testCoolantExtremeTemp() {
-            // 2 ^ ((200-90)/10) = 2 ^ 11 = 2048.0 (유한값)
+            // raw: 2 ^ ((200-90)/10) = 2^11 = 2048.0 → COOLANT_MAX_FACTOR(4.0) 적용
             TripSummary trip = createTripWithMaxCoolantTemp(200.0);
             Double factor = invokeCalculateCoolantFactor(trip);
             assertNotNull(factor);
             assertFalse(factor.isInfinite(), "Factor should not be Infinity");
             assertFalse(factor.isNaN(), "Factor should not be NaN");
-            assertEquals(2048.0, factor, 0.001);
+            assertEquals(4.0, factor, 0.001);
         }
     }
 
@@ -263,10 +263,10 @@ class WearFactorServiceTest {
         @Test
         @DisplayName("정상 효율: efficiency=1.0 → factor=1.0")
         void testAirFilterNormalEfficiency() {
-            // avgMaf=16, baseline=16, throttle=100% → efficiency=16/(16*1.0)=1.0
+            // avgMaf=18, baseline=18(default), throttle=100% → efficiency=18/(18*1.0)=1.0
             // factor = 1.5 ^ (max(0, 1.0-1.0)/0.1) = 1.5^0 = 1.0
-            TripSummary trip = createTripWithMafThrottle(16.0, 100.0);
-            Vehicle vehicle = createVehicleWithModel("unknown"); // baseline=16.0 (default)
+            TripSummary trip = createTripWithMafThrottle(18.0, 100.0);
+            Vehicle vehicle = createVehicleWithModel("unknown"); // baseline=18.0 (default)
             Double factor = invokeCalculateAirFilterFactor(trip, vehicle);
             assertEquals(1.0, factor, 0.001);
         }
@@ -274,9 +274,9 @@ class WearFactorServiceTest {
         @Test
         @DisplayName("효율 저하: efficiency=0.8 → factor 계산")
         void testAirFilterReducedEfficiency() {
-            // avgMaf=12.8, baseline=16, throttle=100% → efficiency=12.8/(16*1.0)=0.8
+            // avgMaf=14.4, baseline=18(default), throttle=100% → efficiency=14.4/(18*1.0)=0.8
             // loss=0.2, factor = 1.5 ^ (0.2/0.1) = 1.5^2 = 2.25
-            TripSummary trip = createTripWithMafThrottle(12.8, 100.0);
+            TripSummary trip = createTripWithMafThrottle(14.4, 100.0);
             Vehicle vehicle = createVehicleWithModel("unknown");
             Double factor = invokeCalculateAirFilterFactor(trip, vehicle);
             assertEquals(2.25, factor, 0.001);
@@ -285,21 +285,21 @@ class WearFactorServiceTest {
         @Test
         @DisplayName("스로틀 정규화: throttle 50% (0~100 → 0~1)")
         void testAirFilterThrottleNormalization() {
-            // avgMaf=8, baseline=16, throttle=50% → normalized=0.5
-            // efficiency = 8 / (16 * 0.5) = 1.0 → factor = 1.0
-            TripSummary trip = createTripWithMafThrottle(8.0, 50.0);
+            // avgMaf=9, baseline=18(default), throttle=50% → normalized=0.5
+            // efficiency = 9 / (18 * 0.5) = 1.0 → factor = 1.0
+            TripSummary trip = createTripWithMafThrottle(9.0, 50.0);
             Vehicle vehicle = createVehicleWithModel("unknown");
             Double factor = invokeCalculateAirFilterFactor(trip, vehicle);
             assertEquals(1.0, factor, 0.001);
         }
 
         @Test
-        @DisplayName("MAF null (EV 차량) → factor=1.5 기본값")
+        @DisplayName("MAF null (EV 차량) → factor=1.0 (주행거리만 반영)")
         void testAirFilterNullMaf() {
             TripSummary trip = TripSummary.builder().build();
             Vehicle vehicle = createVehicleWithModel("unknown");
             Double factor = invokeCalculateAirFilterFactor(trip, vehicle);
-            assertEquals(1.5, factor, 0.001);
+            assertEquals(1.0, factor, 0.001);
         }
 
         @Test
@@ -367,26 +367,24 @@ class WearFactorServiceTest {
         }
 
         @Test
-        @DisplayName("Null 처리: brake=null, avgSpeed=null → factor=1.0*1.3=1.3")
+        @DisplayName("Null 처리: avgSpeed=null → factor=1.0 (주행거리만 반영)")
         void testBrakePadNullValues() {
             TripSummary trip = TripSummary.builder().build();
             Double factor = invokeCalculateBrakePadFactor(trip);
-            // brake=0, speed=0 → energy=0, city_mult=1.3 (0 < 30)
-            assertEquals(1.3, factor, 0.001);
+            assertEquals(1.0, factor, 0.001);
         }
 
         @Test
-        @DisplayName("극단 급제동: brake=1000, avgSpeed=100 → Infinity/NaN 없이 유한값 반환")
+        @DisplayName("극단 급제동: brake=1000, avgSpeed=100 → 상한(4.0) 적용, 유한값 반환")
         void testBrakePadExtremeValues() {
-            // brake_energy = 1000 * 100^2 / 10000 = 1000
-            // city_mult = 1.0 (100 >= 30)
-            // factor = (1 + 1000) * 1.0 = 1001.0
+            // brake_energy = 1000 * 100^2 / 10000 = 1000 → raw factor 1001.0
+            // BRAKE_PAD_MAX_FACTOR(4.0) 적용 → 4.0 반환
             TripSummary trip = createTripWithBrakeSpeed(1000, 100.0);
             Double factor = invokeCalculateBrakePadFactor(trip);
             assertNotNull(factor);
             assertFalse(factor.isInfinite(), "Factor should not be Infinity");
             assertFalse(factor.isNaN(), "Factor should not be NaN");
-            assertEquals(1001.0, factor, 0.001);
+            assertEquals(4.0, factor, 0.001);
         }
     }
 
@@ -429,6 +427,7 @@ class WearFactorServiceTest {
     private TripSummary createTripWithDistance(double distance) {
         TripSummary trip = TripSummary.builder().build();
         trip.setDistance(distance);
+        trip.setAvgRpm(2000.0); // RPM 있음 → 공식 적용 (미지원이면 1.0 반환하므로 테스트용 필수)
         trip.setHighRpmRatio(0.0);
         return trip;
     }
