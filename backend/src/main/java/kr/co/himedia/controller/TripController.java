@@ -13,6 +13,8 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.validation.Valid;
+import kr.co.himedia.dto.trip.TripObdLogDto;
+
 import java.util.List;
 import java.util.UUID;
 
@@ -39,6 +41,14 @@ public class TripController {
     @GetMapping("/{tripId}")
     public ResponseEntity<ApiResponse<TripSummary>> getTripDetail(@PathVariable("tripId") UUID tripId) {
         return ResponseEntity.ok(ApiResponse.success(tripService.getTripDetail(tripId)));
+    }
+
+    /**
+     * 주행 구간 OBD 로그 조회 (CSV 내보내기용)
+     */
+    @GetMapping("/{tripId}/obd-logs")
+    public ResponseEntity<ApiResponse<List<TripObdLogDto>>> getTripObdLogs(@PathVariable("tripId") UUID tripId) {
+        return ResponseEntity.ok(ApiResponse.success(tripService.getTripObdLogs(tripId)));
     }
 
     /**

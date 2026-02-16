@@ -11,6 +11,7 @@ import { useBleStore } from '../store/useBleStore';
 import BaseScreen from '../components/layout/BaseScreen';
 
 const MAX_LOG_ROWS = 500;
+// 블루투스 OBD가 수집하는 PID만 (highPids: rpm,speed,throttle + normalPids)
 const CSV_HEADER = 'timestamp,rpm,speed,voltage,coolantTemp,engineLoad,fuelTrimShort,fuelTrimLong,throttle,map,maf,intakeTemp,engineRuntime';
 
 function obdDataToCsvRow(d: ObdData): string {
