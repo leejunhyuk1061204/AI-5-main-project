@@ -1,5 +1,12 @@
 ﻿# OBD Anomaly Progress Log
 
+## Pre-Step3 Summary (Step1~2)
+
+- vFinal 방향 확정: Hybrid(Stat/AE) + Quality Gating + Policy 구조 채택
+- 문서/API 명세 정렬: `window_sec=60`, `stride_sec=30`, `domains+events` 중심 응답 유지
+- 코어 스키마 정리: Core10에서 실차 대응 가능한 Core7로 전환
+- 엔진 경로 리팩터링: 스코어러/정책/아티팩트 로딩 구조 분리
+- 기본 안정성 확보: artifact 부재 시 degraded 동작, API 정상 응답 보장
 ## 2026-02-16 | Step3: vFinal 엔진 보강 + 4케이스 테스트
 
 ### 1) 변경 요약 (What Changed)
@@ -47,3 +54,40 @@
 ### 6) 남은 경고 (Non-blocking)
 - Pydantic v2 deprecation (`Config` -> `ConfigDict`)
 - IF scorer의 빈 슬라이스 RuntimeWarning (기능상 치명적 아님)
+
+## 2026-02-16 | Step4: Policy/Top-Signals refinement + sample runner
+
+### 1) 변경 요약 (What Changed)
+- 정책 로직 보강
+  - `k_consecutive`, `cooldown_sec` 경계값 방어(`k>=1`, `cooldown>=0`)
+  - policy event에 `streak`, `start_t` 메타 추가
+- severity 판정 기준을 policy 값(`warning`, `critical`) 우선 사용
+- `top_signals` 정규화 보강
+  - 합계가 0일 때 `0,0,0` 대신 균등 분배 fallback
+  - 서비스/스코어러 양쪽 경로에서 일관 처리
+- IF 통계 계산 경고 완화
+  - 빈 diff 슬라이스에서 `nanmean` 경고 방지
+- 샘플 실행 스크립트 추가
+  - `ai/scripts/obd_engine/run_obd_anomaly_sample.py`
+
+### 2) 수정 파일 (Files Changed)
+- `ai/app/services/obd_anomaly/core/policy/threshold_policy.py`
+- `ai/app/services/obd_anomaly/core/scorers/engine_scorer.py`
+- `ai/app/services/obd_anomaly/core/scorers/iforest_scorer.py`
+- `ai/app/services/obd_anomaly/obd_anomaly_service.py`
+- `tests/test_obd_policy_top_signals.py` (신규)
+- `ai/scripts/obd_engine/run_obd_anomaly_sample.py` (신규)
+
+### 3) 검증 결과 (Validation)
+- 실행 명령:
+  - `python -m pytest -q ..\\tests\\test_obd_anomaly_vfinal.py ..\\tests\\test_obd_policy_top_signals.py`
+  - `python scripts\\obd_engine\\run_obd_anomaly_sample.py`
+- 결과:
+  - `7 passed, 1 warning`
+  - 샘플 응답에서 `ENGINE_POLICY_ANOMALY` 이벤트 정상 생성 확인
+  - `domains.engine.top_signals.contribution` 값이 0이 아닌 정규화 값으로 출력 확인
+
+### 4) 참고 사항 (Notes)
+- 현재 샘플은 artifact 부재(degraded) 환경에서도 정책/이벤트 경로가 동작함을 확인하기 위한 목적
+- 남은 warning은 Pydantic v2 deprecation (`Config` -> `ConfigDict`)이며 기능 영향은 없음
+
