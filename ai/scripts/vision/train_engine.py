@@ -19,13 +19,15 @@ import platform
 from ultralytics import YOLO
 import shutil
 
-model = YOLO("yolov8s.pt")
-print("✅ yolov8s 모델 다운로드 완료")
+# Removed global model initialization to prevent multiprocessing issues on Windows
 
 # =============================================================================
 # [Configuration] GPU Optimized Settings
 # =============================================================================
-BASE_MODEL = "yolov8s.pt"
+# [Architecture] YOLO11m with P2 Head (Small Target Optimization)
+# 4개의 Detection Head(P2, P3, P4, P5)를 사용하여 아주 작은 부품 감지력을 극대화한 구조입니다.
+BASE_YAML = "ai/data/yolo/engine/yolo11m-p2.yaml"
+BASE_MODEL = "yolo11m.pt"
 
 # [Path Config] RunPod과 로컬 환경 자동 감지
 RUNPOD_DATA_PATH = "/workspace/large_data"
@@ -34,17 +36,20 @@ DATA_ROOT = RUNPOD_DATA_PATH if os.path.exists(RUNPOD_DATA_PATH) else LOCAL_DATA
 
 DATA_YAML_PATH = os.path.join(DATA_ROOT, "yolo/engine/engine_merged.yaml")
 OUTPUT_DIR = "ai/runs/engine_model"
-SAVE_PATH = "ai/weights/engine/best.pt"
+SAVE_PATH = "ai/weights/engine/best_engine11m.pt"
 
-# Training Hyperparameters (RunPod Optimized)
-DEFAULT_EPOCHS = 10
-BATCH_SIZE = int(os.getenv("BATCH_SIZE", "4"))  # RunPod 기본값 16 (로컬 4)
-IMG_SIZE = 640
+# Training Hyperparameters (0.9 mAP Target + P2 Head)
+DEFAULT_EPOCHS = 200
+# [RunPod RTX 4070 (12GB) Optimized] 
+# P2 Head + 1280px 환경에서도 12GB VRAM이면 Batch Size 16까지 충분히 가능합니다.
+BATCH_SIZE = int(os.getenv("BATCH_SIZE", "16"))
+IMG_SIZE = 1280
 OPTIMIZER = "AdamW"
 LR0 = 0.001
 LRF = 0.01
 PATIENCE = 50
-WORKERS = 4 if platform.system() != "Windows" else 0  # 자동 감지
+# RunPod(Linux) 환경에서는 CPU 코어 활용을 위해 Workers를 8로 상향
+WORKERS = 8 if platform.system() != "Windows" else 0 
 
 # [Original RTX 4090 Reference]
 # DEFAULT_EPOCHS = 150
@@ -63,6 +68,8 @@ HSV_V = 0.6      # 0.4 → 0.6 (명도 변화 증가)
 FLIPUD = 0.0     # 유지 (엔진룸은 상하 반전 X)
 FLIPLR = 0.5     # 유지
 
+
+
 # Regularization (과적합 방지)
 WEIGHT_DECAY = 0.0005  # 추가!
 
@@ -78,10 +85,12 @@ def evaluate_baseline():
         print(f"[Error] data.yaml not found at {DATA_YAML_PATH}")
         return None
     
+    # Baseline은 순수 모델 성능 측정을 위해 기본 모델 사용 (imgsz만 1280 적용)
     model = YOLO(BASE_MODEL)
     
     print(f"[Info] Evaluating with base model ({BASE_MODEL})...")
-    metrics = model.val(data=DATA_YAML_PATH, split='val', imgsz=1280)
+    metrics = model.val(data=DATA_YAML_PATH, split='val', imgsz=IMG_SIZE, half=True)
+
     
     map50 = metrics.box.map50
     map50_95 = metrics.box.map
@@ -106,7 +115,8 @@ def train_model(epochs=DEFAULT_EPOCHS, batch=BATCH_SIZE, imgsz=IMG_SIZE, workers
         print(f"[Error] data.yaml not found at {DATA_YAML_PATH}")
         return None
     
-    model = YOLO(BASE_MODEL)
+    # [P2 Head 적용] YAML 아키텍처로 초기화 및 가중치 로드
+    model = YOLO(BASE_YAML).load(BASE_MODEL)
     
     # [Weight Management] 기존 가중치가 있다면 백업 (누적 방지용)
     if os.path.exists(SAVE_PATH):
@@ -145,15 +155,16 @@ def train_model(epochs=DEFAULT_EPOCHS, batch=BATCH_SIZE, imgsz=IMG_SIZE, workers
         # Regularization (과적합 방지)
         weight_decay=WEIGHT_DECAY,
         
+        # Optimization Protocol
+        close_mosaic=20,  # 마지막 20 에폭에서 Mosaic 끄기 (정밀도 향상)
+        
         # Performance
-        workers=WORKERS,  # 환경 자동 감지
+        workers=workers,  # 환경 자동 감지 (변수 사용)
         cache=False,  # RAM으로 데이터셋 캐싱 (속도 향상)
         
         # Logging
         verbose=True,
     )
-    # Save Best Model - 기존 best.pt 대신 새 이름 사용
-    NEW_SAVE_PATH = "ai/weights/engine/best_engine8s.pt"
     
     # Save Best Model - model.train() 결과 객체에서 실제 저장 경로를 가져옴 (가장 고신뢰 방식)
     if hasattr(results, 'save_dir'):
@@ -163,9 +174,9 @@ def train_model(epochs=DEFAULT_EPOCHS, batch=BATCH_SIZE, imgsz=IMG_SIZE, workers
         best_model_run_path = os.path.join(OUTPUT_DIR, "run", "weights", "best.pt")
 
     if os.path.exists(best_model_run_path):
-        os.makedirs(os.path.dirname(NEW_SAVE_PATH), exist_ok=True)
-        shutil.copy(best_model_run_path, NEW_SAVE_PATH)
-        print(f"\n[✓] Model saved to: {NEW_SAVE_PATH}")
+        os.makedirs(os.path.dirname(SAVE_PATH), exist_ok=True)
+        shutil.copy(best_model_run_path, SAVE_PATH)
+        print(f"\n[✓] Model saved to: {SAVE_PATH}")
         print(f"[✓] Ready for deployment!")
     else:
         print(f"[Warning] Best model weight file not found at: {best_model_run_path}")
@@ -192,7 +203,8 @@ def evaluate_final():
     model = YOLO(SAVE_PATH)
     
     print(f"[Info] Evaluating with trained model ({SAVE_PATH})...")
-    metrics = model.val(data=DATA_YAML_PATH, split='val', imgsz=1280)
+    metrics = model.val(data=DATA_YAML_PATH, split='val', imgsz=IMG_SIZE, half=True)
+
     
     map50 = metrics.box.map50
     map50_95 = metrics.box.map

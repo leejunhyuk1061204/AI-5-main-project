@@ -184,6 +184,11 @@ async def run_ast_inference(processed_audio_buffer, ast_model_payload=None) -> A
                     
                     is_critical = True
             
+            # 6. Build probability map for all_probs
+            all_probs_map = {}
+            for name, idx in model.config.label2id.items():
+                all_probs_map[name.lower()] = float(max_probs[idx].item())
+
             return AudioResponse(
                 status=status,
                 analysis_type="AST_WINDOW",
@@ -193,6 +198,7 @@ async def run_ast_inference(processed_audio_buffer, ast_model_payload=None) -> A
                     description=description
                 ),
                 confidence=round(confidence, 4),
+                all_probs=all_probs_map, # [New] Add distribution
                 is_critical=is_critical
             )
             

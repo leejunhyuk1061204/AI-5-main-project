@@ -8,6 +8,12 @@ Desktop.ini
 *.bak
 *.tmp
 
+# AI Tools
+.gemini/
+.agent/
+.antigravity/
+.cortex/
+
 # Python / Environment
 __pycache__/
 *.py[cod]
@@ -31,8 +37,15 @@ data/CarDD_release/
 data/obd/
 data/processed/
 data/yolo/
-data/audio/
+data/audio/raw/
+data/audio/processed/
+data/audio/cache/
+data/audio/temp/
+data/audio/test/
+data/audio/train/
 data/yolo_router/
+data/*.zip
+data/*.rar
 results/
 samples/
 runs/
@@ -61,3 +74,6 @@ client_secret*.json
 # Logs
 *.log
 logs/
+benchmark_log.txt
+metrics.json
+*.results.json
