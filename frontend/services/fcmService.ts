@@ -223,7 +223,12 @@ class FcmService {
                 break;
 
             case 'TRIP_COMPLETE':
-                console.log('[FCM] Trip complete:', data.tripId, 'Distance:', data.distance);
+            case 'TRIP_END':
+                console.log('[FCM] Trip end:', data.tripId, 'Distance:', data.distance);
+                break;
+
+            case 'TRIP_START':
+                console.log('[FCM] Trip start:', data.tripId);
                 break;
 
             default:
@@ -254,9 +259,14 @@ class FcmService {
                     break;
 
                 case 'TRIP_COMPLETE':
+                case 'TRIP_END':
                     if (tripId) {
                         navigation.navigate('DrivingHis');
                     }
+                    break;
+
+                case 'TRIP_START':
+                    navigation.navigate('MainPage');
                     break;
 
                 default:

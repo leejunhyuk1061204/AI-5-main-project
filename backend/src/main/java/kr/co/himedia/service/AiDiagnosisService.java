@@ -354,14 +354,22 @@ public class AiDiagnosisService {
                 processInitialPhase(taskMessage, session);
             }
         } catch (Exception e) {
-            log.error("Unified Diagnosis Pipeline Failed [Session: {}]", sessionId, e);
+            DiagTriggerType triggerType = session.getTriggerType();
+            log.error("Unified Diagnosis Pipeline Failed [Session: {}, Trigger: {}] {}", sessionId, triggerType,
+                    e.getMessage(), e);
             session.updateStatus(DiagStatus.FAILED, "진단 실패: " + e.getMessage());
             diagSessionRepository.save(session);
-            // 실패 시에도 SSE 구독자에게 명시적으로 알림을 보낸다.
-            try {
-                sseEmitters.send(sessionId.toString(), "failed", "진단 실패: " + e.getMessage());
-            } catch (Exception sseError) {
-                log.warn("Failed to send FAILED SSE event for session {}", sessionId, sseError);
+
+            // AUTO/DTC: SSE 구독자가 없으므로 푸시 알림으로 실패 전달
+            if (triggerType == DiagTriggerType.AUTO || triggerType == DiagTriggerType.DTC) {
+                sendDiagnosisFailureNotification(session.getVehiclesId(), sessionId, e.getMessage());
+            } else {
+                // VISUAL/AUDIO 등: 화면에서 SSE 구독 중이면 failed 이벤트 전송
+                try {
+                    sseEmitters.send(sessionId.toString(), "failed", "진단 실패: " + e.getMessage());
+                } catch (Exception sseError) {
+                    log.warn("Failed to send FAILED SSE event for session {}", sessionId, sseError);
+                }
             }
             throw new RuntimeException("진단 파이프라인 오류", e);
         }
@@ -389,15 +397,14 @@ public class AiDiagnosisService {
 
         // 1. 병렬 분석 태스크 생성
         CompletableFuture<Map<String, Object>> visualTask = CompletableFuture.supplyAsync(() -> {
-            try {
-                if (imageFile != null) {
+            if (imageFile != null) {
+                try {
                     log.info("[Visual] [Semaphore-Acquire] 진입 시도 (Global: {}, Session: {})",
                             globalAiSemaphore.availablePermits(), sessionSemaphore.availablePermits());
                     sessionSemaphore.acquire();
                     globalAiSemaphore.acquire();
                     log.info("[Visual] [Semaphore-Acquire] 진입 성공 (Global: {}, Session: {})",
-                            globalAiSemaphore.availablePermits(),
-                            sessionSemaphore.availablePermits());
+                            globalAiSemaphore.availablePermits(), sessionSemaphore.availablePermits());
                     try {
                         Map<String, Object> result = aiClient.callVisualAnalysis(imageFile, requestDto.getVehicleId(),
                                 sessionId);
@@ -409,17 +416,18 @@ public class AiDiagnosisService {
                         log.info("[Visual] [Semaphore-Release] 반납 완료 (Global: {}, Session: {})",
                                 globalAiSemaphore.availablePermits(), sessionSemaphore.availablePermits());
                     }
+                } catch (Exception e) {
+                    log.error("[Visual] 분석 실패", e);
+                    // 상위 진단 파이프라인에서 FAILED 처리하도록 예외 전파
+                    throw new RuntimeException("Visual analysis failed", e);
                 }
-                return requestDto.getVisualAnalysis();
-            } catch (Exception e) {
-                log.error("[Visual] 분석 실패", e);
-                return null;
             }
+            return requestDto.getVisualAnalysis();
         });
 
         CompletableFuture<Map<String, Object>> audioTask = CompletableFuture.supplyAsync(() -> {
-            try {
-                if (audioFile != null) {
+            if (audioFile != null) {
+                try {
                     log.info("[Audio] [Semaphore-Acquire] 진입 시도 (Global: {}, Session: {})",
                             globalAiSemaphore.availablePermits(), sessionSemaphore.availablePermits());
                     sessionSemaphore.acquire();
@@ -438,12 +446,13 @@ public class AiDiagnosisService {
                         log.info("[Audio] [Semaphore-Release] 반납 완료 (Global: {}, Session: {})",
                                 globalAiSemaphore.availablePermits(), sessionSemaphore.availablePermits());
                     }
+                } catch (Exception e) {
+                    log.error("[Audio] 분석 실패", e);
+                    // 상위 진단 파이프라인에서 FAILED 처리하도록 예외 전파
+                    throw new RuntimeException("Audio analysis failed", e);
                 }
-                return requestDto.getAudioAnalysis();
-            } catch (Exception e) {
-                log.error("[Audio] 분석 실패", e);
-                return null;
             }
+            return requestDto.getAudioAnalysis();
         });
 
         CompletableFuture<Map<String, Object>> anomalyTask = CompletableFuture.supplyAsync(() -> {
@@ -783,6 +792,29 @@ public class AiDiagnosisService {
         }
     }
 
+    private void sendDiagnosisFailureNotification(UUID vehicleId, UUID sessionId, String failureMessage) {
+        try {
+            vehicleRepository.findById(vehicleId).ifPresent(vehicle -> {
+                User user = userRepository.findById(vehicle.getUserId()).orElse(null);
+                if (user == null) {
+                    return;
+                }
+                String title = "차량 진단 실패";
+                String body = "AI 진단 분석 중 오류가 발생했습니다. 다시 시도해 주세요.";
+
+                Map<String, String> data = new HashMap<>();
+                data.put("type", "DIAG_FAILED");
+                data.put("sessionId", sessionId.toString());
+                data.put("message", failureMessage != null ? failureMessage : "알 수 없는 오류");
+
+                notificationService.sendNotification(user, title, body, Notification.NotificationType.DIAG_ALERT, data);
+                log.info("Sent Diagnosis Failure Notification [Vehicle: {}, Session: {}]", vehicleId, sessionId);
+            });
+        } catch (Exception e) {
+            log.error("Failed to send diagnosis failure notification [Vehicle: {}, Session: {}]", vehicleId, sessionId, e);
+        }
+    }
+
     private Map<String, Object> performAnomalyDetection(UnifiedDiagnosisRequestDto requestDto,
             DiagSession session, java.util.concurrent.Semaphore sessionSemaphore) {
         try {
@@ -895,7 +927,8 @@ public class AiDiagnosisService {
 
         } catch (Exception e) {
             log.error("Anomaly detection failed", e);
-            return Map.of("is_anomaly", false, "error", e.getMessage());
+            // 상위 통합 진단 플로우에서 FAILED로 처리하도록 예외 전파
+            throw new RuntimeException("Anomaly detection failed", e);
         }
     }
 
@@ -968,12 +1001,15 @@ public class AiDiagnosisService {
         int t = 0;
         for (Map<String, Object> row : chunk) {
             Map<String, Object> features = new HashMap<>();
-            putIfNumber(row, features, "rpm", "rpm");
-            putIfNumber(row, features, "speed", "speed");
-            putIfNumber(row, features, "load", "engine_load");
-            putIfNumber(row, features, "engineLoad", "engine_load");
-            putIfNumber(row, features, "coolant", "coolant_temp");
-            putIfNumber(row, features, "coolantTemp", "coolant_temp");
+            // Core7 스키마에 맞게 키 매핑
+            putIfNumber(row, features, "rpm", "engine_rpm");
+            putIfNumber(row, features, "speed", "vehicle_speed_kmh");
+            putIfNumber(row, features, "coolant", "engine_coolant_temp_c");
+            putIfNumber(row, features, "coolantTemp", "engine_coolant_temp_c");
+            putIfNumber(row, features, "map", "imap_kpa");
+            putIfNumber(row, features, "intakeTemp", "intake_air_temp_c");
+            putIfNumber(row, features, "maf", "maf_gps");
+            putIfNumber(row, features, "throttlePos", "throttle_pos_pct");
             putIfNumber(row, features, "voltage", "battery_voltage_v");
             if (tirePressureKpa != null && !tirePressureKpa.isEmpty()) {
                 features.putAll(tirePressureKpa);
@@ -1212,10 +1248,15 @@ public class AiDiagnosisService {
         for (List<ObdLog> group : tripGroups) {
             List<Map<String, Object>> mappedLogs = group.stream().map(l -> {
                 Map<String, Object> p = new HashMap<>();
+                // OBD 로그에서 Core7 피처에 대응되는 값 추출
                 p.put("rpm", l.getRpm());
                 p.put("speed", l.getSpeed());
-                p.put("load", l.getEngineLoad());
                 p.put("coolant", l.getCoolantTemp());
+                p.put("map", l.getMap());
+                p.put("intakeTemp", l.getIntakeTemp());
+                p.put("maf", l.getMaf());
+                p.put("throttlePos", l.getThrottlePos());
+                // 기타 참조용 피처는 그대로 유지
                 p.put("voltage", l.getVoltage());
                 p.put("time", l.getTime().toString());
                 return p;

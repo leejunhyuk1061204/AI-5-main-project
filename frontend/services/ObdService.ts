@@ -117,8 +117,23 @@ class ObdService {
     // Observers
     private listeners: ((data: ObdData) => void)[] = [];
 
+    /**
+     * 백엔드가 LocalDateTime(타임존 정보 없음)으로 파싱하므로,
+     * 클라이언트 로컬 시각 기준 ISO-8601 문자열(YYYY-MM-DDTHH:mm:ss.SSS)을 생성한다.
+     * (toISOString()은 UTC 기준이라 서버 로컬 시간과 9시간 어긋나는 문제가 있음)
+     */
+    private getLocalTimestamp(): string {
+        const now = new Date();
+        const pad = (n: number) => n.toString().padStart(2, '0');
+        const padMs = (n: number) => n.toString().padStart(3, '0');
+
+        return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}` +
+            `T${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}.` +
+            `${padMs(now.getMilliseconds())}`;
+    }
+
     // Current Snapshot
-    private currentData: ObdData = { timestamp: new Date().toISOString() };
+    private currentData: ObdData = { timestamp: this.getLocalTimestamp() };
     private vin: string | null = null;
     private calid: string | null = null;
     private cvn: string | null = null;
@@ -161,12 +176,12 @@ class ObdService {
     // [10단계] 연속 관측 카운터
     private idleCount: number = 0; // RPM=0 && Speed=0 연속 카운트 (초)
     private disconnectCount: number = 0; // highAgeMs > 3000 연속 카운트 (틱)
-    // 주행 시작 조건: RPM > 300, 전압 12.7~13.3V 연속 3~5초 후 startTrip 1회 호출
+    // 주행 시작 조건: RPM > 300 연속 4초 후 startTrip 1회 호출
     private tripStartConditionCount: number = 0;
     private tripStartTriggered: boolean = false;
 
-    // [10단계] Grace Period
-    private readonly GRACE_PERIOD_IDLE_MS = 60000; // 60초
+    // [10단계] Grace Period (IDLE/DISCONNECT 동일 30초)
+    private readonly GRACE_PERIOD_IDLE_MS = 30000; // 30초
     private readonly GRACE_PERIOD_DISCONNECT_MS = 30000; // 30초
 
     // [11단계] PID 실패 관리 (Stability)
@@ -347,7 +362,7 @@ class ObdService {
 
         this.connectionType = 'classic';
         this.classicDevice = device;
-        this.currentData = { timestamp: new Date().toISOString() };
+        this.currentData = { timestamp: this.getLocalTimestamp() };
         this.isDisconnectRequested = false;
         this.connectionErrorCount = 0;
         this.disconnectionHandled = false;
@@ -379,7 +394,7 @@ class ObdService {
 
         this.connectionType = 'ble';
         this.currentDeviceId = deviceId;
-        this.currentData = { timestamp: new Date().toISOString() };
+        this.currentData = { timestamp: this.getLocalTimestamp() };
         this.isDisconnectRequested = false;
         // reconnectAttempts는 재연결 시도 흐름( handleDisconnection/attemptReconnect )에서만 관리
         this.connectionErrorCount = 0;
@@ -492,9 +507,6 @@ class ObdService {
             }
 
             if (ok) {
-                // 전송 성공 → 연결 정상으로 판단, 에러 카운트/플래그 리셋
-                this.connectionErrorCount = 0;
-                this.disconnectionHandled = false;
                 return true;
             }
             // ok === false 인 경우 (Classic write 실패 등)
@@ -568,7 +580,7 @@ class ObdService {
         if (hasPermission) return true;
         const result = await PermissionsAndroid.request('android.permission.POST_NOTIFICATIONS');
         if (result === 'granted') return true;
-        Alert.alert("알림 권한 필요", "백그라운드 수집을 위해 알림 권한이 반드시 필요합니다.");
+        Alert.alert("알림 권한 필요", "백그라운드 수집 및 주행 알림을 위해 알림 권한이 반드시 필요합니다.");
         return false;
     }
 
@@ -616,7 +628,7 @@ class ObdService {
                             url: url,
                             method: 'POST',
                             timestamp: Date.now(),
-                            body: JSON.stringify({ endTime: new Date().toISOString() })
+                            body: JSON.stringify({ endTime: this.getLocalTimestamp() })
                         });
                     }
                 }
@@ -661,6 +673,7 @@ class ObdService {
             OBD_PIDS.THROTTLE
         ];
 
+        // anomaly + wear_factor + DTC + freezeFrame에 실제로 쓰는 PID만
         const normalPids = [
             OBD_PIDS.ENGINE_LOAD,
             OBD_PIDS.MAP,
@@ -668,19 +681,21 @@ class ObdService {
             OBD_PIDS.COOLANT_TEMP,
             OBD_PIDS.INTAKE_TEMP,
             OBD_PIDS.ENGINE_RUNTIME,
+            OBD_PIDS.FUEL_TRIM_SHORT,
+            OBD_PIDS.FUEL_TRIM_LONG,
             OBD_PIDS.VOLTAGE,
             OBD_PIDS.DTC_STATUS,
-            // 보조 지표 (Ircama car 지원)
-            OBD_PIDS.FUEL_STATUS,
-            OBD_PIDS.TIMING_ADVANCE,
-            OBD_PIDS.OBD_COMPLIANCE,
-            OBD_PIDS.DISTANCE_W_MIL,
-            OBD_PIDS.DISTANCE_SINCE_DTC_CLEAR,
-            OBD_PIDS.BAROMETRIC_PRESSURE,
-            OBD_PIDS.CATALYST_TEMP_B1S1,
-            OBD_PIDS.ABSOLUTE_LOAD,
-            OBD_PIDS.TIME_SINCE_DTC_CLEARED,
-            OBD_PIDS.FUEL_TYPE,
+            // --- 주석 처리 (미사용) ---
+            // OBD_PIDS.FUEL_STATUS,
+            // OBD_PIDS.TIMING_ADVANCE,
+            // OBD_PIDS.OBD_COMPLIANCE,
+            // OBD_PIDS.DISTANCE_W_MIL,
+            // OBD_PIDS.DISTANCE_SINCE_DTC_CLEAR,
+            // OBD_PIDS.BAROMETRIC_PRESSURE,
+            // OBD_PIDS.CATALYST_TEMP_B1S1,
+            // OBD_PIDS.ABSOLUTE_LOAD,
+            // OBD_PIDS.TIME_SINCE_DTC_CLEARED,
+            // OBD_PIDS.FUEL_TYPE,
         ];
 
         // 1. HIGH 그룹전체는 매 주기에 추가 (최신성 보장)
@@ -724,7 +739,7 @@ class ObdService {
 
         // 7단계: Freshness Check를 적용한 스냅샷 생성
         const now = Date.now();
-        const snapshot: ObdData = { timestamp: new Date().toISOString() };
+        const snapshot: ObdData = { timestamp: this.getLocalTimestamp() };
 
         // 각 필드별 신선도 체크 (Implementation Plan 기준)
         const freshnessThresholds: Record<string, number> = {
@@ -759,6 +774,23 @@ class ObdService {
             }
         });
 
+        // [10단계] SUSPECT_END 시 기록/전송용 스냅샷을 null로 — 배치에 키 포함·백엔드 NULL 기록
+        if (this.tripState === 'SUSPECT_END') {
+            const s = snapshot as unknown as Record<string, unknown>;
+            s.rpm = null;
+            s.speed = null;
+            s.voltage = null;
+            s.coolant_temp = null;
+            s.engine_load = null;
+            s.fuel_trim_short = null;
+            s.fuel_trim_long = null;
+            s.throttle = null;
+            s.map = null;
+            s.maf = null;
+            s.intake_temp = null;
+            s.engine_runtime = null;
+        }
+
         // 데이터 기록 및 알림
         this.notifyListeners(snapshot);
         this.collectData(snapshot);
@@ -779,11 +811,10 @@ class ObdService {
 
         this.samplingTimer = setTimeout(() => this.samplingLoop(intervalMs), intervalMs);
 
-        // [10단계] 주행 시작 조건: RPM > 300, 전압 12.7~13.3V 연속 4초 후 startTrip 1회
+        // [10단계] 주행 시작 조건: RPM > 300 연속 4초 후 startTrip 1회
         if (this.tripState === 'WAITING_START' && this.vehicleId && !useTripStore.getState().isDriving && !this.tripStartTriggered) {
             const rpmOk = snapshot.rpm !== undefined && snapshot.rpm > 300;
-            const voltOk = snapshot.voltage !== undefined && snapshot.voltage >= 12.7 && snapshot.voltage <= 13.3;
-            if (rpmOk && voltOk) {
+            if (rpmOk) {
                 this.tripStartConditionCount++;
                 if (this.tripStartConditionCount >= 4) {
                     this.tripStartTriggered = true;
@@ -803,11 +834,10 @@ class ObdService {
      * [10단계] 주행 종료 상태 머신 체크
      */
     private checkTripTermination(snapshot: ObdData, now: number) {
-        // 기존 데이터 기반 종료 로직(IDLE / highAgeMs) 비활성화.
-        // 현재는 연결 상태(재연결 시도 실패 등)에 의해 주행 종료 여부를 판단한다.
-        if (!this.isPolling || this.isEndingTrip || this.tripState !== 'RUNNING') return;
+        if (!this.isPolling || this.isEndingTrip) return;
+        if (this.tripState !== 'RUNNING' && this.tripState !== 'SUSPECT_END') return;
 
-        // highAgeMs 계산: RPM 또는 Speed 중 최근 갱신 기준
+        // highAgeMs 계산: RPM 또는 Speed 중 최근 갱신 기준 (실제 수신 데이터 갱신 시각)
         const rpmTs = this.lastUpdatedAt.get('rpm') || 0;
         const speedTs = this.lastUpdatedAt.get('speed') || 0;
         const lastHighUpdatedAt = Math.max(rpmTs, speedTs);
@@ -842,10 +872,11 @@ class ObdService {
             }
         }
         else if (this.tripState === 'SUSPECT_END') {
-            // 복귀 조건: rpm > 0 또는 speed > 0 또는 업데이트 재개
-            const isActuallyActive = (snapshot.rpm !== undefined && snapshot.rpm > 0) ||
-                (snapshot.speed !== undefined && snapshot.speed > 0) ||
-                (highAgeMs <= 1000);
+            // 복귀 조건: 실제 수신 데이터(currentData) 기준 — 스냅샷은 SUSPECT_END 시 0으로 덮어씌워져 DB용
+            const currentRpm = this.currentData.rpm;
+            const currentSpeed = this.currentData.speed;
+            const isActuallyActive = (currentRpm !== undefined && currentRpm > 0) ||
+                (currentSpeed !== undefined && currentSpeed > 0);
 
             if (isActuallyActive) {
                 this.tripState = 'RUNNING';
@@ -982,8 +1013,10 @@ class ObdService {
             return;
         }
 
-        // [11단계] 성공적으로 파싱되면 실패 카운트 리셋
+        // [11단계] 성공적으로 파싱되면 실패 카운트/연결 에러 카운트 리셋
         this.resetPidFailCount(pidKey);
+        this.connectionErrorCount = 0;
+        this.disconnectionHandled = false;
 
         if (result !== null) {
             // Mode + PID 조합으로 구분 (예: "010C", "03", "020200")
@@ -1001,6 +1034,8 @@ class ObdService {
                 case '010B': this.updateData('map', result); break;
                 case '0110': this.updateData('maf', result); break;
                 case '011F': this.updateData('engine_runtime', result); break;
+                case '0106': this.updateData('fuel_trim_short', result); break;
+                case '0107': this.updateData('fuel_trim_long', result); break;
                 case '0103': this.updateData('fuel_status', result); break;
                 case '010E': this.updateData('timing_advance', result); break;
                 case '011C': this.updateData('obd_compliance', result); break;
@@ -1069,7 +1104,7 @@ class ObdService {
         // 테스트 모드(ELM327 테스트 화면)에서는 1초 타이머 대신
         // 각 01 모드 응답이 올 때마다 최신 스냅샷을 바로 내보낸다.
         if (this.testMode && this.currentPid && this.currentPid.mode === '01') {
-            const snapshot: ObdData = { timestamp: new Date().toISOString() };
+            const snapshot: ObdData = { timestamp: this.getLocalTimestamp() };
             Object.keys(this.currentData).forEach(key => {
                 if (key === 'timestamp') return;
                 (snapshot as any)[key] = (this.currentData as any)[key];
@@ -1578,7 +1613,7 @@ class ObdService {
     private simulationLoop() {
         if (!this.isPolling) return;
         const fakeData: ObdData = {
-            timestamp: new Date().toISOString(),
+            timestamp: this.getLocalTimestamp(),
             rpm: Math.floor(Math.random() * (3000 - 800) + 800),
             speed: Math.floor(Math.random() * 120),
             engine_load: Math.floor(Math.random() * 100),
@@ -1645,6 +1680,8 @@ class ObdService {
                     }
                 } else if (this.classicDevice) {
                     console.log('[ObdService] attemptReconnect Classic. address=', this.classicDevice.address);
+                    await ClassicBtService.disconnect(this.classicDevice);
+                    await this.delay(500);
                     const ok = await ClassicBtService.connect(this.classicDevice);
                     if (ok) {
                         await this.setClassicDevice(this.classicDevice);
