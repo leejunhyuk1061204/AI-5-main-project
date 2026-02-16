@@ -31,7 +31,11 @@ class IForestScorer:
             min_v = float(np.nanmin(col)) if np.any(np.isfinite(col)) else 0.0
             max_v = float(np.nanmax(col)) if np.any(np.isfinite(col)) else 0.0
             slope = float(col[-1] - col[0]) if np.isfinite(col[-1]) and np.isfinite(col[0]) else 0.0
-            dmean = float(np.nanmean(np.abs(np.diff(col)))) if len(col) > 1 else 0.0
+            if len(col) > 1:
+                d = np.diff(col)
+                dmean = float(np.nanmean(np.abs(d))) if np.any(np.isfinite(d)) else 0.0
+            else:
+                dmean = 0.0
             vals.extend([mean, std, min_v, max_v, slope, dmean])
             names.extend(
                 [
