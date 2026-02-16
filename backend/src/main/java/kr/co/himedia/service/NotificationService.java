@@ -117,7 +117,9 @@ public class NotificationService {
             case COMMUNITY_ALERT: // 마케팅으로 간주
                 return setting.getNotiMarketing();
             case SYSTEM_ALERT:
-                return true; // 시스템 필수 공지는 설정 무시하고 발송 (또는 notiRecall 등을 사용할 수 있음)
+            case TRIP_START:
+            case TRIP_END:
+                return true; // 시스템/주행 알림은 설정 무시하고 발송
             default:
                 return true;
         }

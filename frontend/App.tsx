@@ -223,9 +223,8 @@ export default function App() {
     initializeFcm();
   }, [initialRoute]);
 
-  // 3. Background Service Handling (P0: active 시 디바운스 후 stop으로 플랩핑 방지)
+  // BackgroundService: 앱 백그라운드 시 OBD 자동 재연결 (주행 시작/종료 알림은 백엔드 FCM)
   const activeStopDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const ACTIVE_STOP_DEBOUNCE_MS = 2500;
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', async (nextAppState) => {
