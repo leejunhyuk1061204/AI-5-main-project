@@ -52,8 +52,6 @@ export default function ObdConnectFlow() {
         await ObdService.ensureNotificationPermissionForPolling();
 
         ObdService.setManualConnectSession(true);
-        // 연결 직후 폴링 먼저 시작 (서버 등록 전에 PID 수집 시작해 어댑터가 켜진 상태에서 바로 요청)
-        ObdService.startPolling(1000);
 
         try {
             await obdDeviceApi.registerDevice({
@@ -70,6 +68,9 @@ export default function ObdConnectFlow() {
             console.error('[ObdConnectFlow] register/record failed:', msg);
             showAlert('연결 기록 실패', '기기 연결은 되었으나 서버 기록에 실패했습니다.', 'ERROR');
         }
+
+        // 서버에 장치 등록·히스토리 기록 후 폴링 시작 (0904/0906 수신 시 doResolveAndConnect가 recordConnect 호출하므로 device가 이미 있어야 함)
+        ObdService.startPolling(1000);
 
         setObdModalVisible(false);
         showAlert('연결 완료', 'OBD 어댑터가 선택한 차량에 연결되었습니다.', 'SUCCESS', async () => {

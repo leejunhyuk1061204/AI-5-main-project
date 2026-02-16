@@ -108,6 +108,44 @@ public class AiDiagnosisService {
         this.userRepository = userRepository;
     }
 
+    /**
+     * DLQ로 이동한 진단 작업에 대한 후속 처리.
+     * 이미 여러 차례 재시도 후에도 실패한 경우이므로,
+     * 여기에서 최종 1회만 실패 FCM을 발송한다.
+     */
+    public void handleDeadDiagnosisTask(DiagnosisTaskMessage taskMessage) {
+        UUID sessionId = taskMessage.getSessionId();
+        if (sessionId == null) {
+            log.error("[DLQ Handler] Dead task without sessionId: {}", taskMessage);
+            return;
+        }
+
+        DiagSession session = diagSessionRepository.findById(sessionId).orElse(null);
+        if (session == null) {
+            log.error("[DLQ Handler] DiagSession not found for dead task. sessionId={}", sessionId);
+            return;
+        }
+
+        DiagTriggerType triggerType = session.getTriggerType();
+
+        // 세션 상태를 FAILED로 보정 (이미 FAILED일 수도 있음)
+        session.updateStatus(DiagStatus.FAILED, "진단 실패: 시스템에서 여러 차례 재시도했지만 완료되지 않았습니다.");
+        diagSessionRepository.save(session);
+
+        // AUTO/DTC만 실패 FCM 발송 대상 (한 세션당 1회)
+        if (triggerType == DiagTriggerType.AUTO || triggerType == DiagTriggerType.DTC) {
+            try {
+                sendDiagnosisFailureNotification(session.getVehiclesId(), sessionId,
+                        "시스템에서 여러 차례 재시도했지만 진단을 완료하지 못했습니다.");
+            } catch (Exception e) {
+                log.error("[DLQ Handler] Failed to send final diagnosis failure notification. sessionId={}", sessionId,
+                        e);
+            }
+        } else {
+            log.info("[DLQ Handler] Non AUTO/DTC dead task. No failure FCM sent. sessionId={}", sessionId);
+        }
+    }
+
     @Value("${app.storage.type:local}")
     private String storageType;
 
@@ -360,17 +398,15 @@ public class AiDiagnosisService {
             session.updateStatus(DiagStatus.FAILED, "진단 실패: " + e.getMessage());
             diagSessionRepository.save(session);
 
-            // AUTO/DTC: SSE 구독자가 없으므로 푸시 알림으로 실패 전달
-            if (triggerType == DiagTriggerType.AUTO || triggerType == DiagTriggerType.DTC) {
-                sendDiagnosisFailureNotification(session.getVehiclesId(), sessionId, e.getMessage());
-            } else {
-                // VISUAL/AUDIO 등: 화면에서 SSE 구독 중이면 failed 이벤트 전송
+            // VISUAL/AUDIO/DATA/ROUTINE 등: 화면에서 SSE 구독 중이면 failed 이벤트 전송
+            if (triggerType != DiagTriggerType.AUTO && triggerType != DiagTriggerType.DTC) {
                 try {
                     sseEmitters.send(sessionId.toString(), "failed", "진단 실패: " + e.getMessage());
                 } catch (Exception sseError) {
                     log.warn("Failed to send FAILED SSE event for session {}", sessionId, sseError);
                 }
             }
+            // AUTO/DTC: 여기서는 실패 FCM을 보내지 않고, DLQ 컨슈머에서 최종 1회만 발송
             throw new RuntimeException("진단 파이프라인 오류", e);
         }
     }
@@ -609,7 +645,7 @@ public class AiDiagnosisService {
         DiagnosisResponseDto statusDto = getDiagnosisResult(sessionId);
         sseEmitters.send(sessionId.toString(), "status", statusDto);
 
-        // 5. 알림 발송 (DTC/AUTO만)
+        // 6. 알림 발송 (DTC/AUTO만)
         DiagTriggerType triggerType = session.getTriggerType();
         if (triggerType == DiagTriggerType.DTC || triggerType == DiagTriggerType.AUTO) {
             String responseMode = (String) finalResponse.getOrDefault("response_mode", "REPORT");

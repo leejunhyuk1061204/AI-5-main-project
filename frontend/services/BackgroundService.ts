@@ -1,6 +1,7 @@
 import BackgroundService from 'react-native-background-actions';
 import { Platform } from 'react-native';
 import ObdService from './ObdService';
+import { useBleStore } from '../store/useBleStore';
 
 const sleep = (time: number) => new Promise<void>((resolve) => setTimeout(() => resolve(), time));
 
@@ -38,7 +39,10 @@ class BackgroundTaskService {
                     console.log('[BackgroundService] Heartbeat tick reached. Trying auto-connect from cache...');
                     await ObdService.tryAutoConnectFromCache();
                 } catch (e) {
-                    console.warn('[BackgroundService] tryAutoConnectFromCache failed', e);
+                    const msg = e instanceof Error ? e.message : String(e);
+                    console.warn('[BackgroundService] tryAutoConnectFromCache failed', msg);
+                    useBleStore.getState().setError(msg);
+                    useBleStore.getState().setStatus('disconnected');
                 }
             }
         }

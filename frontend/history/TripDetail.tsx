@@ -1,11 +1,32 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons, FontAwesome5, Ionicons } from '@expo/vector-icons';
-import { StatusBar } from 'expo-status-bar';
-import tripApi, { TripSummary } from '../api/tripApi';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
+import tripApi, { TripSummary, TripObdLogDto } from '../api/tripApi';
 import BaseScreen from '../components/layout/BaseScreen';
+import { useAlertStore } from '../store/useAlertStore';
+
+// 블루투스 OBD가 수집하는 PID만 (highPids: rpm,speed,throttle + normalPids)
+const CSV_HEADER = 'timestamp,rpm,speed,voltage,coolantTemp,engineLoad,fuelTrimShort,fuelTrimLong,throttle,map,maf,intakeTemp,engineRuntime';
+
+function obdLogToCsvRow(d: TripObdLogDto): string {
+    const t = d.timestamp ?? '';
+    const rpm = d.rpm ?? '';
+    const speed = d.speed ?? '';
+    const voltage = d.voltage ?? '';
+    const coolantTemp = d.coolantTemp ?? '';
+    const engineLoad = d.engineLoad ?? '';
+    const fuelTrimShort = d.fuelTrimShort ?? '';
+    const fuelTrimLong = d.fuelTrimLong ?? '';
+    const throttle = d.throttlePos ?? '';
+    const map = d.map ?? '';
+    const maf = d.maf ?? '';
+    const intakeTemp = d.intakeTemp ?? '';
+    const engineRuntime = d.engineRuntime ?? '';
+    return [t, rpm, speed, voltage, coolantTemp, engineLoad, fuelTrimShort, fuelTrimLong, throttle, map, maf, intakeTemp, engineRuntime].join(',');
+}
 
 export default function TripDetail() {
     const navigation = useNavigation();
@@ -13,6 +34,8 @@ export default function TripDetail() {
     const { tripId } = route.params || {};
     const [trip, setTrip] = useState<TripSummary | null>(null);
     const [loading, setLoading] = useState(true);
+    const [exporting, setExporting] = useState(false);
+    const showAlert = useAlertStore((s) => s.showAlert);
 
     useEffect(() => {
         if (tripId) {
@@ -62,6 +85,31 @@ export default function TripDetail() {
         if (score >= 60) return '보통';
         return '주의';
     };
+
+    const handleExportCsv = useCallback(async () => {
+        if (!tripId) return;
+        setExporting(true);
+        try {
+            const res = await tripApi.getTripObdLogs(tripId);
+            if (!res.success || !res.data || res.data.length === 0) {
+                showAlert('내보내기 실패', '이 주행에 OBD 데이터가 없습니다.', 'ERROR');
+                return;
+            }
+            const lines = [CSV_HEADER, ...res.data.map(obdLogToCsvRow)];
+            const csvString = lines.join('\n');
+            const filename = `trip_${tripId}_${new Date().toISOString().replace(/[:.]/g, '-')}.csv`;
+            const path = `${FileSystem.documentDirectory}${filename}`;
+            const encoding = (FileSystem.EncodingType && FileSystem.EncodingType.UTF8) ?? 'utf8';
+            await FileSystem.writeAsStringAsync(path, csvString, { encoding });
+            await Sharing.shareAsync(path);
+            showAlert('내보내기 완료', `${res.data.length}행의 OBD 데이터를 CSV로 저장했습니다.`, 'SUCCESS');
+        } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            showAlert('내보내기 실패', msg, 'ERROR');
+        } finally {
+            setExporting(false);
+        }
+    }, [tripId, showAlert]);
 
     if (loading) {
         return (
@@ -263,6 +311,22 @@ export default function TripDetail() {
                         </View>
                     </View>
                 </View>
+
+                {/* 6. CSV 내보내기 */}
+                <TouchableOpacity
+                    onPress={handleExportCsv}
+                    disabled={exporting}
+                    className="flex-row items-center justify-center gap-2 py-4 bg-primary/20 border border-primary/40 rounded-xl active:bg-primary/30"
+                >
+                    {exporting ? (
+                        <ActivityIndicator size="small" color="#0d7ff2" />
+                    ) : (
+                        <MaterialIcons name="file-download" size={22} color="#0d7ff2" />
+                    )}
+                    <Text className="text-primary font-bold text-base">
+                        {exporting ? '내보내는 중...' : 'OBD 데이터 CSV 내보내기'}
+                    </Text>
+                </TouchableOpacity>
             </ScrollView>
         </BaseScreen>
     );

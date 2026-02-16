@@ -18,6 +18,8 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import kr.co.himedia.dto.trip.TripObdLogDto;
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -44,6 +46,43 @@ public class TripService {
     public TripSummary getTripDetail(UUID tripId) {
         return tripSummaryRepository.findByTripId(tripId)
                 .orElseThrow(() -> new BaseException(ErrorCode.TRIP_NOT_FOUND));
+    }
+
+    /**
+     * 주행 구간 OBD 로그 조회 (CSV 내보내기용)
+     */
+    @Transactional(readOnly = true)
+    public List<TripObdLogDto> getTripObdLogs(UUID tripId) {
+        TripSummary trip = tripSummaryRepository.findByTripId(tripId)
+                .orElseThrow(() -> new BaseException(ErrorCode.TRIP_NOT_FOUND));
+
+        if (trip.getEndTime() == null) {
+            return List.of();
+        }
+
+        var startOffset = trip.getStartTime().atZone(java.time.ZoneId.systemDefault()).toOffsetDateTime();
+        var endOffset = trip.getEndTime().atZone(java.time.ZoneId.systemDefault()).toOffsetDateTime();
+
+        List<ObdLog> logs = obdLogRepository.findByVehicleIdAndTimeBetweenOrderByTimeAsc(
+                trip.getVehicleId(), startOffset, endOffset);
+
+        return logs.stream()
+                .map(log -> TripObdLogDto.builder()
+                        .timestamp(log.getTime() != null ? log.getTime().toString() : "")
+                        .rpm(log.getRpm())
+                        .speed(log.getSpeed())
+                        .voltage(log.getVoltage())
+                        .coolantTemp(log.getCoolantTemp())
+                        .engineLoad(log.getEngineLoad())
+                        .fuelTrimShort(log.getFuelTrimShort())
+                        .fuelTrimLong(log.getFuelTrimLong())
+                        .throttlePos(log.getThrottlePos())
+                        .map(log.getMap())
+                        .maf(log.getMaf())
+                        .intakeTemp(log.getIntakeTemp())
+                        .engineRuntime(log.getEngineRuntime())
+                        .build())
+                .collect(Collectors.toList());
     }
 
     // 주행 시작 (Trip ID 발급 및 초기화)
@@ -93,12 +132,14 @@ public class TripService {
         trip.setEndTime(endTime);
 
         var startOffset = trip.getStartTime().atZone(java.time.ZoneId.systemDefault()).toOffsetDateTime();
+        var endOffset = endTime.atZone(java.time.ZoneId.systemDefault()).toOffsetDateTime();
 
-        log.info("[TripEnd] Query for all logs from startTime: {} (vehicleId={})", startOffset, trip.getVehicleId());
+        log.info("[TripEnd] Query logs between {} ~ {} (vehicleId={})", startOffset, endOffset, trip.getVehicleId());
 
-        List<ObdLog> tripLogs = obdLogRepository.findByVehicleIdAndTimeGreaterThanEqualOrderByTimeAsc(
+        List<ObdLog> tripLogs = obdLogRepository.findByVehicleIdAndTimeBetweenOrderByTimeAsc(
                 trip.getVehicleId(),
-                startOffset);
+                startOffset,
+                endOffset);
 
         log.info("[TripEnd] Found {} logs for trip {}", tripLogs.size(), tripId);
 
