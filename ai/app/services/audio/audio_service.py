@@ -113,11 +113,12 @@ class AudioService:
         # 2. 전처리: 노이즈 필터링 파이프라인 (음성/잡음 제거)
         try:
             from ai.app.services.audio.audio_preprocessing import preprocess_audio_pipeline
-            preprocessed_bytes = await preprocess_audio_pipeline(audio_bytes)
-            print(f"[Audio Service] 노이즈 필터링 완료 (원본: {len(audio_bytes)}B → 처리: {len(preprocessed_bytes)}B)")
+            preprocessed_bytes, speech_ratio = await preprocess_audio_pipeline(audio_bytes)
+            print(f"[Audio Service] 노이즈 필터링 완료 (원본: {len(audio_bytes)}B → 처리: {len(preprocessed_bytes)}B, 음성비율: {speech_ratio:.2%})")
         except Exception as e:
             print(f"[Audio Service] 전처리 실패 (Fallback to raw): {e}")
             preprocessed_bytes = audio_bytes
+            speech_ratio = 0.0
         
         # 3. 16kHz 변환 (이미 전처리에서 완료되었으나 버퍼 형태로 변환)
         audio_buffer = io.BytesIO(preprocessed_bytes)
@@ -143,7 +144,9 @@ class AudioService:
         # AST 결과에서 Decision 추출
         decision = get_audio_decision(
             confidence=ast_result.confidence,
-            label=ast_result.category
+            label=ast_result.category,
+            all_probs=getattr(ast_result, "all_probs", None) or {},
+            speech_ratio=speech_ratio # [New] Pass Voice Ratio to prevent OOD misclassification
         )
         
         if decision.status == "UNCERTAIN":

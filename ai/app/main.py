@@ -56,11 +56,24 @@ def load_ast_model():
     print("[Model] Loading AST Audio Model...")
     from transformers import ASTForAudioClassification, ASTFeatureExtractor
     
-    model_path = os.path.join("ai", "weights", "audio", "best_ast_model")
+    # [User Request] 기본 경로를 hybrid_cnn14/cnn14.pt로 변경 (나중에 바뀔 수도 있음)
+    model_path = os.path.join("ai", "weights", "audio", "hybrid_cnn14", "cnn14.pt") 
     
-    if not os.path.exists(model_path):
-        print(f"[Warning] AST 가중치 없음: {model_path}")
-        print("[Warning] 기본 모델(MIT/ast-finetuned-audioset)을 로드합니다.")
+    # [Fallback] 만약 요청된 경로가 없거나 파일인 경우 (Transformers는 폴더 필요) 기존 경로들 체크
+    if not os.path.exists(model_path) or not os.path.isdir(model_path):
+        for alt_path in [
+            os.path.join("ai", "weights", "audio", "best_ast_model"),
+            os.path.join("ai", "weights", "audio", "hybrid_ast")
+        ]:
+            if os.path.exists(alt_path) and os.path.isdir(alt_path):
+                print(f"[Info] 지정된 경로가 없거나 파일입니다. 대체 AST 폴더 사용: {alt_path}")
+                model_path = alt_path
+                break
+
+    # 최종 체크: 여전히 폴더가 아니면 기본 모델(Online)로 폴백
+    if not os.path.isdir(model_path):
+        print(f"[Warning] AST 가중치 폴더를 찾을 수 없음 (현재 경로: {model_path})")
+        print("[Warning] 기본 모델(MIT/ast-finetuned-audioset)을 로드하여 서버 중단을 방지합니다.")
         model_name = "MIT/ast-finetuned-audioset-10-10-0.4593"
         model = ASTForAudioClassification.from_pretrained(model_name)
         feature_extractor = ASTFeatureExtractor.from_pretrained(model_name)
