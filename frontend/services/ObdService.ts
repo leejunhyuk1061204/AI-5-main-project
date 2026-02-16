@@ -315,6 +315,11 @@ class ObdService {
         console.log('[ObdService] doResolveAndConnect call resolveVehicle deviceId=', deviceId, 'vin=', vin ? '***' : null, 'calid=', calid ? '***' : null, 'cvn=', cvn ? '***' : null);
 
         try {
+            await obdDeviceApi.registerDevice({
+                deviceId,
+                deviceType: this.connectionType === 'classic' ? 'classic' : 'ble',
+                name: useBleStore.getState().connectedDeviceName || deviceId,
+            });
             const res = await obdDeviceApi.resolveVehicle({
                 deviceId,
                 vin,
@@ -633,6 +638,9 @@ class ObdService {
                     }
                 }
             }
+
+            // 주행 종료 후 연결 해제 → 다음 출발 시 Heartbeat의 tryAutoConnectFromCache가 재연결·폴링 재개하도록 함
+            await this.disconnect();
         } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
             console.error('[ObdService] finalizeTrip error. reason=', msg);
