@@ -21,7 +21,7 @@ vehicles:
     vin: "1HMXOBSGK693TJ7JR"
     calid: "SONATA_CAL_001"
     cvn: "A1B2C3D4"
-    csv_file: "scenarios/driving_normal.csv"
+    csv_file: "scenarios/test_trip.csv"
     mappings:
       "010C": { col: "rpm", formula: "x * 4" }
       "010D": { col: "speed", formula: "x" }
@@ -31,6 +31,9 @@ vehicles:
       "010B": { col: "map", formula: "x" }
       "0110": { col: "maf", formula: "x * 100" }
       "010F": { col: "intake_temp", formula: "x + 40" }
+      "0111": { col: "throttle", formula: "x * 2.55" }
+      "0106": { col: "fuel_trim_short", formula: "x + 128" }
+      "0107": { col: "fuel_trim_long", formula: "x + 128" }
     dtcs: ["P0115", "P0300"]
 
   - id: "DEV_002"
