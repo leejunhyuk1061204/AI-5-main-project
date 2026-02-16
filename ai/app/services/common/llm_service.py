@@ -24,6 +24,7 @@ from typing import Optional, List, Dict, Any
 from openai import AsyncOpenAI
 from ai.app.schemas.visual_schema import VisualResponse
 from ai.app.schemas.audio_schema import AudioResponse, AudioDetail
+from ai.app.services.audio.hertz import convert_bytes_to_16khz
 
 # OpenAI 클라이언트 생성 및 키 체크
 def _get_api_key():
@@ -446,15 +447,20 @@ async def analyze_audio_with_llm(s3_url: str, audio_bytes: Optional[bytes] = Non
             async with httpx.AsyncClient(timeout=10.0) as httpx_client:
                 audio_response = await httpx_client.get(s3_url)
                 audio_response.raise_for_status()
-                audio_data = base64.b64encode(audio_response.content).decode('utf-8')
+                audio_bytes = audio_response.content
+
+        # [Fix] 확실한 WAV 변환 (m4a, mp3 대응)
+        converted_buffer = await convert_bytes_to_16khz(audio_bytes)
+        if converted_buffer:
+            audio_data = base64.b64encode(converted_buffer.getvalue()).decode('utf-8')
         else:
+            # 변환 실패 시 원본 시도 (최후의 보루)
             audio_data = base64.b64encode(audio_bytes).decode('utf-8')
 
         # [Correct] Audio Input via 'chat.completions.create'
         response = await _get_client().chat.completions.create(
-            model="gpt-4o-audio-preview",  # [Model Update] gpt-5 -> gpt-4o-audio-preview for audio input
-            modalities=["text"], # Start with text output
-            # audio={"voice": "alloy", "format": "wav"}, # ❌ Removed invalid param for input-only task
+            model="gpt-4o-audio-preview",  # [Model Update] gpt-4o-audio-preview for audio input
+            modalities=["text"], # Text output only
             messages=[
                 {
                     "role": "user",
@@ -661,7 +667,7 @@ async def interpret_tire_status(status_list: List[Dict]) -> Dict[str, str]:
     """
     try:
         response = await _get_client().chat.completions.create(
-            model="gpt-5",
+            model="gpt-4o", # [Stability] Standardizing to 4o
             messages=[{"role": "user", "content": PROMPT}],
             response_format={"type": "json_object"},
             max_completion_tokens=500
@@ -819,14 +825,20 @@ async def generate_audio_labels(s3_url: str, audio_bytes: Optional[bytes] = None
             async with httpx.AsyncClient(timeout=10.0) as httpx_client:
                 audio_response = await httpx_client.get(s3_url)
                 audio_response.raise_for_status()
-                audio_data = base64.b64encode(audio_response.content).decode('utf-8')
+                audio_bytes = audio_response.content
+
+        # [Fix] 확실한 WAV 변환 (Active Learning 데이터 품질 보정)
+        converted_buffer = await convert_bytes_to_16khz(audio_bytes)
+        if converted_buffer:
+            audio_data = base64.b64encode(converted_buffer.getvalue()).decode('utf-8')
         else:
             audio_data = base64.b64encode(audio_bytes).decode('utf-8')
         
+        # [Fix] API Parameter & Model update
         response = await _get_client().chat.completions.create(
-            model="gpt-5",
-            modalities=["text", "audio"],
-            audio={"voice": "alloy", "format": "wav"},
+            model="gpt-4o-audio-preview",
+            modalities=["text"], # Text output only (No audio output needed for labeling)
+            # audio={"voice": "alloy", "format": "wav"}, # ❌ Removed invalid param
             messages=[
                 {
                     "role": "user",
@@ -841,7 +853,8 @@ async def generate_audio_labels(s3_url: str, audio_bytes: Optional[bytes] = None
             ]
         )
         
-        content = response.choices[0].message.audio.transcript
+        # [Fix] Response format (gpt-4o-audio-preview with text modality returns content)
+        content = response.choices[0].message.content
         match = re.search(r'\{.*\}', content, re.DOTALL)
         if match:
             return json.loads(match.group())

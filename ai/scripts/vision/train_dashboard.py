@@ -33,7 +33,7 @@ SAVE_PATH = "ai/weights/dashboard/best.pt"
 
 DEFAULT_EPOCHS = 10
 BATCH_SIZE = 16  # 데이터 적을 때 최적화 (기존 2)
-IMG_SIZE = 640
+IMG_SIZE = 1080
 WORKERS = 4 if platform.system() != "Windows" else 0  # 환경 자동 감지
 
 # Augmentation (Small Dataset Optimized)
