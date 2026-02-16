@@ -46,6 +46,8 @@ public class Notification {
         COMMUNITY_ALERT, // 커뮤니티 알림
         SYSTEM_ALERT, // 시스템 공지
         DTC_ALERT, // DTC 고장 알림
-        DIAG_ALERT // AI 진단 결과 알림
+        DIAG_ALERT, // AI 진단 결과 알림
+        TRIP_START, // 주행 시작
+        TRIP_END // 주행 종료
     }
 }
