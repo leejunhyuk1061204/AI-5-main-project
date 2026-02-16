@@ -40,9 +40,12 @@ class EngineScorer:
         if not path.exists():
             return None
         try:
-            return json.loads(path.read_text(encoding="utf-8"))
+            return json.loads(path.read_text(encoding="utf-8-sig"))
         except Exception:
-            return None
+            try:
+                return json.loads(path.read_text(encoding="utf-8"))
+            except Exception:
+                return None
 
     def _load_torch_model(self, path: Path) -> Any:
         if not path.exists():
@@ -117,23 +120,35 @@ class EngineScorer:
             )
 
             gate = self._decide_gate(q)
-            score_if, st_if, top_if = self._if_scorer.score(x)
-            score_ae, st_ae, top_ae = self._ae_scorer.score(x, mask)
+            score_if, st_if, top_if = 0.0, "SKIPPED", []
+            score_ae, st_ae, top_ae = None, "SKIPPED", []
 
             mode = gate.mode
-            final = score_if
-            top_signals = top_if
-            details_status = {"ae": st_ae, "if": st_if}
+            final = 0.0
+            top_signals: List[Dict[str, float]] = []
+
+            if mode in ("IF_ONLY", "BOTH"):
+                score_if, st_if, top_if = self._if_scorer.score(x)
+            if mode in ("AE_ONLY", "BOTH"):
+                score_ae, st_ae, top_ae = self._ae_scorer.score(x, mask)
 
             if mode == "AE_ONLY":
                 if score_ae is None:
                     mode = "IF_ONLY"
+                    score_if, st_if, top_if = self._if_scorer.score(x)
+                    final = float(score_if)
+                    top_signals = top_if
                 else:
                     final = float(score_ae)
                     top_signals = top_ae
-            if mode == "BOTH":
+            elif mode == "IF_ONLY":
+                final = float(score_if)
+                top_signals = top_if
+            elif mode == "BOTH":
                 if score_ae is None:
                     mode = "IF_ONLY"
+                    final = float(score_if)
+                    top_signals = top_if
                 else:
                     final = float(gate.ae_weight * score_ae + (1.0 - gate.ae_weight) * score_if)
                     merged: Dict[str, float] = {}
@@ -145,6 +160,7 @@ class EngineScorer:
                         {"feature": k, "contribution": v}
                         for k, v in sorted(merged.items(), key=lambda kv: kv[1], reverse=True)[:3]
                     ]
+            details_status = {"ae": st_ae, "if": st_if}
 
             threshold = self._threshold()
             is_anom = bool(final >= threshold)
