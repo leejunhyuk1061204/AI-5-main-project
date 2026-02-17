@@ -32,6 +32,7 @@ class ObdAnomalyService:
 
     def run(self, req: ObdAnomalyRequest) -> ObdAnomalyResponse:
         self._validate(req)
+        effective_duration_sec = self._effective_duration_sec(req)
         selected_domains = self._resolve_domains(req)
 
         windows = make_windows(
@@ -88,7 +89,7 @@ class ObdAnomalyService:
             vehicle_id=req.vehicle_id,
             trip_id=req.trip_id,
             timestamp_unit=req.timestamp_unit,
-            total_duration_sec=req.duration_sec,
+            total_duration_sec=effective_duration_sec,
             window_sec=req.options.window_sec,
             stride_sec=req.options.stride_sec,
             num_windows=len(window_results),
@@ -172,9 +173,13 @@ class ObdAnomalyService:
         return EventSeverity.INFO
 
     def _validate(self, req: ObdAnomalyRequest) -> None:
-        expected_len = req.duration_sec * req.sampling_hz
-        if len(req.data) != expected_len:
-            raise ValueError(f"data length mismatch: got={len(req.data)}, expected={expected_len}")
+        if not req.data:
+            raise ValueError("data must not be empty")
+        # Backend may send variable-length trailing chunks (not always 900s).
+        # Keep request tolerant and use actual payload length as effective duration.
+
+    def _effective_duration_sec(self, req: ObdAnomalyRequest) -> int:
+        return int(len(req.data) / max(1, req.sampling_hz))
 
     def _resolve_domains(self, req: ObdAnomalyRequest) -> List[str]:
         domains = list(req.options.domains or DEFAULT_DOMAINS)
