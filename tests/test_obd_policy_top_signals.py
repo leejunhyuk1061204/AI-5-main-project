@@ -83,3 +83,41 @@ def test_top_signals_normalized_in_service_extract():
     assert len(top) == 2
     s = sum(t.contribution for t in top)
     assert abs(s - 1.0) < 1e-6
+
+
+def test_variable_length_chunk_does_not_fail_when_duration_mismatch():
+    svc = ObdAnomalyService()
+    data = []
+    for i in range(120):
+        data.append(
+            {
+                "t": i,
+                "features": {
+                    "engine_coolant_temp_c": 88.0,
+                    "imap_kpa": 42.0,
+                    "engine_rpm": 850.0,
+                    "vehicle_speed_kmh": 25.0,
+                    "intake_air_temp_c": 24.0,
+                    "maf_gps": 3.5,
+                    "throttle_pos_pct": 16.0,
+                },
+            }
+        )
+
+    # duration_sec is still 900 from backend contract, but actual payload is 120s chunk.
+    req = ObdAnomalyRequest.model_validate(
+        {
+            "vehicle_id": "veh-2",
+            "trip_id": "trip-2",
+            "mode": "DRIVING",
+            "duration_sec": 900,
+            "sampling_hz": 1,
+            "timestamp_unit": "s",
+            "data": data,
+            "options": {"domains": ["engine"], "window_sec": 60, "stride_sec": 30},
+        }
+    )
+
+    res = svc.run(req)
+    assert res.meta.total_duration_sec == 120
+    assert res.meta.num_windows > 0
