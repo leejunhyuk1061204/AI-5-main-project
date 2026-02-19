@@ -107,7 +107,8 @@ public class MaintenanceService {
 
                 MaintenanceHistory history = MaintenanceHistory.builder()
                                 .vehicle(vehicle)
-                                .maintenanceDate(request.getMaintenanceDate())
+                                .maintenanceDate(request.getMaintenanceDate() != null ? request.getMaintenanceDate()
+                                                : LocalDate.now())
                                 .mileageAtMaintenance(mileageAtMaintenance)
                                 .consumableItem(item)
                                 .isStandardized(request.getIsStandardized())
@@ -267,7 +268,8 @@ public class MaintenanceService {
         @Transactional
         public void registerHistory(Vehicle vehicle, ConsumableItem item, LocalDate maintenanceDate, Double mileage) {
                 LocalDate safeDate = maintenanceDate != null ? maintenanceDate : java.time.LocalDate.now();
-                Double safeMileage = mileage != null ? mileage : (vehicle.getTotalMileage() != null ? vehicle.getTotalMileage() : 0.0);
+                Double safeMileage = mileage != null ? mileage
+                                : (vehicle.getTotalMileage() != null ? vehicle.getTotalMileage() : 0.0);
                 MaintenanceHistory history = MaintenanceHistory.builder()
                                 .vehicle(vehicle)
                                 .maintenanceDate(safeDate)
@@ -277,7 +279,8 @@ public class MaintenanceService {
                                 .build();
                 maintenanceHistoryRepository.save(history);
 
-                double remainingLife = computeRemainingLifePercent(vehicle, mileage != null ? mileage : safeMileage, item);
+                double remainingLife = computeRemainingLifePercent(vehicle, mileage != null ? mileage : safeMileage,
+                                item);
                 vehicleConsumableRepository.findByVehicleAndConsumableItem_Id(vehicle, item.getId())
                                 .ifPresentOrElse(vc -> {
                                         if (maintenanceDate != null) {
@@ -409,7 +412,8 @@ public class MaintenanceService {
                                 req.setMemo(commonMemo);
                                 requests.add(req);
                         }
-                        java.util.List<MaintenanceHistoryResponse> responses = registerMaintenanceList(vehicleId, requests);
+                        java.util.List<MaintenanceHistoryResponse> responses = registerMaintenanceList(vehicleId,
+                                        requests);
                         return responses.isEmpty() ? null : responses.get(0);
                 }
 

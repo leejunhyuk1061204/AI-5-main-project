@@ -142,7 +142,11 @@ CREATE TABLE IF NOT EXISTS obd_device_vehicle_history (
     updated_at TIMESTAMP
 );
 
-CREATE INDEX IF NOT EXISTS idx_obd_history_device_last ON obd_device_vehicle_history (obd_device_id, last_connected_at DESC);
+CREATE INDEX IF NOT EXISTS idx_obd_history_device_last ON obd_device_vehicle_history (
+    obd_device_id,
+    last_connected_at DESC
+);
+
 CREATE INDEX IF NOT EXISTS idx_obd_history_device_calid_cvn ON obd_device_vehicle_history (obd_device_id, calid, cvn);
 
 -- OBD 실시간 로그 (2.2.1) - TimescaleDB
@@ -350,7 +354,7 @@ CREATE TABLE IF NOT EXISTS vehicle_consumables (
 CREATE TABLE IF NOT EXISTS maintenance_logs (
     maintenance_id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
     vehicle_id UUID NOT NULL REFERENCES vehicles (vehicles_id),
-    maintenance_date DATE NOT NULL,
+    maintenance_date DATE NOT NULL DEFAULT CURRENT_DATE,
     mileage_at_maintenance DOUBLE PRECISION NOT NULL,
     consumable_item_id INT REFERENCES consumable_items (id),
     is_standardized BOOLEAN,
@@ -406,15 +410,17 @@ CREATE TABLE IF NOT EXISTS notification (
     type VARCHAR(50) NOT NULL,
     is_read BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    CONSTRAINT notification_type_check CHECK (type IN (
-        'MAINTENANCE_ALERT',
-        'COMMUNITY_ALERT',
-        'SYSTEM_ALERT',
-        'DTC_ALERT',
-        'DIAG_ALERT',
-        'TRIP_START',
-        'TRIP_END'
-    ))
+    CONSTRAINT notification_type_check CHECK (
+        type IN (
+            'MAINTENANCE_ALERT',
+            'COMMUNITY_ALERT',
+            'SYSTEM_ALERT',
+            'DTC_ALERT',
+            'DIAG_ALERT',
+            'TRIP_START',
+            'TRIP_END'
+        )
+    )
 );
 
 -- 지식 베이스 벡터 (2.5.2) - RAG용 매뉴얼 청크 (charm.li)
@@ -428,6 +434,7 @@ CREATE TABLE IF NOT EXISTS knowledge_vectors (
 );
 
 CREATE INDEX IF NOT EXISTS idx_knowledge_metadata ON knowledge_vectors USING GIN (metadata);
+
 CREATE INDEX IF NOT EXISTS idx_knowledge_embedding ON knowledge_vectors USING hnsw (embedding vector_cosine_ops);
 
 -- 8. 외부 API 연동 및 상세 정보 (External)
