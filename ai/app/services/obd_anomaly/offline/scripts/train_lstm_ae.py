@@ -1,5 +1,6 @@
 ﻿import argparse
 import json
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
@@ -98,6 +99,10 @@ def apply_scaler(windows: np.ndarray, mean: np.ndarray, std: np.ndarray) -> np.n
 
 
 def main() -> None:
+    start_dt = datetime.now()
+    start_ts = start_dt.timestamp()
+    print(f"[START] train_lstm_ae at {start_dt.strftime('%Y-%m-%d %H:%M:%S')}")
+
     ap = argparse.ArgumentParser()
     ap.add_argument("--train-jsonl", required=True)
     ap.add_argument("--schema", default="app/services/obd_anomaly/models/schemas/v1/schema_core.json")
@@ -181,6 +186,10 @@ def main() -> None:
     Path(args.out_report).parent.mkdir(parents=True, exist_ok=True)
     Path(args.out_report).write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
 
+    end_dt = datetime.now()
+    elapsed_sec = end_dt.timestamp() - start_ts
+    print(f"[END] train_lstm_ae at {end_dt.strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"[ELAPSED] {elapsed_sec:.2f}s")
     print("[OK] lstm-ae trained")
     print(f"model={args.out_model}")
     print(f"scaler={args.out_scaler}")
