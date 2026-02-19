@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from pathlib import Path
 from typing import Any, Dict, List
@@ -288,6 +288,11 @@ class ObdAnomalyService:
             if env is None:
                 continue
 
+            # Engine final anomaly/event emission is policy-driven.
+            # Engine policy events are appended in run(), so skip engine here
+            # to avoid score/event/flag mismatch in summary responses.
+            if domain == "engine":
+                continue
             # rule 기반 우선
             rules = env.details.get("rules", [])
             if isinstance(rules, list):
@@ -345,10 +350,19 @@ class ObdAnomalyService:
         return EventSeverity.INFO
 
     def _calc_anomaly_score(self, summary_core: CommonEnvelope, domains: Dict[str, DomainResult]) -> float | None:
-        if summary_core.score is not None:
-            return float(summary_core.score)
-        scores = [d.score for d in domains.values() if d.score is not None]
-        return float(max(scores)) if scores else None
+        # Keep top-level score consistent with final anomaly decision.
+        # - if no domain is finally anomalous -> score 0.0
+        # - if anomalous -> use max score among anomalous domains
+        final_anomaly = any(d.is_anomaly for d in domains.values())
+        if not final_anomaly:
+            return 0.0
+
+        scores = [float(d.score) for d in domains.values() if d.is_anomaly and d.score is not None]
+        if scores:
+            return float(max(scores))
+
+        # Safety fallback when anomaly flag exists without numeric score.
+        return 1.0
 
     def _build_raw_window_results(
         self,

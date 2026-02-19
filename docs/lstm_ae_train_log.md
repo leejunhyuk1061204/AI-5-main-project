@@ -3,6 +3,54 @@
 이 문서는 엔진 anomaly hybrid 실험 로그이며, legacy LSTM-AE-only 기록은 하단에 보관.
 앞으로 신규 실험 기록은 `Hybrid Engine Runs` 섹션을 메인으로 사용한다.
 
+## Section Guide
+아래는 각 섹션이 의미하는 내용과 하위 항목 설명이다.
+
+1) `Run Info`
+- 이번 실행의 데이터/전처리 조건을 기록한다.
+- `Date`: 실행 날짜/시간
+- `Env`: 실행 환경(Local/RunPod)
+- `Dataset`: 학습에 사용한 데이터셋
+- `Split`: train/val/test 분할 방식(누수 방지 포함)
+- `window_sec`: 윈도우 길이(초)
+- `stride_sec`: 윈도우 이동 간격(초)
+- `sampling_hz`: 샘플링 주기(Hz)
+- `normalize`: 정규화 방식(zscore 등)
+- `min_coverage`: 결측 허용 기준
+- `fill_method`: 결측 보정 방식
+- `Schema`: core feature 스키마 버전/구성
+
+2) `Training Params`
+- 학습 하이퍼파라미터를 기록한다.
+- `epochs`: 학습 반복 횟수
+- `batch_size`: 한 번에 학습하는 샘플 수
+- `lr`: 학습률
+- `device`: `cpu` 또는 `cuda(gpu)`
+- IF(Stat One-Class)는 epoch 대신 모델 파라미터(`n_estimators` 등)를 기록한다.
+
+3) `Loss Log`
+- 학습 과정의 손실값 변화를 기록한다.
+- `epoch 01~N`: 각 epoch 종료 시점의 loss
+- 추세(감소/정체/진동)를 통해 학습 안정성을 확인한다.
+
+4) `Output`
+- 실행 결과물을 기록한다.
+- `model_path`: 저장 모델 파일 위치
+- `scaler_path`: 스케일러 파일 위치
+- `report_path`: 실행 리포트 파일 위치
+- `time`/`elapsed_sec`: 총 소요 시간
+- `notes`: 특이사항(중단, 재시작, 경고 등)
+
+5) `Policy` / `Eval` (vFinal)
+- 정책 확정에 필요한 검증 결과를 기록한다.
+- `threshold`, `k_consecutive`, `cooldown` 확정값
+- 정상 점수 분포(quantiles), 시간당 알람 빈도(alarms/hour)
+- top_signals 예시와 해석
+
+6) `Training Progress` (vFinal)
+- IF / LSTM-AE / Policy 단계별 완료 상태를 한눈에 관리한다.
+- 각 단계 산출물 경로와 핵심 수치를 요약한다.
+
 ## Hybrid Engine Runs
 
 ### Run: <RUN_ID>
@@ -157,9 +205,89 @@
 - Schema: core7-v1
 - Missing feature handling: align + mask; AE SKIPPED rules: policy 기반
 
+#### Training Progress
+- Stat One-Class (IsolationForest):
+  - status: done
+  - windows: 6332
+  - model_path: ai/app/services/obd_anomaly/models/artifacts/v1/iforest.pkl
+  - report_path: ai/app/services/obd_anomaly/offline/datasets/vfinal/iforest_report.json
+- LSTM-AE:
+  - status: done
+  - start_time: 2026-02-19 10:50:56
+  - end_time: 2026-02-19 11:20:44
+  - elapsed_sec: 1788.76
+  - final_loss: 0.360000
+  - model_path: ai/app/services/obd_anomaly/models/artifacts/v1/lstm_ae.pt
+  - scaler_path: ai/app/services/obd_anomaly/models/artifacts/v1/scaler.json
+  - report_path: ai/app/services/obd_anomaly/offline/datasets/vfinal/lstm_ae_report.json
+- Policy Eval:
+  - status: done
+  - threshold: 0.795981228351593
+  - k_consecutive: 2
+  - cooldown_sec: 60
+  - alarms_per_hour (val): 0.226986
+  - policy_path: ai/app/services/obd_anomaly/models/artifacts/v1/threshold_policy.json
+  - report_path: ai/app/services/obd_anomaly/offline/datasets/vfinal/policy_report.md
+
 #### Notes / Next Actions
-- notes: data prep 단계 완료. split 파일(train/val/test jsonl) 생성 확인.
-- next: IF 학습 -> LSTM-AE 학습 -> policy(eval) 순으로 실행.
+- notes: data prep 완료 후 IF 학습까지 완료. 현재 LSTM-AE 학습 대기 상태.
+- next: LSTM-AE 학습 -> policy(eval) 순으로 실행.
+
+---
+
+### Run: vFinal Step7 - LSTM-AE Train (template)
+#### Run Info
+#### One-Class Data Policy
+- normal_labels: normal,frei,stau
+- train_filter: is_normal=true only
+- excluded_from_train: is_normal=false (val/test/replay only)
+
+- Date: 2026-02-19
+- Env: Local (ai5)
+- Dataset: OBD normal+frei+stau
+- Split: trip/session-based (train/val/test), leakage-prevention: enabled
+- Train trips: 56
+- Val trips: 12
+- Test trips: 13
+- window_sec: 60
+- stride_sec: 30
+- sampling_hz: 10
+- normalize: zscore (fit on train)
+- fill_method: impute_nan(mean per feature in window)
+- min_coverage: n/a (script-level filter 없음)
+- Schema: core7-v1
+
+#### Training Params
+- epochs: 10
+- batch_size: 32
+- lr: 1e-3
+- device: cpu | cuda
+
+#### Runtime (fill after run)
+- start_time: 2026-02-19 10:50:56
+- end_time: 2026-02-19 11:20:44
+- elapsed_sec: 1788.76
+
+#### Loss Log (fill after run)
+- epoch 01: 0.523741
+- epoch 02: 0.398712
+- epoch 03: 0.392678
+- epoch 04: 0.378054
+- epoch 05: 0.379739
+- epoch 06: 0.373941
+- epoch 07: 0.370592
+- epoch 08: 0.368786
+- epoch 09: 0.370557
+- epoch 10: 0.360000
+
+#### Output (fill after run)
+- model_path: ai/app/services/obd_anomaly/models/artifacts/v1/lstm_ae.pt
+- scaler_path: ai/app/services/obd_anomaly/models/artifacts/v1/scaler.json
+- report_path: ai/app/services/obd_anomaly/offline/datasets/vfinal/lstm_ae_report.json
+- notes: loss가 10 epoch 동안 전반적으로 감소(0.523741 -> 0.360000)하여 정상 패턴 복원 학습이 안정적으로 진행됨.
+
+#### Next
+- 통합 테스트 실행 및 API 엔진 응답 검증
 
 #### Eval
 - Threshold selection: method (val quantile / target alarm rate / etc)
