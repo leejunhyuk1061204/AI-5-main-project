@@ -149,6 +149,7 @@ export default function ObdConnectFlow() {
                 visible={obdModalVisible}
                 onClose={() => setObdModalVisible(false)}
                 onConnected={handleConnected}
+                onConnectionFailed={() => setObdModalVisible(true)}
                 selectedVehicleId={effectiveSelectedId}
                 selectedVehicleLabel={selectedVehicleLabel}
                 onVehicleChangeSuccess={() => {

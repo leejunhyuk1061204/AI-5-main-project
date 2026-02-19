@@ -18,6 +18,7 @@ export interface ObdDeviceRegisterRequest {
 
 export interface ConnectHistoryRequest {
     vehicleId: string;
+    vin?: string;
     calid?: string;
     cvn?: string;
 }

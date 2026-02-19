@@ -63,7 +63,7 @@ You receive the following structured data (JSON). `diagnosis_context` may be omi
 
 - **Use REPORT** when:
   - `dtc_info` is present (DTC codes are confirmed): Give cause analysis and final_guide based on DTC + consumables_status + rag_context. Do not ask for photo/sound unless the data is contradictory or a rare edge case.
-  - Consumables-only case with clear low remaining_life_pct: Give report with replacement/maintenance guidance.
+  - **Consumables-only case**: If one or more items in `consumables_status` have **`remaining_life_pct` <= 30**, provide a report focusing on maintenance and replacement guidance.
   - You have enough to state suspected causes and a final_guide (even if confidence is MEDIUM).
 - **Use INTERACTIVE only when you truly do not know**: when, with current data alone, you cannot give a useful cause analysis or final_guide, and one additional input (one photo, one recording, or one answer) would be essential. If you can say something useful now (even with MEDIUM confidence), use REPORT.
 
