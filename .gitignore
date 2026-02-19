@@ -173,6 +173,8 @@ offline/raw/efd/*.csv
 
 # generated datasets (용량 크면 제외 권장)
 offline/datasets/**/*.jsonl
+offline/datasets/**/*.csv
+offline/datasets/vfinal/
 # 예시/샘플만 허용하고 싶으면 아래 라인으로 예외 허용(필요시 주석 해제)
 # !offline/datasets/kaggle_efd/example_*.jsonl
 
@@ -198,11 +200,11 @@ offline/**/*.pyc
 # Anomaly Offline (absolute paths)
 ai/app/services/obd_anomaly/offline/raw/
 ai/app/services/obd_anomaly/offline/datasets/**/*.jsonl
+ai/app/services/obd_anomaly/offline/datasets/**/*.csv
+ai/app/services/obd_anomaly/offline/datasets/vfinal/
 ai/app/services/obd_anomaly/offline/registry/models/
 ai/app/services/obd_anomaly/offline/registry/scalers/
 
-
 # Local Deployment Scripts
 scripts/deploy_backend.ps1
-
 backend/deploy_backend.ps1

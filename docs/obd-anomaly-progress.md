@@ -91,3 +91,167 @@
 - 현재 샘플은 artifact 부재(degraded) 환경에서도 정책/이벤트 경로가 동작함을 확인하기 위한 목적
 - 남은 warning은 Pydantic v2 deprecation (`Config` -> `ConfigDict`)이며 기능 영향은 없음
 
+## 2026-02-18 | Step6: One-class dataset split/training policy
+
+### One-class 학습 원칙
+- 학습 대상: `is_normal=true` 샘플만 사용
+- 정상 라벨 기준: `normal`, `frei`, `stau` (및 `0`, `NORMAL` 호환)
+- 학습 제외: `is_normal=false` 샘플
+  - 해석: 이상/불확실 샘플은 train에 섞지 않고 val/test, 리플레이 평가 용도로만 사용
+
+### Split 원칙
+- 비율: `train/val/test = 70/15/15`
+- 방식: `trip_id` 또는 `session_id` 그룹 단위 split (윈도우 랜덤 split 금지)
+- 목적: 데이터 누수(leakage) 방지 및 정책(threshold/K/cooldown) 검증 신뢰성 확보
+
+### 실행 결과 (Data Prep)
+- 실행 스크립트:
+  - `prepare_obd_raw_core7.py`
+  - `prepare_dataset.py`
+- 결과:
+  - rows_total: `2,732,486`
+  - trips_total: `81`
+  - split_groups: `train=56`, `val=12`, `test=13`
+- 이슈/수정:
+  - 이슈: 초기 실행에서 `trips=0`으로 집계되어 split 실패
+  - 원인: `prepare_obd_raw_core7.py`에서 `trip_id/label` 인덱스 정렬 불일치로 NaN 발생
+  - 해결: DataFrame 인덱스를 시간축 인덱스로 맞춘 뒤 `trip_id/label` 컬럼을 고정 문자열로 주입
+- 상태:
+  - Data prep 완료
+  - 다음 단계: `train_iforest.py` -> `train_lstm_ae.py` -> `eval_policy.py`
+
+## 2026-02-19 | Step7: IF training
+
+### 실행 결과 (IsolationForest)
+- 실행 스크립트:
+  - `train_iforest.py`
+- 입력:
+  - `train.jsonl` (split 결과, train trips=56)
+- 결과:
+  - status: `[OK] iforest trained`
+  - windows_used: `6332`
+  - model: `ai/app/services/obd_anomaly/models/artifacts/v1/iforest.pkl`
+  - report: `ai/app/services/obd_anomaly/offline/datasets/vfinal/iforest_report.json`
+- 해석:
+  - train split에서 60/30(window/stride)로 생성된 6,332개 윈도우를 기반으로 정상 분포 학습 완료
+- 다음 단계:
+  - `train_lstm_ae.py` 실행
+
+## 2026-02-19 | Step7: LSTM-AE training (in progress)
+
+### 실행 계획
+- 실행 스크립트:
+  - `train_lstm_ae.py`
+- 입력:
+  - `train.jsonl` (split 결과, train trips=56)
+- 파라미터:
+  - `window_sec=60`
+  - `stride_sec=30`
+  - `epochs=10`
+  - `batch_size=32`
+  - `lr=1e-3`
+
+### 기록 템플릿 (학습 종료 후 채우기)
+- 결과:
+  - status: `[OK] lstm-ae trained` | `FAILED` | `INTERRUPTED`
+  - start_time:
+  - end_time:
+  - elapsed_sec:
+  - final_loss:
+  - windows_used:
+  - model: `ai/app/services/obd_anomaly/models/artifacts/v1/lstm_ae.pt`
+  - scaler: `ai/app/services/obd_anomaly/models/artifacts/v1/scaler.json`
+  - report: `ai/app/services/obd_anomaly/offline/datasets/vfinal/lstm_ae_report.json`
+- 다음 단계:
+  - `eval_policy.py` 실행
+
+### 실행 결과 (LSTM-AE)
+- 실행 스크립트:
+  - `train_lstm_ae.py`
+- 결과:
+  - status: `[OK] lstm-ae trained`
+  - start_time: `2026-02-19 10:50:56`
+  - end_time: `2026-02-19 11:20:44`
+  - elapsed_sec: `1788.76` (약 29분 49초)
+  - final_loss: `0.360000`
+  - loss_trend: `0.523741 -> 0.360000` (10 epochs)
+  - model: `ai/app/services/obd_anomaly/models/artifacts/v1/lstm_ae.pt`
+  - scaler: `ai/app/services/obd_anomaly/models/artifacts/v1/scaler.json`
+  - report: `ai/app/services/obd_anomaly/offline/datasets/vfinal/lstm_ae_report.json`
+- 해석:
+  - epoch 진행에 따라 재구성 손실이 안정적으로 감소하여 정상 패턴 학습이 진행됨
+- 다음 단계:
+  - `eval_policy.py` 실행 후 `threshold_policy.json` 확정
+
+## 2026-02-19 | Step7: Policy evaluation
+
+### 실행 결과 (Policy)
+- 실행 스크립트:
+  - `eval_policy.py`
+- 결과:
+  - status: `[OK] policy evaluated`
+  - policy: `ai/app/services/obd_anomaly/models/artifacts/v1/threshold_policy.json`
+  - report: `ai/app/services/obd_anomaly/offline/datasets/vfinal/policy_report.md`
+- 핵심 정책값:
+  - threshold: `0.795981`
+  - k_consecutive: `2`
+  - cooldown_sec: `60`
+  - severity.warning: `0.7`
+  - severity.critical: `0.85`
+- 정상 분포/알람 지표(val):
+  - q50: `0.256836`
+  - q90: `0.433243`
+  - q95: `0.632952`
+  - q99: `0.795981`
+  - alarms_per_hour: `0.226986`
+- top_signals 예시:
+  - `intake_air_temp_c`, `engine_rpm`, `throttle_pos_pct` 중심으로 상위 기여
+- 참고:
+  - `torch.load` 관련 FutureWarning 1건 발생(동작 영향 없음, 향후 `weights_only=True` 검토)
+
+## 2026-02-19 | Step7: Integration test validation
+
+### 실행 결과 (pytest)
+- 실행 명령:
+  - `python -m pytest -q ..\tests\test_obd_anomaly_vfinal.py ..\tests\test_obd_policy_top_signals.py`
+- 결과:
+  - `8 passed, 4 warnings in 4.47s`
+- 경고 (non-blocking):
+  - Pydantic v2 deprecation (`Config` -> `ConfigDict`)
+  - `torch.load(weights_only=False)` future warning
+- 결론:
+  - Step7 학습/정책 반영 상태에서 핵심 통합 테스트 통과
+
+## 2026-02-19 | Step7: Sample run validation
+
+### 실행 결과 (run_obd_anomaly_sample.py)
+- 실행 명령:
+  - `python scripts\obd_engine\run_obd_anomaly_sample.py`
+- 결과:
+  - 샘플 실행 자체는 정상 완료 (응답 JSON 반환)
+  - `torch.load(weights_only=False)` FutureWarning 1건 (non-blocking)
+
+### 관찰된 정합성 이슈 (todo)
+- 현상:
+  - `anomaly_score=1.0`
+  - `events[]`에 `ENGINE_HYBRID_ANOMALY` 존재
+  - 최상위 `is_anomaly=false`
+- 해석:
+  - 점수/이벤트와 최상위 anomaly 플래그 간 정합성 불일치
+- 다음 조치:
+  - `obd_anomaly_service`의 최종 `is_anomaly` 집계 로직과 policy 반영 순서 점검
+  - 수정 후 sample 재실행으로 확인
+
+### 조치 결과 (fixed)
+- 수정 파일:
+  - `ai/app/services/obd_anomaly/obd_anomaly_service.py`
+- 수정 내용:
+  - 엔진 이벤트 수집을 policy 이벤트 중심으로 정리
+  - 최상위 `anomaly_score`를 최종 anomaly 판정과 일치하도록 계산 로직 보정
+- 재검증(샘플 실행):
+  - `is_anomaly=false`
+  - `anomaly_score=0.0`
+  - `events=[]`
+- 결론:
+  - sample 응답에서 점수/플래그/이벤트 정합성 이슈 해결
+
