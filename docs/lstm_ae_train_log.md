@@ -1,12 +1,17 @@
 # Engine Hybrid (Stat One-Class + LSTM-AE) Training Log
 
-ÀÌ ¹®¼­´Â ¿£Áø anomaly hybrid ½ÇÇè ·Î±×ÀÌ¸ç, legacy LSTM-AE-only ±â·ÏÀº ÇÏ´Ü¿¡ º¸°ü.
-¾ÕÀ¸·Î ½Å±Ô ½ÇÇè ±â·ÏÀº `Hybrid Engine Runs` ¼½¼ÇÀ» ¸ŞÀÎÀ¸·Î »ç¿ëÇÑ´Ù.
+ì´ ë¬¸ì„œëŠ” ì—”ì§„ anomaly hybrid ì‹¤í—˜ ë¡œê·¸ì´ë©°, legacy LSTM-AE-only ê¸°ë¡ì€ í•˜ë‹¨ì— ë³´ê´€.
+ì•ìœ¼ë¡œ ì‹ ê·œ ì‹¤í—˜ ê¸°ë¡ì€ `Hybrid Engine Runs` ì„¹ì…˜ì„ ë©”ì¸ìœ¼ë¡œ ì‚¬ìš©í•œë‹¤.
 
 ## Hybrid Engine Runs
 
 ### Run: <RUN_ID>
 #### Run Info
+#### One-Class Data Policy
+- normal_labels: normal,frei,stau
+- train_filter: is_normal=true only
+- excluded_from_train: is_normal=false (val/test/replay only)
+
 - Date:
 - Env: Local | RunPod
 - Dataset: OBD normal | OBD normal+frei+stau | ...
@@ -79,6 +84,11 @@
 
 ### Run: Hybrid Run (OBD normal+frei+stau)
 #### Run Info
+#### One-Class Data Policy
+- normal_labels: normal,frei,stau
+- train_filter: is_normal=true only
+- excluded_from_train: is_normal=false (val/test/replay only)
+
 - Date:
 - Env: Local | RunPod
 - Dataset: OBD normal+frei+stau
@@ -119,6 +129,37 @@
 #### Loss Log (LSTM-AE)
 - epoch 01:
 ...
+
+---
+
+### Run: vFinal Step6 - Data Prep (pre-train)
+#### Run Info
+#### One-Class Data Policy
+- normal_labels: normal,frei,stau
+- train_filter: is_normal=true only
+- excluded_from_train: is_normal=false (val/test/replay only)
+
+- Date: 2026-02-18
+- Env: Local
+- Dataset: OBD normal+frei+stau (raw csv)
+- Split: trip/session-based (train/val/test), leakage-prevention: enabled
+- rows_total: 2732486
+- trips_total: 81
+- Train trips: 56
+- Val trips: 12
+- Test trips: 13
+- window_sec: 60
+- stride_sec: 30
+- sampling_hz: 10
+- normalize: pending (fit on train only)
+- fill_method: pending
+- min_coverage: pending
+- Schema: core7-v1
+- Missing feature handling: align + mask; AE SKIPPED rules: policy ê¸°ë°˜
+
+#### Notes / Next Actions
+- notes: data prep ë‹¨ê³„ ì™„ë£Œ. split íŒŒì¼(train/val/test jsonl) ìƒì„± í™•ì¸.
+- next: IF í•™ìŠµ -> LSTM-AE í•™ìŠµ -> policy(eval) ìˆœìœ¼ë¡œ ì‹¤í–‰.
 
 #### Eval
 - Threshold selection: method (val quantile / target alarm rate / etc)
@@ -170,7 +211,7 @@
 
 ## Real-car Final Test (No Training)
 
-### Run: Hybrid Eval on Real-car cases (ÇĞ½ÀX, ÃÖÁ¾ Å×½ºÆ®)
+### Run: Hybrid Eval on Real-car cases (í•™ìŠµX, ìµœì¢… í…ŒìŠ¤íŠ¸)
 #### Run Info
 - Date:
 - Env: Local | RunPod
@@ -231,7 +272,7 @@
 - reason:
 - results (if executed):
 
-### Run: Optional Kaggle Bench (Âü°í¿ë, MVP¿¡´Â ¹Ì»ç¿ë)
+### Run: Optional Kaggle Bench (ì°¸ê³ ìš©, MVPì—ëŠ” ë¯¸ì‚¬ìš©)
 #### Run Info
 - Date:
 - Env: Local | RunPod
@@ -305,23 +346,23 @@
 # LSTM-AE Training Log
 
 <!--
-»ç¿ë ¹æ¹ı:
-- Local/RunPod Áß ½ÇÁ¦ »ç¿ëÇÑ È¯°æ ¼½¼Ç¸¸ ±â·ÏÇÕ´Ï´Ù.
-- Training Params´Â ½ÇÇà Àü¿¡, Loss/OutputÀº ½ÇÇà ÈÄ Ã¤¿ó´Ï´Ù.
+ì‚¬ìš© ë°©ë²•:
+- Local/RunPod ì¤‘ ì‹¤ì œ ì‚¬ìš©í•œ í™˜ê²½ ì„¹ì…˜ë§Œ ê¸°ë¡í•©ë‹ˆë‹¤.
+- Training ParamsëŠ” ì‹¤í–‰ ì „ì—, Loss/Outputì€ ì‹¤í–‰ í›„ ì±„ì›ë‹ˆë‹¤.
 -->
 
 <!--
-¼½¼Ç ÀÇ¹Ì:
-- Run Info: ÀÌ¹ø ½ÇÇàÀÇ µ¥ÀÌÅÍ/ÀüÃ³¸® Á¶°Ç ±â·Ï
-- Training Params: ÇĞ½À ÇÏÀÌÆÛÆÄ¶ó¹ÌÅÍ ±â·Ï
-- Loss Log: epochº° ¼Õ½Ç°ª ±â·Ï
-- Output: °á°ú ¸ğµ¨ °æ·Î/¼Ò¿ä½Ã°£/Æ¯ÀÌ»çÇ× ±â·Ï
-- Eval: °ËÁõ °á°ú(AUC/threshold µî) ±â·Ï
+ì„¹ì…˜ ì˜ë¯¸:
+- Run Info: ì´ë²ˆ ì‹¤í–‰ì˜ ë°ì´í„°/ì „ì²˜ë¦¬ ì¡°ê±´ ê¸°ë¡
+- Training Params: í•™ìŠµ í•˜ì´í¼íŒŒë¼ë¯¸í„° ê¸°ë¡
+- Loss Log: epochë³„ ì†ì‹¤ê°’ ê¸°ë¡
+- Output: ê²°ê³¼ ëª¨ë¸ ê²½ë¡œ/ì†Œìš”ì‹œê°„/íŠ¹ì´ì‚¬í•­ ê¸°ë¡
+- Eval: ê²€ì¦ ê²°ê³¼(AUC/threshold ë“±) ê¸°ë¡
 -->
 
 <!--
-½ÇÂ÷ µ¥ÀÌÅÍ °ü·Ã:
-- ½ÇÂ÷ µ¥ÀÌÅÍ´Â º°µµ È®º¸µÈ 2°³ ÄÉÀÌ½º(¹èÅÍ¸® ¹æÀü/½Ãµ¿ ²¨Áü)ÀÌ¸ç, ÀüÃ³¸® JSONL¸¸ S3¿¡ ¾÷·ÎµåÇÑ´Ù.
+ì‹¤ì°¨ ë°ì´í„° ê´€ë ¨:
+- ì‹¤ì°¨ ë°ì´í„°ëŠ” ë³„ë„ í™•ë³´ëœ 2ê°œ ì¼€ì´ìŠ¤(ë°°í„°ë¦¬ ë°©ì „/ì‹œë™ êº¼ì§)ì´ë©°, ì „ì²˜ë¦¬ JSONLë§Œ S3ì— ì—…ë¡œë“œí•œë‹¤.
 -->
 
 ## Local (OBD)
@@ -360,7 +401,7 @@
 ### Output (Baseline)
 - model_path: ai/weights/runs/20260207_220501/lstm_ae.pt
 - time: 8238.8s (137m 19s)
-- notes: loss°¡ 0.49 ¡æ 0.38·Î °¨¼ÒÇÏ¿© Á¤»ó ÆĞÅÏ º¹¿ø ¿ÀÂ÷°¡ ÁÙ°í ÀÖÀ½. Áß¹İ(5~7 epoch)¿¡¼­ ¼ÒÆø Èçµé¸² ÀÖÀ¸³ª ÀÌÈÄ ´Ù½Ã °¨¼ÒÇØ ¼ö·Å °æÇâ È®ÀÎµÊ. °ËÁõ ¼¼Æ®°¡ ¾øÀ¸¹Ç·Î °úÀûÇÕ ¿©ºÎ´Â ¾ÆÁ÷ ÆÇ´Ü ºÒ°¡ÇÏ¸ç, Á¤»ó/ÀÌ»ó ºĞÆ÷ ºĞ¸® È®ÀÎÀÌ ÇÊ¿äÇÔ.
+- notes: lossê°€ 0.49 â†’ 0.38ë¡œ ê°ì†Œí•˜ì—¬ ì •ìƒ íŒ¨í„´ ë³µì› ì˜¤ì°¨ê°€ ì¤„ê³  ìˆìŒ. ì¤‘ë°˜(5~7 epoch)ì—ì„œ ì†Œí­ í”ë“¤ë¦¼ ìˆìœ¼ë‚˜ ì´í›„ ë‹¤ì‹œ ê°ì†Œí•´ ìˆ˜ë ´ ê²½í–¥ í™•ì¸ë¨. ê²€ì¦ ì„¸íŠ¸ê°€ ì—†ìœ¼ë¯€ë¡œ ê³¼ì í•© ì—¬ë¶€ëŠ” ì•„ì§ íŒë‹¨ ë¶ˆê°€í•˜ë©°, ì •ìƒ/ì´ìƒ ë¶„í¬ ë¶„ë¦¬ í™•ì¸ì´ í•„ìš”í•¨.
 
 ---
 
@@ -410,16 +451,16 @@
 ### Output
 - model_path: ai/weights/efd/runs/20260209_104949/lstm_ae_efd.pt
 - time: 3.3s (0m 3s)
-- notes: EFD ¿ø½Ã ½ºÄÉÀÏ·Î ÇĞ½ÀµÇ¾î loss Àı´ë°ªÀÌ Å­(Á¤±ÔÈ­ ¹ÌÀû¿ë). ºĞÆ÷ ºñ±³/AUC·Î ¼º´É È®ÀÎ ÇÊ¿ä.
+- notes: EFD ì›ì‹œ ìŠ¤ì¼€ì¼ë¡œ í•™ìŠµë˜ì–´ loss ì ˆëŒ€ê°’ì´ í¼(ì •ê·œí™” ë¯¸ì ìš©). ë¶„í¬ ë¹„êµ/AUCë¡œ ì„±ëŠ¥ í™•ì¸ í•„ìš”.
 
 ### EFD Eval (Baseline, no normalization)
 - AUC: 0.4770
 - threshold (q=0.99): 1,132,182.75
-- notes: Á¤±ÔÈ­ ¹ÌÀû¿ë »óÅÂ¿¡¼­ Á¤»ó/°íÀå ºĞ¸® ¼º´ÉÀÌ ³·À½ ¡æ Á¤±ÔÈ­ Àû¿ë ÈÄ ÀçÇĞ½À/ÀçÆò°¡ ÇÊ¿ä.
+- notes: ì •ê·œí™” ë¯¸ì ìš© ìƒíƒœì—ì„œ ì •ìƒ/ê³ ì¥ ë¶„ë¦¬ ì„±ëŠ¥ì´ ë‚®ìŒ â†’ ì •ê·œí™” ì ìš© í›„ ì¬í•™ìŠµ/ì¬í‰ê°€ í•„ìš”.
 
 ---
 
-### Normalized (zscore) ÀçÇĞ½À
+### Normalized (zscore) ì¬í•™ìŠµ
 
 ### Run Info (Normalized, zscore)
 - Date: 2026-02-09 12:04:30
@@ -429,7 +470,7 @@
 - window_sec: 60
 - stride_sec: 60
 - sampling_hz: 1
-- normalize: zscore (normal ±âÁØ)
+- normalize: zscore (normal ê¸°ì¤€)
 - min_coverage: n/a
 - fill_method: n/a
 - resample: none
@@ -456,12 +497,12 @@
 - model_path: ai/weights/efd/runs/20260209_120430/lstm_ae_efd.pt
 - scaler_path: ai/weights/efd/scaler_efd.json
 - time: 3.0s (0m 3s)
-- notes: Á¤±ÔÈ­ Àû¿ëÀ¸·Î loss ½ºÄÉÀÏÀÌ ¾ÈÁ¤È­µÊ. ´Ù¸¸ ºĞ¸® ¼º´ÉÀº AUC ±âÁØÀ¸·Î Ãß°¡ °³¼± ÇÊ¿ä.
+- notes: ì •ê·œí™” ì ìš©ìœ¼ë¡œ loss ìŠ¤ì¼€ì¼ì´ ì•ˆì •í™”ë¨. ë‹¤ë§Œ ë¶„ë¦¬ ì„±ëŠ¥ì€ AUC ê¸°ì¤€ìœ¼ë¡œ ì¶”ê°€ ê°œì„  í•„ìš”.
 
 ### EFD Eval (Normalized, zscore)
 - AUC: 0.4966
 - threshold (q=0.99): 1.067330
-- notes: Á¤±ÔÈ­ ÈÄ AUC°¡ ¼ÒÆø °³¼±µÇ¾úÀ¸³ª ¿©ÀüÈ÷ ºĞ¸® ¼º´ÉÀÌ ³·À½ ¡æ Ã¤³Î/ÀüÃ³¸®/¸ğµ¨ ±¸Á¶ Àç°ËÅä ÇÊ¿ä.
+- notes: ì •ê·œí™” í›„ AUCê°€ ì†Œí­ ê°œì„ ë˜ì—ˆìœ¼ë‚˜ ì—¬ì „íˆ ë¶„ë¦¬ ì„±ëŠ¥ì´ ë‚®ìŒ â†’ ì±„ë„/ì „ì²˜ë¦¬/ëª¨ë¸ êµ¬ì¡° ì¬ê²€í†  í•„ìš”.
 
 ---
 
@@ -471,12 +512,12 @@
 - source_csv: ai/app/services/obd_anomaly/offline/raw/kaggle_efd2/engine_failure_dataset.csv
 - output_jsonl: ai/app/services/obd_anomaly/offline/datasets/kaggle_efd2/labeled.jsonl
 - label_col: Fault_Condition (values: 0,1,2,3)
-- channels: Temperature (¢²C), RPM, Fuel_Efficiency, Vibration_X, Vibration_Y, Vibration_Z, Torque, Power_Output (kW)
+- channels: Temperature (âˆ‘C), RPM, Fuel_Efficiency, Vibration_X, Vibration_Y, Vibration_Z, Torque, Power_Output (kW)
 - sampling_hz: 1
 - window_sec: 60
 - stride_sec: 60
 - rows_total: 1000
-- notes: °áÃø/Áßº¹ 0% È®ÀÎ. ¶óº§ Æ÷ÇÔ JSONL·Î º¯È¯ ¿Ï·á.
+- notes: ê²°ì¸¡/ì¤‘ë³µ 0% í™•ì¸. ë¼ë²¨ í¬í•¨ JSONLë¡œ ë³€í™˜ ì™„ë£Œ.
 
 ---
 
@@ -491,5 +532,5 @@
 - window_sec: 60
 - stride_sec: 60
 - rows_total: 19535
-- notes: °áÃø/Áßº¹ 0% È®ÀÎ. ¶óº§ Æ÷ÇÔ JSONL·Î º¯È¯ ¿Ï·á.
+- notes: ê²°ì¸¡/ì¤‘ë³µ 0% í™•ì¸. ë¼ë²¨ í¬í•¨ JSONLë¡œ ë³€í™˜ ì™„ë£Œ.
 
