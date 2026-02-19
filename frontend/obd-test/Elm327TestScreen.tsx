@@ -10,7 +10,7 @@ import { LogBuffer } from '../services/LogBuffer';
 import { useBleStore } from '../store/useBleStore';
 import BaseScreen from '../components/layout/BaseScreen';
 
-const MAX_LOG_ROWS = 500;
+const MAX_LOG_ROWS = 2000;
 // 블루투스 OBD가 수집하는 PID만 (highPids: rpm,speed,throttle + normalPids)
 const CSV_HEADER = 'timestamp,rpm,speed,voltage,coolantTemp,engineLoad,fuelTrimShort,fuelTrimLong,throttle,map,maf,intakeTemp,engineRuntime';
 
@@ -135,12 +135,14 @@ export default function Elm327TestScreen() {
     }, [status]);
 
     const ObdCard = ({ label, value, unit }: { label: string; value: string | number | null | undefined; unit?: string }) => (
-        <View className="flex-1 m-1 p-3 rounded-xl bg-black/40 border border-white/10 items-center justify-center min-h-[72px]">
-            <Text className="text-[10px] text-text-muted mb-1 uppercase tracking-widest">{label}</Text>
-            <Text className="text-xl font-bold text-white">
-                {value != null ? String(value) : '-'}
-            </Text>
-            {unit && <Text className="text-[10px] text-text-muted mt-0.5">{unit}</Text>}
+        <View className="w-1/2 p-1">
+            <View className="p-3 rounded-xl bg-black/40 border border-white/10 items-center justify-center min-h-[72px]">
+                <Text className="text-[10px] text-text-muted mb-1 uppercase tracking-widest">{label}</Text>
+                <Text className="text-xl font-bold text-white">
+                    {value != null ? String(value) : '-'}
+                </Text>
+                {unit && <Text className="text-[10px] text-text-muted mt-0.5">{unit}</Text>}
+            </View>
         </View>
     );
 
