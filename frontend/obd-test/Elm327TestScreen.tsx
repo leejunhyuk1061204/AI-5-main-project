@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, FlatList } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -37,7 +37,8 @@ export default function Elm327TestScreen() {
     const navigation = useNavigation();
     const { status, connectedDeviceName } = useBleStore();
     const [connectModalVisible, setConnectModalVisible] = useState(false);
-    const [logRows, setLogRows] = useState<ObdData[]>([]);
+    const [csvRows, setCsvRows] = useState<ObdData[]>([]);
+    const [latestObd, setLatestObd] = useState<ObdData | null>(null);
     const [logContent, setLogContent] = useState(() => LogBuffer.getContent());
     const [activeTab, setActiveTab] = useState<'console' | 'obd'>('console');
     const [test0302Result, setTest0302Result] = useState<{ storedDtc: string | null; freezeDtc: string | null } | null>(null);
@@ -56,16 +57,17 @@ export default function Elm327TestScreen() {
     }, [logContent]);
 
     const onConnected = useCallback(() => {
-        setLogRows([]);
-        ObdService.setTestMode(true);
+        setCsvRows([]);
+        setLatestObd(null);
         ObdService.setManualConnectSession(true);
         ObdService.startPolling(1000);
-        console.log('[Elm327Test] onConnected: log cleared, testMode on, polling started');
+        console.log('[Elm327Test] onConnected: log cleared, polling started');
     }, []);
 
     useEffect(() => {
         const unsubscribe = ObdService.onData((data: ObdData) => {
-            setLogRows(prev => {
+            setLatestObd(data);
+            setCsvRows(prev => {
                 const next = [...prev, data];
                 if (next.length > MAX_LOG_ROWS) return next.slice(-MAX_LOG_ROWS);
                 return next;
@@ -73,9 +75,8 @@ export default function Elm327TestScreen() {
         });
         return () => {
             unsubscribe();
-            ObdService.setTestMode(false);
             ObdService.setManualConnectSession(false);
-            console.log('[Elm327Test] unmount: unsubscribed, testMode off');
+            console.log('[Elm327Test] unmount: unsubscribed');
         };
     }, []);
 
@@ -85,7 +86,7 @@ export default function Elm327TestScreen() {
     }, []);
 
     const handleExportCsv = useCallback(async () => {
-        const lines = [CSV_HEADER, ...logRows.map(obdDataToCsvRow)];
+        const lines = [CSV_HEADER, ...csvRows.map(obdDataToCsvRow)];
         const csvString = lines.join('\n');
         const filename = `obd_test_${new Date().toISOString().replace(/[:.]/g, '-')}.csv`;
         const path = `${FileSystem.documentDirectory}${filename}`;
@@ -93,12 +94,12 @@ export default function Elm327TestScreen() {
             const encoding = (FileSystem.EncodingType && FileSystem.EncodingType.UTF8) ?? 'utf8';
             await FileSystem.writeAsStringAsync(path, csvString, { encoding });
             await Sharing.shareAsync(path);
-            console.log('[Elm327Test] CSV exported rows=', logRows.length, 'path=', path);
+            console.log('[Elm327Test] CSV exported rows=', csvRows.length, 'path=', path);
         } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
             console.error('[Elm327Test] CSV export failed. reason=', msg);
         }
-    }, [logRows]);
+    }, [csvRows]);
 
     const handleExportLogFile = useCallback(async () => {
         const raw = LogBuffer.getContent();
@@ -133,23 +134,43 @@ export default function Elm327TestScreen() {
         }
     }, [status]);
 
-    const renderObdItem = useCallback(({ item, index }: { item: ObdData; index: number }) => {
-        const ts = item.timestamp ? new Date(item.timestamp).toLocaleTimeString() : '-';
-        const parts = [
-            item.rpm != null ? `RPM ${item.rpm}` : null,
-            item.speed != null ? `km/h ${item.speed}` : null,
-            item.voltage != null ? `${item.voltage}V` : null,
-            item.coolant_temp != null ? `coolant ${item.coolant_temp}` : null,
-        ].filter(Boolean);
-        return (
-            <View className="py-1.5 px-2 border-b border-white/5">
-                <Text className="text-xs text-text-muted">{index + 1}. {ts}</Text>
-                <Text className="text-sm text-white">{parts.join(' · ') || '-'}</Text>
+    const ObdCard = ({ label, value, unit }: { label: string; value: string | number | null | undefined; unit?: string }) => (
+        <View className="flex-1 m-1 p-3 rounded-xl bg-black/40 border border-white/10 items-center justify-center min-h-[72px]">
+            <Text className="text-[10px] text-text-muted mb-1 uppercase tracking-widest">{label}</Text>
+            <Text className="text-xl font-bold text-white">
+                {value != null ? String(value) : '-'}
+            </Text>
+            {unit && <Text className="text-[10px] text-text-muted mt-0.5">{unit}</Text>}
+        </View>
+    );
+
+    const ObdCardGrid = ({ data }: { data: ObdData | null }) => (
+        <ScrollView contentContainerStyle={{ paddingBottom: 8 }}>
+            <View className="flex-row flex-wrap">
+                <ObdCard label="RPM" value={data?.rpm} unit="rpm" />
+                <ObdCard label="속도" value={data?.speed} unit="km/h" />
+                <ObdCard label="스로틀" value={data?.throttle != null ? data.throttle.toFixed(1) : null} unit="%" />
+                <ObdCard label="냉각수 온도" value={data?.coolant_temp} unit="°C" />
+                <ObdCard label="엔진 부하" value={data?.engine_load != null ? data.engine_load.toFixed(1) : null} unit="%" />
+                <ObdCard label="MAP" value={data?.map} unit="kPa" />
+                <ObdCard label="MAF" value={data?.maf != null ? data.maf.toFixed(2) : null} unit="g/s" />
+                <ObdCard label="흡기 온도" value={data?.intake_temp} unit="°C" />
+                <ObdCard label="단기 연료 트림" value={data?.fuel_trim_short != null ? data.fuel_trim_short.toFixed(1) : null} unit="%" />
+                <ObdCard label="장기 연료 트림" value={data?.fuel_trim_long != null ? data.fuel_trim_long.toFixed(1) : null} unit="%" />
+                <ObdCard label="전압" value={data?.voltage != null ? data.voltage.toFixed(1) : null} unit="V" />
+                <ObdCard label="엔진 런타임" value={data?.engine_runtime} unit="sec" />
+                <ObdCard label="DTC 상태" value={data?.dtc_status} />
             </View>
-        );
-    }, []);
+            {data?.timestamp && (
+                <Text className="text-[10px] text-text-muted text-center mt-2">
+                    마지막 수신: {new Date(data.timestamp).toLocaleTimeString()}
+                </Text>
+            )}
+        </ScrollView>
+    );
 
     const connectionLabel = status === 'connected' ? `연결됨: ${connectedDeviceName || 'OBD'}` : status === 'connecting' ? '연결 중...' : '미연결';
+    const totalRows = csvRows.length;
 
     return (
         <BaseScreen scrollable={false} padding={false} useBottomNav={false}>
@@ -188,7 +209,7 @@ export default function Elm327TestScreen() {
                         onPress={handleExportCsv}
                         className="flex-1 bg-white/10 py-2 rounded-lg items-center"
                     >
-                        <Text className="text-sm text-white">CSV 내보내기 ({logRows.length}행)</Text>
+                        <Text className="text-sm text-white">CSV 내보내기 ({totalRows}행)</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                         onPress={handleExportLogFile}
@@ -227,7 +248,7 @@ export default function Elm327TestScreen() {
                         onPress={() => setActiveTab('obd')}
                         className={`flex-1 py-2 rounded-lg items-center ${activeTab === 'obd' ? 'bg-primary/80' : 'bg-white/10'}`}
                     >
-                        <Text className="text-sm text-white">OBD 데이터 ({logRows.length}행)</Text>
+                        <Text className="text-sm text-white">OBD 데이터 ({totalRows}행)</Text>
                     </TouchableOpacity>
                 </View>
                 {activeTab === 'console' && (
@@ -243,7 +264,7 @@ export default function Elm327TestScreen() {
                 {activeTab === 'obd' && (
                     <View className="flex-row gap-2 mb-2">
                         <TouchableOpacity
-                            onPress={() => setLogRows([])}
+                            onPress={() => { setCsvRows([]); setLatestObd(null); }}
                             className="bg-white/10 py-2 px-4 rounded-lg justify-center"
                         >
                             <Text className="text-sm text-white">OBD 데이터 지우기</Text>
@@ -263,12 +284,7 @@ export default function Elm327TestScreen() {
                             </Text>
                         </ScrollView>
                     ) : (
-                        <FlatList
-                            data={logRows}
-                            renderItem={renderObdItem}
-                            keyExtractor={(_, i) => String(i)}
-                            contentContainerStyle={{ paddingBottom: 8 }}
-                        />
+                        <ObdCardGrid data={latestObd} />
                     )}
                 </View>
             </View>
