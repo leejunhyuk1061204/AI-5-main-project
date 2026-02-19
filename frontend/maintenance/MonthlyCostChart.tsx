@@ -31,45 +31,70 @@ export default function MonthlyCostChart({ maintenanceList, fuelingList }: Month
         const currentYear = today.getFullYear();
         const currentMonth = today.getMonth() + 1; // 1-12
 
-        // 결과 배열 초기화 (최근 N개월)
-        const result: MonthlyCost[] = [];
+        // 결과 맵 초기화 (최근 N개월)
+        const costsMap: { [key: string]: { maintenance: number; fueling: number } } = {};
+
+        // 날짜 파싱 헬퍼 (YYYY-MM-DD -> Date)
+        const parseDate = (dateStr: string) => {
+            const parts = dateStr.split('-');
+            return new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+        };
+
+        // 필터 시작 날짜 계산
+        const filterStartDate = new Date(currentYear, currentMonth - 1 - periodFilter + 1, 1);
 
         for (let i = periodFilter - 1; i >= 0; i--) {
             const date = new Date(currentYear, currentMonth - 1 - i, 1);
             const year = date.getFullYear();
             const month = date.getMonth() + 1;
-            const monthStr = `${year}-${String(month).padStart(2, '0')}`;
-            const monthLabel = `${month}월`;
-
-            result.push({
-                month: monthStr,
-                monthLabel,
-                maintenanceCost: 0,
-                fuelingCost: 0,
-                totalCost: 0
-            });
+            const monthKey = `${year}-${String(month).padStart(2, '0')}`;
+            costsMap[monthKey] = { maintenance: 0, fueling: 0 };
         }
 
-        // 정비 내역 집계
-        maintenanceList.forEach(item => {
-            const dateStr = item.maintenanceDate.substring(0, 7); // YYYY-MM
-            const target = result.find(r => r.month === dateStr);
-            if (target) {
-                target.maintenanceCost += item.cost || 0;
-                target.totalCost += item.cost || 0;
+        // 1. 정비 내역 집계 (날짜 없으면 스킵, 필터링 기간 내)
+        maintenanceList.forEach((item) => {
+            if (!item.maintenanceDate) return;
+            const date = parseDate(item.maintenanceDate);
+            if (date < filterStartDate) return; // Filter out dates older than the period
+
+            const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+
+            if (costsMap[monthKey]) { // Only add if month is within the filtered period
+                costsMap[monthKey].maintenance += item.cost || 0;
             }
         });
 
-        // 주유 내역 집계
-        fuelingList.forEach(item => {
-            if (item.fuelingDate) {
-                const dateStr = item.fuelingDate.substring(0, 7); // YYYY-MM
-                const target = result.find(r => r.month === dateStr);
-                if (target) {
-                    target.fuelingCost += item.totalCost || 0;
-                    target.totalCost += item.totalCost || 0;
-                }
+        // 2. 주유 내역 집계 (날짜 없으면 스킵, 필터링 기간 내)
+        fuelingList.forEach((item) => {
+            if (!item.fuelingDate) return;
+            const date = parseDate(item.fuelingDate);
+            if (date < filterStartDate) return; // Filter out dates older than the period
+
+            const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+
+            if (costsMap[monthKey]) { // Only add if month is within the filtered period
+                costsMap[monthKey].fueling += item.totalCost || 0;
             }
+        });
+
+        // Convert costsMap to MonthlyCost array, ensuring correct order and labels
+        const result: MonthlyCost[] = [];
+        const sortedMonthKeys = Object.keys(costsMap).sort(); // Sort keys to ensure chronological order
+
+        sortedMonthKeys.forEach(monthKey => {
+            const [year, month] = monthKey.split('-').map(Number);
+            const monthLabel = `${month}월`;
+            const maintenanceCost = costsMap[monthKey].maintenance;
+            const fuelingCost = costsMap[monthKey].fueling;
+            const totalCost = maintenanceCost + fuelingCost;
+
+            result.push({
+                month: monthKey,
+                monthLabel,
+                maintenanceCost,
+                fuelingCost,
+                totalCost
+            });
         });
 
         return result;
@@ -83,6 +108,8 @@ export default function MonthlyCostChart({ maintenanceList, fuelingList }: Month
         let maxCost = -1;
         let maxCostMonth: MonthlyCost | null = null;
 
+        let validMonthCount = 0;
+
         monthlyCosts.forEach(item => {
             let cost = 0;
             if (chartType === 'ALL') {
@@ -94,13 +121,17 @@ export default function MonthlyCostChart({ maintenanceList, fuelingList }: Month
             }
 
             totalCost += cost;
+            if (cost > 0) {
+                validMonthCount++;
+            }
+
             if (cost > maxCost) {
                 maxCost = cost;
                 maxCostMonth = item;
             }
         });
 
-        const avgMonthlyCost = Math.round(totalCost / monthlyCosts.length);
+        const avgMonthlyCost = validMonthCount > 0 ? Math.round(totalCost / validMonthCount) : 0;
 
         return { avgMonthlyCost, totalCost, maxCostMonth };
     }, [monthlyCosts, chartType]);
@@ -161,6 +192,9 @@ export default function MonthlyCostChart({ maintenanceList, fuelingList }: Month
             // 정비 항목별 집계
             const itemMap = new Map<string, number>();
             maintenanceList.forEach(item => {
+                // maintenanceDate가 null이면 건너뜀 (크래시 방지)
+                if (!item.maintenanceDate) return;
+
                 // maintenanceDate가 YYYY-MM-DD 형식이므로 YYYY-MM으로 비교
                 if (item.maintenanceDate.substring(0, 7) >= startDateStr) {
                     const key = item.itemDescription || '기타 정비';
@@ -173,11 +207,14 @@ export default function MonthlyCostChart({ maintenanceList, fuelingList }: Month
         } else {
             // 주유 날짜별 집계 (최신순)
             return fuelingList
-                .filter(item => item.fuelingDate && item.fuelingDate.substring(0, 7) >= startDateStr)
-                .sort((a, b) => b.fuelingDate.localeCompare(a.fuelingDate))
+                .filter(item => {
+                    if (!item.fuelingDate) return false;
+                    return item.fuelingDate.substring(0, 7) >= startDateStr;
+                })
+                .sort((a, b) => (b.fuelingDate || '').localeCompare(a.fuelingDate || ''))
                 .map(item => ({
                     id: item.id,
-                    label: item.fuelingDate,
+                    label: item.fuelingDate || '-',
                     subLabel: item.shopName || '주유소',
                     amount: item.totalCost ?? 0,
                     color: 'text-white'
