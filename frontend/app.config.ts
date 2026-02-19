@@ -21,6 +21,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
         bundleIdentifier: "com.lee-kang-hyun.frontend"
     },
     android: {
+        package: "com.lee_kang_hyun.chabom",
         adaptiveIcon: {
             foregroundImage: "./assets/adaptive_icon_fixed.png",
             backgroundColor: "#101922"
