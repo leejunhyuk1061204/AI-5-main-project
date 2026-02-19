@@ -91,3 +91,32 @@
 - 현재 샘플은 artifact 부재(degraded) 환경에서도 정책/이벤트 경로가 동작함을 확인하기 위한 목적
 - 남은 warning은 Pydantic v2 deprecation (`Config` -> `ConfigDict`)이며 기능 영향은 없음
 
+## 2026-02-18 | Step6: One-class dataset split/training policy
+
+### One-class 학습 원칙
+- 학습 대상: `is_normal=true` 샘플만 사용
+- 정상 라벨 기준: `normal`, `frei`, `stau` (및 `0`, `NORMAL` 호환)
+- 학습 제외: `is_normal=false` 샘플
+  - 해석: 이상/불확실 샘플은 train에 섞지 않고 val/test, 리플레이 평가 용도로만 사용
+
+### Split 원칙
+- 비율: `train/val/test = 70/15/15`
+- 방식: `trip_id` 또는 `session_id` 그룹 단위 split (윈도우 랜덤 split 금지)
+- 목적: 데이터 누수(leakage) 방지 및 정책(threshold/K/cooldown) 검증 신뢰성 확보
+
+### 실행 결과 (Data Prep)
+- 실행 스크립트:
+  - `prepare_obd_raw_core7.py`
+  - `prepare_dataset.py`
+- 결과:
+  - rows_total: `2,732,486`
+  - trips_total: `81`
+  - split_groups: `train=56`, `val=12`, `test=13`
+- 이슈/수정:
+  - 이슈: 초기 실행에서 `trips=0`으로 집계되어 split 실패
+  - 원인: `prepare_obd_raw_core7.py`에서 `trip_id/label` 인덱스 정렬 불일치로 NaN 발생
+  - 해결: DataFrame 인덱스를 시간축 인덱스로 맞춘 뒤 `trip_id/label` 컬럼을 고정 문자열로 주입
+- 상태:
+  - Data prep 완료
+  - 다음 단계: `train_iforest.py` -> `train_lstm_ae.py` -> `eval_policy.py`
+
