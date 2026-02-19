@@ -133,12 +133,26 @@ export default function MaintenanceBook() {
 
     const formatDate = (dateString: string | null) => {
         if (!dateString) return '-';
-        const date = new Date(dateString);
-        return date.toLocaleDateString('ko-KR', {
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-        }).replace(/\./g, '.').replace(/ /g, '');
+        // YYYY-MM-DD 형식의 문자열이 들어온다고 가정하고 처리
+        // new Date() 사용 시 타임존 문제로 하루 전 날짜가 나올 수 있음
+        const parts = dateString.split('-');
+        if (parts.length === 3) {
+            return `${parts[0]}.${parts[1]}.${parts[2]}`;
+        }
+
+        // 형식이 맞지 않는 경우 fallback (기존 로직 유지하되 안전하게)
+        try {
+            const date = new Date(dateString);
+            if (isNaN(date.getTime())) return dateString; // 파싱 실패 시 원본 반환
+
+            return date.toLocaleDateString('ko-KR', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+            }).replace(/\./g, '.').replace(/ /g, '');
+        } catch (e) {
+            return dateString;
+        }
     };
 
     // 폼 초기화
@@ -206,7 +220,7 @@ export default function MaintenanceBook() {
                 }
 
                 const base = {
-                    maintenanceDate: formDate,
+                    maintenanceDate: formDate || new Date().toISOString().split('T')[0],
                     mileageAtMaintenance: formMileage.trim() ? parseFormattedNumber(formMileage) : null,
                     shopName: formShopName || null,
                     memo: formMemo || null,
@@ -224,9 +238,9 @@ export default function MaintenanceBook() {
                     const positionCodesToUse = row.positionCodes?.length
                         ? row.positionCodes
                         : isPositionTypeRow(row.consumableItemCode) &&
-                          ['TIRE_FL', 'TIRE_FR', 'TIRE_RL', 'TIRE_RR', 'BRAKE_PAD_FRONT', 'BRAKE_PAD_REAR'].includes(row.consumableItemCode)
-                          ? [row.consumableItemCode]
-                          : null;
+                            ['TIRE_FL', 'TIRE_FR', 'TIRE_RL', 'TIRE_RR', 'BRAKE_PAD_FRONT', 'BRAKE_PAD_REAR'].includes(row.consumableItemCode)
+                            ? [row.consumableItemCode]
+                            : null;
                     if (positionCodesToUse && positionCodesToUse.length > 0) {
                         const rowCost = row.amount ? Math.round(parseFormattedNumber(row.amount)) : null;
                         const costPer = rowCost != null ? Math.floor(rowCost / positionCodesToUse.length) : null;
