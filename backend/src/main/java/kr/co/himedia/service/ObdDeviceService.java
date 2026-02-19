@@ -65,24 +65,36 @@ public class ObdDeviceService {
     public void recordConnect(UUID userId, String deviceId, ConnectHistoryRequest request) {
         ObdDevice device = obdDeviceRepository.findByUserIdAndDeviceId(userId, deviceId)
                 .orElseThrow(() -> new BaseException(ErrorCode.ENTITY_NOT_FOUND));
-        vehicleRepository.findByVehicleIdAndDeletedAtIsNull(request.getVehicleId())
+        Vehicle vehicle = vehicleRepository.findByVehicleIdAndDeletedAtIsNull(request.getVehicleId())
                 .orElseThrow(() -> new BaseException(ErrorCode.VEHICLE_NOT_FOUND));
 
-        ObdDeviceVehicleHistory history = historyRepository.findByObdDeviceIdAndVehiclesId(device.getId(), request.getVehicleId())
+        // 0902로 수신한 VIN이 있고, 해당 차량에 아직 VIN이 없을 때만 저장
+        if (request.getVin() != null && !request.getVin().isBlank()
+                && (vehicle.getVin() == null || vehicle.getVin().isBlank())) {
+            vehicle.updateVin(request.getVin().trim());
+            vehicleRepository.save(vehicle);
+            log.info("[recordConnect] VIN 저장 완료 vehicleId={}", request.getVehicleId());
+        }
+
+        ObdDeviceVehicleHistory history = historyRepository
+                .findByObdDeviceIdAndVehiclesId(device.getId(), request.getVehicleId())
                 .orElse(ObdDeviceVehicleHistory.builder()
                         .obdDeviceId(device.getId())
                         .vehiclesId(request.getVehicleId())
                         .lastConnectedAt(OffsetDateTime.now())
                         .build());
         history.setLastConnectedAt(OffsetDateTime.now());
-        if (request.getCalid() != null) history.setCalid(request.getCalid());
-        if (request.getCvn() != null) history.setCvn(request.getCvn());
+        if (request.getCalid() != null)
+            history.setCalid(request.getCalid());
+        if (request.getCvn() != null)
+            history.setCvn(request.getCvn());
         historyRepository.save(history);
     }
 
     /**
      * 차량 특정: VIN → CALID → CVN → 해당 장치 마지막 연결 차량 → 대표 차량.
-     * 각 단계에서 null/blank면 해당 단계 스킵. 후보가 정확히 1건일 때만 반환, 0건이면 다음 단계, 2건 이상이면 다음 단계로 진행.
+     * 각 단계에서 null/blank면 해당 단계 스킵. 후보가 정확히 1건일 때만 반환, 0건이면 다음 단계, 2건 이상이면 다음 단계로
+     * 진행.
      */
     @Transactional(readOnly = true)
     public UUID resolveVehicle(UUID userId, ResolveVehicleRequest request) {
@@ -109,7 +121,8 @@ public class ObdDeviceService {
             log.debug("[resolveVehicle] no device for deviceId, skip CALID/CVN/last");
         } else {
             if (request.getCalid() != null && !request.getCalid().isBlank()) {
-                List<ObdDeviceVehicleHistory> byCalid = historyRepository.findAllByObdDeviceIdAndCalid(device.getId(), request.getCalid().trim());
+                List<ObdDeviceVehicleHistory> byCalid = historyRepository.findAllByObdDeviceIdAndCalid(device.getId(),
+                        request.getCalid().trim());
                 if (byCalid.size() == 1) {
                     UUID vehicleId = byCalid.get(0).getVehiclesId();
                     log.info("[resolveVehicle] step=CALID single match vehicleId={}", vehicleId);
@@ -123,14 +136,16 @@ public class ObdDeviceService {
             if (request.getCvn() != null && !request.getCvn().isBlank()) {
                 String cvnTrim = request.getCvn().trim();
                 if (request.getCalid() != null && !request.getCalid().isBlank()) {
-                    Optional<ObdDeviceVehicleHistory> byCalidCvn = historyRepository.findByObdDeviceIdAndCalidAndCvn(device.getId(), request.getCalid().trim(), cvnTrim);
+                    Optional<ObdDeviceVehicleHistory> byCalidCvn = historyRepository
+                            .findByObdDeviceIdAndCalidAndCvn(device.getId(), request.getCalid().trim(), cvnTrim);
                     if (byCalidCvn.isPresent()) {
                         UUID vehicleId = byCalidCvn.get().getVehiclesId();
                         log.info("[resolveVehicle] step=CALID+CVN match vehicleId={}", vehicleId);
                         return vehicleId;
                     }
                 }
-                List<ObdDeviceVehicleHistory> byCvn = historyRepository.findAllByObdDeviceIdAndCvn(device.getId(), cvnTrim);
+                List<ObdDeviceVehicleHistory> byCvn = historyRepository.findAllByObdDeviceIdAndCvn(device.getId(),
+                        cvnTrim);
                 if (byCvn.size() == 1) {
                     UUID vehicleId = byCvn.get(0).getVehiclesId();
                     log.info("[resolveVehicle] step=CVN single match vehicleId={}", vehicleId);
@@ -144,7 +159,8 @@ public class ObdDeviceService {
                 log.debug("[resolveVehicle] step=CVN no match, continue");
             }
 
-            Optional<ObdDeviceVehicleHistory> last = historyRepository.findTopByObdDeviceIdOrderByLastConnectedAtDesc(device.getId());
+            Optional<ObdDeviceVehicleHistory> last = historyRepository
+                    .findTopByObdDeviceIdOrderByLastConnectedAtDesc(device.getId());
             if (last.isPresent()) {
                 UUID vehicleId = last.get().getVehiclesId();
                 log.info("[resolveVehicle] step=LAST_CONNECTED vehicleId={}", vehicleId);

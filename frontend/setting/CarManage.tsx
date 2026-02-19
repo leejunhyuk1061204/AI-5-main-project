@@ -401,6 +401,7 @@ export default function CarManage() {
                     setSelectedVehicleIdForObd(null);
                 }}
                 onConnected={handleObdConnected}
+                onConnectionFailed={() => setObdModalVisible(true)}
             />
         </BaseScreen >
     );

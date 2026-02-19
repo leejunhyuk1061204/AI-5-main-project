@@ -9,6 +9,7 @@ import java.util.UUID;
 @Setter
 public class ConnectHistoryRequest {
     private UUID vehicleId;
+    private String vin;
     private String calid;
     private String cvn;
 }

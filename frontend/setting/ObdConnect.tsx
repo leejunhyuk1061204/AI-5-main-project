@@ -31,6 +31,8 @@ interface ObdConnectProps {
     visible: boolean;
     onClose: () => void;
     onConnected?: (device: UnifiedDevice) => void;
+    /** 연결 실패 시 호출 (모달 다시 열기 등) */
+    onConnectionFailed?: () => void;
     /** 이미 연결된 상태에서 다른 차량으로 연결만 변경할 때 사용 */
     selectedVehicleId?: string | null;
     selectedVehicleLabel?: string;
@@ -43,6 +45,7 @@ export default function ObdConnect({
     visible,
     onClose,
     onConnected,
+    onConnectionFailed,
     selectedVehicleId = null,
     selectedVehicleLabel,
     onVehicleChangeSuccess
@@ -60,6 +63,7 @@ export default function ObdConnect({
     } = useBleStore();
 
     const [changingVehicle, setChangingVehicle] = useState(false);
+    const [isManualConnecting, setIsManualConnecting] = useState(false);
 
     const [classicDevices, setClassicDevices] = useState<UnifiedDevice[]>([]);
     // UI Local Status (to keep 'success' modal behavior separate from just 'connected' state if needed, 
@@ -158,11 +162,14 @@ export default function ObdConnect({
             })
         ]);
 
-    // 수동 연결 전용: 1회 시도, 실패 시 재시도 없음 (자동 연결은 BackgroundService/tryAutoConnectFromCache에서 별도 처리)
     const connectToDevice = async (device: UnifiedDevice) => {
         setStatus('connecting');
+        setIsManualConnecting(true);
         setError(null);
         console.log('[ObdConnect] connect start name=', device.name, 'type=', device.type, 'id=', device.id);
+
+        // 연결 시작 즉시 모달 닫기
+        onClose();
 
         const doConnect = async () => {
             console.log('[ObdConnect] stopScan + delay...');
@@ -176,9 +183,7 @@ export default function ObdConnect({
                 if (connected) {
                     console.log('[ObdConnect] classic connected name=', device.name);
                     await ObdService.setClassicDevice(device.classicDevice);
-                    setTimeout(() => {
-                        if (onConnected) onConnected(device);
-                    }, 1500);
+                    if (onConnected) onConnected(device);
                 } else {
                     throw new Error('Classic BT connection returned false');
                 }
@@ -190,25 +195,28 @@ export default function ObdConnect({
                 await BleService.retrieveServices(device.id);
                 await ObdService.setTargetDevice(device.id);
                 console.log('[ObdConnect] BLE connected name=', device.name);
-                setTimeout(() => {
-                    if (onConnected) onConnected(device);
-                }, 1500);
+                if (onConnected) onConnected(device);
             }
         };
 
         try {
             await connectWithTimeout(doConnect(), CONNECT_TIMEOUT_MS, timeoutMsg);
             connectedDuringSessionRef.current = true;
+            useAlertStore.getState().showAlert('연결 성공', `${device.name}에 연결되었습니다.`, 'SUCCESS');
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
             setStatus('disconnected');
             setError(msg);
             if (device.type === 'ble') {
-                BleService.disconnect(device.id).catch(() => {});
+                BleService.disconnect(device.id).catch(() => { });
             } else if (device.type === 'classic' && device.classicDevice) {
-                ClassicBtService.disconnect(device.classicDevice).catch(() => {});
+                ClassicBtService.disconnect(device.classicDevice).catch(() => { });
             }
             console.warn('[ObdConnect] manual connect failed (no retry). reason=', msg);
+            useAlertStore.getState().showAlert('연결 실패', msg || '기기를 찾을 수 없습니다.', 'ERROR');
+            if (onConnectionFailed) onConnectionFailed();
+        } finally {
+            setIsManualConnecting(false);
         }
     };
 
@@ -276,13 +284,17 @@ export default function ObdConnect({
                             ) : (
                                 <>
                                     <View className="items-center mb-8">
-                                        <View className="w-20 h-20 rounded-full bg-[#0d7ff2]/10 items-center justify-center mb-4 border border-[#0d7ff2]/20">
-                                            <MaterialIcons name="bluetooth-connected" size={40} color="#0d7ff2" />
-                                        </View>
-                                        <Text className="text-white text-xl font-bold mb-1">이미 연결되어 있습니다</Text>
-                                        <Text className="text-slate-400 text-center text-sm">
-                                            {connectedDeviceName || connectedDeviceId || 'OBD 기기'}와 연결 중입니다.
-                                        </Text>
+                                        {!isManualConnecting && (
+                                            <>
+                                                <View className="w-20 h-20 rounded-full bg-[#0d7ff2]/10 items-center justify-center mb-4 border border-[#0d7ff2]/20">
+                                                    <MaterialIcons name="bluetooth-connected" size={40} color="#0d7ff2" />
+                                                </View>
+                                                <Text className="text-white text-xl font-bold mb-1">이미 연결되어 있습니다</Text>
+                                                <Text className="text-slate-400 text-center text-sm">
+                                                    {connectedDeviceName || connectedDeviceId || 'OBD 기기'}와 연결 중입니다.
+                                                </Text>
+                                            </>
+                                        )}
                                     </View>
                                     {selectedVehicleId && selectedVehicleLabel ? (
                                         <TouchableOpacity
