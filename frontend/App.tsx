@@ -83,7 +83,11 @@ const linking = {
 };
 
 // Keep the splash screen visible while we fetch resources
-ExpoSplashScreen.preventAutoHideAsync();
+try {
+  ExpoSplashScreen.preventAutoHideAsync().catch(() => { });
+} catch (e) {
+  console.warn('[App] SplashScreen.preventAutoHideAsync failed', e);
+}
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -136,13 +140,24 @@ export default function App() {
     async function prepare() {
       try {
         // Set Root View Background Color
-        await SystemUI.setBackgroundColorAsync("#101922");
+        try {
+          await SystemUI.setBackgroundColorAsync("#101922");
+          await ExpoSplashScreen.hideAsync();
 
-        // Set Android Navigation Bar Color
-        if (Platform.OS === 'android') {
-          // Edge-to-Edge support: transparent background
-          await NavigationBar.setBackgroundColorAsync("transparent");
-          await NavigationBar.setButtonStyleAsync("light");
+          if (Platform.OS === 'android') {
+            // NavigationBar는 일부 환경에서 실패할 수 있으므로 안전하게 처리
+            try {
+              await NavigationBar.setVisibilityAsync("hidden");
+              await NavigationBar.setBackgroundColorAsync("transparent");
+              await NavigationBar.setButtonStyleAsync("light");
+            } catch (navErr) {
+              console.warn('[App] NavigationBar settings failed', navErr);
+            }
+          }
+        } catch (e) {
+          console.warn('[App] UI initialization failed', e);
+          // UI 초기화 실패해도 앱은 계속 진행하도록 함
+          await ExpoSplashScreen.hideAsync().catch(() => { });
         }
 
         // Check for persistent login
@@ -202,11 +217,15 @@ export default function App() {
   // 4. FCM Initialization (로그인 후)
   useEffect(() => {
     const initializeFcm = async () => {
-      const token = await AsyncStorage.getItem('accessToken');
-      if (token) {
-        // 로그인된 상태에서만 FCM 초기화
-        await fcmService.initialize();
-        fcmService.setupForegroundHandler();
+      try {
+        const token = await AsyncStorage.getItem('accessToken');
+        if (token) {
+          // 로그인된 상태에서만 FCM 초기화
+          await fcmService.initialize();
+          fcmService.setupForegroundHandler();
+        }
+      } catch (e) {
+        console.error("[FCM] Optional initialization failed", e);
       }
     };
 

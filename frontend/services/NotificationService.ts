@@ -66,16 +66,22 @@ class NotificationService {
      * 토큰 갱신 리스너 설정
      */
     public setupTokenRefreshListener() {
-        return messaging().onTokenRefresh(async (token) => {
-            console.log('[FCM] Token refreshed:', token);
-            const accessToken = await AsyncStorage.getItem('accessToken');
-            if (accessToken) {
-                const response = await authService.updateFcmToken(token);
-                if (response.success) {
-                    await AsyncStorage.setItem('savedFcmToken', token);
+        try {
+            if (Platform.OS === 'web') return () => { };
+            return messaging().onTokenRefresh(async (token) => {
+                console.log('[FCM] Token refreshed:', token);
+                const accessToken = await AsyncStorage.getItem('accessToken');
+                if (accessToken) {
+                    const response = await authService.updateFcmToken(token).catch(() => ({ success: false }));
+                    if (response.success) {
+                        await AsyncStorage.setItem('savedFcmToken', token);
+                    }
                 }
-            }
-        });
+            });
+        } catch (e) {
+            console.warn('[NotificationService] setupTokenRefreshListener failed', e);
+            return () => { };
+        }
     }
 }
 

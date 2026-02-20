@@ -193,19 +193,24 @@ class ObdService {
                 const bleManagerEmitter = new NativeEventEmitter(BleManagerModule);
 
                 // BLE 응답 리스너 (진단: 수신 여부 확인용)
-                bleManagerEmitter.addListener(
-                    'BleManagerDidUpdateValueForCharacteristic',
-                    ({ value, peripheral, service, characteristic }: any) => {
-                        if (this.connectionType !== 'ble') return;
-                        if (peripheral !== this.currentDeviceId) return;
+                try {
+                    const bleManagerEmitter = new NativeEventEmitter(BleManagerModule);
+                    bleManagerEmitter.addListener(
+                        'BleManagerDidUpdateValueForCharacteristic',
+                        ({ value, peripheral, service, characteristic }: any) => {
+                            if (this.connectionType !== 'ble') return;
+                            if (peripheral !== this.currentDeviceId) return;
 
-                        const asciiString = value?.length ? String.fromCharCode(...value) : '';
-                        if (this.currentPid && value?.length) {
-                            console.log('[ObdService] BLE notify', value.length, 'b for', this.currentPid.mode + ':' + this.currentPid.pid);
+                            const asciiString = value?.length ? String.fromCharCode(...value) : '';
+                            if (this.currentPid && value?.length) {
+                                console.log('[ObdService] BLE notify', value.length, 'b for', this.currentPid.mode + ':' + this.currentPid.pid);
+                            }
+                            this.handleResponse(asciiString);
                         }
-                        this.handleResponse(asciiString);
-                    }
-                );
+                    );
+                } catch (emitterErr) {
+                    console.warn('[ObdService] NativeEventEmitter(BleManager) failed', emitterErr);
+                }
             }
         }
 
@@ -519,44 +524,44 @@ class ObdService {
         this.tripState = 'ENDED';
         console.log('[TripStateChange] ENDED (finalizing)');
 
+        try {
+            // 1. [필수] 응답 파편 차단
+            this.ignoreResponses = true;
+
+            // 2. 폴링 중단
+            this.isPolling = false;
+            this.commandQueue = [];
+            this.isProcessingQueue = false;
+            this.currentPid = null;
+
+            if (this.samplingTimer) {
+                clearTimeout(this.samplingTimer);
+                this.samplingTimer = null;
+            }
+            useBleStore.getState().setPolling(false);
+
+            await this.flushBuffer();
+
+            const tripId = useTripStore.getState().currentTripId;
             try {
-                // 1. [필수] 응답 파편 차단
-                this.ignoreResponses = true;
-
-                // 2. 폴링 중단
-                this.isPolling = false;
-                this.commandQueue = [];
-                this.isProcessingQueue = false;
-                this.currentPid = null;
-
-                if (this.samplingTimer) {
-                    clearTimeout(this.samplingTimer);
-                    this.samplingTimer = null;
-                }
-                useBleStore.getState().setPolling(false);
-
-                await this.flushBuffer();
-
-                const tripId = useTripStore.getState().currentTripId;
-                try {
-                    await useTripStore.getState().endTrip();
-                } catch (e) {
-                    const msg = e instanceof Error ? e.message : String(e);
-                    console.error('[ObdService] endTrip failed, queuing. reason=', msg);
-                    if (tripId) {
-                        const url = `/api/v1/trips/${tripId}/end`;
-                        const isQueued = await OfflineStorage.isUrlQueued(url);
-                        if (!isQueued) {
-                            await OfflineStorage.addToQueue({
-                                url: url,
-                                method: 'POST',
-                                timestamp: Date.now(),
-                                body: JSON.stringify({ endTime: new Date().toISOString() })
-                            });
-                        }
+                await useTripStore.getState().endTrip();
+            } catch (e) {
+                const msg = e instanceof Error ? e.message : String(e);
+                console.error('[ObdService] endTrip failed, queuing. reason=', msg);
+                if (tripId) {
+                    const url = `/api/v1/trips/${tripId}/end`;
+                    const isQueued = await OfflineStorage.isUrlQueued(url);
+                    if (!isQueued) {
+                        await OfflineStorage.addToQueue({
+                            url: url,
+                            method: 'POST',
+                            timestamp: Date.now(),
+                            body: JSON.stringify({ endTime: new Date().toISOString() })
+                        });
                     }
                 }
-            } catch (e) {
+            }
+        } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
             console.error('[ObdService] finalizeTrip error. reason=', msg);
         } finally {
@@ -853,7 +858,7 @@ class ObdService {
 
                 const success = await this.sendCommand(command);
                 if (!success) {
-                // [11단계] sendCommand 실패 캘운팅
+                    // [11단계] sendCommand 실패 캘운팅
                     this.pidRequestStartTime = null;
                     this.incrementPidFailCount(pid, 'sendCommand failed');
                     this.currentPid = null;

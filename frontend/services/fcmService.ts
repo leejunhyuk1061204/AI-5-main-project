@@ -2,6 +2,7 @@ import messaging from '@react-native-firebase/messaging';
 import firebase from '@react-native-firebase/app';
 import { authService } from './auth';
 import { useAlertStore } from '../store/useAlertStore';
+import { Platform } from 'react-native';
 
 /**
  * FCM 서비스
@@ -212,7 +213,8 @@ class FcmService {
      */
     async getToken(): Promise<string | null> {
         try {
-            const token = await messaging().getToken();
+            if (Platform.OS === 'web') return null;
+            const token = await messaging().getToken().catch(() => null);
             return token;
         } catch (error) {
             console.error('[FCM] Failed to get token:', error);
