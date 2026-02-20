@@ -208,6 +208,7 @@ class ObdService {
         this.manualConnectSession = value;
     }
 
+
     constructor() {
         if (Platform.OS !== 'web') {
             const BleManagerModule = NativeModules.BleManager;

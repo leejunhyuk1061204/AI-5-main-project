@@ -170,8 +170,14 @@ export default function SettingMain() {
                         icon="cloud-sync"
                         title="커넥티드 카 연동"
                         subtitle="SmartCar 계정 연결"
-                        isLast
                         onPress={() => Linking.openURL(`${BASE_URL}/api/smartcar/login`)}
+                    />
+                    <SettingsItem
+                        icon="speed"
+                        title="OBD 실시간 모니터"
+                        subtitle="실차 OBD 데이터 실시간 확인"
+                        isLast
+                        onPress={() => navigation.navigate('Elm327Test')}
                     />
                 </View>
             </View>
