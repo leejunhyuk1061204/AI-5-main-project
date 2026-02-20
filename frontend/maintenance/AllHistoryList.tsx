@@ -101,7 +101,7 @@ export default function AllHistoryList({
                 shopName: group.shopName || '정비소 미기록',
                 cost: group.cost,
                 mileage: group.mileage,
-                data: { ...group, isFueling: false, totalCost: group.cost } // 상세 보기를 위한 데이터 구조 맞춤
+                data: { ...group, isFueling: false, totalCost: group.cost, maintenanceDate: group.date } // 상세 보기를 위한 데이터 구조 맞춤
             });
         });
 

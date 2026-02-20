@@ -335,6 +335,7 @@ class ObdService {
 
             await obdDeviceApi.recordConnect(deviceId, {
                 vehicleId,
+                vin: this.vin || undefined,
                 calid: this.calid || undefined,
                 cvn: this.cvn || undefined
             });

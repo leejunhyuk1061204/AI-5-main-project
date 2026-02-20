@@ -23,6 +23,7 @@ import fcmService from './services/fcmService';
 import { authService } from './services/auth';
 import GlobalAlert from './components/common/GlobalAlert';
 import GlobalDatePicker from './components/common/GlobalDatePicker';
+import ObdConnectingOverlay from './components/common/ObdConnectingOverlay';
 import BottomNav from './nav/BottomNav';
 
 import Tos from './sign/Tos';
@@ -340,6 +341,7 @@ export default function App() {
                 </Stack.Navigator>
                 <GlobalAlert />
                 <GlobalDatePicker />
+                <ObdConnectingOverlay />
                 <CustomErrorModal />
               </>
             )}
