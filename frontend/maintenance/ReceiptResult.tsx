@@ -106,7 +106,7 @@ export default function ReceiptResult({ navigation, route }: { navigation?: any;
                 await ocrApi.registerFuelingManual(vehicleId, payload);
             } else {
                 const base = {
-                    maintenanceDate: date,
+                    maintenanceDate: date || new Date().toISOString().split('T')[0],
                     mileageAtMaintenance: parseFormattedNumber(mileage) || null,
                     shopName: shopName || null,
                     memo: memo || null,

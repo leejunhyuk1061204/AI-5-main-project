@@ -1,7 +1,7 @@
 """
-매뉴얼 ZIP → 풀기 → 청킹 → 임베딩 → knowledge_vectors 시드 SQL (v2).
-리스트 3분할 중 2번: 원본_zip 목록 정렬 후 인덱스 % 3 == 1 인 ZIP만 처리.
-작업: embedding작업 폴더에 풀고, 처리 후 해당 폴더 삭제. 시드: seed 폴더에 seed_v2.sql.
+매뉴얼 ZIP → 풀기 → 청킹 → 임베딩 → knowledge_vectors 시드 SQL (v1).
+리스트 3분할 중 1번: 원본_zip 목록 정렬 후 인덱스 % 3 == 0 인 ZIP만 처리.
+작업: embedding작업 폴더에 풀고, 처리 후 해당 폴더 삭제. 시드: seed 폴더에 seed_v1.sql.
 """
 import argparse
 import os
@@ -13,9 +13,11 @@ import urllib.parse
 import requests
 import zipfile
 import re
+import threading
 from datetime import datetime
 from bs4 import BeautifulSoup
 from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # --- 버전/리스트 (v2 = 2번 리스트) ---
 VERSION = "v2"
@@ -24,7 +26,7 @@ NUM_LISTS = 6
 
 # --- 경로 ---
 SOURCE_DIR = r"G:\내 드라이브\정비지침서\원본_zip"
-EXTRACT_DIR = r"G:\내 드라이브\정비지침서\embedding작업"
+EXTRACT_DIR = r"C:\temp\embedding작업"
 SEED_DIR = r"G:\내 드라이브\정비지침서\seed"
 
 OUTPUT_SQL_PATH = os.path.join(SEED_DIR, f"seed_{VERSION}.sql")
@@ -33,10 +35,13 @@ PROCESSED_LIST_FILE = f"logs/embed_manuals_processed_{VERSION}.txt"
 
 MODEL_NAME = "nomic-embed-text"
 OLLAMA_API_URL = "http://localhost:11434/api/embed"
-CHUNK_SIZE = 1000
+CHUNK_SIZE = 2000
 CHUNK_OVERLAP = 200
 EMBED_RETRIES = 3
 EMBED_RETRY_DELAY = 5
+
+# 병렬 처리용 Lock
+file_write_lock = threading.Lock()
 
 
 def log(message):
@@ -207,7 +212,59 @@ def _collect_html_paths(extract_root):
     return [p[0] for p in sorted(paths, key=lambda x: x[1])]
 
 
-def process_zip_file(zip_path, dry_run=False):
+def process_page_task(page_data):
+    """
+    단일 페이지 전체를 처리하는 작업 함수 (병렬 실행용)
+    Returns: (success_count, sql_lines) tuple
+    """
+    html_full, extract_root, context_header, vehicle_meta, zipname = page_data
+    rel_path = os.path.relpath(html_full, extract_root).replace("\\", "/")
+    page_match = re.search(r"pages/(\d+)\.html", rel_path)
+    page_ord = 0
+    page_number = int(page_match.group(1)) if page_match else page_ord
+    
+    sql_lines = []
+    try:
+        with open(html_full, "r", encoding="utf-8", errors="ignore") as f:
+            html_content = f.read()
+    except Exception as e:
+        log(f"  [ERROR] Cannot read {rel_path}: {e}")
+        return (0, [])
+    
+    text = extract_text_from_html(html_content)
+    cleaned_text = clean_text(text)
+    if not cleaned_text or len(cleaned_text) < 50:
+        return (0, [])
+    
+    chunks = splitter.split_text(cleaned_text)
+    total_chunks = len(chunks)
+    
+    for chunk_idx, chunk in enumerate(chunks):
+        if not chunk.strip():
+            continue
+        final_text = context_header + f"[Page: {page_number}]\n" + chunk
+        
+        embedding = get_ollama_embedding(final_text)
+        if not embedding:
+            continue
+        
+        metadata = {
+            **vehicle_meta,
+            "page_number": page_number,
+            "chunk_index": chunk_idx,
+            "total_chunks_in_page": total_chunks,
+            "source_file": rel_path,
+            "source_zip": zipname,
+            "chunk_method": "smart_recursive_v1",
+        }
+        content_hash = get_hash(f"{final_text}_{zipname}_{page_number}_{chunk_idx}")
+        sql_line = format_sql(final_text, metadata, embedding, content_hash)
+        sql_lines.append(sql_line)
+    
+    return (len(sql_lines), sql_lines)
+
+
+def process_zip_file(zip_path, dry_run=False, workers=3):
     zipname = os.path.basename(zip_path)
     zip_stem = zipname.replace(".zip", "")
     log(f"Processing {zipname}..." + (" (dry-run)" if dry_run else ""))
@@ -226,6 +283,8 @@ def process_zip_file(zip_path, dry_run=False):
             zf.extractall(extract_root)
 
         html_paths = _collect_html_paths(extract_root)
+        log(f"  Extracted {len(html_paths)} HTML files from {zipname}")
+        
         if not html_paths:
             log(f"  [SKIP] No .html files in {zipname}")
             shutil.rmtree(extract_root, ignore_errors=True)
@@ -234,53 +293,47 @@ def process_zip_file(zip_path, dry_run=False):
         log(f"  Found {len(html_paths)} pages")
         success_count = 0
         sql_f = None if dry_run else open(OUTPUT_SQL_PATH, "a", encoding="utf-8")
-        try:
+        
+        if dry_run:
+            # Dry-run: 순차 처리
             for page_ord, html_full in enumerate(html_paths):
                 rel_path = os.path.relpath(html_full, extract_root).replace("\\", "/")
-                page_match = re.search(r"pages/(\d+)\.html", rel_path)
-                page_number = int(page_match.group(1)) if page_match else page_ord
                 try:
                     with open(html_full, "r", encoding="utf-8", errors="ignore") as f:
                         html_content = f.read()
                 except Exception as e:
-                    log(f"  [ERROR] Cannot read {rel_path}: {e}")
                     continue
                 text = extract_text_from_html(html_content)
                 cleaned_text = clean_text(text)
                 if not cleaned_text or len(cleaned_text) < 50:
                     continue
                 chunks = splitter.split_text(cleaned_text)
-                total_chunks = len(chunks)
-                for chunk_idx, chunk in enumerate(chunks):
-                    if not chunk.strip():
-                        continue
-                    final_text = context_header + f"[Page: {page_number}]\n" + chunk
-                    if dry_run:
-                        success_count += 1
-                        continue
-                    embedding = get_ollama_embedding(final_text)
-                    if not embedding:
-                        continue
-                    metadata = {
-                        **vehicle_meta,
-                        "page_number": page_number,
-                        "chunk_index": chunk_idx,
-                        "total_chunks_in_page": total_chunks,
-                        "source_file": rel_path,
-                        "source_zip": zipname,
-                        "chunk_method": "smart_recursive_v1",
-                    }
-                    content_hash = get_hash(f"{final_text}_{zipname}_{page_number}_{chunk_idx}")
-                    sql_f.write(format_sql(final_text, metadata, embedding, content_hash))
-                    success_count += 1
-                if page_number % 100 == 0:
-                    log(f"  Progress: Page {page_number} processed")
-        finally:
-            if sql_f is not None:
-                sql_f.close()
+                success_count += len(chunks)
+        else:
+            # 페이지별 병렬 처리
+            page_tasks = [(html_full, extract_root, context_header, vehicle_meta, zipname) 
+                            for html_full in html_paths]
+            
+            with ThreadPoolExecutor(max_workers=workers) as executor:
+                futures = {executor.submit(process_page_task, task): task for task in page_tasks}
+                
+                page_count = 0
+                for future in as_completed(futures):
+                    task = futures[future]
+                    try:
+                        count, sql_lines = future.result()
+                        if sql_lines:
+                            with file_write_lock:  # SQL 쓰기만 Lock
+                                for sql_line in sql_lines:
+                                    sql_f.write(sql_line)
+                        success_count += count
+                        page_count += 1
+                        if page_count % 10 == 0:
+                            log(f"  Progress: {page_count}/{len(html_paths)} pages processed")
+                    except Exception as e:
+                        log(f"  [ERROR] Page processing failed for {task[0]}: {e}")
 
-        shutil.rmtree(extract_root, ignore_errors=True)
-        log(f"  [FINISH] {zipname}: {success_count} chunks" + (" (dry-run)" if dry_run else " embedded"))
+        log(f"  Finished {zipname}: {success_count} chunks embedded.")
         return True
 
     except Exception as e:
@@ -289,11 +342,19 @@ def process_zip_file(zip_path, dry_run=False):
             shutil.rmtree(extract_root, ignore_errors=True)
         return False
 
+    finally:
+        if sql_f is not None:
+            sql_f.close()
+
+        shutil.rmtree(extract_root, ignore_errors=True)
+        log(f"  [FINISH] {zipname}: {success_count} chunks" + (" (dry-run)" if dry_run else " embedded"))
+
 
 def main():
     parser = argparse.ArgumentParser(description=f"Manual embedding pipeline {VERSION} (list index % {NUM_LISTS} == {LIST_INDEX})")
     parser.add_argument("--resume", action="store_true", help="이미 처리된 ZIP 건너뜀")
     parser.add_argument("--dry-run", action="store_true", help="풀기/청킹만, API·SQL 쓰기 없음")
+    parser.add_argument("--workers", type=int, default=3, help="병렬 처리 워커 수 (기본값: 3)")
     args = parser.parse_args()
 
     os.makedirs(os.path.dirname(os.path.abspath(LOG_FILE)), exist_ok=True)
@@ -319,10 +380,11 @@ def main():
     log(f"ZIPs for this list: {len(zip_files)}" + (f" (skipped {len(processed)})" if args.resume else ""))
     log("=" * 60)
 
+    log(f"Using {args.workers} parallel workers for embedding")
     for idx, zipname in enumerate(zip_files, 1):
         zip_path = os.path.join(SOURCE_DIR, zipname)
         log(f"\n[{idx}/{len(zip_files)}] Starting {zipname}")
-        ok = process_zip_file(zip_path, dry_run=args.dry_run)
+        ok = process_zip_file(zip_path, dry_run=args.dry_run, workers=args.workers)
         if ok and not args.dry_run:
             with open(PROCESSED_LIST_FILE, "a", encoding="utf-8") as f:
                 f.write(zipname + "\n")
