@@ -81,7 +81,9 @@ class ObdAnomalyService:
 
         domains = self._build_summary_domains(req, summary_core, summary_ext, selected_domains)
         events = self._collect_events({"engine": summary_core, **summary_ext}, selected_domains)
+        events.extend(self._collect_engine_info_events(summary_core))
         events.extend(engine_policy_events)
+        events = self._compact_events(events)
         is_anomaly = any(v.is_anomaly for v in domains.values())
         anomaly_score = self._calc_anomaly_score(summary_core, domains)
 
@@ -342,12 +344,96 @@ class ObdAnomalyService:
 
         return out
 
+    def _collect_engine_info_events(self, summary_core: CommonEnvelope) -> List[AnomalyEvent]:
+        out: List[AnomalyEvent] = []
+        events = summary_core.details.get("events", [])
+        if not isinstance(events, list):
+            return out
+
+        grouped: Dict[tuple[str, str, str, str], Dict[str, Any]] = {}
+        for event in events:
+            if not isinstance(event, dict):
+                continue
+            etype = str(event.get("type", "ANOMALY_EVENT"))
+            if etype == "ENGINE_HYBRID_ANOMALY":
+                continue
+            feature = event.get("feature")
+            if not isinstance(feature, str) or not feature:
+                feature = "engine_quality"
+            value = event.get("value")
+            sev_raw = str(event.get("severity", "INFO")).upper()
+            sev = EventSeverity.INFO
+            if sev_raw in ("WARNING", "CRITICAL", "INFO"):
+                sev = EventSeverity(sev_raw)
+            key = (etype, feature, str(value), sev.value)
+            if key not in grouped:
+                grouped[key] = {
+                    "value": value,
+                    "message": event.get("message") or "engine quality advisory",
+                    "windows": set(),
+                    "severity": sev,
+                }
+            win = event.get("window_index")
+            if isinstance(win, int):
+                grouped[key]["windows"].add(win)
+
+        for (etype, feature, _, _), info in grouped.items():
+            wins = sorted(list(info["windows"]))
+            msg = str(info["message"])
+            if wins:
+                msg = f"{msg} (affected_windows={len(wins)})"
+            out.append(
+                AnomalyEvent(
+                    type=etype,
+                    domain="engine",
+                    feature=feature,
+                    value=info["value"],
+                    threshold=summary_core.threshold,
+                    window_index=None,
+                    severity=info["severity"],
+                    message=msg,
+                )
+            )
+        return out
+
     def _severity_for_domain(self, domain: str) -> EventSeverity:
         if domain in ("engine", "brake"):
             return EventSeverity.CRITICAL
         if domain in ("electrical", "tire"):
             return EventSeverity.WARNING
         return EventSeverity.INFO
+
+    def _compact_events(self, events: List[AnomalyEvent]) -> List[AnomalyEvent]:
+        grouped: Dict[tuple[str, str, str, str], List[AnomalyEvent]] = {}
+        for e in events:
+            key = (e.type, e.domain, e.feature, e.severity.value)
+            grouped.setdefault(key, []).append(e)
+
+        out: List[AnomalyEvent] = []
+        for (_, _, _, _), group in grouped.items():
+            if len(group) == 1:
+                out.append(group[0])
+                continue
+
+            base = group[0]
+            nums = [float(g.value) for g in group if isinstance(g.value, (int, float))]
+            value: float | int | str | None = base.value
+            if nums:
+                value = float(min(nums))
+
+            out.append(
+                AnomalyEvent(
+                    type=base.type,
+                    domain=base.domain,
+                    feature=base.feature,
+                    value=value,
+                    threshold=base.threshold,
+                    window_index=None,
+                    severity=base.severity,
+                    message=f"{base.message} (occurrences={len(group)})",
+                )
+            )
+        return out
 
     def _calc_anomaly_score(self, summary_core: CommonEnvelope, domains: Dict[str, DomainResult]) -> float | None:
         # Keep top-level score consistent with final anomaly decision.
