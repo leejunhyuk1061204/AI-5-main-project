@@ -114,6 +114,66 @@ class EngineScorer:
             return [{"feature": f, "contribution": w} for f, _ in ranked]
         return [{"feature": f, "contribution": float(v / denom)} for f, v in ranked]
 
+    def _detect_hard_limit_event(self, w: Window) -> Dict[str, Any] | None:
+        # Physical hard-limit guardrail for clearly impossible values.
+        hard_limits = {
+            "engine_rpm": 8000.0,
+            "vehicle_speed_kmh": 240.0,
+            "throttle_pos_pct": 100.0,
+            "imap_kpa": 250.0,
+            "engine_coolant_temp_c": 150.0,
+            "intake_air_temp_c": 100.0,
+            "maf_gps": 150.0,
+        }
+        for s in w.samples:
+            for feat, limit in hard_limits.items():
+                v = s.features.get(feat)
+                if isinstance(v, (int, float)) and float(v) > limit:
+                    return {
+                        "type": "ENGINE_HARD_LIMIT_ANOMALY",
+                        "feature": feat,
+                        "value": float(v),
+                        "window_index": w.window_index,
+                        "severity": "CRITICAL",
+                        "message": f"hard-limit exceeded: {feat}>{limit}",
+                    }
+        return None
+
+    def _detect_stall_event(self, w: Window) -> Dict[str, Any] | None:
+        rpms: List[float] = []
+        speeds: List[float] = []
+        for s in w.samples:
+            rv = s.features.get("engine_rpm")
+            sv = s.features.get("vehicle_speed_kmh")
+            rpms.append(float(rv) if isinstance(rv, (int, float)) else float("nan"))
+            speeds.append(float(sv) if isinstance(sv, (int, float)) else float("nan"))
+
+        if len(rpms) < 3:
+            return None
+
+        for i in range(1, len(rpms)):
+            prev_rpm = rpms[i - 1]
+            cur_rpm = rpms[i]
+            if not (prev_rpm == prev_rpm and cur_rpm == cur_rpm):  # nan check
+                continue
+            # Stall-like drop: high rpm -> near-zero rpm within one step.
+            if prev_rpm >= 1200.0 and cur_rpm <= 400.0:
+                cur_spd = speeds[i]
+                prev_spd = speeds[i - 1]
+                if not (cur_spd == cur_spd):  # nan check
+                    continue
+                # Vehicle still moving/rolling while rpm collapses.
+                if cur_spd >= 20.0 and ((prev_spd != prev_spd) or ((prev_spd - cur_spd) <= 15.0)):
+                    return {
+                        "type": "ENGINE_STALL_SUSPECT",
+                        "feature": "engine_rpm",
+                        "value": float(cur_rpm),
+                        "window_index": w.window_index,
+                        "severity": "WARNING",
+                        "message": "rpm sudden drop while vehicle is moving; possible engine stall",
+                    }
+        return None
+
     def score_window(self, req: ObdAnomalyRequest, w: Window) -> CommonEnvelope:
         try:
             schema = self._schema_features()
@@ -180,6 +240,48 @@ class EngineScorer:
 
             threshold = self._threshold()
             is_anom = bool(final >= threshold)
+            hard_limit_event = self._detect_hard_limit_event(w)
+            stall_event = self._detect_stall_event(w)
+            if hard_limit_event is not None:
+                final = max(final, 1.0)
+                is_anom = True
+            if stall_event is not None:
+                is_anom = True
+            missing_features: List[str] = []
+            if q.n_present < self._core_min():
+                missing_features = [
+                    feat
+                    for idx, feat in enumerate(schema)
+                    if idx < mask.shape[1] and float(mask[:, idx].sum()) <= 0.0
+                ]
+
+            events: List[Dict[str, Any]] = []
+            if q.n_present < self._core_min():
+                events.append(
+                    {
+                        "type": "INSUFFICIENT_CORE_FEATURES",
+                        "feature": "core7_quality",
+                        "value": float(q.n_present),
+                        "window_index": w.window_index,
+                        "message": "core feature shortage; degraded IF_ONLY path",
+                        "n_present": int(q.n_present),
+                        "core_min_target": int(self._core_min()),
+                        "missing_features": missing_features,
+                    }
+                )
+            if hard_limit_event is not None:
+                events.append(hard_limit_event)
+            if stall_event is not None:
+                events.append(stall_event)
+            if is_anom:
+                events.append(
+                    {
+                        "type": "ENGINE_HYBRID_ANOMALY",
+                        "feature": "engine_hybrid_score",
+                        "value": float(final),
+                        "window_index": w.window_index,
+                    }
+                )
             return CommonEnvelope(
                 domain="engine",
                 status=EnvelopeStatus.PROCESSED,
@@ -199,18 +301,7 @@ class EngineScorer:
                     },
                     "status": details_status,
                     "top_signals": top_signals,
-                    "events": (
-                        [
-                            {
-                                "type": "ENGINE_HYBRID_ANOMALY",
-                                "feature": "engine_hybrid_score",
-                                "value": float(final),
-                                "window_index": w.window_index,
-                            }
-                        ]
-                        if is_anom
-                        else []
-                    ),
+                    "events": events,
                 },
             )
         except Exception as exc:
