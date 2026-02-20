@@ -19,6 +19,8 @@ jobs:
           cat <<'EOF' > .env
           APP_ENV=production
           STORAGE_TYPE=s3
+          AI_SERVER_URL=${{ secrets.AI_SERVER_URL }}
+          
           S3_ACCESS_KEY=${{ secrets.S3_ACCESS_KEY }}
           S3_SECRET_KEY=${{ secrets.S3_SECRET_KEY }}
           S3_REGION=${{ secrets.S3_REGION }}

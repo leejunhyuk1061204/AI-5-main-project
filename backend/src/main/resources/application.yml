@@ -126,3 +126,7 @@ kakao:
   pay:
     secret-key: ${KAKAO_PAY_SECRET_KEY:dummy}
 
+ai:
+  server:
+    url: ${AI_SERVER_URL:http://localhost:8001}
+

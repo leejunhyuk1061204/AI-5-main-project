@@ -1,22 +1,11 @@
 package kr.co.himedia.service;
 
-import kr.co.himedia.common.exception.BaseException;
-import kr.co.himedia.common.exception.ErrorCode;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.io.FileSystemResource;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
 import org.springframework.retry.annotation.Backoff;
 import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Component;
-import org.springframework.util.LinkedMultiValueMap;
-import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
-
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.Map;
 
 /**
@@ -29,17 +18,8 @@ public class AiClient {
 
     private final RestTemplate restTemplate;
 
-    @Value("${ai.server.url.visual:http://localhost:8001/api/v1/visual}")
-    private String aiServerVisualUrl;
-
-    @Value("${ai.server.url.audio:http://localhost:8001/api/v1/predict/audio}")
-    private String aiServerAudioUrl;
-
-    @Value("${ai.server.url.comprehensive:http://localhost:8001/api/v1/connect/predict/comprehensive}")
-    private String aiServerUnifiedUrl;
-
-    @Value("${ai.server.url.anomaly:http://localhost:8001/api/v1/predict/anomaly}")
-    private String aiServerAnomalyUrl;
+    @Value("${ai.server.url}")
+    private String aiServerBaseUrl;
 
     public AiClient() {
         org.springframework.http.client.SimpleClientHttpRequestFactory factory = new org.springframework.http.client.SimpleClientHttpRequestFactory();
@@ -58,12 +38,13 @@ public class AiClient {
             request.put("vehicleId", vehicleId != null ? vehicleId.toString() : null);
             request.put("sessionId", sessionId != null ? sessionId.toString() : null);
 
+            String requestUrl = aiServerBaseUrl + "/api/v1/visual";
             @SuppressWarnings("unchecked")
-            Map<String, Object> result = restTemplate.postForObject(aiServerVisualUrl, request, Map.class);
+            Map<String, Object> result = restTemplate.postForObject(requestUrl, request, Map.class);
             return result;
         } catch (Exception e) {
             log.error("[AiClient] Visual Analysis Failed [Vehicle: {}, Session: {}]. URL: {}, Error: {}",
-                    vehicleId, sessionId, aiServerVisualUrl, e.getMessage());
+                    vehicleId, sessionId, aiServerBaseUrl + "/api/v1/visual", e.getMessage());
             throw e;
         }
     }
@@ -78,12 +59,13 @@ public class AiClient {
             request.put("vehicleId", vehicleId != null ? vehicleId.toString() : null);
             request.put("sessionId", sessionId != null ? sessionId.toString() : null);
 
+            String requestUrl = aiServerBaseUrl + "/api/v1/predict/audio";
             @SuppressWarnings("unchecked")
-            Map<String, Object> result = restTemplate.postForObject(aiServerAudioUrl, request, Map.class);
+            Map<String, Object> result = restTemplate.postForObject(requestUrl, request, Map.class);
             return result;
         } catch (Exception e) {
             log.error("[AiClient] Audio Analysis Failed [Vehicle: {}, Session: {}]. URL: {}, Error: {}",
-                    vehicleId, sessionId, aiServerAudioUrl, e.getMessage());
+                    vehicleId, sessionId, aiServerBaseUrl + "/api/v1/predict/audio", e.getMessage());
             throw e;
         }
     }
@@ -91,8 +73,9 @@ public class AiClient {
     @Retryable(retryFor = Exception.class, maxAttempts = 2, backoff = @Backoff(delay = 3000))
     public Map<String, Object> callAnomalyDetection(Map<String, Object> request) {
         log.info("[Retryable] Requesting Anomaly Detection");
+        String requestUrl = aiServerBaseUrl + "/api/v1/predict/anomaly";
         @SuppressWarnings("unchecked")
-        Map<String, Object> result = (Map<String, Object>) restTemplate.postForObject(aiServerAnomalyUrl, request,
+        Map<String, Object> result = (Map<String, Object>) restTemplate.postForObject(requestUrl, request,
                 Map.class);
         return result;
     }
@@ -100,20 +83,18 @@ public class AiClient {
     @Retryable(retryFor = Exception.class, maxAttempts = 2, backoff = @Backoff(delay = 5000))
     public Map<String, Object> callComprehensiveDiagnosis(Map<String, Object> request) {
         log.info("[Retryable] Requesting Comprehensive Diagnosis");
+        String requestUrl = aiServerBaseUrl + "/api/v1/connect/predict/comprehensive";
         try {
             @SuppressWarnings("unchecked")
-            Map<String, Object> result = (Map<String, Object>) restTemplate.postForObject(aiServerUnifiedUrl, request,
+            Map<String, Object> result = (Map<String, Object>) restTemplate.postForObject(requestUrl, request,
                     Map.class);
             return result;
         } catch (Exception e) {
-            log.error("[AiClient] Comprehensive Diagnosis Failed. URL: {}, Error: {}", aiServerUnifiedUrl,
+            log.error("[AiClient] Comprehensive Diagnosis Failed. URL: {}, Error: {}", requestUrl,
                     e.getMessage());
             throw e;
         }
     }
-
-    @Value("${ai.server.url.embedding:http://localhost:8001/api/v1/predict/embedding}")
-    private String aiServerEmbeddingUrl;
 
     /**
      * 텍스트 임베딩 요청 (Ollama)
@@ -124,11 +105,12 @@ public class AiClient {
         if (text == null || text.isBlank())
             return null;
         try {
+            String requestUrl = aiServerBaseUrl + "/api/v1/predict/embedding";
             Map<String, String> request = Map.of("text", text);
             log.info("[Embedding] Request url={}, textLength={}, textPreview={}",
-                    aiServerEmbeddingUrl, text.length(),
+                    requestUrl, text.length(),
                     text.length() > 200 ? text.substring(0, 200) + "..." : text);
-            Map<String, Object> response = restTemplate.postForObject(aiServerEmbeddingUrl, request, Map.class);
+            Map<String, Object> response = restTemplate.postForObject(requestUrl, request, Map.class);
 
             if (response != null && response.containsKey("embedding")) {
                 Object embeddingObj = response.get("embedding");
