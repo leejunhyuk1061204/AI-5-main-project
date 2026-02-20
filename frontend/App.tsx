@@ -4,7 +4,7 @@ import { View, Text, Platform, Keyboard, AppState } from 'react-native';
 import * as ExpoSplashScreen from 'expo-splash-screen';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { NavigationContainer, DarkTheme, useNavigationContainerRef } from '@react-navigation/native';
+import { NavigationContainer, DarkTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as NavigationBar from 'expo-navigation-bar';
@@ -20,10 +20,8 @@ import { useUserStore } from './store/useUserStore';
 import ObdService from './services/ObdService';
 import BackgroundService from './services/BackgroundService';
 import fcmService from './services/fcmService';
-import { authService } from './services/auth';
 import GlobalAlert from './components/common/GlobalAlert';
 import GlobalDatePicker from './components/common/GlobalDatePicker';
-import ObdConnectingOverlay from './components/common/ObdConnectingOverlay';
 import BottomNav from './nav/BottomNav';
 
 import Tos from './sign/Tos';
@@ -40,7 +38,7 @@ import MaintenanceReg from './registration/passive/MaintenanceReg';
 import MyPage from './setting/MyPage';
 import DiagMain from './diagnosis/DiagMain';
 import ObdDiagLoading from './diagnosis/ObdDiagLoading';
-
+import ObdDiagResult from './diagnosis/ObdDiagResult';
 import EngineSoundDiag from './diagnosis/EngineSoundDiag';
 import AiCompositeDiag from './diagnosis/AiCompositeDiag';
 import AiProfessionalDiag from './diagnosis/AiProfessionalDiag';
@@ -67,12 +65,10 @@ import ChatAudioScreen from './diagnosis/ChatAudioScreen';
 import MaintenanceBook from './maintenance/MaintenanceBook';
 import ReceiptScan from './maintenance/ReceiptScan';
 import ReceiptResult from './maintenance/ReceiptResult';
-import ReceiptGallery from './maintenance/ReceiptGallery';
 import PaymentSuccess from './payment/PaymentSuccess';
 import MaintenanceHistory from './history/MaintenanceHistory';
 import DrivingList from './history/DrivingList';
 import Elm327TestScreen from './obd-test/Elm327TestScreen';
-import TripDetail from './history/TripDetail';
 
 // Deep Linking Configuration
 const linking = {
@@ -86,7 +82,11 @@ const linking = {
 };
 
 // Keep the splash screen visible while we fetch resources
-ExpoSplashScreen.preventAutoHideAsync();
+try {
+  ExpoSplashScreen.preventAutoHideAsync().catch(() => { });
+} catch (e) {
+  console.warn('[App] SplashScreen.preventAutoHideAsync failed', e);
+}
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -116,7 +116,6 @@ const AppTheme = {
 };
 
 export default function App() {
-  const navigationRef = useNavigationContainerRef();
   const [appIsReady, setAppIsReady] = useState(false);
   const [initialRoute, setInitialRoute] = useState<string>('Tos');
   const [showCustomSplash, setShowCustomSplash] = useState(true);
@@ -140,52 +139,58 @@ export default function App() {
     async function prepare() {
       try {
         // Set Root View Background Color
-        await SystemUI.setBackgroundColorAsync("#101922");
+        try {
+          await SystemUI.setBackgroundColorAsync("#101922");
+          await ExpoSplashScreen.hideAsync();
 
-        // Set Android Navigation Bar Color
-        if (Platform.OS === 'android') {
-          // Edge-to-Edge support: transparent background
-          await NavigationBar.setBackgroundColorAsync("transparent");
-          await NavigationBar.setButtonStyleAsync("light");
+          if (Platform.OS === 'android') {
+            // NavigationBar는 일부 환경에서 실패할 수 있으므로 안전하게 처리
+            try {
+              await NavigationBar.setVisibilityAsync("hidden");
+              await NavigationBar.setBackgroundColorAsync("transparent");
+              await NavigationBar.setButtonStyleAsync("light");
+            } catch (navErr) {
+              console.warn('[App] NavigationBar settings failed', navErr);
+            }
+          }
+        } catch (e) {
+          console.warn('[App] UI initialization failed', e);
+          // UI 초기화 실패해도 앱은 계속 진행하도록 함
+          await ExpoSplashScreen.hideAsync().catch(() => { });
         }
 
-        // 1) 약관 동의는 로그인 여부와 무관하게 앱 최초/미동의 시 먼저 표시
-        const hasAgreed = await AsyncStorage.getItem('hasAgreedToTos');
-        if (hasAgreed !== 'true') {
-          setInitialRoute('Tos');
-        } else {
-          // 2) 동의 후 로그인 유지 여부에 따라 초기 화면 결정 (refreshToken 기준)
-          const refreshToken = await AsyncStorage.getItem('refreshToken');
-          if (refreshToken) {
-            try {
-              const newAccessToken = await authService.refreshAccessToken();
-              if (!newAccessToken) {
-                await AsyncStorage.multiRemove(['accessToken', 'refreshToken']);
-                setInitialRoute('Login');
-              } else {
-                await loadUser();
-                const vehicles = await fetchVehicles();
-                console.log('[App] Auto-login: loading OBD devices and starting background reconnect');
-                await ObdService.loadAndCacheDevices();
-                ObdService.startBackgroundReconnectIfNeeded().catch((e) => {
-                  console.warn('[App] startBackgroundReconnectIfNeeded failed during auto-login', e);
-                });
+        // Check for persistent login
+        const token = await AsyncStorage.getItem('accessToken');
+        if (token) {
+          try {
+            await loadUser(); // 사용자 정보 미리 로드
+            const vehicles = await fetchVehicles();
+            // 등록된 OBD 기기 목록 캐시 및 백그라운드 재연결 시작
+            console.log('[App] Auto-login: loading OBD devices and starting background reconnect');
+            await ObdService.loadAndCacheDevices();
+            ObdService.startBackgroundReconnectIfNeeded().catch((e) => {
+              console.warn('[App] startBackgroundReconnectIfNeeded failed during auto-login', e);
+            });
 
-                // FCM 토큰 발급 및 서버 동기화 (자동 로그인 시)
-                await fcmService.registerFcmToken();
+            // FCM 토큰 발급 및 서버 동기화 (자동 로그인 시)
+            await fcmService.registerFcmToken();
 
-                if (vehicles.length > 0) {
-                  setInitialRoute('MainPage');
-                } else {
-                  setInitialRoute('RegisterMain');
-                }
-              }
-            } catch (e) {
-              console.error("Failed to restore session or fetch vehicles on startup", e);
-              setInitialRoute('Login');
+            if (vehicles.length > 0) {
+              setInitialRoute('MainPage');
+            } else {
+              setInitialRoute('RegisterMain');
             }
-          } else {
+          } catch (e) {
+            console.error("Failed to fetch vehicles on startup", e);
             setInitialRoute('Login');
+          }
+        } else {
+          // Check Tos agreement
+          const hasAgreed = await AsyncStorage.getItem('hasAgreedToTos');
+          if (hasAgreed === 'true') {
+            setInitialRoute('Login');
+          } else {
+            setInitialRoute('Tos');
           }
         }
       } catch (e) {
@@ -211,21 +216,24 @@ export default function App() {
   // 4. FCM Initialization (로그인 후)
   useEffect(() => {
     const initializeFcm = async () => {
-      const token = await AsyncStorage.getItem('accessToken');
-      if (token) {
-        // 로그인된 상태에서만 FCM 초기화
-        await fcmService.initialize();
-        fcmService.setupForegroundHandler();
-        // 알림 클릭 시 화면 이동 핸들러 (navigationRef 전달)
-        fcmService.setupNotificationOpenedHandler(navigationRef);
+      try {
+        const token = await AsyncStorage.getItem('accessToken');
+        if (token) {
+          // 로그인된 상태에서만 FCM 초기화
+          await fcmService.initialize();
+          fcmService.setupForegroundHandler();
+        }
+      } catch (e) {
+        console.error("[FCM] Optional initialization failed", e);
       }
     };
 
     initializeFcm();
   }, [initialRoute]);
 
-  // BackgroundService: 앱 백그라운드 시 OBD 자동 재연결 (주행 시작/종료 알림은 백엔드 FCM)
+  // 3. Background Service Handling (P0: active 시 디바운스 후 stop으로 플랩핑 방지)
   const activeStopDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const ACTIVE_STOP_DEBOUNCE_MS = 2500;
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', async (nextAppState) => {
@@ -237,6 +245,12 @@ export default function App() {
         if (ObdService.isConnected()) {
           await BackgroundService.start();
         }
+      } else if (nextAppState === 'active') {
+        if (activeStopDebounceRef.current) clearTimeout(activeStopDebounceRef.current);
+        activeStopDebounceRef.current = setTimeout(async () => {
+          activeStopDebounceRef.current = null;
+          await BackgroundService.stop();
+        }, ACTIVE_STOP_DEBOUNCE_MS);
       }
     });
 
@@ -300,7 +314,7 @@ export default function App() {
                   <Stack.Screen name="MaintenanceReg" component={MaintenanceReg} />
                   <Stack.Screen name="EngineSoundDiag" component={EngineSoundDiag} />
                   <Stack.Screen name="ObdDiagLoading" component={ObdDiagLoading} options={{ headerShown: false }} />
-
+                  <Stack.Screen name="ObdDiagResult" component={ObdDiagResult} options={{ headerShown: false }} />
                   <Stack.Screen
                     name="AiCompositeDiag"
                     component={AiCompositeDiag}
@@ -333,15 +347,12 @@ export default function App() {
                   <Stack.Screen name="MaintenanceBook" component={MaintenanceBook} />
                   <Stack.Screen name="ReceiptScan" component={ReceiptScan} />
                   <Stack.Screen name="ReceiptResult" component={ReceiptResult} />
-                  <Stack.Screen name="ReceiptGallery" component={ReceiptGallery} />
                   <Stack.Screen name="PaymentSuccess" component={PaymentSuccess} />
                   <Stack.Screen name="MaintenanceHistory" component={MaintenanceHistory} />
                   <Stack.Screen name="DrivingList" component={DrivingList} />
-                  <Stack.Screen name="TripDetail" component={TripDetail} />
                 </Stack.Navigator>
                 <GlobalAlert />
                 <GlobalDatePicker />
-                <ObdConnectingOverlay />
                 <CustomErrorModal />
               </>
             )}
