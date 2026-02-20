@@ -203,3 +203,16 @@ ai/app/services/obd_anomaly/offline/registry/scalers/
 scripts/deploy_backend.ps1
 
 backend/deploy_backend.ps1
+
+
+# ==================================================
+# Temporary & Data Files (Added by Assistant)
+# ==================================================
+eofc/
+*.csv
+__pycache__/
+
+
+*.bak
+*.jpg
+
