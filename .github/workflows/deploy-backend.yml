@@ -17,6 +17,23 @@ jobs:
         working-directory: backend
         run: |
           cat <<'EOF' > .env
+          APP_ENV=production
+          STORAGE_TYPE=s3
+          S3_ACCESS_KEY=${{ secrets.S3_ACCESS_KEY }}
+          S3_SECRET_KEY=${{ secrets.S3_SECRET_KEY }}
+          S3_REGION=${{ secrets.S3_REGION }}
+          S3_BUCKET_NAME=${{ secrets.S3_BUCKET_NAME }}
+          
+          SMARTCAR_CLIENT_ID=${{ secrets.SMARTCAR_CLIENT_ID }}
+          SMARTCAR_CLIENT_SECRET=${{ secrets.SMARTCAR_CLIENT_SECRET }}
+          SMARTCAR_REDIRECT_URI=${{ secrets.SMARTCAR_REDIRECT_URI }}
+          SMARTCAR_MODE=${{ secrets.SMARTCAR_MODE }}
+          
+          Client_ID=${{ secrets.CLIENT_ID }}
+          Client_Secret=${{ secrets.CLIENT_SECRET }}
+          Secret_key=${{ secrets.SECRET_KEY }}
+          KAKAO_PAY_SECRET_KEY=${{ secrets.KAKAO_PAY_SECRET_KEY }}
+          
           JWT_SECRET=${{ secrets.JWT_SECRET }}
           ENCRYPTION_KEY=${{ secrets.ENCRYPTION_KEY }}
           NAVER_OCR_Secret_Key=${{ secrets.NAVER_OCR_SECRET_KEY }}
@@ -24,6 +41,10 @@ jobs:
           OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
           HM_CLIENT_ID=${{ secrets.HM_CLIENT_ID }}
           HM_CLIENT_SECRET=${{ secrets.HM_CLIENT_SECRET }}
+          
+          FIREBASE_CONFIG_PATH=firebase-service-account.json
+          ALLOWED_ORIGINS=http://localhost:8080,http://localhost:19006,http://10.0.2.2:8080,http://${{ secrets.EC2_HOST }}:8080
+          
           DB_HOST=localhost
           DB_PORT=5432
           DB_NAME=car_sentry
