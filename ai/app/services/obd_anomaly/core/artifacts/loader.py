@@ -22,6 +22,14 @@ def load_artifact_json(path: Path, default: Dict[str, Any] | None = None) -> Dic
 def load_artifact_pickle(path: Path) -> Any:
     if not path.exists():
         return None
+    # IF model is exported with joblib.dump in offline training script.
+    # Try joblib first, then fallback to raw pickle for backward compatibility.
+    try:
+        import joblib
+
+        return joblib.load(path)
+    except Exception:
+        pass
     try:
         with open(path, "rb") as f:
             return pickle.load(f)
