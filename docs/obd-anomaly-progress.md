@@ -1,5 +1,9 @@
 ﻿# OBD Anomaly Progress Log
 
+참조 문서:
+- docs/obd-anomaly-design-and-overfitting-guardrails.md
+
+
 ## Pre-Step3 Summary (Step1~2)
 
 - vFinal 방향 확정: Hybrid(Stat/AE) + Quality Gating + Policy 구조 채택
@@ -255,3 +259,111 @@
 - 결론:
   - sample 응답에서 점수/플래그/이벤트 정합성 이슈 해결
 
+
+## 2026-02-19 | Step8: Real-case replay issue (Core7 sparse input)
+
+### 재현 명령
+- `python scripts\obd_engine\run_obd_anomaly_real_case.py --debug --csv "C:\Users\seona\Desktop\real_cases\2026-02-03_(2015_grandeur-hg_battery-case).csv" --vehicle-id "veh-real-battery" --trip-id "trip-real-battery" --sampling-hz 10`
+- `python scripts\obd_engine\run_obd_anomaly_real_case.py --debug --csv "C:\Users\seona\Desktop\real_cases\2026-02-03_(2024_kona_engine-stall-case).csv" --vehicle-id "veh-real-stall" --trip-id "trip-real-stall" --sampling-hz 10`
+
+### 관찰 결과
+- 두 실차 파일 모두 `n_present=3`, `core_min_target=5` (Core7 중 3개만 매핑됨)
+- 매핑된 feature: `engine_coolant_temp_c`, `engine_rpm`, `vehicle_speed_kmh`
+- 미매핑 feature: `imap_kpa`, `intake_air_temp_c`, `maf_gps`, `throttle_pos_pct`
+- 엔진 결과: `status=PROCESSED`, `score=0.0409`, `threshold=0.7959`, `is_anomaly=false`, `events=[]`
+
+### 해석 (핵심)
+- 현재 동작은 `IF_ONLY`로 수행되는 것은 맞음.
+- 다만 입력 정보량이 `3/7`로 너무 낮아 IF 점수 분별력이 부족하고, 현 threshold 기준으로 anomaly를 올리지 못함.
+- 즉 "IF 미동작" 문제가 아니라 "Core7 sparse 입력에서 탐지력 저하" 이슈임.
+
+### 즉시 조치 항목 (슈팅)
+1. `n_present < core_min_target` 시 `DATA_QUALITY_LOW` / `INSUFFICIENT_CORE_FEATURES` 이벤트 명시
+2. 실차 CSV의 `OBD 모듈 전압(V)`를 `battery_voltage_v`로 매핑하여 electrical rule 경로 확보
+3. 필요 시 `n_present=3` 전용 보조 모델/정책(별도 threshold) 분기 도입
+
+### 조치 반영 (2026-02-19, Step8)
+- 수정 파일:
+  - `ai/app/services/obd_anomaly/core/scorers/engine_scorer.py`
+  - `ai/app/services/obd_anomaly/obd_anomaly_service.py`
+  - `ai/scripts/obd_engine/run_obd_anomaly_real_case.py`
+- 반영 내용:
+  - `INSUFFICIENT_CORE_FEATURES` 이벤트 생성 로직 추가 (`n_present < core_min_target`)
+  - 엔진 품질 이벤트를 최종 `events[]`로 노출
+  - 중복 이벤트(윈도우별 다건)를 단일 요약 이벤트 1건으로 집계
+  - 실차 CSV 매핑에 `battery_voltage_v` 추가 (`OBD 모듈 전압(V)`)
+- 기대 효과:
+  - Core7 부족 사유를 응답에서 즉시 확인 가능
+  - 배터리 저전압 케이스는 electrical rule 경로로 탐지 가능성 확보
+
+### 전압 검증 결과 (real cases)
+- 실행 명령(CMD):
+  - `python -c "import pandas as pd; p=r'C:\Users\seona\Desktop\real_cases\2026-02-03_(2015_grandeur-hg_battery-case).csv'; s=pd.to_numeric(pd.read_csv(p)['OBD 모듈 전압 (V)'], errors='coerce').dropna(); print('battery-case -> min=', float(s.min()), 'max=', float(s.max()), 'avg=', float(s.mean()))"`
+  - `python -c "import pandas as pd; p=r'C:\Users\seona\Desktop\real_cases\2026-02-03_(2024_kona_engine-stall-case).csv'; s=pd.to_numeric(pd.read_csv(p)['OBD 모듈 전압 (V)'], errors='coerce').dropna(); print('stall-case -> min=', float(s.min()), 'max=', float(s.max()), 'avg=', float(s.mean()))"`
+- 결과:
+  - battery-case: `min=12.5`, `max=14.7`, `avg=13.9454`
+  - stall-case: `min=12.5`, `max=14.8`, `avg=14.1509`
+- 해석:
+  - electrical rule 임계값(`11.8V`) 미만 구간이 없어 `electrical.is_anomaly=false`는 정상 동작
+  - 배터리/시동꺼짐 재현 탐지는 전압 룰만으로는 한계가 있어 추가 규칙(예: rpm/speed 급락 패턴) 필요
+
+### 전압 룰 기준 개선 (2026-02-19)
+- 수정 파일:
+  - `ai/app/services/obd_anomaly/domains/electrical_rule.py`
+- 변경 사항:
+  - 단일 임계값(11.8V) 방식에서 `rpm` 구간 분리 룰로 개선
+  - OFF/near-cranking (`rpm < 300`):
+    - warning: `< 12.4V`
+    - critical: `< 11.8V`
+  - ON/charging (`rpm >= 300`):
+    - warning: `min_on < 13.5V` 또는 `max_on > 14.8V`
+    - critical: `min_on < 12.4V` 또는 `max_on >= 15.2V`
+- 반영 의도:
+  - 주행 ON 로그에 OFF 기준 전압(11.8V)만 적용되던 오해를 제거하고, 운행 상태별 정상 범위를 반영
+
+### 이벤트 요약 처리 개선 (2026-02-19)
+- 수정 파일:
+  - `ai/app/services/obd_anomaly/obd_anomaly_service.py`
+- 변경 사항:
+  - 동일 이벤트(`type/domain/feature/severity`) 다건 발생 시 1건으로 요약 집계
+  - 요약 이벤트 메시지에 `occurrences=N` 추가
+  - 숫자 value는 그룹 내 최소값으로 대표값 기록
+- 반영 의도:
+  - 실차 재생 결과에서 `VOLTAGE_ON_WARNING_LOW` 다건 노이즈를 줄이고, 운영/시연 가독성 개선
+
+### API 명세 보강 (2026-02-19)
+- 수정 파일:
+  - `docs/4.API 명세서.md`
+- 반영 내용:
+  - `3.3 Event Schema`에 `severity` 해석 문구 명시
+    - `INFO`: 참고/품질 안내 (정상 확정 의미 아님)
+    - `WARNING`: 주의 필요 이벤트
+    - `CRITICAL`: 즉시 대응 필요 이벤트
+- 목적:
+  - 운영/백엔드/멘토 공유 시 `severity` 의미 오해 방지
+
+### 스톨(시동 꺼짐) 의심 패턴 룰 추가 (2026-02-19)
+- 수정 파일:
+  - `ai/app/services/obd_anomaly/core/scorers/engine_scorer.py`
+  - `ai/app/services/obd_anomaly/obd_anomaly_service.py`
+- 반영 내용:
+  - 엔진 도메인에 `ENGINE_STALL_SUSPECT` 이벤트 규칙 추가
+    - 조건: `engine_rpm`이 고회전(>=1200)에서 저회전(<=400)으로 급락하면서 `vehicle_speed_kmh >= 20` 유지
+  - 스톨 이벤트 발생 시 엔진 도메인 `is_anomaly=true` 처리
+  - 엔진 이벤트 severity를 `INFO` 고정이 아닌 이벤트 원본값(`WARNING/CRITICAL/INFO`)으로 반영
+- 목적:
+  - Core7 결손(3/7) 상황에서도 실차 스톨 패턴을 룰 경로로 탐지 가능하도록 보완
+
+### 스톨 케이스 재검증 결론 (2026-02-19)
+- 검증 명령:
+  - `python scripts\obd_engine\run_obd_anomaly_real_case.py --debug --csv "C:\Users\seona\Desktop\real_cases\2026-02-03_(2024_kona_engine-stall-case).csv" --vehicle-id "veh-real-stall" --trip-id "trip-real-stall" --sampling-hz 10`
+  - `python -c "import pandas as pd; p=r'C:\Users\seona\Desktop\real_cases\2026-02-03_(2024_kona_engine-stall-case).csv'; df=pd.read_csv(p); c='엔진 RPM (rpm)'; t='time'; s=df[[t,c]].copy(); s[c]=pd.to_numeric(s[c],errors='coerce'); print(s.nsmallest(20,c).to_string(index=False))"`
+- 결과:
+  - 리플레이 기준 `is_anomaly=false` 유지
+  - 스톨 규칙(`ENGINE_STALL_SUSPECT`) 미트리거
+  - RPM 최소값 검증 결과, 최저 RPM 구간이 `1441` 수준으로 유지됨 (급락 신호 부재)
+- 해석:
+  - 현재 파일은 파일명과 달리 스톨 순간 센서 패턴(급락/저RPM)을 포함하지 않음
+  - 규칙 미탐지는 로직 이슈가 아니라 입력 구간 미포함 이슈
+- 다음 액션:
+  - 스톨 직전~직후(최소 1~2분) 원본 구간 재추출 후 재검증
