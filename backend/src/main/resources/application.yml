@@ -21,7 +21,7 @@ spring:
     open-in-view: false # Disable OSIV for performance
     defer-datasource-initialization: true # SQL init를 Hibernate 테이블 생성 이후로 미룸
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     show-sql: false
     properties:
       hibernate:
