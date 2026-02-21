@@ -113,7 +113,13 @@ CREATE TABLE IF NOT EXISTS car_model_master (
     model_year INT,
     fuel_type VARCHAR(20),
     displacement INT,
-    spec_json JSONB
+    spec_json JSONB,
+    CONSTRAINT unique_car_model UNIQUE (
+        manufacturer_ko,
+        model_name_ko,
+        model_year,
+        fuel_type
+    )
 );
 
 -- 4. 텔레메트리 (Telemetry)
