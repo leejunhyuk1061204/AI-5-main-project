@@ -391,7 +391,7 @@ def train(mode, epochs=None, batch_size=None):
                                    min_epochs=COMMON_CONFIG["early_stop_min_epochs"])
 
     best_f1 = 0
-    save_path = f"./ai/weights/audio/yamnet_{args.mode}.pt"
+    save_path = f"./ai/weights/audio/yamnet_{mode}.pt"
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
 
     # 3. Epoch Loop
@@ -430,7 +430,7 @@ def train(mode, epochs=None, batch_size=None):
 
         # Validation
         val_metrics = evaluate(model, val_loader)
-        print(f"Epoch [{epoch+1}/{args.epochs}] Loss: {train_loss/len(train_loader):.4f} | "
+        print(f"Epoch [{epoch+1}/{epochs}] Loss: {train_loss/len(train_loader):.4f} | "
               f"Safety F1: {val_metrics['safety_joint_f1']:.4f} | Recall: {val_metrics['defect_recall']:.4f}")
 
         # Safety-critical Monitoring: Use Safety Joint F1 for EarlyStopping
