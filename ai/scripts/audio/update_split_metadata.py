@@ -1,3 +1,7 @@
+"""
+[파일 용도] 메타데이터 분할 정보 업데이트
+`split_dataset.py` 실행 후, 원본 `metadata.csv` 내용을 바탕으로 Train/Test 폴더 구조에 맞게 경로 정보를 갱신합니다.
+"""
 import os
 import csv
 import librosa

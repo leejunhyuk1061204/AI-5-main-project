@@ -48,6 +48,13 @@ def should_use_fallback():
     explicit_mock = os.getenv("MOCK_LLM", "false").lower() == "true"
     return explicit_mock or not is_llm_ready()
 
+def strip_markdown(content: str) -> str:
+    """Markdown 코드 블록(```json ... ```) 제거 헬퍼"""
+    if not content: return ""
+    # ```json ... ``` 또는 ``` ... ``` 블록 제거
+    content = re.sub(r'```(?:json)?\s*(.*?)\s*```', r'\1', content, flags=re.DOTALL)
+    return content.strip()
+
 # ---------------------------------------------------------
 # 1. 시각 전문 진단 (GPT-5 Vision)
 # ---------------------------------------------------------
@@ -90,7 +97,8 @@ async def suggest_anomaly_label(
         return {
             "defect_category": "UNKNOWN",
             "defect_label": "Analysis_Unavailable",
-            "severity": "WARNING"
+            "severity": "WARNING",
+            "is_mock": True
         }
     
     try:
@@ -119,7 +127,8 @@ async def suggest_anomaly_label(
             "defect_label": "Analysis_Failed",
             "description_ko": "AI 정밀 분석 중 오류가 발생했습니다. (일시적 장애)",
             "severity": "WARNING",
-            "recommended_action": "육안 점검 권장"
+            "recommended_action": "육안 점검 권장",
+            "is_mock": True
         }
 
 
@@ -213,7 +222,8 @@ async def suggest_anomaly_label_with_base64(
             return {
                 "defect_category": "UNKNOWN",
                 "defect_label": "Analysis_Failed",
-                "severity": "WARNING"
+                "severity": "WARNING",
+                "is_mock": True
             }
 
         return json.loads(content)
@@ -223,14 +233,16 @@ async def suggest_anomaly_label_with_base64(
         return {
             "defect_category": "UNKNOWN",
             "defect_label": "Analysis_Failed",
-            "severity": "WARNING"
+            "severity": "WARNING",
+            "is_mock": True
         }
     except Exception as e:
         print(f"[LLM Anomaly Base64 Error] {e}")
         return {
             "defect_category": "UNKNOWN",
             "defect_label": "Analysis_Failed",
-            "severity": "WARNING"
+            "severity": "WARNING",
+            "is_mock": True
         }
 
 
@@ -258,14 +270,14 @@ async def call_openai_vision(s3_url: str, prompt: str) -> Dict[str, Any]:
     if should_use_fallback():
         reason = "MOCK" if os.getenv("MOCK_LLM", "false").lower() == "true" else "Local"
         print(f"[LLM {reason}] call_openai_vision")
-        # 타이어 분석 등에서 공통으로 쓰이는 JSON 구조 대응
         return {
             "wear_level_pct": 20,
             "wear_status": "GOOD",
             "critical_issues": None,
             "description": f"이미지 데이터 분석 결과가 양호합니다. ({reason} 분석 모드)",
             "recommendation": "안전 주행을 위해 정기적인 점검을 유지하십시오.",
-            "is_replacement_needed": False
+            "is_replacement_needed": False,
+            "is_mock": True
         }
 
     try:
@@ -289,10 +301,10 @@ async def call_openai_vision(s3_url: str, prompt: str) -> Dict[str, Any]:
         
     except json.JSONDecodeError as e:
         print(f"[LLM Vision] JSON 파싱 오류: {e}")
-        return {"status": "ERROR", "error": "JSON 파싱 실패"}
+        return {"status": "ERROR", "error": "JSON 파싱 실패", "is_mock": True}
     except Exception as e:
         print(f"[LLM Vision Error] {e}")
-        return {"status": "ERROR", "error": str(e)}
+        return {"status": "ERROR", "error": str(e), "is_mock": True}
 
 async def analyze_general_image(s3_url: str) -> VisualResponse:
     """
@@ -327,7 +339,8 @@ async def analyze_general_image(s3_url: str) -> VisualResponse:
             status="NORMAL",
             analysis_type="LLM_FALLBACK",
             category="GENERAL",
-            data={}
+            data={},
+            is_mock=True
         )
 
     try:
@@ -354,7 +367,8 @@ async def analyze_general_image(s3_url: str) -> VisualResponse:
                 status="ERROR",
                 analysis_type="LLM_GENERAL",
                 category="ERROR",
-                data={}
+                data={},
+                is_mock=True
             )
 
         try:
@@ -365,7 +379,8 @@ async def analyze_general_image(s3_url: str) -> VisualResponse:
                 status="NORMAL",
                 analysis_type="LLM_GENERAL",
                 category="ETC",
-                data={}
+                data={},
+                is_mock=True
             )
 
         # Map LLM result to VisualResponse
@@ -375,7 +390,8 @@ async def analyze_general_image(s3_url: str) -> VisualResponse:
                 status="ERROR",
                 analysis_type="LLM_GENERAL",
                 category="IRRELEVANT",
-                data={}
+                data={},
+                is_mock=True
             )
 
         return VisualResponse(
@@ -397,7 +413,8 @@ async def analyze_general_image(s3_url: str) -> VisualResponse:
             status="ERROR", 
             analysis_type="LLM_GENERAL", 
             category="ERROR", 
-            data={}
+            data={},
+            is_mock=True
         )
 
 # ---------------------------------------------------------
@@ -437,8 +454,8 @@ async def analyze_audio_with_llm(s3_url: str, audio_bytes: Optional[bytes] = Non
             category="ENGINE",
             confidence=0.9,
             is_critical=False,
-            data=AudioDetail(
-                diagnosed_label="정상 구동음"
+            detail=AudioDetail(
+                diagnosed_label="NORMAL_SOUND"
             )
         )
    
@@ -451,16 +468,39 @@ async def analyze_audio_with_llm(s3_url: str, audio_bytes: Optional[bytes] = Non
 
         # [Fix] 확실한 WAV 변환 (m4a, mp3 대응)
         converted_buffer = await convert_bytes_to_16khz(audio_bytes)
+        
         if converted_buffer:
             audio_data = base64.b64encode(converted_buffer.getvalue()).decode('utf-8')
+            audio_format = "wav"
         else:
-            # 변환 실패 시 원본 시도 (최후의 보루)
-            audio_data = base64.b64encode(audio_bytes).decode('utf-8')
+            # 변환 실패 시: 원본이 OpenAI가 확실히 지원하는 형식(wav, mp3)인지 체크
+            magic = audio_bytes[:32] # Increased for more reliable ftyp detection
+            if (b"RIFF" in magic and b"WAVE" in magic):
+                audio_data = base64.b64encode(audio_bytes).decode('utf-8')
+                audio_format = "wav"
+            elif (b"ID3" in magic or b"\xff\xfb" in magic[:2]):
+                audio_data = base64.b64encode(audio_bytes).decode('utf-8')
+                audio_format = "mp3"
+            else:
+                # [Diagnostic] 어떤 포맷인지 확인하여 사용자에게 안내
+                detected_fmt = "UNKNOWN"
+                if b"ftypM4A" in magic or b"ftypmp42" in magic: detected_fmt = "M4A"
+                elif b"fLaC" in magic: detected_fmt = "FLAC"
+                
+                print(f"[LLM Audio Error] 지원하지 않는 오디오 형식({detected_fmt})이며 변환에도 실패했습니다. (ffmpeg 설치/PATH 확인 필요).")
+                return AudioResponse(
+                    status="ERROR",
+                    analysis_type="CONVERSION_FAILED",
+                    category="UNKNOWN_AUDIO",
+                    detail=AudioDetail(diagnosed_label="FAULTY_SOUND"),
+                    confidence=0.0,
+                    is_critical=False
+                )
 
         # [Correct] Audio Input via 'chat.completions.create'
         response = await _get_client().chat.completions.create(
             model="gpt-4o-audio-preview",  # [Model Update] gpt-4o-audio-preview for audio input
-            modalities=["text"], # Text output only
+            modalities=["text"], # [Optimization] Text output only
             messages=[
                 {
                     "role": "user",
@@ -470,15 +510,16 @@ async def analyze_audio_with_llm(s3_url: str, audio_bytes: Optional[bytes] = Non
                             "type": "input_audio",
                             "input_audio": {
                                 "data": audio_data,
-                                "format": "wav"
+                                "format": audio_format # [Fix] Use detected format
                             }
                         }
                     ]
                 }
-            ]
+            ],
+            timeout=45.0 # [Adjustment] Audio processing takes longer
         )
         
-        content = response.choices[0].message.content
+        content = strip_markdown(response.choices[0].message.content)
 
         
         match = re.search(r'\{.*\}', content, re.DOTALL)
@@ -496,11 +537,11 @@ async def analyze_audio_with_llm(s3_url: str, audio_bytes: Optional[bytes] = Non
             status=current_status,
             analysis_type="LLM_AUDIO",
             category=result.get("category", "ENGINE"),
-            data=AudioDetail(
-                diagnosed_label=result.get("diagnosed_label", "LLM 진단")
+            detail=AudioDetail(
+                diagnosed_label="NORMAL_SOUND" if current_status == "NORMAL" else "FAULTY_SOUND"
             ),
             confidence=float(result.get("confidence", 0.8)),
-            is_critical=(current_status == "FAULTY")
+            is_critical=(current_status != "NORMAL")
         )
     except Exception as e:
         print(f"[LLM Audio Error] {e}")
@@ -508,7 +549,7 @@ async def analyze_audio_with_llm(s3_url: str, audio_bytes: Optional[bytes] = Non
             status="ERROR",
             analysis_type="LLM_AUDIO",
             category="UNKNOWN_AUDIO",
-            data=AudioDetail(diagnosed_label="Error"),
+            detail=AudioDetail(diagnosed_label="FAULTY_SOUND"),
             confidence=0.0,
             is_critical=False
         )
@@ -529,7 +570,8 @@ async def interpret_dashboard_warnings(detections: List[Dict]) -> Dict[str, str]
         if not detections:
             return {
                 "description": f"계기판에 특별한 경고등이 감지되지 않았습니다. ({reason} 분석 모드)",
-                "recommendation": "안전 운행 하십시오."
+                "recommendation": "안전 운행 하십시오.",
+                "is_mock": True
             }
         
         # 동적 메시지 생성
@@ -538,7 +580,8 @@ async def interpret_dashboard_warnings(detections: List[Dict]) -> Dict[str, str]
         
         return {
             "description": desc,
-            "recommendation": "안전 주행을 위해 가까운 시일 내에 전문가 점검을 받으십시오."
+            "recommendation": "안전 주행을 위해 가까운 시일 내에 전문가 점검을 받으십시오.",
+            "is_mock": True
         }
 
     PROMPT = f"""
@@ -563,7 +606,8 @@ async def interpret_dashboard_warnings(detections: List[Dict]) -> Dict[str, str]
         return json.loads(response.choices[0].message.content)
     except Exception as e:
         print(f"[LLM Dashboard Error] {e}")
-        return {"description": "계기판 경고등 분석 중 오류가 발생했습니다.", "recommendation": "안전한 곳에 정차 후 수동 점검 바랍니다."}
+        return {"description": "계기판 경고등 분석 중 오류가 발생했습니다.", "recommendation": "안전한 곳에 정차 후 수동 점검 바랍니다.", "is_mock": True}
+        
 
 
 async def generate_exterior_report(mappings: List[Dict]) -> Dict[str, str]:
@@ -591,7 +635,8 @@ async def generate_exterior_report(mappings: List[Dict]) -> Dict[str, str]:
         
         return {
             "description": desc,
-            "recommendation": "가까운 정비소에서 견적을 받아보시는 것을 권장합니다."
+            "recommendation": "가까운 정비소에서 견적을 받아보시는 것을 권장합니다.",
+            "is_mock": True
         }
 
     PROMPT = f"""
@@ -628,7 +673,8 @@ async def generate_exterior_report(mappings: List[Dict]) -> Dict[str, str]:
             
         return {
             "description": fallback_desc,
-            "recommendation": "가까운 정비소에서 육안 검사를 권장합니다."
+            "recommendation": "가까운 정비소에서 육안 검사를 권장합니다.",
+            "is_mock": True
         }
 
 
@@ -645,13 +691,15 @@ async def interpret_tire_status(status_list: List[Dict]) -> Dict[str, str]:
         if not issues:
              return {
                 "description": f"타이어의 상태가 마모 한계 내에 있으며 정상입니다. ({reason} 분석 모드)",
-                "recommendation": "공기압 체크와 타이어 위치 교환을 주기적으로 실시하십시오."
+                "recommendation": "공기압 체크와 타이어 위치 교환을 주기적으로 실시하십시오.",
+                "is_mock": True
             }
             
         desc = f"타이어에서 {', '.join(issues)} 상태가 감지되었습니다. ({reason} 분석 모드)"
         return {
             "description": desc,
-            "recommendation": "타이어 전문점에서 상세 점검을 받으십시오."
+            "recommendation": "타이어 전문점에서 상세 점검을 받으십시오.",
+            "is_mock": True
         }
 
     PROMPT = f"""
@@ -675,7 +723,7 @@ async def interpret_tire_status(status_list: List[Dict]) -> Dict[str, str]:
         return json.loads(response.choices[0].message.content)
     except Exception as e:
         print(f"[LLM Tire Error] {e}")
-        return {"description": "타이어 상태 정보를 처리하는 도중 오류가 발생했습니다.", "recommendation": "공기압 및 트레드 상태를 수동으로 확인하십시오."}
+        return {"description": "타이어 상태 정보를 처리하는 도중 오류가 발생했습니다.", "recommendation": "공기압 및 트레드 상태를 수동으로 확인하십시오.", "is_mock": True}
 
 
 # ---------------------------------------------------------
@@ -770,17 +818,17 @@ async def generate_training_labels(s3_url: str, domain: str) -> dict:
         # [Guard 1] Empty Response Check
         if not content or content.strip() == "":
             print(f"[LLM Training Labels] Error: Empty response from LLM (Length: 0)")
-            return {"labels": [], "status": "FAILED", "reason": "LLM_EMPTY_RESPONSE"}
+            return {"labels": [], "status": "FAILED", "reason": "LLM_EMPTY_RESPONSE", "is_mock": True}
 
         try:
             return json.loads(content)
         except json.JSONDecodeError:
             print(f"[LLM Training Labels] JSON Parsing Failed. Raw Content: {content}")
-            return {"labels": [], "status": "FAILED", "reason": "JSON_PARSE_ERROR"}
+            return {"labels": [], "status": "FAILED", "reason": "JSON_PARSE_ERROR", "is_mock": True}
             
     except Exception as e:
         print(f"[LLM Training Labels Error] {e}")
-        return {"labels": [], "status": "FAILED", "reason": str(e)}
+        return {"labels": [], "status": "FAILED", "reason": str(e), "is_mock": True}
 
 
 async def generate_audio_labels(s3_url: str, audio_bytes: Optional[bytes] = None) -> dict:
@@ -831,14 +879,28 @@ async def generate_audio_labels(s3_url: str, audio_bytes: Optional[bytes] = None
         converted_buffer = await convert_bytes_to_16khz(audio_bytes)
         if converted_buffer:
             audio_data = base64.b64encode(converted_buffer.getvalue()).decode('utf-8')
+            audio_format = "wav"
         else:
-            audio_data = base64.b64encode(audio_bytes).decode('utf-8')
+            # 변환 실패 시: 원본이 OpenAI가 확실히 지원하는 형식(wav, mp3)인지 체크
+            magic = audio_bytes[:32]
+            if (b"RIFF" in magic and b"WAVE" in magic):
+                audio_data = base64.b64encode(audio_bytes).decode('utf-8')
+                audio_format = "wav"
+            elif (b"ID3" in magic or b"\xff\xfb" in magic[:2]):
+                audio_data = base64.b64encode(audio_bytes).decode('utf-8')
+                audio_format = "mp3"
+            else:
+                detected_fmt = "UNKNOWN"
+                if b"ftypM4A" in magic or b"ftypmp42" in magic: detected_fmt = "M4A"
+                elif b"fLaC" in magic: detected_fmt = "FLAC"
+                
+                print(f"[LLM Audio Labels Error] 지원하지 않는 형식({detected_fmt})이며 변환에도 실패했습니다.")
+                return {"label": "UNKNOWN", "category": "UNKNOWN", "status": "CONVERSION_FAILED"}
         
         # [Fix] API Parameter & Model update
         response = await _get_client().chat.completions.create(
             model="gpt-4o-audio-preview",
             modalities=["text"], # Text output only (No audio output needed for labeling)
-            # audio={"voice": "alloy", "format": "wav"}, # ❌ Removed invalid param
             messages=[
                 {
                     "role": "user",
@@ -846,7 +908,7 @@ async def generate_audio_labels(s3_url: str, audio_bytes: Optional[bytes] = None
                         {"type": "text", "text": PROMPT},
                         {
                             "type": "input_audio",
-                            "input_audio": {"data": audio_data, "format": "wav"}
+                            "input_audio": {"data": audio_data, "format": audio_format} # [Fix] Use detected format
                         }
                     ]
                 }
@@ -858,7 +920,7 @@ async def generate_audio_labels(s3_url: str, audio_bytes: Optional[bytes] = None
         match = re.search(r'\{.*\}', content, re.DOTALL)
         if match:
             return json.loads(match.group())
-        return {"label": "UNKNOWN", "category": "UNKNOWN", "status": "ERROR"}
+        return {"label": "UNKNOWN", "category": "UNKNOWN", "status": "ERROR", "is_mock": True}
         
     except Exception as e:
         print(f"[LLM Audio Labels Error] {e}")

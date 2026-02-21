@@ -1,6 +1,6 @@
 # ai/scripts/audio/train_audio_v3.py
 """
-🚀 통합 멀티태스크 오디오 학습 도구 v3 (Option A 적용)
+[파일 용도] 통합 멀티태스크 오디오 학습 도구 v3 (Option A)
 
 [Core Architecture]
 - 1-Call 2-Outputs: 하나의 모델이 두 가지를 동시에 예측 (Multi-Task Learning)

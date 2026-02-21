@@ -1,6 +1,6 @@
 # ai/scripts/audio/train_cnn14.py
 """
-🏭 CNN14 (PANNs Cnn14_16k) — Multi-Task 2-Head 학습
+[파일 용도] CNN14 (PANNs Cnn14_16k) 모델 학습
 
 [Architecture]
 - Backbone: CNN14Lite (PANNs pretrained)
@@ -26,9 +26,10 @@ from sklearn.metrics import (
 from ai.scripts.audio.config import (
     set_seed, save_metrics, measure_latency, EarlyStopping,
     TYPE_LABELS, type2id, id2type, ABNORMAL_LABELS, OTHER_THRESHOLD,
-    COMMON_CONFIG, DEVICE, SAVE_ROOT, NUM_TYPE_CLASSES
+    ABNORMAL_THRESHOLD, COMMON_CONFIG, DEVICE, SAVE_ROOT, NUM_TYPE_CLASSES
 )
 from ai.scripts.audio.data_loader import create_dataloaders
+from ai.scripts.audio.advanced_metrics import calculate_fpr_at_recall, calculate_trr, calculate_nrs, calculate_divergence
 
 set_seed(42)
 
@@ -65,11 +66,31 @@ class CNN14MultiTask(nn.Module):
             ConvBlock(512, 1024),
         )
 
-        # Dual heads
+        # [Strict v3.7] Purified Two-Head Structure
         self.fc1 = nn.Linear(1024, 512)
         self.dropout = nn.Dropout(0.3)
-        self.type_head = nn.Linear(512, NUM_TYPE_CLASSES)      # 3-class
-        self.abnormal_head = nn.Linear(512, 1)                  # binary
+        
+        # Head A: Binary (Normal, Abnormal)
+        self.binary_head = nn.Linear(512, 2)
+        # Head B: Multi-class (Starter, Engine, Brake, Other)
+        self.type_head = nn.Linear(512, 4)
+
+    def freeze_backbone(self):
+        # Freeze all backbone
+        for p in self.conv_blocks.parameters(): p.requires_grad = False
+        for p in self.fc1.parameters(): p.requires_grad = False
+        
+        # [v3.8] Partial Unfreeze: Last ConvBlock + FC1
+        # conv_blocks has 5 layers (indices 0~4)
+        for p in self.conv_blocks[4].parameters(): p.requires_grad = True
+        for p in self.fc1.parameters(): p.requires_grad = True
+        
+        print("🔒 Backbone (CNN14) FROZEN (Except last block & fc1)", flush=True)
+
+    def unfreeze_backbone(self):
+        for p in self.conv_blocks.parameters(): p.requires_grad = True
+        for p in self.fc1.parameters(): p.requires_grad = True
+        print("🔓 Backbone (CNN14) UNFROZEN", flush=True)
 
     def forward(self, x):
         if x.dim() == 3:
@@ -77,9 +98,11 @@ class CNN14MultiTask(nn.Module):
         x = self.conv_blocks(x)
         x = torch.mean(x, dim=(2, 3))  # Global Average Pooling → (B, 1024)
         x = self.dropout(F.relu(self.fc1(x)))  # (B, 512)
-        type_logits = self.type_head(x)         # (B, 3)
-        abnormal_logits = self.abnormal_head(x).squeeze(-1)  # (B,)
-        return type_logits, abnormal_logits
+        
+        # [Strict v3.7] Always calculate both heads (No conditional forward)
+        logits_bin = self.binary_head(x)
+        logits_type = self.type_head(x)
+        return logits_type, logits_bin
 
     def get_features(self, x):
         """Hybrid Fusion용 feature 추출"""
@@ -147,81 +170,80 @@ def evaluate_model(model, loader, desc="Eval"):
     with torch.no_grad():
         for batch in loader:
             mel = batch["mel_input"].to(DEVICE)
-            t_log, a_log = model(mel)
+            t_lbl = batch["type_label"].to(DEVICE)
+            a_lbl = batch["abnormal_label"].to(DEVICE)
+            t_log, b_log = model(mel)
 
-            # Abnormal prediction
-            a_pred = (torch.sigmoid(a_log) > 0.5).cpu().numpy().astype(int)
-            a_label = batch["abnormal_label"].numpy().astype(int)
-
-            # Type prediction with Decision Layer Simulation
-            # Service triggers LLM if confidence < 0.6 (T_LOW)
-            t_probs = torch.softmax(t_log, dim=1)
-            max_p, preds = torch.max(t_probs, dim=1)
-            preds_with_other = preds.clone()
+            # [Strict Hierarchical Inference v3.7 - Option A]
+            # 1. Abnormal Detection (Binary Head: 2 outputs)
+            b_pred = torch.argmax(b_log, dim=1) 
             
-            # Decision Layer Simulation (Gate 3/4 Trigger):
-            # If confidence < 0.6, it marks as 'other' for Uncertain % calculation
-            preds_with_other[max_p < 0.6] = 3  # T_LOW from audio_llm_fallback.py
+            # 2. Type Classification (Only index 0, 1, 2 for confidence check)
+            t_probs = torch.softmax(t_log[:, :3], dim=1) 
+            max_p, t_preds = torch.max(t_probs, dim=1) 
             
-            all_tp.extend(preds_with_other.cpu().numpy())
-            all_tl.extend(batch["type_label"].numpy())
-            all_ap.extend(a_pred)
-            all_al.extend(a_label)
+            # Initialize as Normal (0)
+            final_preds = torch.zeros_like(b_pred)
+            
+            # Mask for Abnormal predictions
+            is_abn_pred = (b_pred == 1)
+            is_other = is_abn_pred & (max_p < OTHER_THRESHOLD)
+            is_typed = is_abn_pred & (~is_other)
+            
+            final_preds[is_other] = 4 # Other (Global ID)
+            final_preds[is_typed] = t_preds[is_typed] + 1 # 1:Starter, 2:Engine, 3:Brake
+            
+            # GT Mapping
+            gt_5class = torch.zeros_like(a_lbl)
+            is_abn_gt = (a_lbl == 1)
+            gt_5class[is_abn_gt] = t_lbl[is_abn_gt] + 1
+            
+            all_tp.extend(final_preds.cpu().numpy())
+            all_tl.extend(gt_5class.cpu().numpy())
+            all_ap.extend(b_pred.cpu().numpy())
+            all_al.extend(a_lbl.cpu().numpy())
 
-    # ── Step 1: Abnormal Detection (전체 샘플) ──
-    all_al_np = np.array(all_al)
-    all_ap_np = np.array(all_ap)
+    all_al_np, all_ap_np = np.array(all_al), np.array(all_ap)
     abn_p, abn_r, abn_f1, _ = precision_recall_fscore_support(all_al_np, all_ap_np, average='binary', zero_division=0)
 
-    # ── Step 2: Sound Type Classification (GT-Abnormal only) ──
-    all_tl_np = np.array(all_tl)
-    all_tp_np = np.array(all_tp)
-    mask = (all_tl_np != -100)
-    hier_tl, hier_tp = all_tl_np[mask], all_tp_np[mask]
-
-    if len(hier_tl) > 0:
-        valid_mask = (hier_tp != 3)
-        if valid_mask.any():
-            balanced_acc = balanced_accuracy_score(hier_tl[valid_mask], hier_tp[valid_mask])
-        else:
-            balanced_acc = 0.0
-        acc = accuracy_score(hier_tl, hier_tp)
-        t_p, t_r, t_f1, _ = precision_recall_fscore_support(hier_tl, hier_tp, labels=[0, 1, 2], average='macro', zero_division=0)
+    all_tl_np, all_tp_np = np.array(all_tl), np.array(all_tp)
+    
+    if len(all_tl_np) > 0:
+        balanced_acc = balanced_accuracy_score(all_tl_np, all_tp_np)
+        acc = accuracy_score(all_tl_np, all_tp_np)
+        t_p, t_r, t_f1, _ = precision_recall_fscore_support(all_tl_np, all_tp_np, labels=[0, 1, 2, 3, 4], average='macro', zero_division=0)
     else:
         acc = balanced_acc = t_p = t_r = t_f1 = 0.0
 
-    # ── Step 3: Uncertain (LLM Fallback) Rate ──
-    uncertain_pct = (all_tp_np == 3).mean() * 100
+    uncertain_pct = (all_tp_np == 4).mean() * 100
 
-    # ── Report ──
     print(f"\n{'='*60}", flush=True)
-    print(f"📊 [{desc}] Evaluation Report", flush=True)
+    print(f"📊 [{desc}] Hierarchical Report", flush=True)
     print(f"{'='*60}", flush=True)
-    print(f"\n## 1️⃣  Abnormal Detection (Primary)", flush=True)
-    print(f"   Precision: {abn_p:.4f} | Recall: {abn_r:.4f} | F1: {abn_f1:.4f}", flush=True)
-    print(f"\n## 2️⃣  Sound Type Classification (Abnormal subset, Secondary)", flush=True)
-    print(f"   Accuracy: {acc:.4f} | Balanced Acc: {balanced_acc:.4f} | Uncertain: {uncertain_pct:.1f}%", flush=True)
-    print(f"   Macro P: {t_p:.4f} | Macro R: {t_r:.4f} | Macro F1: {t_f1:.4f}", flush=True)
-
-    if len(hier_tl) > 0:
-        print(f"\n   [Per-class Report]", flush=True)
-        report = classification_report(hier_tl, hier_tp, labels=[0, 1, 2], target_names=TYPE_LABELS, zero_division=0, output_dict=True)
-        print(classification_report(hier_tl, hier_tp, labels=[0, 1, 2], target_names=TYPE_LABELS, zero_division=0), flush=True)
+    print(f"  1️⃣  Abnormal Detection: P={abn_p:.4f} R={abn_r:.4f} F1={abn_f1:.4f}", flush=True)
+    print(f"  2️⃣  System Type (5-Class): Acc={acc:.4f} BAcc={balanced_acc:.4f} F1={t_f1:.4f} | Uncert={uncertain_pct:.1f}%", flush=True)
+    
+    if len(all_tl_np) > 0:
+        DISP = ["normal"] + TYPE_LABELS
+        print(f"\n   [Classification Report (Method A)]", flush=True)
+        print(classification_report(all_tl_np, all_tp_np, labels=[0, 1, 2, 3, 4], target_names=DISP, zero_division=0), flush=True)
         
+        report = classification_report(all_tl_np, all_tp_np, labels=[0, 1, 2, 3, 4], target_names=DISP, zero_division=0, output_dict=True)
         starter_f1 = report["starter"]["f1-score"]
         engine_f1 = report["engine"]["f1-score"]
         brake_f1 = report["brake"]["f1-score"]
-
-        DISP = TYPE_LABELS + ["other"]
-        cm = confusion_matrix(hier_tl, hier_tp, labels=[0, 1, 2, 3])
-        print(f"   [Confusion Matrix (including 'other')]", flush=True)
-        print(f"   {'':>10} " + " ".join([f"{l:>8}" for l in DISP]), flush=True)
-        for i in range(len(TYPE_LABELS)):
-            print(f"   {TYPE_LABELS[i]:>10} | " + " ".join([f"{v:>8}" for v in cm[i]]), flush=True)
+        cm = confusion_matrix(all_tl_np, all_tp_np, labels=[0, 1, 2, 3, 4])
+        print(f"\n   [Confusion Matrix (5-class Hierarchical)]", flush=True)
+        head_str = " " * 15
+        for d in DISP: head_str += f"{d:>9}"
+        print(head_str, flush=True)
+        for i, row in enumerate(cm):
+            row_str = f"{DISP[i]:>13} | "
+            for val in row: row_str += f"{val:>9}"
+            print(row_str, flush=True)
+        print(f"{'='*60}\n", flush=True)
     else:
         starter_f1 = engine_f1 = brake_f1 = 0.0
-
-    print(f"{'='*60}\n", flush=True)
 
     return {
         "abnormal_f1": abn_f1, "abnormal_recall": abn_r, "abnormal_precision": abn_p,
@@ -229,7 +251,30 @@ def evaluate_model(model, loader, desc="Eval"):
         "type_acc": acc, "type_balanced_acc": balanced_acc,
         "starter_f1": starter_f1, "engine_f1": engine_f1, "brake_f1": brake_f1,
         "uncertain_pct": round(uncertain_pct, 2)
-    }
+    }, (all_al_np, all_ap_np)
+
+def get_scores_and_features(model, loader):
+    """지표 계산을 위한 예측 점수와 feature 추출"""
+    model.eval()
+    all_scores = []
+    all_labels = []
+    all_features = []
+    
+    with torch.no_grad():
+        for batch in loader:
+            mel = batch["mel_input"].to(DEVICE)
+            a_lbl = batch["abnormal_label"].to(DEVICE)
+            
+            t_log, b_log = model(mel)
+            probs = torch.softmax(b_log, dim=1)[:, 1] # Abnormal probability
+            
+            feats = model.get_features(mel)
+            
+            all_scores.extend(probs.cpu().numpy())
+            all_labels.extend(a_lbl.cpu().numpy())
+            all_features.append(feats.cpu().numpy())
+            
+    return np.array(all_labels), np.array(all_scores), np.concatenate(all_features, axis=0)
 
 
 # =============================================================================
@@ -260,16 +305,28 @@ def train(mode, epochs=None, batch_size=None, lr=None):
     model.load_pretrained_weights()
     model = model.to(DEVICE)
 
-    # ── Freeze Logic ──
+    # ── Freeze / Load Logic ──
     if mode == "baseline":
-        print("🔒 Backbone FROZEN (conv_blocks) — heads only", flush=True)
-        for name, p in model.named_parameters():
-            if "type_head" in name or "abnormal_head" in name or "fc1" in name:
-                p.requires_grad = True
-            else:
-                p.requires_grad = False
+        print("🔒 Backbone FROZEN (Except last block) — heads only", flush=True)
+        # Apply partial unfreeze
+        model.freeze_backbone()
+        
+        # Ensure heads are trainable
+        for p in model.binary_head.parameters(): p.requires_grad = True
+        for p in model.type_head.parameters(): p.requires_grad = True
     else:
-        print("🔓 ALL parameters UNFROZEN — full fine-tune", flush=True)
+        # Fine-tune Mode: Load Baseline Best Weights first (Warm-up)
+        baseline_path = os.path.join(SAVE_ROOT, "cnn14_baseline", "best_model.pt")
+        if os.path.exists(baseline_path):
+            print(f"🔥 Fine-tune: Loading Baseline weights from {baseline_path} (strict=False for v3.7 trans)", flush=True)
+            state_dict = torch.load(baseline_path, map_location=DEVICE, weights_only=False)
+            # [Strict v3.7] Filter out incompatible heads
+            state_dict = {k: v for k, v in state_dict.items() if not k.startswith("type_head") and not k.startswith("binary_head") and not k.startswith("abnormal_head")}
+            model.load_state_dict(state_dict, strict=False)
+        else:
+            print("⚠️  Baseline weights not found. Fine-tuning from pretrained.", flush=True)
+            
+        print("🔓 ALL parameters UNFROZEN — full fine-tune with differential LR", flush=True)
         for p in model.parameters():
             p.requires_grad = True
 
@@ -278,18 +335,28 @@ def train(mode, epochs=None, batch_size=None, lr=None):
     print(f"📐 Trainable: {trainable:,} / {total:,} ({trainable/total*100:.1f}%)", flush=True)
 
     # ── Data ──
-    train_loader, val_loader, test_loader, type_weights = create_dataloaders("cnn", batch_size=batch_size)
+    train_loader, val_loader, val_loader_balanced, test_loader, test_loader_balanced, type_weights = create_dataloaders("cnn", batch_size=batch_size)
 
     # ── Optimizer ──
     if mode == "baseline":
         optimizer = torch.optim.AdamW(filter(lambda p: p.requires_grad, model.parameters()), lr=lr)
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=2, verbose=True)
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=2)
     else:
-        optimizer = torch.optim.AdamW(model.parameters(), lr=lr)
+        # Differential LR: Backbone (1e-6) vs Head (1e-4) — default lr is typically fine-tune lr (3e-5)
+        # We use proportional scaling based on the passed 'lr'
+        head_lr = lr * 3  # ~1e-4
+        backbone_lr = lr / 10  # ~3e-6
+        
+        optimizer = torch.optim.AdamW([
+            {"params": model.conv_blocks.parameters(), "lr": backbone_lr},
+            {"params": model.fc1.parameters(), "lr": head_lr},
+            {"params": model.type_head.parameters(), "lr": head_lr},
+            {"params": model.binary_head.parameters(), "lr": head_lr},
+        ])
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
 
-    criterion_type = nn.CrossEntropyLoss(weight=type_weights, ignore_index=-100)
-    criterion_abn = nn.BCEWithLogitsLoss()
+    criterion_type = nn.CrossEntropyLoss(weight=type_weights[:3], ignore_index=-100)
+    criterion_bin = nn.CrossEntropyLoss()
     scaler = torch.amp.GradScaler('cuda', enabled=fp16)
 
     # ── Training Loop ──
@@ -301,6 +368,13 @@ def train(mode, epochs=None, batch_size=None, lr=None):
     print(f"\n🔔 Starting Training Loop ({epochs} epochs)...\n", flush=True)
 
     for epoch in range(epochs):
+        # [Fix] Two-stage Training: Head Stabilization Phase
+        if mode == "finetune":
+            if epoch < 3:
+                model.freeze_backbone()
+            elif epoch == 3:
+                model.unfreeze_backbone()
+
         model.train()
         total_loss = 0
         optimizer.zero_grad()
@@ -311,23 +385,29 @@ def train(mode, epochs=None, batch_size=None, lr=None):
                 mel = batch["mel_input"].to(DEVICE)
                 t_lbl = batch["type_label"].to(DEVICE)
                 a_lbl = batch["abnormal_label"].to(DEVICE)
+                t_log, b_log = model(mel)
 
-                t_log, a_log = model(mel)
-
-                # Gated Type Loss — GT-Abnormal only
-                is_abn = (a_lbl == 1)
-                if is_abn.any():
-                    loss_t = criterion_type(t_log[is_abn], t_lbl[is_abn])
+                # [Strict v3.7] Loss calculation
+                # 1. Binary Loss
+                loss_bin = criterion_bin(b_log, a_lbl)
+                
+                # 2. Type Loss
+                abn_mask = (a_lbl == 1)
+                if abn_mask.sum() > 0:
+                    loss_type = criterion_type(t_log[abn_mask][:, :3], t_lbl[abn_mask])
                 else:
-                    loss_t = 0.0
+                    loss_type = torch.tensor(0.0).to(DEVICE)
+                
+                loss = (loss_bin + COMMON_CONFIG["lambda_type"] * loss_type) / grad_accum
 
-                loss = (loss_t + criterion_abn(a_log, a_lbl)) / grad_accum
-
-            scaler.scale(loss).backward()
+            if not torch.isnan(loss):
+                scaler.scale(loss).backward()
             if (i + 1) % grad_accum == 0:
-                scaler.step(optimizer)
-                scaler.update()
-                optimizer.zero_grad()
+                # [Fix] Gradient Clipping
+                scaler.unscale_(optimizer)
+                torch.nn.utils.clip_grad_norm_(model.parameters(), COMMON_CONFIG["max_grad_norm"])
+                
+                scaler.step(optimizer); scaler.update(); optimizer.zero_grad()
 
             total_loss += loss.item() * grad_accum
             if (i + 1) % 10 == 0 or (i + 1) == len(train_loader):
@@ -335,43 +415,88 @@ def train(mode, epochs=None, batch_size=None, lr=None):
 
         # ── Validation ──
         print(f"\n⏳ Validating...", flush=True)
-        metrics = evaluate_model(model, val_loader, f"Epoch {epoch+1} Valid")
+        metrics, _ = evaluate_model(model, val_loader, f"Epoch {epoch+1} Valid")
         avg_loss = total_loss / len(train_loader)
 
-        # Combined metric for model selection
-        combined_f1 = (metrics["abnormal_f1"] + metrics["type_macro_f1"]) / 2
-        print(f"📈 Epoch {epoch+1}/{epochs} | Loss: {avg_loss:.4f} | Abn Recall: {metrics['abnormal_recall']:.4f} | Abn F1: {metrics['abnormal_f1']:.4f} | Type F1: {metrics['type_macro_f1']:.4f} | Combined: {combined_f1:.4f}", flush=True)
+        # Combined metric for model selection (Balanced)
+        combined_score = (metrics["abnormal_f1"] + metrics["type_macro_f1"] + metrics["type_acc"]) / 3
+        print(f"📈 Epoch {epoch+1}/{epochs} | Loss: {avg_loss:.4f} | Abn Recall: {metrics['abnormal_recall']:.4f} | Abn F1: {metrics['abnormal_f1']:.4f} | Type F1: {metrics['type_macro_f1']:.4f} | Type Acc: {metrics['type_acc']:.4f} | Score: {combined_score:.4f}", flush=True)
 
         # ── Scheduler ──
         if mode == "baseline":
-            scheduler.step(combined_f1)
+            scheduler.step(combined_score)
         else:
             scheduler.step()
 
         # ── Save Best ──
-        if combined_f1 > best_f1:
-            best_f1 = combined_f1
+        if combined_score > best_f1:
+            best_f1 = combined_score
             torch.save(model.state_dict(), os.path.join(save_dir, "best_model.pt"))
-            print(f"💾 Best model saved (F1={best_f1:.4f})", flush=True)
+            print(f"💾 Best model saved (Score={best_f1:.4f})", flush=True)
 
         # ── Early Stopping ──
-        if early_stop.step(combined_f1, epoch):
+        if early_stop.step(combined_score, epoch):
             break
 
-    # ── Test Evaluation ──
-    print(f"\n{'='*60}", flush=True)
-    print(f"🏁 FINAL TEST EVALUATION — CNN14 {mode.upper()}", flush=True)
-    print(f"{'='*60}", flush=True)
+    # ── [V3.1] Dual Evaluation Strategy — Comparative Report ──
+    print(f"\n{'='*80}", flush=True)
+    print(f"🏁 DUAL TEST EVALUATION — Original vs Balanced Subset", flush=True)
+    print(f"{'='*80}", flush=True)
 
     best_path = os.path.join(save_dir, "best_model.pt")
     if os.path.exists(best_path):
         model.load_state_dict(torch.load(best_path, map_location=DEVICE, weights_only=True))
     model = model.to(DEVICE)
 
-    test_metrics = evaluate_model(model, test_loader, "FINAL TEST")
+    # 1. Original Distribution Test
+    test_metrics, _ = evaluate_model(model, test_loader, desc="FINAL TEST (ORIGINAL)")
+    
+    # 2. Balanced Subset Evaluation (Fair Comparison)
+    balanced_metrics, _ = evaluate_model(model, test_loader_balanced, desc="FINAL TEST (BALANCED SUBSET)")
+
+    # ── Advanced Metrics (Operational) ──
+    print(f"🧪 Calculating Advanced Metrics (FPR@P99x, TRR, NRS, Div)...", flush=True)
+    test_labels, test_scores, test_feats = get_scores_and_features(model, test_loader)
+    
+    train_subset_loader = torch.utils.data.DataLoader(
+        train_loader.dataset, batch_size=batch_size, shuffle=False, num_workers=0
+    )
+    max_train_feats = 500
+    train_labels, _, train_feats = get_scores_and_features(model, train_subset_loader)
+    train_feats_normal = train_feats[train_labels == 0][:max_train_feats]
+    
+    test_feats_normal = test_feats[test_labels == 0]
+    test_scores_normal = test_scores[test_labels == 0]
+
+    fpr_metrics = calculate_fpr_at_recall(test_labels, test_scores)
+    trr = calculate_trr(test_scores_normal)
+    nrs = calculate_nrs(test_feats_normal)
+    div = calculate_divergence(train_feats_normal, test_feats_normal)
+
+    print(f"\n📊 COMPARATIVE PERFORMANCE REPORT (Test Set)", flush=True)
+    print(f"{'-'*80}", flush=True)
+    print(f"{'Metric':<25} | {'Original Dist':<15} | {'Balanced Subset':<15} | {'Diff':<10}", flush=True)
+    print(f"{'-'*80}", flush=True)
+    
+    metrics_to_comp = [
+        ("Accuracy", "type_acc"),
+        ("Balanced Acc", "type_balanced_acc"),
+        ("Macro F1", "type_macro_f1"),
+        ("Starter F1", "starter_f1"),
+        ("Engine F1", "engine_f1"),
+        ("Brake F1", "brake_f1"),
+    ]
+    
+    for label, key in metrics_to_comp:
+        orig = test_metrics.get(key, 0)
+        bal = balanced_metrics.get(key, 0)
+        diff = bal - orig
+        diff_str = f"{diff:+.4f}" if abs(diff) > 1e-6 else "0.0000"
+        print(f"{label:<25} | {orig:<15.4f} | {bal:<15.4f} | {diff_str:<10}", flush=True)
+    print(f"{'='*80}\n", flush=True)
 
     # ── Latency 측정 ──
-    dummy_mel = torch.randn(1, 128, 501).to(DEVICE)  # 5초 @ 16kHz mel
+    dummy_mel = torch.randn(1, 128, 501).to(DEVICE) 
     latency = measure_latency(model, dummy_mel, DEVICE)
 
     # ── Model Size ──
@@ -379,14 +504,18 @@ def train(mode, epochs=None, batch_size=None, lr=None):
 
     # ── Save Metrics ──
     final_metrics = {
-        "model": "cnn14",
-        "mode": mode,
-        **test_metrics,
-        "latency_ms": round(latency, 1),
-        "model_size_mb": round(model_size_mb, 1),
+        "model": "cnn14", "mode": mode, 
+        **test_metrics, 
+        **fpr_metrics,
+        "trr": round(trr, 4), "nrs": round(nrs, 4), "divergence": round(div, 4),
+        "balanced_type_macro_f1": balanced_metrics["type_macro_f1"],
+        "balanced_type_acc": balanced_metrics["type_acc"],
+        "latency_ms": round(latency, 1), 
+        "model_size_mb": round(model_size_mb, 1)
     }
     save_metrics("cnn14", mode, final_metrics)
     print(f"\n✅ CNN14 {mode.upper()} training complete!\n", flush=True)
+    return final_metrics
     return final_metrics
 
 

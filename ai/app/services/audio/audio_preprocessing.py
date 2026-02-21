@@ -205,57 +205,96 @@ def preprocess_array(
         (processed_audio, speech_ratio)
     """
     # 1. Silence Trim
+    logger.info("[preprocess_array] Silence Trim 시작...")
     audio = trim_silence_rms(audio, sr, top_db=top_db)
+    logger.info(f"[preprocess_array] Silence Trim 완료: {len(audio)/sr:.2f}s")
     
     # 2. Band-pass Filter
+    logger.info("[preprocess_array] Band-pass Filter 시작...")
     audio = apply_bandpass_filter(audio, sr, low_freq=low_freq, high_freq=high_freq)
+    logger.info("[preprocess_array] Band-pass Filter 완료")
     
     # 3. VAD & Speech Masking
+    logger.info("[preprocess_array] VAD 계산 시작...")
     speech_ratio, vad_mask = calculate_speech_ratio(audio, sr)
+    logger.info(f"[preprocess_array] VAD 완료 (speech_ratio={speech_ratio:.2%})")
     
-    # [Refinement] 정상 데이터이거나 라벨값이 명시적으로 normal일 때만 마스킹 활성화
     is_normal = (label_name.lower() == "normal")
     
     if enable_speech_mask and is_normal and speech_ratio > 0.05:
-        # 음성 데이터가 유의미하고 '정상' 클래스일 때만 마스킹 적용
+        logger.info("[preprocess_array] Speech Soft Masking 시작...")
         audio = apply_speech_soft_masking(audio, sr, vad_mask, base_attenuation=base_attenuation)
+        logger.info("[preprocess_array] Speech Soft Masking 완료")
         
     # 4. Spectral Gating
     if enable_spectral_gate:
+        logger.info("[preprocess_array] Spectral Gating 시작...")
         audio = apply_spectral_gating(audio, sr, min_gain=min_gain)
+        logger.info("[preprocess_array] Spectral Gating 완료")
         
     return audio, speech_ratio
 
 
 async def preprocess_audio_pipeline(
-    audio_bytes: bytes, 
+    audio_bytes: bytes,
+    source_url: str = "",  # [추가] URL 확장자로 포맷 자동 감지
     enable_speech_mask: bool = True,
     enable_spectral_gate: bool = True,
-    top_db: int = 35,          # [Inference] Defect 보존을 위해 약간 완화 (기본 20 -> 35)
-    min_gain: float = 0.6,     # [Inference] Defect Roughness 보존을 위해 완화 (기본 0.2 -> 0.6)
-    base_attenuation: float = 0.4  # [Inference] 목소리 감쇠 강도 소폭 완화 (오탐 방지)
+    top_db: int = 35,
+    min_gain: float = 0.6,
+    base_attenuation: float = 0.4
 ) -> bytes:
     """
     전체 전처리 파이프라인 실행.
-    (Sliding Window 추론을 지원하기 위해 길이를 제한하지 않고 보존합니다)
-    
-    Args:
-        audio_bytes: 원본 오디오 바이트
-    Returns:
-        bytes: 전처리된 16kHz WAV 바이트
+    m4a/mp3/aac 등은 ffmpeg로 먼저 WAV 변환 후 처리합니다.
     """
     try:
-        # 비동기 실행을 위해 루프 활용
         import asyncio
         loop = asyncio.get_running_loop()
 
         def _process(data):
+            # 확장자 기반 포맷 감지
+            import os, shutil, subprocess, tempfile
+            ext = os.path.splitext(source_url.split("?")[0])[-1].lower().lstrip(".")
+            logger.info(f"[Preprocess] source_url ext='{ext}', size={len(data)} bytes")
+
+            # m4a / mp3 / aac / mp4 → ffmpeg로 WAV 변환 후 librosa에 전달
+            NON_LIBROSA_FORMATS = {"m4a", "mp3", "aac", "mp4", "ogg", "opus"}
+            if ext in NON_LIBROSA_FORMATS:
+                ffmpeg_path = shutil.which("ffmpeg")
+                if not ffmpeg_path:
+                    logger.error("[Preprocess] ffmpeg not found in PATH. m4a 변환 불가.")
+                    return data, 0.0
+
+                tmp_input = None
+                try:
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=f".{ext}") as f:
+                        f.write(data)
+                        tmp_input = f.name
+
+                    result = subprocess.run(
+                        [ffmpeg_path, "-y", "-i", tmp_input,
+                         "-ar", "16000", "-ac", "1", "-f", "wav", "pipe:1"],
+                        capture_output=True, timeout=30
+                    )
+                    if result.returncode != 0 or len(result.stdout) < 1000:
+                        logger.error(f"[Preprocess] ffmpeg 변환 실패: {result.stderr.decode(errors='ignore')[-300:]}")
+                        return data, 0.0
+
+                    logger.info(f"[Preprocess] ffmpeg 변환 완료: {len(result.stdout):,} bytes WAV")
+                    data = result.stdout  # WAV bytes로 교체
+                finally:
+                    if tmp_input and os.path.exists(tmp_input):
+                        os.unlink(tmp_input)
+
             # 1. Load & Resample to 16kHz
+            logger.info("[Step 1] librosa.load 시작...")
             audio_stream = io.BytesIO(data)
             audio, sr = librosa.load(audio_stream, sr=16000)
-            logger.info(f"Loaded Audio: {len(audio)/sr:.2f}s at {sr}Hz")
-            
-            # 2. 통합 전처리 (Single Source of Truth 호출)
+            logger.info(f"[Step 1] librosa.load 완료: {len(audio)/sr:.2f}s at {sr}Hz")
+
+            # 2. 통합 전처리
+            logger.info("[Step 2] preprocess_array 시작...")
             audio, speech_ratio = preprocess_array(
                 audio, sr,
                 top_db=top_db,
@@ -263,23 +302,25 @@ async def preprocess_audio_pipeline(
                 base_attenuation=base_attenuation,
                 enable_speech_mask=enable_speech_mask,
                 enable_spectral_gate=enable_spectral_gate,
-                label_name="normal" # 추론 시에는 보수적으로 normal 처리 (음성 마스킹 적용 가능성 열어둠)
+                label_name="normal"
             )
-            
-            # 3. Per-sample RMS Normalization (모델 입력 스케일 보정)
-            target_rms = 0.1  # 목표 RMS 레벨
+            logger.info(f"[Step 2] preprocess_array 완료 (speech_ratio={speech_ratio:.2%})")
+
+            # 3. RMS Normalization
+            logger.info("[Step 3] RMS Normalization 시작...")
+            target_rms = 0.1
             current_rms = np.sqrt(np.mean(audio**2)) + 1e-8
             audio = audio * (target_rms / current_rms)
-            logger.debug(f"RMS Normalized: {current_rms:.4f} → {target_rms}")
-            
+            logger.info("[Step 3] RMS Normalization 완료")
+
             # 4. Output to WAV Bytes
+            logger.info("[Step 4] WAV 인코딩 시작...")
             buffer = io.BytesIO()
             sf.write(buffer, audio, 16000, format='WAV')
             buffer.seek(0)
-            
-            logger.info(f"Pipeline Complete. Output Length: {len(audio)/sr:.2f}s")
+            logger.info(f"[Step 4] WAV 인코딩 완료. Pipeline Complete. Output Length: {len(audio)/sr:.2f}s")
             return buffer.getvalue(), speech_ratio
-            
+
         processed_bytes, speech_ratio = await loop.run_in_executor(None, _process, audio_bytes)
         return processed_bytes, speech_ratio
     except Exception as e:

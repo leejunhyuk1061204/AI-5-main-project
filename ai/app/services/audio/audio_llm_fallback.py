@@ -9,10 +9,8 @@
 2. 저확신 또는 모호한 상황 발생 시 LLM(GPT-4o) 분석 트리거
 3. 능동 학습(Active Learning) 대상 선별 (Gate 4)
 """
+
 """
-[Decision Layer] Pure Logic for Audio Anomaly Detection (Standard v1.0)
-
-
 [Decision Layer] Pure Logic for Audio Anomaly Detection (Standard v1.0)
 ARCHITECTURAL RULE:
 - PURE LOGIC ONLY (No LLM, No I/O).
@@ -37,15 +35,32 @@ class AudioDecisionResult:
     label: Optional[str] = None
     reason: str = ""
     is_ambiguous: bool = False
+    is_mock: bool = False
 
 # =============================================================================
 # Configuration - Standard Gate Thresholds
 # =============================================================================
 
+import math
+
 # Common thresholds for AST/Hybrid models
 T_HIGH = 0.85
 T_LOW = 0.60
 AMBIGUITY_DELTA = 0.15
+ENTROPY_THRESHOLD = 0.8  # [New] Entropy > 0.8 is considered ambiguous
+TOPK_RATIO_THRESHOLD = 1.5 # [New] 1st prob / 2nd prob < 1.5 is ambiguous
+
+def _calculate_entropy(probs: Dict[str, float]) -> float:
+    """Softmax Entropy calculation (Pure Python)"""
+    p_values = [v for v in probs.values() if v > 0]
+    if not p_values: return 0.0
+    return -sum(p * math.log2(p) for p in p_values)
+
+def _calculate_topk_ratio(probs: Dict[str, float]) -> float:
+    """1st prob / 2nd prob calculation"""
+    if len(probs) < 2: return 999.0 # Not ambiguous
+    sorted_probs = sorted(probs.values(), reverse=True)
+    return sorted_probs[0] / (sorted_probs[1] + 1e-9)
 
 def get_audio_decision(
     confidence: float,
@@ -69,9 +84,23 @@ def get_audio_decision(
             is_ambiguous=False
         )
     
-    # 0. Ambiguity Analysis (2등과의 차이 검증)
+    # 0. Ambiguity Analysis (Enhanced with Entropy & Top-k Ratio)
     is_ambiguous = False
+    ambiguity_reason = ""
     if all_probs and len(all_probs) >= 2:
+        # A. Entropy Check (다중 클래스 모호성)
+        entropy = _calculate_entropy(all_probs)
+        if entropy > ENTROPY_THRESHOLD:
+            is_ambiguous = True
+            ambiguity_reason = f"high_entropy({entropy:.2f})"
+        
+        # B. Top-k Ratio Check (1, 2등간의 확신도 차이)
+        ratio = _calculate_topk_ratio(all_probs)
+        if ratio < TOPK_RATIO_THRESHOLD:
+            is_ambiguous = True
+            ambiguity_reason += f" low_topk_ratio({ratio:.2f})" if ambiguity_reason else f"low_topk_ratio({ratio:.2f})"
+
+        # C. Traditional Delta Check (Fallback check)
         values = sorted(all_probs.values(), reverse=True)
         delta = values[0] - values[1]
         if delta < AMBIGUITY_DELTA:
@@ -110,12 +139,15 @@ def get_audio_decision(
         )
 
     # Gate 3: Uncertain (Low confidence or Ambiguous)
-    # Gate 1 조건(Confidence >= T_HIGH)을 만족하더라도 Ambiguous하면 여기로 빠짐
+    reason = "uncertain_or_ambiguous"
+    if is_ambiguous and ambiguity_reason:
+        reason = f"ambiguous: {ambiguity_reason}"
+
     return AudioDecisionResult(
         status="UNCERTAIN",
         gate=3,
         confidence=confidence,
         label=label,
-        reason="uncertain_or_ambiguous",
+        reason=reason,
         is_ambiguous=is_ambiguous
     )

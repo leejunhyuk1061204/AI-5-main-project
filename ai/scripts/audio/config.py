@@ -1,11 +1,8 @@
 # ai/scripts/audio/config.py
 """
-🔧 공통 설정 모듈 — 모든 벤치마크 스크립트가 참조하는 Single Source of Truth
-
-[벤치마크 기준]
-- Primary: abnormal recall / F1
-- Secondary: sound_type macro-F1 (abnormal subset only)
-- Speed: 실제 추론 속도 (batch=1, torch.cuda.synchronize)
+[파일 용도] 오디오 학습 공통 설정 (Config)
+오디오 모델 학습 및 추론에 필요한 모든 상수, 경로, 하이퍼파라미터(Epochs, Batch size, LR 등)를 정의합니다.
+모든 스크립트에서 이 파일을 import하여 설정을 공유합니다. "Single Source of Truth" 역할을 합니다.
 """
 import os, json, time, random
 import torch
@@ -15,29 +12,43 @@ import numpy as np
 # Head 1: abnormal (binary)
 ABNORMAL_LABELS = ["normal", "abnormal"]
 
-# Head 2: sound_type (3-class, GT-Abnormal only)
-TYPE_LABELS = ["starter", "engine", "brake"]
+# Head 2: sound_type (GT-Abnormal only)
+# [Strict v3.7] Starter(0), Engine(1), Brake(2), Other(3)
+TYPE_LABELS = ["starter", "engine", "brake", "other"]
 NUM_TYPE_CLASSES = len(TYPE_LABELS)
 type2id = {l: i for i, l in enumerate(TYPE_LABELS)}
 id2type = {i: l for i, l in enumerate(TYPE_LABELS)}
 
 # Inference threshold for "other" (Unknown abnormality)
-OTHER_THRESHOLD = 0.3
+OTHER_THRESHOLD = 0.45 # [v4.6.2] Final lower threshold
+ABNORMAL_THRESHOLD = 0.8  # Primary Head (Normal vs Abnormal)
 
 # ──────────── 하이퍼 파라미터 ────────────
 COMMON_CONFIG = {
     "sr": 16000,
     "audio_length": 5,           # 5초 고정
-    "batch_size": 16,            # 3050 8GB (RunPod에서는 32)
+    "batch_size": 32,            # [v4.5] User requested 32
     "lr_baseline": 1e-3,         # Head만
-    "lr_finetune": 3e-5,         # 전체
+    "lr_finetune": 3e-5,         # [Added] Standard Fine-tune LR
+    "lr_lora_backbone": 4e-5,    # [v4.8] Lightweight Tuning
+    "lr_lora_head": 1.8e-4,      # [v4.5] Aggressive Tuning
     "optimizer": "AdamW",
-    "baseline_epochs": 10,
-    "finetune_epochs": 20,
-    "early_stop_patience": 5,
-    "early_stop_min_epochs": 8,  # 최소 8 에폭 전엔 stopping 금지
+    "baseline_epochs": 2,        # [v4.8] Minimal Baseline (Pure Head)
+    "finetune_epochs": 8,        # [v4.8] Optimal LoRA fine-tune
+    "warmup_ratio": 0.1,         # [v4.8] Slightly longer warmup
+    "early_stop_patience": 8,    # Matches total epochs
+    "early_stop_min_epochs": 4,  
     "grad_accum": 2,
-    "samples_per_class": 200,    # Train 세트 클래스별 목표 샘플 수
+    "lambda_type": 2.0,          # [v4.6.2] Increased Type Loss Emphasis
+    "max_grad_norm": 1.0,        
+    "aug_intensity": "high",     
+    "samples_per_class": 0,      
+    "use_focal_loss": True,      
+    "focal_gamma": 1.3,          
+    "use_mixup": True,           
+    "mixup_alpha": 0.2,          # [v4.8] Reduced Mixup (prev: 0.35)
+    "label_smoothing": 0.1,      
+    "use_swa": True,             
 }
 
 # ──────────── Class Weights (Inverse Frequency) ────────────
@@ -52,8 +63,9 @@ DATA_ROOT = RUNPOD_DATA_PATH if os.path.exists(RUNPOD_DATA_PATH) else LOCAL_DATA
 
 TRAIN_DATA_DIR = os.path.join(DATA_ROOT, "audio/train")
 TEST_DATA_DIR = os.path.join(DATA_ROOT, "audio/test")
+NOISE_DATA_DIR = os.path.join(DATA_ROOT, "audio/noises")
 
-SAVE_ROOT = "./ai/runs"
+SAVE_ROOT = "./ai/runs/dry_run" if os.environ.get("BENCHMARK_DRY_RUN") == "1" else "./ai/runs"
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 IS_RUNPOD = os.path.exists(RUNPOD_DATA_PATH)
 

@@ -1,10 +1,8 @@
 # ai/scripts/audio/data_loader.py
 """
-📦 공통 데이터 로딩 모듈 — Multi-Task 2-Head 지원
-
-[Label Structure]
-- abnormal: 0 (정상), 1 (비정상)
-- type_label: starter=0, engine=1, brake=2, normal=-100 (ignore)
+[파일 용도] 오디오 데이터 로더 (Dataset & DataLoader)
+PyTorch의 Dataset 클래스를 상속받아 오디오 파일을 로드하고, 전처리(Mel Spectrogram 변환 등)를 수행합니다.
+Method A (계층적 분류)를 위한 라벨링 처리 및 데이터 증강(Augmentation) 로직도 포함되어 있습니다.
 """
 import os
 import pickle
@@ -16,10 +14,12 @@ import torch
 import concurrent.futures
 from collections import Counter
 from sklearn.model_selection import train_test_split
+import random
+from audiomentations import Compose, AddGaussianSNR, TimeStretch, PitchShift, Gain, ClippingDistortion, AddBackgroundNoise, AddShortNoises
 
 from ai.app.services.audio.audio_preprocessing import preprocess_array
 from ai.scripts.audio.config import (
-    TRAIN_DATA_DIR, TEST_DATA_DIR, TYPE_LABELS, type2id,
+    TRAIN_DATA_DIR, TEST_DATA_DIR, NOISE_DATA_DIR, TYPE_LABELS, type2id,
     COMMON_CONFIG, DEVICE, IS_RUNPOD
 )
 
@@ -29,40 +29,85 @@ def highpass_filter(y, sr, cutoff=50):
     b, a = scipy.signal.butter(4, cutoff, 'highpass', fs=sr)
     return scipy.signal.filtfilt(b, a, y)
 
-def apply_spec_augment(mel, time_mask_max=20, freq_mask_max=10):
-    """SpecAugment (강화: time=20, freq=10)"""
+# ── Advanced Augmentation Settings (audiomentations) ──
+
+def get_augmentation_pipeline(intensity="medium"):
+    """
+    [v4.0] Advanced Augmentation Pipeline using audiomentations.
+    Addresses shortcut learning (shortcut to recording environment) and destructive fine-tuning.
+    Refined parameters based on DCASE/MIMII best practices.
+    """
+    # [v4.5] Noise Augmentation (Aggressively Expand 300 samples -> 3000+)
+    noise_augment = Compose([
+        TimeStretch(min_rate=0.75, max_rate=1.25, p=0.8),          # ±25%
+        PitchShift(min_semitones=-5, max_semitones=5, p=0.7),      # ±5 semitones
+        Gain(min_gain_db=-10, max_gain_db=10, p=1.0),              # ±10dB
+        AddGaussianSNR(min_snr_db=10, max_snr_db=30, p=0.5),       # White noise on background noise
+    ], p=1.0)
+
+    if intensity == "high":
+        return Compose([
+            # 1. Background Noise + Self-Augmentation (The Core Breaker)
+            AddBackgroundNoise(
+                sounds_path=NOISE_DATA_DIR, 
+                min_snr_db=12, 
+                max_snr_db=27, 
+                p=0.5,
+                noise_transform=noise_augment 
+            ) if os.path.exists(NOISE_DATA_DIR) else AddGaussianSNR(p=0.0),
+            
+            # 2. Pitch Shift (Key change) - reduced range
+            PitchShift(min_semitones=-4, max_semitones=4, p=0.3),
+            
+            # 3. Time Stretch (Speed change)
+            TimeStretch(min_rate=0.82, max_rate=1.18, p=0.2),
+            
+            # 4. Gain (Volume change)
+            Gain(min_gain_db=-6, max_gain_db=6, p=0.3),
+            ClippingDistortion(min_percentile_threshold=0, max_percentile_threshold=20, p=0.25),
+        ])
+    else: # medium (default for training)
+        return Compose([
+            AddBackgroundNoise(
+                sounds_path=NOISE_DATA_DIR, 
+                min_snr_db=15, 
+                max_snr_db=35, 
+                p=0.4,
+                noise_transform=noise_augment
+            ) if os.path.exists(NOISE_DATA_DIR) else AddGaussianSNR(p=0.0),
+
+            AddGaussianSNR(min_snr_db=15, max_snr_db=40, p=0.3),
+            TimeStretch(min_rate=0.9, max_rate=1.1, p=0.2),
+            PitchShift(min_semitones=-1.5, max_semitones=1.5, p=0.3),
+            Gain(min_gain_db=-6, max_gain_db=6, p=0.3),
+            ClippingDistortion(min_percentile_threshold=0, max_percentile_threshold=10, p=0.2),
+        ])
+
+AUGMENTER = None # Global instance initialized in Dataset
+
+# Augmentation Parameters for SpecAugment
+AUG_PARAMS = {
+    "high": {"freq_mask": 30, "time_mask": 40},
+    "medium": {"freq_mask": 20, "time_mask": 30},
+    "low": {"freq_mask": 10, "time_mask": 15},
+}
+
+def apply_spec_augment(mel, intensity="medium"):
+    """SpecAugment (Frequency & Time Masking)"""
+    p = AUG_PARAMS.get(intensity, AUG_PARAMS["medium"])
     n_mels, n_steps = mel.shape
     mel = mel.copy()
-    f = np.random.randint(0, freq_mask_max)
+    
+    # Frequency Masking
+    f = np.random.randint(0, p["freq_mask"])
     f0 = np.random.randint(0, n_mels - f)
     mel[f0:f0+f, :] = 0
-    t = np.random.randint(0, time_mask_max)
+    
+    # Time Masking
+    t = np.random.randint(0, p["time_mask"])
     t0 = np.random.randint(0, n_steps - t)
     mel[:, t0:t0+t] = 0
     return mel
-
-def apply_waveform_aug(y, sr):
-    """Waveform Augmentation (강화: Noise 70%, Pitch 50%±3, Stretch 40% 0.85~1.15)"""
-    y = y.copy()
-    
-    # 1. Additive White Noise
-    if np.random.rand() < 0.7:
-        noise_level = np.random.uniform(0.001, 0.01)
-        noise = np.random.randn(len(y)) * noise_level * np.max(np.abs(y))
-        y = y + noise
-        
-    # 2. Random Pitch Shift (±3 semitones)
-    if np.random.rand() < 0.5:
-        n_steps = np.random.uniform(-3, 3)
-        y = librosa.effects.pitch_shift(y, sr=sr, n_steps=n_steps)
-        
-    # 3. Time Stretch (0.85 ~ 1.15)
-    if np.random.rand() < 0.4:
-        rate = np.random.uniform(0.85, 1.15)
-        y_stretched = librosa.effects.time_stretch(y, rate=rate)
-        y = librosa.util.fix_length(y_stretched, size=len(y))
-        
-    return y
 
 # ──────────── 데이터 목록 로딩 ────────────
 
@@ -137,9 +182,22 @@ def preprocess_item(item, arch=None, fe=None, use_cache=True):
         y_proc = librosa.util.fix_length(y_proc, size=16000 * 5)  # 5초 고정
 
         # Mel Spectrogram
-        mel = librosa.feature.melspectrogram(y=y_proc, sr=16000, n_mels=128, fmax=8000, power=1.0)
-        mel_pcen = librosa.pcen(mel, sr=16000)
-        mel_norm = (mel_pcen - mel_pcen.mean()) / (mel_pcen.std() + 1e-6)
+        # [v4.9] YAMNet (AudioSet) Standard Params
+        if arch == "yamnet":
+            # YAMNet: sr=16k, n_fft=400, hop=160 (10ms), n_mels=64
+            # log-mel with offset=0.001 (AudioSet style)
+            mel = librosa.feature.melspectrogram(
+                y=y_proc, sr=16000, n_fft=400, hop_length=160, n_mels=64, fmin=125, fmax=7500
+            )
+            # Log-Mel (Stabilized)
+            mel_log = np.log(mel + 0.001)
+            # Normalization (YAMNet typically uses simple offset, but we standardized z-score)
+            mel_norm = (mel_log - np.mean(mel_log)) / (np.std(mel_log) + 1e-6)
+        else:
+            # Existing CNN/PaSST Logic (128 mels)
+            mel = librosa.feature.melspectrogram(y=y_proc, sr=16000, n_mels=128, fmax=8000, power=1.0)
+            mel_pcen = librosa.pcen(mel, sr=16000)
+            mel_norm = (mel_pcen - mel_pcen.mean()) / (mel_pcen.std() + 1e-6)
 
         # AST/Fusion용 Feature 미리 계산
         ast_input = None
@@ -172,9 +230,13 @@ def preprocess_item(item, arch=None, fe=None, use_cache=True):
 # ──────────── Dataset ────────────
 
 class AudioDataset(torch.utils.data.Dataset):
-    def __init__(self, data_list, arch, feature_extractor=None, is_training=False, desc="Dataset"):
+    def __init__(self, data_list, arch, feature_extractor=None, is_training=False, desc="Dataset", background_paths=None):
         print(f"🛠️  [{desc}] Processing {len(data_list)} items...", flush=True)
         self.is_training = is_training
+        self.arch = arch # [v4.9] Store architecture for runtime augmentation
+        self.background_paths = background_paths # [v4.7] List of normal file paths for mixing
+        self.intensity = COMMON_CONFIG.get("aug_intensity", "medium")
+        self.augmenter = get_augmentation_pipeline(self.intensity) if is_training else None
 
         workers = 4 if IS_RUNPOD else 2
         with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
@@ -195,22 +257,63 @@ class AudioDataset(torch.utils.data.Dataset):
         sr = 16000
         
         # Train-only (or Forced) Augmentation
-        # Leak Test의 경우 '양쪽 모두' 적용을 권장하므로 is_training에 의존
         if self.is_training:
-            # 1. Waveform Aug (Noise, Pitch, Stretch)
-            y = apply_waveform_aug(y, sr)
+            # [v4.7] Source Bias Mitigation: Mix Site Background into Youtube/Abnormal Samples
+            # If current sample is abnormal (likely Youtube), mix in a normal (likely Site) sample as noise.
+            if item['abnormal'] == 1 and self.background_paths and random.random() < 0.7: # 70% chance
+                try:
+                    noise_path = random.choice(self.background_paths)
+                    noise, _ = librosa.load(noise_path, sr=sr)
+                    
+                    # Fix length to match y
+                    if len(noise) < len(y):
+                        noise = np.tile(noise, int(np.ceil(len(y)/len(noise))))
+                    noise = noise[:len(y)]
+                    
+                    # Normalize noise volume to be lower than signal (SNR-like)
+                    # We want background, not to overpower the defect.
+                    # Target: Noise is 20% ~ 40% of the mix
+                    alpha = random.uniform(0.2, 0.4) 
+                    
+                    # Energy matching
+                    y_rms = np.sqrt(np.mean(y**2) + 1e-9)
+                    n_rms = np.sqrt(np.mean(noise**2) + 1e-9)
+                    if n_rms > 0:
+                        noise = noise * (y_rms / n_rms) * alpha
+                        
+                    y = y + noise
+                    # Normalize again to prevent clipping
+                    max_val = np.max(np.abs(y))
+                    if max_val > 1.0:
+                        y = y / max_val
+                        
+                except Exception as e:
+                    pass # Ignore mixing errors, proceed with original
+
+            if self.augmenter:
+                # 1. Advanced Waveform Aug (audiomentations)
+                y = self.augmenter(samples=y, sample_rate=sr)
             
-            # 2. Gain Aug
-            gain = np.random.uniform(0.7, 1.3)
+            # 2. Gain Aug (Subtle adjustment)
+            gain = np.random.uniform(0.8, 1.2)
             y = y * gain
             
             # 3. Re-calculate Mel from augmented waveform
-            mel_raw = librosa.feature.melspectrogram(y=y, sr=sr, n_mels=128, fmax=8000, power=1.0)
-            mel_pcen = librosa.pcen(mel_raw, sr=sr)
-            mel = (mel_pcen - mel_pcen.mean()) / (mel_pcen.std() + 1e-6)
+            if self.arch == "yamnet":
+                # [v4.9] YAMNet Style: 64 mels, log(mel + 0.001)
+                mel_raw = librosa.feature.melspectrogram(
+                    y=y, sr=sr, n_fft=400, hop_length=160, n_mels=64, fmin=125, fmax=7500
+                )
+                mel_log = np.log(mel_raw + 0.001)
+                mel = (mel_log - np.mean(mel_log)) / (np.std(mel_log) + 1e-6)
+            else:
+                # Default (CNN/PaSST): 128 mels, PCEN
+                mel_raw = librosa.feature.melspectrogram(y=y, sr=sr, n_mels=128, fmax=8000, power=1.0)
+                mel_pcen = librosa.pcen(mel_raw, sr=sr)
+                mel = (mel_pcen - mel_pcen.mean()) / (mel_pcen.std() + 1e-6)
             
             # 4. SpecAugment
-            mel = apply_spec_augment(mel)
+            mel = apply_spec_augment(mel, intensity=self.intensity)
         else:
             mel = item["mel"]
 
@@ -222,8 +325,77 @@ class AudioDataset(torch.utils.data.Dataset):
             "mel_input": torch.tensor(mel, dtype=torch.float32),
             "raw_audio": torch.tensor(y, dtype=torch.float32),
             "type_label": torch.tensor(lbl_t, dtype=torch.long),
-            "abnormal_label": torch.tensor(item["abnormal"], dtype=torch.float32),
+            "abnormal_label": torch.tensor(item["abnormal"], dtype=torch.long),
         }
+
+
+# ──────────── 데이터셋 균형 조정 (Oversampling / Undersampling) ────────────
+def balance_dataset(data, samples_per_cls, name="Dataset"):
+    """Undersampling을 제거하고, 필요한 경우에만 Oversampling 수행 (데이터 손실 방지)"""
+    if samples_per_cls <= 0:
+        return data
+        
+    balanced_data = []
+    class_keys = sorted(set([x["type"] for x in data]))
+    
+    print(f"⚖️  Balancing {name}: target {samples_per_cls} per class (Oversampling)...", flush=True)
+    
+    for cls in class_keys:
+        cls_data = [x for x in data if x["type"] == cls]
+        if not cls_data:
+            continue
+        
+        n_samples = len(cls_data)
+        if n_samples >= samples_per_cls:
+            balanced_data.extend(cls_data)
+        else:
+            multiplier = samples_per_cls // n_samples
+            remainder = samples_per_cls % n_samples
+            balanced_data.extend(cls_data * multiplier)
+            balanced_data.extend(cls_data[:remainder])
+    return balanced_data
+
+def balance_to_minimum(data, name="Dataset", target_count=30):
+    """
+    [Revised Strategy v3.2/v3.5]
+    - 클래스별로 최대 target_count(기본 30)개의 샘플을 무작위 추출 (Undersampling).
+    - 샘플이 target_count보다 적은 경우, 오버샘플링 없이 원본 전체 사용.
+    - 고정 시드(42)를 사용하여 일관성 유지.
+    """
+    if not data:
+        return []
+
+    from collections import Counter
+    # Ensure every entry has a type, fallback to 'unknown' if missing
+    for x in data:
+        if "type" not in x:
+            x["type"] = "normal" if x.get("abnormal") == 0 else "unknown"
+
+    counts = Counter([x["type"] for x in data])
+    class_keys = sorted(counts.keys())
+    
+    if not class_keys:
+        return []
+
+    print(f"⚖️  Creating Balanced Subset for {name}: Target={target_count} per class...", flush=True)
+    
+    # 고정 시드를 사용하여 평가의 일관성 유지
+    np.random.seed(42)
+    
+    balanced_data = []
+    for cls in class_keys:
+        cls_data = [x for x in data if x["type"] == cls]
+        if not cls_data: continue
+        
+        # 원본 개수와 타겟 개수 중 작은 값을 선택 (Oversampling 방지)
+        num_to_sample = min(len(cls_data), target_count)
+        indices = np.random.choice(len(cls_data), num_to_sample, replace=False)
+        balanced_data.extend([cls_data[i] for i in indices])
+        
+        print(f"   - {cls:<10}: {len(cls_data):>4} -> {num_to_sample:>4}", flush=True)
+        
+    print(f"✅ Balanced {name} ready (Total: {len(balanced_data)})", flush=True)
+    return balanced_data
 
 
 # ──────────── DataLoader 생성 ────────────
@@ -249,14 +421,19 @@ def create_dataloaders(arch, feature_extractor=None, batch_size=None, samples_pe
             # 현장 데이터는 각 파일이 개별 기록이므로 파일명을 그룹 아이디로 (또는 필요시 세션별 묶음)
             item["group_id"] = fname
         else:
-            # 유튜브: type_ID_seg_clip.wav 또는 normal_idle_X_clip.wav
+            # 유튜브/외부: [type]_[ID]_... 형태
             parts = fname.split("_")
-            if "normal_idle" in fname:
-                # [normal, idle, 1, 01.wav] -> normal_idle_1
+            # 1) ext_normal_07023057_034.wav -> 07023057
+            # 2) normal_idle_1_01.wav -> normal_idle_1
+            # 3) brake_id_01_001.wav -> id
+            if fname.startswith("ext_normal"):
+                # [ext, normal, ID, seg.wav]
+                item["group_id"] = parts[2] if len(parts) >= 3 else fname
+            elif "normal_idle" in fname:
+                # [normal, idle, ID, seg.wav]
                 item["group_id"] = "_".join(parts[:3]) if len(parts) >= 3 else fname
             else:
-                # [brake, id, 01, 001.wav] -> id
-                # 유튜브 ID는 보통 2번째 파트 (id)
+                # [type, ID, seg, clip.wav] -> ID는 보통 2번째 파트
                 item["group_id"] = parts[1] if len(parts) >= 2 else fname
 
         # 계층화 키 생성: {type}_{source} (정상: normal_site, 결함: engine_youtube 등)
@@ -264,39 +441,40 @@ def create_dataloaders(arch, feature_extractor=None, batch_size=None, samples_pe
 
     # 2. 그룹 계층화 분할 (Group Stratified Split)
     def robust_group_split(data, train_ratio=0.7, val_ratio=0.1):
-        """유튜브 원본 그룹(Video ID) 단위로 데이터를 분할하여 Leakage 방지"""
+        """유튜브 원본 그룹(Video ID) 단위로 데이터를 분할하여 Leakage 방지 및 최소 분포 보장"""
         group_map = {} # gid -> skey
         for x in data:
             gid = x["group_id"]
             if gid not in group_map:
                 group_map[gid] = x["stratify_key"]
         
-        unique_gids = list(group_map.keys())
-        unique_keys = [group_map[gid] for gid in unique_gids]
+        unique_gids = np.array(list(group_map.keys()))
+        unique_keys = np.array([group_map[gid] for gid in unique_gids])
         
         train_gids, val_gids, test_gids = [], [], []
         
-        for key in set(unique_keys):
-            g_in_key = [gid for gid in unique_gids if group_map[gid] == key]
+        for key in sorted(set(unique_keys)):
+            g_in_key = unique_gids[unique_keys == key].tolist()
             n_g = len(g_in_key)
             np.random.seed(42)
             np.random.shuffle(g_in_key)
             
-            if n_g == 1:
-                # 1개뿐이면 Train에만 배치
-                train_gids.append(g_in_key[0])
-                continue
-            elif n_g == 2:
-                # 2개면 Train + Val (검증 가능하도록)
-                train_gids.append(g_in_key[0])
-                val_gids.append(g_in_key[1])
-                continue
-                
-            n_tr = max(1, int(n_g * train_ratio))
-            n_va = max(1, int(n_g * val_ratio))
-            # val에 최소 1개 보장
-            if n_va == 0 and n_g - n_tr >= 2:
-                n_va = 1
+            # [Revised v3.6] Evaluation-Prioritized Split
+            # 목표: Test, Val 각각 최소 30개 그룹 확보 (데이터가 충분할 경우)
+            # 만약 데이터가 너무 적으면(예: 3개 미만) 기존처럼 1개씩이라도 할당
+            if n_g >= 90: # 충분히 많으면 30씩 고정
+                n_te = 30
+                n_va = 30
+            elif n_g >= 3: # 3개 이상이면 적어도 1개씩은 나누고 남은 비율로 30에 가깝게
+                # Val/Test에 각각 총 데이터의 1/3까지는 우선 할당 (Train 고갈 방지 최소 마진)
+                limit = n_g // 3
+                n_te = min(30, limit)
+                n_va = min(30, limit)
+            else: # 3개 미만 (매우 희귀)
+                if n_g == 1: n_te, n_va = 0, 0
+                else: n_te, n_va = 1, 0
+            
+            n_tr = n_g - n_te - n_va
             
             train_gids.extend(g_in_key[:n_tr])
             val_gids.extend(g_in_key[n_tr : n_tr+n_va])
@@ -350,53 +528,54 @@ def create_dataloaders(arch, feature_extractor=None, batch_size=None, samples_pe
         if len(group_data) == 0:
             print(f"     ⚠️  No defect samples in {group_name}!")
 
-    # 3. 데이터셋 균형 조정 (Train 세트 전용)
-    if samples_per_class > 0:
-        balanced_train = []
-        train_class_keys = sorted(set([x["type"] for x in train_data]))
-        
-        print(f"⚖️  Balancing Train set to {samples_per_class} samples per class...", flush=True)
-        
-        for cls in train_class_keys:
-            cls_data = [x for x in train_data if x["type"] == cls]
-            if not cls_data:
-                continue
+    # 3. 데이터셋 균형 조정 (Balancing)
+    # [Revised Strategy - v3.2] 
+    # - Train: Original distribution (samples_per_class=0 in config) + Loss Weighting
+    # - Val/Test: Dual version (Original & Balanced Subset with Target 30)
+    
+    train_final = train_data
+    val_data_final = val_data
+    val_data_balanced = balance_to_minimum(val_data, name="Valid (Balanced Subset)", target_count=30)
+    
+    test_data_final = test_data
+    test_data_balanced = balance_to_minimum(test_data, name="Test (Balanced Subset)", target_count=30)
+    
+    # ──────────── [v5.0] Oversampling (Balanced) ────────────
+    # 목표: 모든 클래스가 ~170개 내외로 균형
+    # starter(62) x3 = 186, engine(171) x1 = 171, brake(33) x5 = 165
+    print(f"⚖️  Applying Oversampling (v5.0 Balanced): Starter x3, Brake x5")
+    train_oversampled = []
+    
+    # Deterministic seed for reproduction
+    rng = random.Random(42)
+    
+    for item in train_final:
+        train_oversampled.append(item)
+        if item['type'] == 'starter':
+            # x3 = Original + 2 copies
+            for _ in range(2): train_oversampled.append(item)
+        elif item['type'] == 'brake':
+            # x5 = Original + 4 copies
+            for _ in range(4): train_oversampled.append(item)
             
-            if len(cls_data) >= samples_per_class:
-                # 1) Undersampling (샘플이 많은 경우 무작위 선택)
-                np.random.seed(42)
-                indices = np.random.choice(len(cls_data), samples_per_class, replace=False)
-                balanced_train.extend([cls_data[i] for i in indices])
-            else:
-                # 2) Augmentation-based Oversampling (샘플이 적은 경우 복제)
-                # (Dataset 클래스 내의 실시간 Augmentation 덕분에 각각의 복제본은 다른 변형으로 학습됨)
-                multiplier = samples_per_class // len(cls_data)
-                remainder = samples_per_class % len(cls_data)
-                balanced_train.extend(cls_data * multiplier)
-                balanced_train.extend(cls_data[:remainder])
-        
-        train_final = balanced_train
-        print(f"✅ Training set balanced: {len(train_data)} -> {len(train_final)} clips")
-    else:
-        # 기존 오버샘플링 (단순 {type}_{source} 비율 맞추기)
-        train_keys = [x["stratify_key"] for x in train_data]
-        counts_train = Counter(train_keys)
-        max_count = max(counts_train.values())
-        
-        balanced_train = []
-        for key in sorted(set(train_keys)):
-            group = [x for x in train_data if x["stratify_key"] == key]
-            resampled_group = group * (max_count // len(group))
-            resampled_group += group[:(max_count % len(group))]
-            balanced_train.extend(resampled_group)
-        
-        train_final = balanced_train
-        print(f"⚖️  Training set oversampled: {len(train_data)} -> {len(train_final)}")
+    # Update train_final
+    before_len = len(train_final)
+    train_final = train_oversampled
+    print(f"   before: {before_len} -> after: {len(train_final)} (Added {len(train_final) - before_len} replicas)")
+
+    print(f"   - [Val/Test] Original for real performance, Balanced Subset (Target 30) for fair comparison.")
+
+    # [v4.7] Collect Normal Paths for Background Mixing
+    # We use ALL normal data (Train+Val+Test) as potential background sources because it's just noise.
+    # Or strictly separate to avoid leaking validation noise?
+    # Safer: Use only TRAIN Normal data.
+    normal_train_paths = [x['path'] for x in train_data if x['abnormal'] == 0]
+    print(f"🔊 Background Noise Source: {len(normal_train_paths)} normal files from Train set")
 
     # Dataset 생성
-    train_ds = AudioDataset(train_final, arch, feature_extractor, is_training=True, desc="Train")
-    val_ds = AudioDataset(val_data, arch, feature_extractor, is_training=False, desc="Valid")
-    test_ds = AudioDataset(test_data, arch, feature_extractor, is_training=False, desc="Test")
+    train_ds = AudioDataset(train_final, arch, feature_extractor, is_training=True, desc="Train", background_paths=normal_train_paths)
+    val_ds = AudioDataset(val_data_final, arch, feature_extractor, is_training=False, desc="Valid")
+    test_ds = AudioDataset(test_data_final, arch, feature_extractor, is_training=False, desc="Test")
 
     pin = IS_RUNPOD
     nw = 4 if IS_RUNPOD else 0
@@ -417,13 +596,52 @@ def create_dataloaders(arch, feature_extractor=None, batch_size=None, samples_pe
     )
     val_loader = torch.utils.data.DataLoader(val_ds, batch_size=batch_size, pin_memory=pin, num_workers=nw)
     test_loader = torch.utils.data.DataLoader(test_ds, batch_size=batch_size, pin_memory=pin, num_workers=nw)
+    
+    # Balanced Subset Loaders
+    val_bal_ds = AudioDataset(val_data_balanced, arch, feature_extractor, is_training=False, desc="Valid_Balanced")
+    val_loader_balanced = torch.utils.data.DataLoader(val_bal_ds, batch_size=batch_size, pin_memory=pin, num_workers=nw)
+    
+    test_bal_ds = AudioDataset(test_data_balanced, arch, feature_extractor, is_training=False, desc="Test_Balanced")
+    test_loader_balanced = torch.utils.data.DataLoader(test_bal_ds, batch_size=batch_size, pin_memory=pin, num_workers=nw)
 
-    # Class Weights (Type Head) - Original Train 분포 기준
-    type_counts = Counter([x['type'] for x in train_data if x['type'] in TYPE_LABELS])
-    if any(type_counts[l] == 0 for l in TYPE_LABELS):
-        weights = torch.ones(len(TYPE_LABELS), device=DEVICE)
-    else:
-        min_count = min(type_counts.values())
-        weights = torch.tensor([min_count / (type_counts[l] + 1e-6) for l in TYPE_LABELS], device=DEVICE).float()
+    # Class Weights (Type Head) - Inverse Frequency (1 / count) 기반 보정
+    # [Important] type_loss는 abnormal=1인 샘플만 기여하므로, abnormal 샘플만 필터링하여 가중치 계산
+    defect_train = [x for x in train_data if x['abnormal'] == 1]
+    type_counts = Counter([x['type'] for x in defect_train if x['type'] in TYPE_LABELS])
+    total = sum(type_counts.values())
+    n_classes = len(TYPE_LABELS)
+    
+    weights = []
+    print(f"⚖️  Calculating Inverse Frequency Weights (Total: {total}):")
+    # Find the maximum count for normalization
+    max_val = max(type_counts.values()) if type_counts else 1.0 # Avoid division by zero if type_counts is empty
+    
+    for t in TYPE_LABELS:
+        count = type_counts.get(t, 0) # Use .get to handle cases where a type might not be in defect_train
+        if count > 0:
+            inverse_freq = max_val / count
+            # [v4.5] Aggressive Weighting (Starter x3.0, Brake x2.2)
+            # [v4.6.1] Engine x2.5 (Fixed Zero Detection issue)
+            if t == "starter":
+                inverse_freq *= 3.0
+            elif t == "brake":
+                inverse_freq *= 2.2
+            elif t == "engine":
+                inverse_freq *= 2.5
+            weights.append(inverse_freq)
+        else:
+            weights.append(1.0) # Assign a default weight if count is zero
+    
+    # Normalize weights to have a mean of 1
+    weights = torch.FloatTensor(weights)
+    if weights.sum() > 0:
+        weights = weights / weights.mean() # Normalize to mean=1
+    
+    # Print final weights for verification
+    for i, t in enumerate(TYPE_LABELS):
+        count = type_counts.get(t, 0)
+        print(f"   - {t}: count={count}, weight={weights[i]:.3f}")
+        
+    weights = torch.tensor(weights, device=DEVICE).float()
 
-    return train_loader, val_loader, test_loader, weights
+    return train_loader, val_loader, val_loader_balanced, test_loader, test_loader_balanced, weights

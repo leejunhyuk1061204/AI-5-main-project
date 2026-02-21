@@ -1,3 +1,7 @@
+"""
+[파일 용도] VISC (차량 내부 소음) 데이터 추출
+원본 VISC 데이터셋에서 필요한 오디오 파일(ID 기준)을 선별하고, Train/Test 구조에 맞춰 `ai/data/audio`로 복사합니다.
+"""
 import os
 import shutil
 import random
