@@ -105,25 +105,37 @@ async def run_ast_inference(processed_audio_buffer, ast_model_payload=None) -> A
     def _sync_inference(audio_buffer):
         try:
             # 1. 오디오 로드 (16kHz)
+            print("[AST Inference] 오디오 로드 시작...")
             audio_buffer.seek(0)
             audio_array, sr = librosa.load(audio_buffer, sr=16000)
+            print(f"[AST Inference] 오디오 로드 완료: {len(audio_array)/sr:.2f}s")
             
             # 2. Sliding Window 설정 (5초 윈도우, Stride 40%)
             window_size = 16000 * 5
-            stride = int(window_size * 0.4) # ≈ 2초 (Semantic Ratio 유지)
+            stride = int(window_size * 0.4)
             
-            # 오디오가 5초보다 짧으면 패딩, 길면 슬라이딩
             if len(audio_array) < window_size:
                 chunks = [librosa.util.fix_length(audio_array, size=window_size)]
             else:
                 chunks = []
                 for start in range(0, len(audio_array) - window_size + 1, stride):
                     chunks.append(audio_array[start:start + window_size])
-                # 마지막 조각 (Stride 때문에 뒤가 남는 경우 처리)
                 if len(audio_array) > window_size and (len(audio_array) - window_size) % stride != 0:
                     chunks.append(audio_array[-window_size:])
             
+            # [성능] 실제 5초 클립 균등 선택 (주파수 왜곡 없음)
+            # - 시간 압축 X → 소리 특성 그대로 보존
+            # - 전/중/후 구간에서 대표 클립을 고르게 추출
+            MAX_CHUNKS = 13  # 최대 13개 (= MAX_CHUNKS * 5초 ≈ 65초치 커버)
+            if len(chunks) > MAX_CHUNKS:
+                step = len(chunks) / MAX_CHUNKS
+                chunks = [chunks[int(i * step)] for i in range(MAX_CHUNKS)]
+                print(f"[AST Inference] 대표 클립 {len(chunks)}개 선택 (오디오 전체 커버, 주파수 보존)")
+            else:
+                print(f"[AST Inference] Sliding Window 완료: {len(chunks)}개 청크")
+            
             # 3. Batch Inference (성능 최적화)
+            print(f"[AST Inference] Feature Extraction 시작 ({len(chunks)}개 청크)...")
             inputs = feature_extractor(
                 chunks, 
                 sampling_rate=16000, 
@@ -131,11 +143,14 @@ async def run_ast_inference(processed_audio_buffer, ast_model_payload=None) -> A
                 padding="max_length"
             )
             
+            print("[AST Inference] Feature Extraction 완료")
+            print(f"[AST Inference] 모델 추론 시작 (batch_size={len(chunks)})...")
             with torch.no_grad():
                 outputs = model(**inputs)
                 logits = outputs.logits
                 # [Optimization] probs (n_chunks, n_classes)는 추후 Heatmap/Localization에 활용 가능
                 probs = F.softmax(logits, dim=-1)
+            print("[AST Inference] 모델 추론 완료")
             
             # 4. Aggregation: Max Pooling across time (결함 감지 확률 극대화)
             max_probs, _ = torch.max(probs, dim=0)
@@ -151,13 +166,11 @@ async def run_ast_inference(processed_audio_buffer, ast_model_payload=None) -> A
             if confidence < 0.4:
                 status = "UNKNOWN"
                 category = "UNKNOWN_SOUND"
-                diagnosed_label = "UNKNOWN"
-                description = "식별 불가능한 소리입니다. 재녹음을 권장합니다."
+                diagnosed_label = "FAULTY_SOUND" # 보수적 접근
                 is_critical = False
             
             # [Refinement] NORMAL 판단: 전체 max가 normal이면서, normal 확신도가 높을 때만 (False Normal 방지)
             else:
-                # [Robust] label2id 순회 시 대소문자 무관하게 처리
                 defect_scores = []
                 for name, idx in model.config.label2id.items():
                     if name.lower() != "normal":
@@ -166,22 +179,12 @@ async def run_ast_inference(processed_audio_buffer, ast_model_payload=None) -> A
                 if label_lower == "normal" and confidence > 0.6 and (not defect_scores or confidence > max(defect_scores)):
                     status = "NORMAL"
                     category = get_category_from_label(label_name)
-                    diagnosed_label = "NORMAL"
-                    description = get_description_from_label(label_name)
+                    diagnosed_label = "NORMAL_SOUND"
                     is_critical = False
                 else:
-                    # 결함(engine, brake, starter) 감지 또는 정상이지만 확신도가 낮을 때
                     status = "CRITICAL"
                     category = get_category_from_label(label_name)
-                    
-                    if label_lower == "normal":
-                        # [Refinement] 정상이지만 확신도가 낮아 정밀 분석(LLM/사람)이 필요한 경우
-                        diagnosed_label = "NORMAL_LOW_CONFIDENCE"
-                        description = "정상 신호로 보이나 신뢰도가 낮습니다. 추가 분석이 권장됩니다."
-                    else:
-                        diagnosed_label = label_name.upper()
-                        description = get_description_from_label(label_name)
-                    
+                    diagnosed_label = "FAULTY_SOUND"
                     is_critical = True
             
             # 6. Build probability map for all_probs
@@ -193,12 +196,10 @@ async def run_ast_inference(processed_audio_buffer, ast_model_payload=None) -> A
                 status=status,
                 analysis_type="AST_WINDOW",
                 category=category,
-                data=AudioDetail(
-                    diagnosed_label=diagnosed_label,
-                    description=description
+                detail=AudioDetail(
+                    diagnosed_label=diagnosed_label
                 ),
                 confidence=round(confidence, 4),
-                all_probs=all_probs_map, # [New] Add distribution
                 is_critical=is_critical
             )
             
@@ -208,9 +209,8 @@ async def run_ast_inference(processed_audio_buffer, ast_model_payload=None) -> A
                 status="UNKNOWN",
                 analysis_type="AST",
                 category="UNKNOWN_AUDIO",
-                data=AudioDetail(
-                    diagnosed_label="Error",
-                    description=f"추론 중 오류 발생: {str(e)}"
+                detail=AudioDetail(
+                    diagnosed_label="FAULTY_SOUND"
                 ),
                 confidence=0.0,
                 is_critical=False
