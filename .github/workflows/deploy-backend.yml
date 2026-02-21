@@ -103,15 +103,34 @@ jobs:
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:$SAFE_BRANCH_NAME
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:latest
 
+      - name: Clean up old DB directories
+        uses: appleboy/ssh-action@v0.1.6
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            sudo rm -rf /home/ubuntu/db || true
+            sudo rm -f /home/ubuntu/*.sql /home/ubuntu/*.csv || true
+
       - name: Copy Configuration Files to EC2
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          source: "backend/firebase-service-account.json,backend/app.env,db/"
+          source: "backend/firebase-service-account.json,backend/app.env"
           target: "/home/ubuntu/"
           strip_components: 1
+
+      - name: Copy DB init files to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "db"
+          target: "/home/ubuntu/"
 
       - name: Deploy to EC2
         uses: appleboy/ssh-action@v1.0.3
