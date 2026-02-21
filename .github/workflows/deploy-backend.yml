@@ -2,7 +2,7 @@ name: Deploy Backend
 
 on:
   push:
-    branches: [deploy, main]
+    branches: [deploy-test]
 
 jobs:
   deploy:
@@ -17,11 +17,36 @@ jobs:
         working-directory: backend
         run: |
           cat <<'EOF' > .env
+          APP_ENV=production
+          STORAGE_TYPE=s3
+          AI_SERVER_URL=${{ secrets.AI_SERVER_URL }}
+          
+          S3_ACCESS_KEY=${{ secrets.S3_ACCESS_KEY }}
+          S3_SECRET_KEY=${{ secrets.S3_SECRET_KEY }}
+          S3_REGION=${{ secrets.S3_REGION }}
+          S3_BUCKET_NAME=${{ secrets.S3_BUCKET_NAME }}
+          
+          SMARTCAR_CLIENT_ID=${{ secrets.SMARTCAR_CLIENT_ID }}
+          SMARTCAR_CLIENT_SECRET=${{ secrets.SMARTCAR_CLIENT_SECRET }}
+          SMARTCAR_REDIRECT_URI=${{ secrets.SMARTCAR_REDIRECT_URI }}
+          SMARTCAR_MODE=${{ secrets.SMARTCAR_MODE }}
+          
+          Client_ID=${{ secrets.CLIENT_ID }}
+          Client_Secret=${{ secrets.CLIENT_SECRET }}
+          Secret_key=${{ secrets.SECRET_KEY }}
+          KAKAO_PAY_SECRET_KEY=${{ secrets.KAKAO_PAY_SECRET_KEY }}
+          
           JWT_SECRET=${{ secrets.JWT_SECRET }}
           ENCRYPTION_KEY=${{ secrets.ENCRYPTION_KEY }}
           NAVER_OCR_Secret_Key=${{ secrets.NAVER_OCR_SECRET_KEY }}
           NAVER_OCR_Invoke_Url=${{ secrets.NAVER_OCR_INVOKE_URL }}
           OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+          HM_CLIENT_ID=${{ secrets.HM_CLIENT_ID }}
+          HM_CLIENT_SECRET=${{ secrets.HM_CLIENT_SECRET }}
+          
+          FIREBASE_CONFIG_PATH=firebase-service-account.json
+          ALLOWED_ORIGINS=http://localhost:8080,http://localhost:19006,http://10.0.2.2:8080,http://${{ secrets.EC2_HOST }}:8080
+          
           DB_HOST=localhost
           DB_PORT=5432
           DB_NAME=car_sentry
@@ -69,10 +94,24 @@ jobs:
       - name: Build and Push Docker Image
         working-directory: backend
         run: |
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:${{ github.ref_name }} .
+          # Sanitize branch name (replace / with -) to make it valid for Docker tag
+          SAFE_BRANCH_NAME=$(echo "${{ github.ref_name }}" | tr '/' '-')
+          echo "Using Docker tag: $SAFE_BRANCH_NAME"
+
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:$SAFE_BRANCH_NAME .
           docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:latest .
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:${{ github.ref_name }}
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:$SAFE_BRANCH_NAME
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:latest
+
+      - name: Clean up old DB directories
+        uses: appleboy/ssh-action@v0.1.6
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            sudo rm -rf /home/ubuntu/db || true
+            sudo rm -f /home/ubuntu/*.sql /home/ubuntu/*.csv || true
 
       - name: Copy Configuration Files to EC2
         uses: appleboy/scp-action@v0.1.7
@@ -84,13 +123,22 @@ jobs:
           target: "/home/ubuntu/"
           strip_components: 1
 
+      - name: Copy DB init files to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "db"
+          target: "/home/ubuntu/"
+
       - name: Deploy to EC2
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          command_timeout: 30m
+          command_timeout: 60m
           script: |
             # --- 0. Optimize Memory & Disk (Critical for t2.micro) ---
             echo "🧹 Cleaning up old Docker images to free space..."
@@ -112,16 +160,31 @@ jobs:
             # Pull latest image
             sudo docker pull ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:latest
             
-            # --- 1. PostgreSQL ---
-            if [ ! "$(sudo docker ps -q -f name=ai-5-db)" ]; then
-                if [ "$(sudo docker ps -aq -f status=exited -f name=ai-5-db)" ]; then
-                    echo "🔄 Starting existing PostgreSQL container..."
-                    sudo docker start ai-5-db
-                else
-                    echo "🐘 Running new PostgreSQL container..."
-                    sudo docker run -d --name ai-5-db --restart unless-stopped --network host -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=car_sentry postgres:15
-                fi
-            fi
+            # --- 1. PostgreSQL (데이터 초기화 및 시드 적용) ---
+            echo "⏹️ Stopping existing PostgreSQL container..."
+            sudo docker stop ai-5-db || true
+            sudo docker rm ai-5-db || true
+            
+            # 기존 데이터(볼륨 찌꺼기) 강제 삭제 (완전 초기화 목적)
+            echo "🧹 Cleaning up old DB volume data..."
+            sudo rm -rf /home/ubuntu/data/postgres_1024 || true
+            sudo mkdir -p /home/ubuntu/data/postgres_1024
+            
+            echo "🐘 Running new PostgreSQL container with Seed Files..."
+            # 로컬 docker-compose.yml과 동일한 환경 구성
+            # 볼륨 마운트(/var/lib/postgresql/data) 및 github action scp로 넘어온 /home/ubuntu/db 폴더의 init sql/csv 명시적 마운트
+            sudo docker run -d --name ai-5-db --restart unless-stopped --network host \
+              -e POSTGRES_USER=postgres \
+              -e POSTGRES_PASSWORD=postgres \
+              -e POSTGRES_DB=car_sentry \
+              -v /home/ubuntu/data/postgres_1024:/var/lib/postgresql/data \
+              -v /home/ubuntu/db/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql \
+              -v /home/ubuntu/db/seed_consumable.sql:/docker-entrypoint-initdb.d/02_seed_consumable.sql \
+              -v /home/ubuntu/db/seed_car_models_load.docker.sql:/docker-entrypoint-initdb.d/03_seed_car_models_load.sql \
+              -v /home/ubuntu/db/seed_car_models.csv:/docker-entrypoint-initdb.d/seed_car_models.csv \
+              -v /home/ubuntu/db/seed_dtc_data_load.docker.sql:/docker-entrypoint-initdb.d/04_seed_dtc_data_load.sql \
+              -v /home/ubuntu/db/seed_dtc_data.csv:/docker-entrypoint-initdb.d/seed_dtc_data.csv \
+              timescale/timescaledb-ha:pg15
 
             # --- 2. Redis ---
             if [ ! "$(sudo docker ps -q -f name=ai-5-redis)" ]; then
@@ -176,8 +239,9 @@ jobs:
             fi
             
             echo "▶️ Running new backend container..."
-            # Add entropy fix to JAVA_TOOL_OPTIONS to prevent startup hangs
-            JAVA_OPTS="-Xmx300m -Djava.security.egd=file:/dev/./urandom"
+            # Adjust memory: 512MB Max Heap (fits within 1GB RAM + 2GB Swap)
+            # -XX:+ExitOnOutOfMemoryError: Ensure container exits immediately on OOM so Docker restarts it (or we catch it)
+            JAVA_OPTS="-Xms256m -Xmx512m -XX:+ExitOnOutOfMemoryError -Djava.security.egd=file:/dev/./urandom"
             
             if [ -f "$REMOTE_ENV_PATH" ]; then
               echo "✅ Env file found at $REMOTE_ENV_PATH. Using it."
@@ -200,22 +264,31 @@ jobs:
                 ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:latest
             fi
 
-            echo "⏳ Waiting for Backend to bind port 8080 (max 20min)..."
-            MAX_RETRIES=120
+            echo "⏳ Waiting for Backend to bind port 8080 (max 50min)..."
+            MAX_RETRIES=300
             for ((i=1; i<=MAX_RETRIES; i++)); do
               if sudo ss -tulpn | grep 8080 > /dev/null; then
                   echo "✅ Backend is listening on port 8080!"
                   break
               fi
-              echo "   ... waiting for port 8080 ($((i*10))s/${MAX_RETRIES}0s)"
-              sleep 10
+              echo "   ... waiting for port 8080 ($((i*10))s/${MAX_RETRIES}0s) - $(date)"
+              
+              # Print logs every 60s (every 6th iteration) to debug hangs
+              if (( i % 6 == 0 )); then
+                 echo "📋 [DEBUG] Tailing last 5 log lines:"
+                 sudo docker logs --tail 5 ai-5-backend
+              fi
+              
+              sleep 10s
             done
             
             # Check if port is actually open after loop
             if ! sudo ss -tulpn | grep 8080 > /dev/null; then
-                echo "❌ Backend failed to start within 20 minutes."
-                echo "📋 Container Logs (Last 50 lines):"
-                sudo docker logs --tail 50 ai-5-backend
+                echo "❌ Backend failed to start within 50 minutes."
+                echo "📋 System Diagnostics (OOM Check):"
+                sudo dmesg | grep -i "kill" || echo "No OOM kills detected in dmesg."
+                echo "📋 Container Logs (Last 100 lines):"
+                sudo docker logs --tail 100 ai-5-backend
                 exit 1
             fi
 
