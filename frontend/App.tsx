@@ -146,7 +146,7 @@ export default function App() {
           if (Platform.OS === 'android') {
             // NavigationBar는 일부 환경에서 실패할 수 있으므로 안전하게 처리
             try {
-              await NavigationBar.setVisibilityAsync("hidden");
+              // await NavigationBar.setVisibilityAsync("hidden"); // 하단 네비게이션 바를 강제로 숨기지 않도록 주석 처리
               await NavigationBar.setBackgroundColorAsync("transparent");
               await NavigationBar.setButtonStyleAsync("light");
             } catch (navErr) {

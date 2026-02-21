@@ -310,20 +310,21 @@ export default function Login() {
                     </TouchableOpacity>
                 </View>
 
-                <TouchableOpacity
+                {/* ELM327 블루투스 테스트 */}
+                {/* <TouchableOpacity
                     onPress={() => navigation.navigate('Elm327Test')}
                     className="mb-2 items-center"
                 >
                     <Text className="text-xs text-text-muted">ELM327 테스트 (로그인 없이)</Text>
-                </TouchableOpacity>
+                </TouchableOpacity> */}
 
                 {/* Reset Button (For Testing) */}
-                <TouchableOpacity
+                {/* <TouchableOpacity
                     onPress={handleReset}
                     className="mb-8 items-center"
                 >
                     <Text className="text-xs text-gray-600 underline">앱 초기화 (테스트용)</Text>
-                </TouchableOpacity>
+                </TouchableOpacity> */}
             </View>
         </BaseScreen>
     );

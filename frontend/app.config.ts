@@ -27,7 +27,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
             foregroundImage: "./assets/adaptive_icon_fixed.png",
             backgroundColor: "#101922"
         },
-        edgeToEdgeEnabled: true,
+
         predictiveBackGestureEnabled: false,
         permissions: [
             "android.permission.BLUETOOTH",
