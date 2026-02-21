@@ -12,6 +12,11 @@
 5. Data: 저신뢰 데이터에 대한 Active Learning(LLM Oracle) 기록 관리
 """
 import os
+import logging
+
+# Logger 설정
+logger = logging.getLogger(__name__)
+
 from ai.app.services.audio.hertz import process_to_16khz
 from ai.app.services.audio.ast_service import run_ast_inference
 from ai.app.services.common.llm_service import analyze_audio_with_llm
@@ -83,6 +88,13 @@ class AudioService:
                 
                 if len(content) > MAX_AUDIO_SIZE:
                     raise ValueError("Audio file too large")
+                
+                # [Debug] Check if content is valid audio or S3 error
+                sample = content[:100]
+                logger.info(f"[Audio Debug] Downloaded {len(content)} bytes. Head: {sample}")
+                if b"<Error>" in sample or b"<?xml" in sample:
+                    logger.error(f"[Audio Debug] S3 Error suspected: {content.decode('utf-8', errors='ignore')}")
+                
                 return content
             except Exception as e:
                 raise ValueError(f"Failed to download audio: {e}")
@@ -101,22 +113,22 @@ class AudioService:
         try:
             audio_bytes = await self._safe_load_audio(s3_url)
         except Exception as e:
-            print(f"[Audio Service] 로드 실패: {e}")
+            logger.error(f"[Audio Service] 로드 실패: {e}")
             return AudioResponse(
                 status="ERROR",
                 analysis_type="IO",
                 category="UNKNOWN_AUDIO",
-                data=AudioDetail(diagnosed_label="Load Error", description=str(e)),
+                detail=AudioDetail(diagnosed_label="FAULTY_SOUND"),
                 confidence=0.0
             )
 
         # 2. 전처리: 노이즈 필터링 파이프라인 (음성/잡음 제거)
         try:
             from ai.app.services.audio.audio_preprocessing import preprocess_audio_pipeline
-            preprocessed_bytes, speech_ratio = await preprocess_audio_pipeline(audio_bytes)
-            print(f"[Audio Service] 노이즈 필터링 완료 (원본: {len(audio_bytes)}B → 처리: {len(preprocessed_bytes)}B, 음성비율: {speech_ratio:.2%})")
+            preprocessed_bytes, speech_ratio = await preprocess_audio_pipeline(audio_bytes, source_url=s3_url)
+            logger.info(f"[Audio Service] 노이즈 필터링 완료 (원본: {len(audio_bytes)}B → 처리: {len(preprocessed_bytes)}B, 음성비율: {speech_ratio:.2%})")
         except Exception as e:
-            print(f"[Audio Service] 전처리 실패 (Fallback to raw): {e}")
+            logger.warning(f"[Audio Service] 전처리 실패 (Fallback to raw): {e}")
             preprocessed_bytes = audio_bytes
             speech_ratio = 0.0
         
@@ -124,16 +136,18 @@ class AudioService:
         audio_buffer = io.BytesIO(preprocessed_bytes)
         
         # 3. 1차 진단: AST 모델
+        logger.info(f"[Audio Service] AST Inference 시작 (preprocessed: {len(preprocessed_bytes):,} bytes)")
         try:
             ast_result = await run_ast_inference(audio_buffer, ast_model_payload=ast_model)
+            logger.info(f"[Audio Service] AST Inference 완료 (status={ast_result.status}, conf={ast_result.confidence})")
         except Exception as e:
-            print(f"[Audio Service] AST Inference Error: {e}")
+            logger.error(f"[Audio Service] AST Inference Error: {e}")
             from ai.app.schemas.audio_schema import AudioResponse, AudioDetail
             ast_result = AudioResponse(
                 status="UNKNOWN",
                 analysis_type="AST_FAILED",
                 category="UNKNOWN_AUDIO",
-                data=AudioDetail(diagnosed_label="Error", description="AST Model Failed"),
+                detail=AudioDetail(diagnosed_label="FAULTY_SOUND"),
                 confidence=0.0,
                 is_critical=False
             )
@@ -150,10 +164,10 @@ class AudioService:
         )
         
         if decision.status == "UNCERTAIN":
-            print(f"[Audio Fallback] {decision.reason} (Gate: {decision.gate}) -> LLM으로 전환 요청")
+            logger.info(f"[Audio Fallback] {decision.reason} (Gate: {decision.gate}) -> LLM으로 전환 요청")
             wav_bytes = audio_buffer.getvalue() if audio_buffer else audio_bytes
             final_result = await analyze_audio_with_llm(s3_url, audio_bytes=wav_bytes)
-            print(f"[Audio Fallback] LLM 응답: {final_result}")
+            logger.info(f"[Audio Fallback] LLM 응답: {final_result}")
             # Decision 정보 주입
             final_result.analysis_type = f"LLM_FALLBACK_GATE_{decision.gate}"
         else:
@@ -168,7 +182,7 @@ class AudioService:
                 from ai.app.services.common.llm_service import generate_audio_labels
                 from ai.app.services.common.active_learning_service import get_active_learning_service
 
-                print(f"[Active Learning] 저신뢰 오디오 감지 ({final_result.confidence:.2f}). LLM 라벨링 시작...")
+                logger.info(f"[Active Learning] 저신뢰 오디오 감지 ({final_result.confidence:.2f}). LLM 라벨링 시작...")
                 
                 # Step 1: LLM Oracle
                 oracle_labels = await generate_audio_labels(s3_url, audio_bytes=audio_bytes)
@@ -176,7 +190,7 @@ class AudioService:
                 
                 # Step 2: Quality Check
                 if status == "RE_RECORD_REQUIRED" or status in ["UNKNOWN", "ERROR"] or not oracle_labels.get("label"):
-                    print(f"[Active Learning] 배제: 품질 미달 ({status})")
+                    logger.info(f"[Active Learning] 배제: 품질 미달 ({status})")
                     return final_result
 
                 # Step 3: Save & Manifest (via Common Service)
@@ -199,7 +213,7 @@ class AudioService:
                     )
 
             except Exception as e:
-                print(f"[Active Learning Audio] 기록 실패 (무시): {e}")
+                logger.error(f"[Active Learning Audio] 기록 실패 (무시): {e}")
             
         return final_result
 
@@ -209,7 +223,7 @@ class AudioService:
             status="NORMAL",
             analysis_type="AST",
             category="ENGINE",
-            data=AudioDetail(diagnosed_label="NORMAL", description="정상입니다."),
+            detail=AudioDetail(diagnosed_label="NORMAL_SOUND"),
             confidence=0.99,
             is_critical=False
         )
