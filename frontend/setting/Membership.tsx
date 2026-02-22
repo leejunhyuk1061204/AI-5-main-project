@@ -257,7 +257,7 @@ export default function Membership() {
                                     <View className="items-end">
                                         <Text className="text-white text-2xl font-bold">{plan.price}</Text>
                                         {plan.period && (
-                                            <Text className="text-gray-500 text-sm">{plan.period}</Text>
+                                            <Text className="text-gray-500 text-sm">정기결제 {plan.period}</Text>
                                         )}
                                     </View>
                                 </View>

@@ -18,7 +18,7 @@ services:
       - ./db/seed_car_models.csv:/docker-entrypoint-initdb.d/seed_car_models.csv
       - ./db/seed_dtc_data_load.docker.sql:/docker-entrypoint-initdb.d/04_seed_dtc_data_load.sql
       - ./db/seed_dtc_data.csv:/docker-entrypoint-initdb.d/seed_dtc_data.csv
-      - ./db/seed_v1.sql:/docker-entrypoint-initdb.d/05_seed_v1.sql
+      # - ./db/seed_v1.sql:/docker-entrypoint-initdb.d/05_seed_v1.sql
     networks:
       - car-sentry-network
 
