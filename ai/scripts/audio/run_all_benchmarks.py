@@ -1,6 +1,8 @@
 # ai/scripts/audio/run_all_benchmarks.py
 """
-🚀 전체 벤치마크 자동 실행 스크립트 (RTX 3050 6GB 최적화)
+[파일 용도] 전체 벤치마크 자동 실행 (Audio)
+오디오 모델(CNN14, AST, PaSST, Hybrid)의 Baseline 학습 및 Fine-tune 실험을 순차적으로 수행합니다.
+실험 결과는 `ai/runs`에 저장되며, 완료 후 통합 리포트를 생성할 수 있습니다.
 
 [사용법]
   Dry-run (1 epoch, 오류 확인):
@@ -15,14 +17,41 @@
 - GPU 메모리 캐시를 매 실행 전 초기화
 - 실시간 로그를 benchmark_log.txt에 기록
 """
-import os, sys, gc, time, argparse, traceback
+import os, sys, gc, time, argparse, traceback, contextlib
 from datetime import datetime, timedelta
 
 import torch
 
+# ─────────── [Pro] Logging Tee (Individual Log Saving) ───────────
+class LoggerTee:
+    def __init__(self, *files):
+        self.files = [f for f in files if f is not None]
+    def write(self, data):
+        for f in self.files:
+            try: f.write(data)
+            except: pass
+    def flush(self):
+        for f in self.files:
+            try: f.flush()
+            except: pass
+
+@contextlib.contextmanager
+def multi_log_context(*files):
+    """Wait-free redirection of stdout/stderr to multiple destinations"""
+    orig_stdout = sys.stdout
+    orig_stderr = sys.stderr
+    sys.stdout = LoggerTee(orig_stdout, *files)
+    sys.stderr = LoggerTee(orig_stderr, *files)
+    try:
+        yield
+    finally:
+        sys.stdout = orig_stdout
+        sys.stderr = orig_stderr
+
 # ──────────── RTX 3050 6GB 최적화 배치 크기 ────────────
 # 모델별로 안전한 배치 크기 설정 (6GB VRAM 기준)
 BATCH_SIZES = {
+    "yamnet":  {"baseline": 16, "finetune": 16},
     "cnn14":   {"baseline": 16, "finetune": 8},
     "ast":     {"baseline": 8,  "finetune": 4},
     "passt":   {"baseline": 8,  "finetune": 4},
@@ -31,13 +60,30 @@ BATCH_SIZES = {
 
 # ──────────── 실행 순서 정의 ────────────
 def get_jobs(dry_run=False):
-    """학습 작업 목록 생성"""
+    """학습 작업 목록 생성 (가벼운 모델부터 → 무거운 모델 순)"""
     epochs_bl = 1 if dry_run else 10    # baseline epochs
     epochs_ft = 1 if dry_run else 20    # finetune epochs
     epochs_hy = 1 if dry_run else 20    # hybrid epochs
+    epochs_ym = 1 if dry_run else 30    # yamnet epochs (scratch training needs more)
 
     jobs = [
-        # ── CNN14 ──
+        # ═══════════════════════════════════════════
+        # 1. YAMNet (MobileNetV1, ~14.5MB, ~15ms)
+        #    가장 가벼운 모델 → 먼저 실행
+        # ═══════════════════════════════════════════
+        {
+            "name": "YAMNet Baseline (Scratch)",
+            "module": "ai.scripts.audio.train_yamnet",
+            "args": ["--mode", "baseline", "--epochs", str(epochs_ym), "--batch_size", str(BATCH_SIZES["yamnet"]["baseline"])],
+        },
+        {
+            "name": "YAMNet Fine-tune (AudioSet Pretrained)",
+            "module": "ai.scripts.audio.train_yamnet",
+            "args": ["--mode", "finetune", "--epochs", str(epochs_ym), "--batch_size", str(BATCH_SIZES["yamnet"]["finetune"])],
+        },
+        # ═══════════════════════════════════════════
+        # 2. CNN14 (~329MB, ~20ms)
+        # ═══════════════════════════════════════════
         {
             "name": "CNN14 Baseline",
             "module": "ai.scripts.audio.train_cnn14",
@@ -48,52 +94,63 @@ def get_jobs(dry_run=False):
             "module": "ai.scripts.audio.train_cnn14",
             "args": ["--mode", "finetune", "--epochs", str(epochs_ft), "--batch_size", str(BATCH_SIZES["cnn14"]["finetune"])],
         },
-        # ── AST ──
+        # ═══════════════════════════════════════════
+        # 3. AST (LoRA Fine-tune, ~329MB, ~100ms)
+        # ═══════════════════════════════════════════
         {
             "name": "AST Baseline",
             "module": "ai.scripts.audio.train_ast",
             "args": ["--mode", "baseline", "--epochs", str(epochs_bl), "--batch_size", str(BATCH_SIZES["ast"]["baseline"])],
         },
         {
-            "name": "AST Fine-tune",
+            "name": "AST LoRA Fine-tune",
             "module": "ai.scripts.audio.train_ast",
             "args": ["--mode", "finetune", "--epochs", str(epochs_ft), "--batch_size", str(BATCH_SIZES["ast"]["finetune"])],
         },
-        # ── PaSST-N-S (No Structured patchout, stride 16) ──
+        # ═══════════════════════════════════════════
+        # 4. PaSST-S (stride 16, No Structured Patchout)
+        #    AudioSet AP=0.468
+        # ═══════════════════════════════════════════
         {
-            "name": "PaSST-N-S Baseline",
+            "name": "PaSST-S (stride16) Baseline",
             "module": "ai.scripts.audio.train_passt",
             "args": ["--arch", "passt_s_p16_s16_128_ap468", "--mode", "baseline", "--epochs", str(epochs_bl), "--batch_size", str(BATCH_SIZES["passt"]["baseline"])],
         },
         {
-            "name": "PaSST-N-S Fine-tune",
+            "name": "PaSST-S (stride16) LoRA Fine-tune",
             "module": "ai.scripts.audio.train_passt",
             "args": ["--arch", "passt_s_p16_s16_128_ap468", "--mode", "finetune", "--epochs", str(epochs_ft), "--batch_size", str(BATCH_SIZES["passt"]["finetune"])],
         },
-        # ── PaSST-S-SWA (Structured patchout + SWA, 최고 성능) ──
+        # ═══════════════════════════════════════════
+        # 5. PaSST-SWA (stride 10, SWA, 최고 사전학습)
+        #    AudioSet AP=0.476
+        # ═══════════════════════════════════════════
         {
-            "name": "PaSST-S-SWA Baseline",
+            "name": "PaSST-SWA (stride10) Baseline",
             "module": "ai.scripts.audio.train_passt",
             "args": ["--arch", "passt_s_swa_p16_128_ap476", "--mode", "baseline", "--epochs", str(epochs_bl), "--batch_size", str(BATCH_SIZES["passt"]["baseline"])],
         },
         {
-            "name": "PaSST-S-SWA Fine-tune",
+            "name": "PaSST-SWA (stride10) LoRA Fine-tune",
             "module": "ai.scripts.audio.train_passt",
             "args": ["--arch", "passt_s_swa_p16_128_ap476", "--mode", "finetune", "--epochs", str(epochs_ft), "--batch_size", str(BATCH_SIZES["passt"]["finetune"])],
         },
-        # ── Hybrid (Fusions) ──
+        # ═══════════════════════════════════════════
+        # 6. Hybrid (Knowledge Distillation Fusion)
+        #    Teacher(AST/PaSST) → Student(CNN14)
+        # ═══════════════════════════════════════════
         {
-            "name": "Hybrid (AST+CNN14)",
+            "name": "Hybrid (AST→CNN14)",
             "module": "ai.scripts.audio.train_hybrid",
             "args": ["--teacher", "ast", "--epochs", str(epochs_hy), "--batch_size", str(BATCH_SIZES["hybrid"]["default"])],
         },
         {
-            "name": "Hybrid (PaSST-N-S+CNN14)",
+            "name": "Hybrid (PaSST-S→CNN14)",
             "module": "ai.scripts.audio.train_hybrid",
             "args": ["--teacher", "passt_s_p16_s16_128_ap468", "--epochs", str(epochs_hy), "--batch_size", str(BATCH_SIZES["hybrid"]["default"])],
         },
         {
-            "name": "Hybrid (PaSST-SWA+CNN14)",
+            "name": "Hybrid (PaSST-SWA→CNN14)",
             "module": "ai.scripts.audio.train_hybrid",
             "args": ["--teacher", "passt_s_swa", "--epochs", str(epochs_hy), "--batch_size", str(BATCH_SIZES["hybrid"]["default"])],
         },
@@ -107,6 +164,20 @@ def clear_gpu():
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
         torch.cuda.synchronize()
+
+
+def archive_existing_runs():
+    """기존 ai/runs 폴더가 있으면 타임스탬프를 붙여 이름을 변경(백업)"""
+    save_root = os.path.join("ai", "runs")
+    # 폴더가 존재하고 내부 파일이 있을 경우에만 아카이빙
+    if os.path.exists(save_root) and os.listdir(save_root):
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        archive_name = f"{save_root}_archive_{timestamp}"
+        print(f"📦 기존 학습 결과 발견! 아카이빙 중: {save_root} -> {archive_name}", flush=True)
+        try:
+            os.rename(save_root, archive_name)
+        except Exception as e:
+            print(f"⚠️ 아카이빙 실패 (파일이 열려있을 수 있음): {e}", flush=True)
 
 
 def run_job(job, log_file):
@@ -123,47 +194,61 @@ def run_job(job, log_file):
     # GPU 메모리 초기화
     clear_gpu()
 
+    # [Pro] Create specific log directory for this job
+    job_dir_name = name.lower().replace(" ", "_").replace("(", "").replace(")", "").replace("+", "_").replace("-", "_")
+    model_log_dir = os.path.join("ai", "runs", job_dir_name)
+    os.makedirs(model_log_dir, exist_ok=True)
+    train_log_path = os.path.join(model_log_dir, "train.log")
+
     start = time.time()
     max_retries = 2
 
     for attempt in range(max_retries + 1):
         try:
-            # sys.argv를 조작하여 각 스크립트의 argparse가 올바르게 동작하도록 함
-            original_argv = sys.argv
-            sys.argv = [module] + args
-            
-            # 모듈을 직접 import하고 실행
-            if "train_cnn14" in module:
-                from ai.scripts.audio.train_cnn14 import train as train_cnn14
-                # args에서 값 추출
-                mode = args[args.index("--mode") + 1]
-                epochs = int(args[args.index("--epochs") + 1])
-                batch_size = int(args[args.index("--batch_size") + 1])
-                train_cnn14(mode, epochs, batch_size)
+            with open(train_log_path, "a", encoding="utf-8") as f_job:
+                with multi_log_context(f_job, log_file):
+                    # sys.argv 조작하여 각 스크립트의 argparse가 올바르게 동작하도록 함
+                    original_argv = sys.argv
+                    sys.argv = [module] + args
+                    
+                    # 모듈을 직접 import하고 실행 (동적 import)
+                    if "train_cnn14" in module:
+                        from ai.scripts.audio.train_cnn14 import train as train_cnn14
+                        mode = args[args.index("--mode") + 1]
+                        epochs = int(args[args.index("--epochs") + 1])
+                        batch_size = int(args[args.index("--batch_size") + 1])
+                        train_cnn14(mode, epochs, batch_size)
 
-            elif "train_ast" in module:
-                from ai.scripts.audio.train_ast import train as train_ast
-                mode = args[args.index("--mode") + 1]
-                epochs = int(args[args.index("--epochs") + 1])
-                batch_size = int(args[args.index("--batch_size") + 1])
-                train_ast(mode, epochs, batch_size)
+                    elif "train_ast" in module:
+                        from ai.scripts.audio.train_ast import train as train_ast
+                        mode = args[args.index("--mode") + 1]
+                        epochs = int(args[args.index("--epochs") + 1])
+                        batch_size = int(args[args.index("--batch_size") + 1])
+                        train_ast(mode, epochs, batch_size)
 
-            elif "train_passt" in module:
-                from ai.scripts.audio.train_passt import train as train_passt
-                arch = args[args.index("--arch") + 1]
-                mode = args[args.index("--mode") + 1]
-                epochs = int(args[args.index("--epochs") + 1])
-                batch_size = int(args[args.index("--batch_size") + 1])
-                train_passt(arch, mode, epochs, batch_size)
+                    elif "train_passt" in module:
+                        from ai.scripts.audio.train_passt import train as train_passt
+                        arch = args[args.index("--arch") + 1]
+                        mode = args[args.index("--mode") + 1]
+                        epochs = int(args[args.index("--epochs") + 1])
+                        batch_size = int(args[args.index("--batch_size") + 1])
+                        train_passt(arch, mode, epochs, batch_size)
 
-            elif "train_hybrid" in module:
-                from ai.scripts.audio.train_hybrid import train as train_hybrid
-                teacher = args[args.index("--teacher") + 1]
-                epochs = int(args[args.index("--epochs") + 1])
-                batch_size = int(args[args.index("--batch_size") + 1])
-                train_hybrid(teacher, epochs, batch_size)
+                    elif "train_hybrid" in module:
+                        from ai.scripts.audio.train_hybrid import train as train_hybrid
+                        teacher = args[args.index("--teacher") + 1]
+                        epochs = int(args[args.index("--epochs") + 1])
+                        batch_size = int(args[args.index("--batch_size") + 1])
+                        train_hybrid(teacher, epochs, batch_size)
 
-            sys.argv = original_argv
+                    elif "train_yamnet" in module:
+                        from ai.scripts.audio.train_yamnet import train as train_yamnet
+                        mode = args[args.index("--mode") + 1]
+                        epochs = int(args[args.index("--epochs") + 1])
+                        batch_size = int(args[args.index("--batch_size") + 1])
+                        train_yamnet(mode, epochs, batch_size)
+
+                    sys.argv = original_argv
             
             elapsed = time.time() - start
             elapsed_str = str(timedelta(seconds=int(elapsed)))
@@ -211,6 +296,10 @@ def main():
     parser = argparse.ArgumentParser(description="전체 벤치마크 자동 실행")
     parser.add_argument("--dry-run", action="store_true", help="1 epoch만 실행하여 오류 확인")
     args = parser.parse_args()
+
+    # ── 기존 결과 보호 (Archiving) ──
+    if not args.dry_run:
+        archive_existing_runs()
 
     dry_run = args.dry_run
     if dry_run:

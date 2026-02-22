@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # ai/scripts/audio/verify_preprocessing.py
 """
-A/B 전처리 검증 스크립트
+[파일 용도] 전처리(Preprocessing) 효과 검증 (A/B Test)
 
 [목적]
 원본 오디오와 전처리된 오디오의 Mel-Spectrogram을 시각적으로 비교하여
