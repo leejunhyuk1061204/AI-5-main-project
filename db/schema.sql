@@ -59,7 +59,8 @@ CREATE TABLE IF NOT EXISTS users (
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW(),
     deleted_at TIMESTAMP,
-    profile_image OID
+    profile_image OID,
+    kakao_sid VARCHAR(255)
 );
 
 -- 사용자 설정 (2.1.2)
@@ -545,6 +546,7 @@ CREATE TABLE IF NOT EXISTS payments (
     item_name VARCHAR(255),
     amount INT,
     status VARCHAR(20) DEFAULT 'PENDING',
+    sid VARCHAR(255),
     approved_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT NOW()
 );

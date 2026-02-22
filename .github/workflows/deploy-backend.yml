@@ -52,6 +52,7 @@ jobs:
           DB_NAME=car_sentry
           DB_USER=postgres
           DB_PASSWORD=postgres
+          APP_BACKEND_URL=https://api.carbom.store
           REDIS_HOST=localhost
           REDIS_PORT=6379
           MQ_HOST=localhost
@@ -103,15 +104,15 @@ jobs:
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:$SAFE_BRANCH_NAME
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:latest
 
-#      - name: Clean up old DB directories
-#        uses: appleboy/ssh-action@v0.1.6
-#        with:
-#          host: ${{ secrets.EC2_HOST }}
-#          username: ${{ secrets.EC2_USERNAME }}
-#          key: ${{ secrets.EC2_SSH_KEY }}
-#          script: |
-#            sudo rm -rf /home/ubuntu/db || true
-#            sudo rm -f /home/ubuntu/*.sql /home/ubuntu/*.csv || true
+      - name: Clean up old DB directories
+        uses: appleboy/ssh-action@v0.1.6
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            sudo rm -rf /home/ubuntu/db || true
+            sudo rm -f /home/ubuntu/*.sql /home/ubuntu/*.csv || true
 
       - name: Copy Configuration Files to EC2
         uses: appleboy/scp-action@v0.1.7
@@ -123,14 +124,14 @@ jobs:
           target: "/home/ubuntu/"
           strip_components: 1
 
-#      - name: Copy DB init files to EC2
-#        uses: appleboy/scp-action@v0.1.7
-#        with:
-#          host: ${{ secrets.EC2_HOST }}
-#          username: ${{ secrets.EC2_USERNAME }}
-#          key: ${{ secrets.EC2_SSH_KEY }}
-#          source: "db"
-#          target: "/home/ubuntu/"
+      - name: Copy DB init files to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "db"
+          target: "/home/ubuntu/"
 
       - name: Deploy to EC2
         uses: appleboy/ssh-action@v1.0.3
@@ -286,6 +287,14 @@ jobs:
 
             echo "📋 Database Status:"
             sudo docker exec ai-5-db pg_isready || echo "Creating DB health check failed (container might be down)"
+            
+            echo "🔄 Applying Database Schema (schema.sql)..."
+            if [ -f "/home/ubuntu/db/schema.sql" ]; then
+                sudo docker exec -i ai-5-db psql -U postgres -d car_sentry < /home/ubuntu/db/schema.sql
+                echo "✅ Schema applied successfully."
+            else
+                echo "⚠️ Warning: schema.sql not found at /home/ubuntu/db/schema.sql"
+            fi
             
             echo "📋 Container Status:"
             sudo docker ps -a -f name=ai-5-backend

@@ -49,4 +49,7 @@ public class User extends BaseEntity {
     @Lob
     @Column(name = "profile_image")
     private byte[] profileImage;
+
+    @Column(name = "kakao_sid")
+    private String kakaoSid;
 }
