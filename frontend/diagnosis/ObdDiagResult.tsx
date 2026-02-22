@@ -86,7 +86,11 @@ export default function ObdDiagResult({ navigation, route }: any) {
                         end={{ x: 1, y: 0 }}
                         style={styles.gradientButton}
                     >
+<<<<<<< HEAD
                         <Text style={styles.buttonText}>확인 (홈으로)</Text>
+=======
+                        <Text style={styles.buttonText}>홈으로</Text>
+>>>>>>> 6bc19dc325216a2973b43ada35b2423e1dcfd21c
                         <MaterialIcons name="home" size={24} color="white" />
                     </LinearGradient>
                 </TouchableOpacity>

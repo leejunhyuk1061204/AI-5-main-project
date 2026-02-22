@@ -1,3 +1,8 @@
+"""
+[파일 용도] 데이터셋 분할 (Train/Test)
+처리된(Processed) 오디오 데이터를 지정된 비율(예: 8:2)로 Train/Test 세트로 무작위 분할합니다.
+디렉토리 구조를 유지하며, `metadata.csv` 파일도 함께 분할하여 저장합니다.
+"""
 import os
 import shutil
 import random

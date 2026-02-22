@@ -3,6 +3,56 @@
 참조 문서:
 - docs/obd-anomaly-design-and-overfitting-guardrails.md
 
+## 2026-02-20 | Step9: 현재 상태 고정(빠른 판단용)
+
+### 0) 보고용 수치 요약 (Final Snapshot)
+- 데이터/학습
+  - one-class(정상만 학습), split=`70/15/15`(trip 단위)
+  - IF 학습 윈도우: `6332`
+  - AE 학습: `epochs=10`, `loss 0.523741 -> 0.360000`, `elapsed=1788.76s`
+  - AE 산출물: `lstm_ae.pt`, `scaler.json`
+- 정책/임계값
+  - threshold: `0.795981` (val q99 기준)
+  - k_consecutive: `2`
+  - cooldown_sec: `60`
+- val 정상 분포
+  - q50: `0.256836`
+  - q90: `0.433243`
+  - q95: `0.632952`
+  - q99: `0.795981`
+- 운영 오탐 지표
+  - alarms_per_hour: `0.226986`
+  - window-level FPR(근사): `~1%` (q99 threshold 설계 기준)
+- AE 학습 상태 해석
+  - epoch 진행에 따라 loss가 안정적으로 감소하여 정상 패턴 재구성 학습 수렴 확인
+- 안정성
+  - pytest: `8 passed, 4 warnings`
+
+### 1) 지금 검증 완료
+- 코드 안정성/회귀 테스트 통과
+  - `python -m pytest -q ..\tests\test_obd_anomaly_vfinal.py ..\tests\test_obd_policy_top_signals.py`
+  - 결과: `8 passed, 4 warnings`
+- 강제 anomaly 판정 로직 제거 완료
+  - 의도적으로 `is_anomaly=true`를 강제로 올리는 경로 제거
+- 저품질 입력 대응 경로 확인
+  - `INSUFFICIENT_CORE_FEATURES` 이벤트 노출
+  - electrical 이벤트 중복 요약(`occurrences`) 동작 확인
+
+### 2) 아직 미검증
+- "실제 stall 탐지 성능"은 아직 미검증
+  - 현재 kona 파일에서 rpm 급락 패턴 미관측
+  - 관측값: `rpm_min=1441`, `rpm_max=1678`, `speed_max=46`
+
+### 3) 검증 한계 (명시)
+- 현재 확보된 실차 파일에는 stall 순간(엔진 rpm 급락) 구간이 포함되어 있지 않음
+- 따라서 Step9 범위에서는 stall 탐지 "성능 검증"을 완료할 수 없음
+- val/test가 정상-only(one-class)이므로 Precision/Recall/F1은 미산출
+
+### 4) Step9 종료 기준 (확정)
+- 종료 범위: 저품질 입력 처리 안정화 + 이벤트/요약/severity 동작 검증
+- 미종료 범위: stall 포함 실차 로그 기반 탐지 성능 검증
+- 다음 단계 입력 조건: stall 직전~직후 1~2분 로그 1건 확보 후 재검증
+
 
 ## Pre-Step3 Summary (Step1~2)
 

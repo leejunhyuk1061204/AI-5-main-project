@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 
 # User provided config
 BASE_URL = "http://localhost:8080/api/v1"
-ACCESS_TOKEN = "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiIxOWVjYTg1Yy1iMWI3LTQyNTEtOThhNi0yYWJlYWRiNWZmNDEiLCJpYXQiOjE3NzA4NTUxODAsImV4cCI6MTc3MDg1ODc4MH0.XGT_OV-V5BAHZUqr_hwtRUVMzF-eryzcyMI10uvR-NQHHbyqzqk3HKwhS38hQLPCSBqjjt5vrgEantbSfPJRVg"
+ACCESS_TOKEN = "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiIxOWVjYTg1Yy1iMWI3LTQyNTEtOThhNi0yYWJlYWRiNWZmNDEiLCJpYXQiOjE3NzE0ODAxMjksImV4cCI6MTc3MTQ4MzcyOX0.pn-HxT4zvTlwHDRuInU0TwslqH4UXkM1VxO4mPthkLuQJFYNaldKfwrBJtFXTpC6vTmLgXIqOF_sVpkcNOiC9A"
 VEHICLE_ID = "75072020-0bbe-4eb2-a583-00fec842a8c2"
 
 def get_headers():
@@ -107,7 +107,7 @@ def send_bulk_logs(trip_id, vehicle_id, start_time, duration_min, event_count):
     logs = []
     current_speed = 0.0
     
-    target_speed = random.choice([60, 70, 80, 90, 100]) 
+    target_speed = random.choice([150, 180, 200, 250, 300]) 
 
     for i in range(log_count):
         ts = (start_time + timedelta(seconds=i)).isoformat()
@@ -128,7 +128,7 @@ def send_bulk_logs(trip_id, vehicle_id, start_time, duration_min, event_count):
                 current_speed = target_speed + random.uniform(-2.0, 2.0)
         
         # Ensure physics constraints
-        current_speed = max(0, min(current_speed, 180)) 
+        current_speed = max(0, min(current_speed, 300)) 
         
         current_rpm = current_speed * 25 + 1000 + random.uniform(-20, 20)
         if current_speed > 100: current_rpm += 500 # Higher RPM for high speed
@@ -177,7 +177,7 @@ def main():
     clear_vehicle_data(VEHICLE_ID)
     print(f"[*] Starting 10 iterations with RANDOM event counts for Vehicle {VEHICLE_ID}")
     
-    total_iterations = 10
+    total_iterations = 200
     base_duration_min = 10 
 
     for i in range(1, total_iterations + 1):
@@ -200,7 +200,12 @@ def main():
             backdate_trip(trip_id, log_start_time.isoformat())
             
             send_bulk_logs(trip_id, VEHICLE_ID, log_start_time, base_duration_min, event_count)
-            end_trip(trip_id)
+            try:
+                end_trip(trip_id)
+            except Exception as e:
+                print(f"[-] Trip End Exception: {e}")
+            
+            time.sleep(2) # Wait for backend async processing
             
             # Fix end time
             log_end_time = log_start_time + timedelta(minutes=base_duration_min)
