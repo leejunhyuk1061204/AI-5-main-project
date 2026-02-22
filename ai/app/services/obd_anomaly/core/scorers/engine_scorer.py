@@ -243,10 +243,10 @@ class EngineScorer:
             hard_limit_event = self._detect_hard_limit_event(w)
             stall_event = self._detect_stall_event(w)
             if hard_limit_event is not None:
-                final = max(final, 1.0)
-                is_anom = True
-            if stall_event is not None:
-                is_anom = True
+                # Keep decision score-driven: no direct is_anomaly force.
+                # Hard-limit exceedance adds a strong score bonus.
+                final = min(1.0, max(final, float(final + 0.3)))
+                is_anom = bool(final >= threshold)
             missing_features: List[str] = []
             if q.n_present < self._core_min():
                 missing_features = [
