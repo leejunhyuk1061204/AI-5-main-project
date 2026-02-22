@@ -161,7 +161,6 @@ jobs:
             # Pull latest image
             sudo docker pull ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:latest
             
-<<<<<<< HEAD
             # --- 1. PostgreSQL (Persistent) ---
             if [ ! "$(sudo docker ps -q -f name=ai-5-db)" ]; then
                 if [ "$(sudo docker ps -aq -f status=exited -f name=ai-5-db)" ]; then
@@ -179,33 +178,6 @@ jobs:
                       timescale/timescaledb-ha:pg15
                 fi
             fi
-=======
-            # --- 1. PostgreSQL (데이터 초기화 및 시드 적용) ---
-            echo "⏹️ Stopping existing PostgreSQL container..."
-            sudo docker stop ai-5-db || true
-            sudo docker rm ai-5-db || true
-            
-            # 기존 데이터(볼륨 찌꺼기) 강제 삭제 (완전 초기화 목적)
-            echo "🧹 Cleaning up old DB volume data..."
-            sudo rm -rf /home/ubuntu/data/postgres_1024 || true
-            sudo mkdir -p /home/ubuntu/data/postgres_1024
-            
-            echo "🐘 Running new PostgreSQL container with Seed Files..."
-            # 로컬 docker-compose.yml과 동일한 환경 구성
-            # 볼륨 마운트(/var/lib/postgresql/data) 및 github action scp로 넘어온 /home/ubuntu/db 폴더의 init sql/csv 명시적 마운트
-            sudo docker run -d --name ai-5-db --restart unless-stopped --network host \
-              -e POSTGRES_USER=postgres \
-              -e POSTGRES_PASSWORD=postgres \
-              -e POSTGRES_DB=car_sentry \
-              -v /home/ubuntu/data/postgres_1024:/var/lib/postgresql/data \
-              -v /home/ubuntu/db/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql \
-              -v /home/ubuntu/db/seed_consumable.sql:/docker-entrypoint-initdb.d/02_seed_consumable.sql \
-              -v /home/ubuntu/db/seed_car_models_load.docker.sql:/docker-entrypoint-initdb.d/03_seed_car_models_load.sql \
-              -v /home/ubuntu/db/seed_car_models.csv:/docker-entrypoint-initdb.d/seed_car_models.csv \
-              -v /home/ubuntu/db/seed_dtc_data_load.docker.sql:/docker-entrypoint-initdb.d/04_seed_dtc_data_load.sql \
-              -v /home/ubuntu/db/seed_dtc_data.csv:/docker-entrypoint-initdb.d/seed_dtc_data.csv \
-              timescale/timescaledb-ha:pg15
->>>>>>> 6bc19dc325216a2973b43ada35b2423e1dcfd21c
 
             # --- 2. Redis ---
             if [ ! "$(sudo docker ps -q -f name=ai-5-redis)" ]; then
