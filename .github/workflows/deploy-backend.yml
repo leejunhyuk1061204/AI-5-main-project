@@ -224,6 +224,17 @@ jobs:
             timeout 30s bash -c 'until sudo ss -tulpn | grep 6379; do sleep 2; echo "Waiting for Redis..."; done'
             echo "✅ Services are listening!"
 
+            echo "📋 Database Status:"
+            sudo docker exec ai-5-db pg_isready || echo "Creating DB health check failed (container might be down)"
+            
+            echo "🔄 Applying Database Schema (schema.sql)..."
+            if [ -f "/home/ubuntu/db/schema.sql" ]; then
+                sudo docker exec -i ai-5-db psql -U postgres -d car_sentry < /home/ubuntu/db/schema.sql
+                echo "✅ Schema applied successfully."
+            else
+                echo "⚠️ Warning: schema.sql not found at /home/ubuntu/db/schema.sql"
+            fi
+
             REMOTE_ENV_PATH="/home/ubuntu/app.env"
             FIREBASE_MOUNT=""
             if [ -f "/home/ubuntu/firebase-service-account.json" ]; then
@@ -284,18 +295,6 @@ jobs:
                 sudo docker logs --tail 100 ai-5-backend
                 exit 1
             fi
-
-            echo "📋 Database Status:"
-            sudo docker exec ai-5-db pg_isready || echo "Creating DB health check failed (container might be down)"
-            
-            echo "🔄 Applying Database Schema (schema.sql)..."
-            if [ -f "/home/ubuntu/db/schema.sql" ]; then
-                sudo docker exec -i ai-5-db psql -U postgres -d car_sentry < /home/ubuntu/db/schema.sql
-                echo "✅ Schema applied successfully."
-            else
-                echo "⚠️ Warning: schema.sql not found at /home/ubuntu/db/schema.sql"
-            fi
-            
             echo "📋 Container Status:"
             sudo docker ps -a -f name=ai-5-backend
             

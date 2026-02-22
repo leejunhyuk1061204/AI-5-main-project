@@ -63,6 +63,8 @@ CREATE TABLE IF NOT EXISTS users (
     kakao_sid VARCHAR(255)
 );
 
+ALTER TABLE users ADD COLUMN IF NOT EXISTS kakao_sid VARCHAR(255);
+
 -- 사용자 설정 (2.1.2)
 CREATE TABLE IF NOT EXISTS user_settings (
     user_id UUID PRIMARY KEY REFERENCES users (user_id),
@@ -550,6 +552,8 @@ CREATE TABLE IF NOT EXISTS payments (
     approved_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT NOW()
 );
+
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS sid VARCHAR(255);
 
 -- 리프레시 토큰 (Refresh Tokens)
 CREATE TABLE IF NOT EXISTS refresh_tokens (

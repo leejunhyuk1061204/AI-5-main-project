@@ -25,7 +25,47 @@ public class AiClient {
         org.springframework.http.client.SimpleClientHttpRequestFactory factory = new org.springframework.http.client.SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(5000);
         factory.setReadTimeout(300000); // 15분 단위 청크 데이터 처리 등 긴 분석 시간을 고려하여 5분으로 상향
-        this.restTemplate = new RestTemplate(factory);
+
+        // InputStream을 여러 번 읽을 수 있도록 BufferingClientHttpRequestFactory 사용
+        org.springframework.http.client.ClientHttpRequestFactory bufferingFactory = new org.springframework.http.client.BufferingClientHttpRequestFactory(
+                factory);
+        this.restTemplate = new RestTemplate(bufferingFactory);
+
+        // AI 통신 로깅용 인터셉터 추가
+        this.restTemplate.getInterceptors().add(new AiLoggingInterceptor());
+    }
+
+    /**
+     * AI 서버와의 통신 요청/응답 전문을 가로채서 로깅하는 인터셉터
+     */
+    private class AiLoggingInterceptor implements org.springframework.http.client.ClientHttpRequestInterceptor {
+        private final org.slf4j.Logger aiLogger = org.slf4j.LoggerFactory.getLogger("AI_COMMUNICATION_LOG");
+
+        @Override
+        public org.springframework.http.client.ClientHttpResponse intercept(
+                org.springframework.http.HttpRequest request, byte[] body,
+                org.springframework.http.client.ClientHttpRequestExecution execution) throws java.io.IOException {
+
+            String reqBody = new String(body, java.nio.charset.StandardCharsets.UTF_8);
+            aiLogger.info("========== [AI Request] ==========");
+            aiLogger.info("URI: {} {}", request.getMethod(), request.getURI());
+            aiLogger.info("Request Body: {}", reqBody);
+
+            long start = System.currentTimeMillis();
+            org.springframework.http.client.ClientHttpResponse response = execution.execute(request, body);
+            long end = System.currentTimeMillis();
+
+            // BufferingClientHttpRequestFactory 덕분에 응답 바디를 읽어도 실제 클라이언트단에서 다시 읽을 수 있음
+            String resBody = org.springframework.util.StreamUtils.copyToString(response.getBody(),
+                    java.nio.charset.StandardCharsets.UTF_8);
+
+            aiLogger.info("========== [AI Response] ==========");
+            aiLogger.info("Status: {} ({}ms)", response.getStatusCode(), (end - start));
+            aiLogger.info("Response Body: {}", resBody);
+            aiLogger.info("===================================\n");
+
+            return response;
+        }
     }
 
     @Retryable(retryFor = Exception.class, maxAttempts = 3, backoff = @Backoff(delay = 2000))
