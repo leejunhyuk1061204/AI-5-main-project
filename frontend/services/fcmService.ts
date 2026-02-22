@@ -116,6 +116,7 @@ class FcmService {
      */
     setupTokenRefreshListener() {
         try {
+            if (Platform.OS === 'web') return () => { };
             return messaging().onTokenRefresh(async (newToken) => {
                 console.log('[FCM] Token refreshed:', newToken.substring(0, 20) + '...');
                 const accessToken = await AsyncStorage.getItem('accessToken');

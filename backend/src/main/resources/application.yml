@@ -19,9 +19,9 @@ spring:
     lazy-initialization: false # 🚀 Ensure RabbitMQ consumers start immediately
   jpa:
     open-in-view: false # Disable OSIV for performance
-    defer-datasource-initialization: true # SQL init를 Hibernate 테이블 생성 이후로 미룸
+    defer-datasource-initialization: false # SQL init를 Hibernate 초기화 이전에 먼저 실행하여 ALTER TABLE 반영
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     show-sql: false
     properties:
       hibernate:
@@ -125,4 +125,8 @@ ocr:
 kakao:
   pay:
     secret-key: ${KAKAO_PAY_SECRET_KEY:dummy}
+
+ai:
+  server:
+    url: ${AI_SERVER_URL:http://localhost:8001}
 
