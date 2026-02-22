@@ -40,7 +40,8 @@ public class KakaoPayService {
     // private String backendUrl;
 
     private static final String KAKAO_PAY_HOST = "https://open-api.kakaopay.com/online/v1/payment";
-    private static final String CID = "TC0ONETIME"; // 테스트용 CID
+    private static final String CID_ONETIME = "TC0ONETIME"; // 테스트용 단건 결제 CID
+    private static final String CID_SUBSCRIPTION = "TCSUBSCRIP"; // 테스트용 정기 결제 CID
 
     /**
      * 카카오페이 결제 준비를 요청하고 결제 정보를 저장합니다.
@@ -53,9 +54,15 @@ public class KakaoPayService {
         // 주문 번호 생성
         String orderId = UUID.randomUUID().toString();
 
+        // 정기 결제 여부 판단 (Premium, Business인 경우 SUBSCRIPTION 사용)
+        String cid = ("Premium".equalsIgnoreCase(request.getItemName())
+                || "Business".equalsIgnoreCase(request.getItemName()))
+                        ? CID_SUBSCRIPTION
+                        : CID_ONETIME;
+
         // 카카오페이 요청 본문
         Map<String, String> parameters = new HashMap<>();
-        parameters.put("cid", CID);
+        parameters.put("cid", cid);
         parameters.put("partner_order_id", orderId);
         parameters.put("partner_user_id", userId);
         parameters.put("item_name", request.getItemName());
@@ -124,7 +131,7 @@ public class KakaoPayService {
 
         // 카카오페이 승인 요청
         Map<String, String> parameters = new HashMap<>();
-        parameters.put("cid", CID);
+        parameters.put("cid", payment.getItemName().toLowerCase().contains("free") ? CID_ONETIME : CID_SUBSCRIPTION);
         parameters.put("tid", payment.getTid());
         parameters.put("partner_order_id", request.getOrderId());
         parameters.put("partner_user_id", userId);
@@ -158,7 +165,7 @@ public class KakaoPayService {
 
         // 카카오페이 승인 요청
         Map<String, String> parameters = new HashMap<>();
-        parameters.put("cid", CID);
+        parameters.put("cid", payment.getItemName().toLowerCase().contains("free") ? CID_ONETIME : CID_SUBSCRIPTION);
         parameters.put("tid", payment.getTid());
         parameters.put("partner_order_id", orderId);
         parameters.put("partner_user_id", payment.getUser().getUserId().toString());
@@ -182,10 +189,17 @@ public class KakaoPayService {
         // 결제 완료 처리
         payment.setStatus(Payment.PaymentStatus.PAID);
         payment.setApprovedAt(LocalDateTime.now());
+        if (approveResponse != null && approveResponse.getSid() != null) {
+            payment.setSid(approveResponse.getSid());
+        }
         paymentRepository.save(payment);
 
         // 멤버십 등급 업데이트 및 만료일 설정 (누적 연장 로직)
         User user = payment.getUser();
+        if (approveResponse != null && approveResponse.getSid() != null) {
+            user.setKakaoSid(approveResponse.getSid());
+        }
+
         if ("Business".equalsIgnoreCase(payment.getItemName())) {
             user.setUserLevel(UserLevel.BUSINESS);
         } else {
