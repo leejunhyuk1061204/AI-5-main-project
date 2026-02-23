@@ -61,14 +61,14 @@ public class KakaoPayService {
                         : CID_ONETIME;
 
         // 카카오페이 요청 본문
-        Map<String, String> parameters = new HashMap<>();
+        Map<String, Object> parameters = new HashMap<>();
         parameters.put("cid", cid);
         parameters.put("partner_order_id", orderId);
         parameters.put("partner_user_id", userId);
         parameters.put("item_name", request.getItemName());
-        parameters.put("quantity", "1");
-        parameters.put("total_amount", String.valueOf(request.getTotalAmount()));
-        parameters.put("tax_free_amount", "0");
+        parameters.put("quantity", 1); // 카카오페이 신규 JSON API에서는 Integer를 요구합니다.
+        parameters.put("total_amount", request.getTotalAmount()); // Integer
+        parameters.put("tax_free_amount", 0); // Integer
 
         // 카카오페이는 http/https URL만 허용하므로 백엔드 콜백 사용
         // baseUrl은 동적으로 추출되므로 로컬 IP(192.168.x.x)가 자동으로 사용됨
@@ -78,7 +78,7 @@ public class KakaoPayService {
 
         // 헤더 설정
         HttpHeaders headers = getHeaders();
-        HttpEntity<Map<String, String>> requestEntity = new HttpEntity<>(parameters, headers);
+        HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(parameters, headers);
 
         log.info("[KakaoPay] Requesting ready API from Kakao with orderId: {}", orderId);
 
@@ -91,6 +91,10 @@ public class KakaoPayService {
                     KakaoReadyResponse.class);
         } catch (Exception e) {
             log.error("[KakaoPay] Kakao API call failed: {}", e.getMessage());
+            if (e instanceof org.springframework.web.client.HttpStatusCodeException) {
+                log.error("[KakaoPay] Error full response: {}",
+                        ((org.springframework.web.client.HttpStatusCodeException) e).getResponseBodyAsString());
+            }
             throw new RuntimeException("Kakao Pay API call failed", e);
         }
 
@@ -130,14 +134,14 @@ public class KakaoPayService {
         }
 
         // 카카오페이 승인 요청
-        Map<String, String> parameters = new HashMap<>();
+        Map<String, Object> parameters = new HashMap<>();
         parameters.put("cid", payment.getItemName().toLowerCase().contains("free") ? CID_ONETIME : CID_SUBSCRIPTION);
         parameters.put("tid", payment.getTid());
         parameters.put("partner_order_id", request.getOrderId());
         parameters.put("partner_user_id", userId);
         parameters.put("pg_token", request.getPgToken());
 
-        HttpEntity<Map<String, String>> requestEntity = new HttpEntity<>(parameters, getHeaders());
+        HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(parameters, getHeaders());
 
         ResponseEntity<KakaoApproveResponse> response = restTemplate.postForEntity(
                 KAKAO_PAY_HOST + "/approve",
@@ -164,14 +168,14 @@ public class KakaoPayService {
         }
 
         // 카카오페이 승인 요청
-        Map<String, String> parameters = new HashMap<>();
+        Map<String, Object> parameters = new HashMap<>();
         parameters.put("cid", payment.getItemName().toLowerCase().contains("free") ? CID_ONETIME : CID_SUBSCRIPTION);
         parameters.put("tid", payment.getTid());
         parameters.put("partner_order_id", orderId);
         parameters.put("partner_user_id", payment.getUser().getUserId().toString());
         parameters.put("pg_token", pgToken);
 
-        HttpEntity<Map<String, String>> requestEntity = new HttpEntity<>(parameters, getHeaders());
+        HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(parameters, getHeaders());
 
         ResponseEntity<KakaoApproveResponse> response = restTemplate.postForEntity(
                 KAKAO_PAY_HOST + "/approve",
