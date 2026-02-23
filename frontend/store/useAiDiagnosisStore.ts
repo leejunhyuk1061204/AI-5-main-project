@@ -233,13 +233,18 @@ export const useAiDiagnosisStore = create<AiDiagnosisState>((set, get) => ({
     })),
 
     connectSse: async (type, sessionId) => {
+        console.log('[connectSse] called', { type, sessionId });
         const sessionStore = get().sessions[type];
-        if (sseInstances[type] && sessionStore.sseSessionId === sessionId) return;
+        if (sseInstances[type] && sessionStore.sseSessionId === sessionId) {
+            console.log('[connectSse] skip: already connected for same sessionId');
+            return;
+        }
 
         get().disconnectSse(type);
 
         const token = await AsyncStorage.getItem('accessToken');
         if (!token) {
+            console.log('[connectSse] no token, abort');
             set((state) => ({
                 sessions: {
                     ...state.sessions,
@@ -252,13 +257,22 @@ export const useAiDiagnosisStore = create<AiDiagnosisState>((set, get) => ({
         set((state) => ({
             sessions: {
                 ...state.sessions,
-                [type]: { ...state.sessions[type], sseSessionId: sessionId, sseProgress: 0, sseStatusMessage: '서버 연결 대기 중...' }
+                [type]: {
+                    ...state.sessions[type],
+                    currentSessionId: sessionId,
+                    sseSessionId: sessionId,
+                    sseProgress: 0,
+                    sseStatusMessage: '서버 연결 대기 중...'
+                }
             }
         }));
 
         const url = `${BASE_URL}/api/v1/ai/diagnose/session/${sessionId}/sse`;
+        console.log('[connectSse] EventSource open', { type, url });
         const es = new EventSource(url, {
-            headers: { Authorization: `Bearer ${token}` }
+            headers: { Authorization: `Bearer ${token}` },
+            lineEndingCharacter: '\n',
+            timeoutBeforeConnection: 0
         });
         sseInstances[type] = es;
 
@@ -270,14 +284,16 @@ export const useAiDiagnosisStore = create<AiDiagnosisState>((set, get) => ({
         };
 
         es.addEventListener('open' as any, () => {
+            console.log('[connectSse] event: open', type);
             updateSseState({ sseStatusMessage: '서버 연결 성공 (진단 시작)', sseProgress: 0.1 });
         });
-        es.addEventListener('step1' as any, () => updateSseState({ sseStatusMessage: '진단 요청 접수 완료', sseProgress: 0.2 }));
-        es.addEventListener('step2' as any, () => updateSseState({ sseStatusMessage: '멀티미디어 데이터 전처리 완료', sseProgress: 0.4 }));
-        es.addEventListener('step3' as any, () => updateSseState({ sseStatusMessage: 'AI 정밀 분석 완료 (시각/청각/OBD)', sseProgress: 0.6 }));
-        es.addEventListener('step4' as any, () => updateSseState({ sseStatusMessage: '결함 원인 추론 및 지식 검색 완료', sseProgress: 0.8 }));
+        es.addEventListener('step1' as any, () => { console.log('[connectSse] event: step1', type); updateSseState({ sseStatusMessage: '진단 요청 접수 완료', sseProgress: 0.2 }); });
+        es.addEventListener('step2' as any, () => { console.log('[connectSse] event: step2', type); updateSseState({ sseStatusMessage: '멀티미디어 데이터 전처리 완료', sseProgress: 0.4 }); });
+        es.addEventListener('step3' as any, () => { console.log('[connectSse] event: step3', type); updateSseState({ sseStatusMessage: 'AI 정밀 분석 완료 (시각/청각/OBD)', sseProgress: 0.6 }); });
+        es.addEventListener('step4' as any, () => { console.log('[connectSse] event: step4', type); updateSseState({ sseStatusMessage: '결함 원인 추론 및 지식 검색 완료', sseProgress: 0.8 }); });
 
         es.addEventListener('failed' as any, (event: any) => {
+            console.log('[connectSse] event: failed', type, event?.data);
             const message = (event?.data && String(event.data).trim()) || 'AI 분석 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.';
             if (sseInstances[type] === es) {
                 sseInstances[type]?.close();
@@ -294,6 +310,7 @@ export const useAiDiagnosisStore = create<AiDiagnosisState>((set, get) => ({
         });
 
         es.addEventListener('step5' as any, async () => {
+            console.log('[connectSse] event: step5', type);
             updateSseState({ sseStatusMessage: '최종 진단 완료 (결과 확인 중)', sseProgress: 1 });
             if (sseInstances[type] === es) {
                 sseInstances[type]?.close();
@@ -335,7 +352,7 @@ export const useAiDiagnosisStore = create<AiDiagnosisState>((set, get) => ({
             }
         });
 
-        es.addEventListener('error' as any, () => { });
+        es.addEventListener('error' as any, (e: any) => { console.log('[connectSse] event: error', type, e?.message || e); });
     },
 
     disconnectSse: (type) => {

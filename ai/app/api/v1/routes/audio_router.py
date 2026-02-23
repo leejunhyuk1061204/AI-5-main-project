@@ -2,8 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from ai.app.schemas.audio_schema import AudioResponse, AudioRequest
 from ai.app.services.audio.audio_service import AudioService
 
-# 1. URL: /predict/audio 설정
-router = APIRouter(tags=["Audio Analysis"])
+# 백엔드 AiClient가 /api/v1/predict/audio 로 호출하므로 prefix 필요
+router = APIRouter(prefix="/predict", tags=["Audio Analysis"])
 
 @router.post("/audio", response_model=AudioResponse)
 async def analyze_audio(

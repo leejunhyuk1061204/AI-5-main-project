@@ -71,8 +71,8 @@ export default function DiagMain() {
         setVehicleId(vehicle.vehicleId);
 
         if (pendingAction === 'OBD') {
-            await startDiagnosis('OBD', vehicle.vehicleId, () => diagnoseObdOnly(vehicle.vehicleId));
-            navigation.navigate('ObdDiagLoading', { vehicleId: vehicle.vehicleId, diagType: 'OBD' });
+            const sessionId = await startDiagnosis('OBD', vehicle.vehicleId, () => diagnoseObdOnly(vehicle.vehicleId));
+            navigation.navigate('ObdDiagLoading', { vehicleId: vehicle.vehicleId, diagType: 'OBD', sessionId: sessionId ?? undefined });
         } else if (pendingAction === 'SOUND') {
             navigation.navigate('EngineSoundDiag', { from: 'professional', vehicleId: vehicle.vehicleId, diagType: 'SOUND' });
         } else if (pendingAction === 'PHOTO') {
@@ -91,11 +91,7 @@ export default function DiagMain() {
         if (status !== 'IDLE' && sid) {
             // 진행 중인 세션이 있으므로 상태에 맞게 화면으로 바로 이동
             if (status === 'PROCESSING' || status === 'REPLY_PROCESSING') {
-                if (type === 'OBD') {
-                    navigation.navigate('ObdDiagLoading', { vehicleId: selectedVehicleId, diagType: type });
-                } else {
-                    navigation.navigate('AiDiagChat', { sessionId: sid, diagType: type });
-                }
+                navigation.navigate('ObdDiagLoading', { vehicleId: selectedVehicleId, diagType: type, sessionId: sid ?? undefined });
             } else if (status === 'INTERACTIVE' || status === 'ACTION_REQUIRED') {
                 navigation.navigate('AiDiagChat', { sessionId: sid, diagType: type });
             } else if (status === 'REPORT') {
@@ -138,8 +134,8 @@ export default function DiagMain() {
                     onPress={() => {
                         handleResumeOrStart('OBD', sessions.OBD.status, sessions.OBD.currentSessionId, () => {
                             if (selectedVehicleId) {
-                                startDiagnosis('OBD', selectedVehicleId, () => diagnoseObdOnly(selectedVehicleId)).then(() => {
-                                    navigation.navigate('ObdDiagLoading', { vehicleId: selectedVehicleId, diagType: 'OBD' });
+                                startDiagnosis('OBD', selectedVehicleId, () => diagnoseObdOnly(selectedVehicleId)).then((sessionId) => {
+                                    navigation.navigate('ObdDiagLoading', { vehicleId: selectedVehicleId, diagType: 'OBD', sessionId: sessionId ?? undefined });
                                 });
                             } else {
                                 setPendingAction('OBD'); setVehicleSelectVisible(true);

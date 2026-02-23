@@ -28,7 +28,8 @@ export default function ObdDiagLoading({ navigation }: any) {
     const insets = useSafeAreaInsets();
     const route = useRoute<RouteProp<{ ObdDiagLoading: ActiveLoadingParams }, 'ObdDiagLoading'>>();
     const vehicleId = route.params?.vehicleId;
-    const diagType: DiagType = route.params?.diagType || 'OBD'; // Default to OBD if not provided
+    const diagType: DiagType = route.params?.diagType || 'OBD';
+    const paramSessionId = route.params?.sessionId;
 
     const {
         sessions,
@@ -47,6 +48,13 @@ export default function ObdDiagLoading({ navigation }: any) {
         diagResult
     } = session;
 
+    // store 반영이 비동기라 로딩 진입 직후 currentSessionId가 비어 있을 수 있음 → params.sessionId 사용
+    const effectiveSessionId = currentSessionId || paramSessionId;
+
+    useEffect(() => {
+        console.log('[ObdDiagLoading] mount/params', { diagType, vehicleId, paramSessionId, currentSessionId, effectiveSessionId });
+    }, [diagType, vehicleId, paramSessionId, currentSessionId, effectiveSessionId]);
+
     // Animations
     const scanLineY = useSharedValue(0);
     const particleOpacity = useSharedValue(0.3);
@@ -54,25 +62,32 @@ export default function ObdDiagLoading({ navigation }: any) {
 
     // Ensure SSE is connected when we have a session (no cleanup: connection lives in store)
     useEffect(() => {
-        if (!currentSessionId) return;
-        connectSse(diagType, currentSessionId);
-    }, [currentSessionId, connectSse, diagType]);
+        if (!effectiveSessionId) {
+            console.log('[ObdDiagLoading] skip connectSse: no effectiveSessionId');
+            return;
+        }
+        console.log('[ObdDiagLoading] connectSse', { diagType, effectiveSessionId });
+        connectSse(diagType, effectiveSessionId);
+    }, [effectiveSessionId, connectSse, diagType]);
 
-    // Navigate when store reports completion (step5 handled in store)
+    // INTERACTIVE → 채팅, REPORT → 리포트만 이동 (한 번에 하나만)
     useEffect(() => {
-        if (status === 'INTERACTIVE' || status === 'ACTION_REQUIRED') {
-            const t = setTimeout(() => {
-                navigation.replace('AiDiagChat', { sessionId: currentSessionId, vehicleId: vehicleId ?? selectedVehicleId ?? undefined, diagType });
-            }, 800);
-            return () => clearTimeout(t);
-        }
+        const sid = effectiveSessionId;
         if (status === 'REPORT') {
+            console.log('[ObdDiagLoading] status=REPORT, replace → DiagnosisReport');
             const t = setTimeout(() => {
-                navigation.replace('DiagnosisReport', { reportData: diagResult, sessionId: currentSessionId, diagType });
+                navigation.replace('DiagnosisReport', { reportData: diagResult, sessionId: sid, diagType });
             }, 800);
             return () => clearTimeout(t);
         }
-    }, [status, currentSessionId, vehicleId, selectedVehicleId, diagResult, navigation, diagType]);
+        if (status === 'INTERACTIVE' || status === 'ACTION_REQUIRED') {
+            console.log('[ObdDiagLoading] status=INTERACTIVE/ACTION_REQUIRED, replace → AiDiagChat');
+            const t = setTimeout(() => {
+                navigation.replace('AiDiagChat', { sessionId: sid, vehicleId: vehicleId ?? selectedVehicleId ?? undefined, diagType });
+            }, 800);
+            return () => clearTimeout(t);
+        }
+    }, [status, effectiveSessionId, vehicleId, selectedVehicleId, diagResult, navigation, diagType]);
 
     // Show failure alert when SSE failed; clear immediately so we only show once
     useEffect(() => {
@@ -220,7 +235,7 @@ export default function ObdDiagLoading({ navigation }: any) {
                 {/* Headline Text */}
                 <View className="w-full items-center mb-10">
                     <Text className="text-white text-[26px] font-bold leading-tight mb-2 text-center">
-                        차량 데이터를{'\n'}
+                        차량 정보를{'\n'}
                         <Text className="text-primary">정밀 분석</Text> 중입니다...
                     </Text>
                     <Text className="text-slate-400 text-sm font-normal leading-relaxed text-center px-4">
@@ -238,7 +253,7 @@ export default function ObdDiagLoading({ navigation }: any) {
                                 <MaterialIcons name="sync" size={14} color="#9cabba" className="animate-spin" />
                                 {/** No duplicate icon needed, removed duplicate from previous bad view */}
                                 <Text className="text-[#9cabba] text-sm font-medium">
-                                    {!currentSessionId ? '세션 정보를 찾을 수 없습니다.' : sseStatusMessage}
+                                    {!effectiveSessionId ? '세션 정보를 찾을 수 없습니다.' : sseStatusMessage}
                                 </Text>
                             </View>
                         </View>

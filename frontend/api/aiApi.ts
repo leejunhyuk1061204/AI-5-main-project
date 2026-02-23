@@ -316,7 +316,8 @@ export const getDiagnosisList = async (vehicleId: string): Promise<any[]> => {
         const response = await api.get('/api/v1/ai/diagnose/list', {
             params: { vehicleId }
         });
-        return response.data.data;
+        const raw = response.data?.data;
+        return Array.isArray(raw) ? raw : (raw != null ? [raw] : []);
     } catch (error) {
         console.error('[aiApi] Failed to fetch diagnosis list:', error);
         throw error;
