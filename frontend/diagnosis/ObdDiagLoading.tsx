@@ -139,11 +139,11 @@ export default function ObdDiagLoading({ navigation }: any) {
                 <View className="flex-row items-center justify-between px-4 py-3">
                     <TouchableOpacity
                         onPress={() => navigation.goBack()}
-                        className="w-10 h-10 items-center justify-center rounded-full active:bg-white/10"
+                        className="w-10 h-10 items-center justify-center -ml-2"
                     >
-                        <MaterialIcons name="arrow-back-ios" size={20} color="white" />
+                        <MaterialIcons name="arrow-back-ios-new" size={24} color="#0d7ff2" />
                     </TouchableOpacity>
-                    <Text className="text-white text-lg font-bold tracking-tight uppercase opacity-90 flex-1 text-center">
+                    <Text className="text-white text-lg font-bold tracking-tight uppercase opacity-90 pr-8 flex-1 text-center">
                         AI Diagnostics
                     </Text>
                     <View className="w-10" />
