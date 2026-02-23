@@ -141,7 +141,7 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           command_timeout: 60m
           script: |
-            # --- Nginx: client_max_body_size (사진 업로드 413) + SSE 스트리밍(버퍼링 끄기) ---
+            # --- Nginx: client_max_body_size (사진 업로드 413) + SSE 스트리밍(버퍼링/타임아웃/압축) ---
             if command -v nginx &> /dev/null; then
               echo "📦 Configuring Nginx..."
               echo 'client_max_body_size 50M;' | sudo tee /etc/nginx/conf.d/client-max-body.conf
@@ -152,22 +152,33 @@ jobs:
               proxy_set_header Connection '';
               proxy_buffering off;
               proxy_cache off;
+              gzip off;
+              proxy_read_timeout 3600s;
+              proxy_send_timeout 3600s;
+              add_header X-Accel-Buffering no;
               chunked_transfer_encoding on;
               proxy_set_header Host $host;
               proxy_set_header X-Real-IP $remote_addr;
               proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
               proxy_set_header X-Forwarded-Proto $scheme;
               proxy_set_header Authorization $http_authorization;
+              proxy_set_header Accept "text/event-stream";
             }
             SSEEOF
-              SITE=$(sudo grep -rl 'proxy_pass' /etc/nginx/sites-enabled 2>/dev/null | head -1)
-              if [ -n "$SITE" ] && ! sudo grep -q 'sse-streaming.conf' "$SITE" 2>/dev/null; then
-                sudo sed -i '/server\s*{/a \    include /etc/nginx/sse-streaming.conf;' "$SITE"
-                echo "✅ Added SSE streaming include to $SITE"
+              SITE=$(sudo grep -rl '8080' /etc/nginx/sites-enabled 2>/dev/null | head -1)
+              if [ -n "$SITE" ]; then
+                if ! sudo grep -q 'sse-streaming.conf' "$SITE" 2>/dev/null; then
+                  sudo sed -i '/server[[:space:]]*{/a \    include /etc/nginx/sse-streaming.conf;' "$SITE"
+                  echo "✅ Added SSE include to every server block in $SITE"
+                else
+                  echo "ℹ️ SSE include already present in $SITE"
+                fi
+              else
+                echo "⚠️ No nginx site with 8080 found in sites-enabled; add 'include /etc/nginx/sse-streaming.conf;' inside server { } manually"
               fi
               if sudo nginx -t 2>/dev/null; then
                 sudo systemctl reload nginx
-                echo "✅ Nginx reloaded (client_max_body_size 50M + SSE proxy_buffering off)"
+                echo "✅ Nginx reloaded (client_max_body_size 50M + SSE streaming)"
               else
                 echo "⚠️ Nginx config test failed, skipping reload"
               fi
