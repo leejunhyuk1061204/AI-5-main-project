@@ -284,19 +284,7 @@ export default function Membership() {
                     ))}
                 </View>
 
-                {/* 혜택 안내 */}
-                <View className="px-5 pt-4">
-                    <View className="bg-[#1a2a3a] rounded-2xl p-5 border border-white/5">
-                        <View className="flex-row items-center gap-2 mb-3">
-                            <MaterialIcons name="auto-awesome" size={18} color="#c5a059" />
-                            <Text className="text-[#c5a059] font-bold">비즈니스 혜택</Text>
-                        </View>
-                        <Text className="text-gray-400 text-sm leading-relaxed">
-                            비즈니스 멤버십 가입 시 다중 차량 통합 관리, 정비소 실시간 연동, 전담 매니저 배정 등
-                            강력한 엔터프라이즈 기능을 무제한으로 이용하실 수 있습니다.
-                        </Text>
-                    </View>
-                </View>
+
             </View>
         </BaseScreen>
     );

@@ -124,8 +124,15 @@ export default function PassiveReg() {
     };
 
     const handleNext = () => {
-        if (!store.vehicleNumber || !store.manufacturer || !store.modelName || !store.modelYear || !store.fuelType) {
-            useAlertStore.getState().showAlert('알림', '모든 필수 필드를 입력해주세요.', 'WARNING');
+        const missingFields = [];
+        if (!store.vehicleNumber) missingFields.push('차량 번호');
+        if (!store.manufacturer) missingFields.push('제조사');
+        if (!store.modelName) missingFields.push('모델명');
+        if (!store.modelYear) missingFields.push('연식');
+        if (!store.fuelType) missingFields.push('연료 타입');
+
+        if (missingFields.length > 0) {
+            useAlertStore.getState().showAlert('필수 항목 누락', `${missingFields.join(', ')} 항목을 입력해주세요.`, 'WARNING');
             return;
         }
         // Go to Step 2

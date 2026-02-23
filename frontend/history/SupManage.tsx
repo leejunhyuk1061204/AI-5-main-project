@@ -11,6 +11,7 @@ import maintenanceApi, { VehicleConsumable } from '../api/maintenanceApi';
 import { useVehicleStore } from '../store/useVehicleStore';
 import { VehicleResponse } from '../api/vehicleApi';
 import VehicleSelectModal from '../components/VehicleSelectModal';
+import Header from '../header/Header';
 
 if (Platform.OS === 'android') {
     if (UIManager.setLayoutAnimationEnabledExperimental) {
@@ -225,22 +226,7 @@ export default function SupManage() {
             <SafeAreaView className="flex-1" edges={['top']}>
 
                 {/* Header */}
-                <View className="flex-row items-center justify-between px-4 py-3 z-10">
-                    <TouchableOpacity
-                        onPress={() => navigation.goBack()}
-                        className="w-10 h-10 items-center justify-center rounded-full active:bg-white/10"
-                    >
-                        <MaterialIcons name="arrow-back-ios" size={20} color="white" />
-                    </TouchableOpacity>
-
-                    <Text className="text-white font-bold text-lg">
-                        소모품 관리
-                    </Text>
-
-                    < TouchableOpacity className="w-10 h-10 items-center justify-center rounded-full active:bg-white/10">
-                        <MaterialIcons name="notifications-none" size={24} color="white" />
-                    </TouchableOpacity>
-                </View>
+                <Header title="소모품 관리" />
 
                 <ScrollView className="flex-1 px-5" contentContainerStyle={{ paddingBottom: 100, paddingTop: 10 }}>
 

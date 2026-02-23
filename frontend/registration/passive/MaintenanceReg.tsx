@@ -50,10 +50,25 @@ export default function MaintenanceReg() {
     // Helper: Handle Registration
     const handleComplete = async (isSkip: boolean = false) => {
         if (!isSkip) {
-            // Check if at least one record has either date or mileage
+            // Check if at least one record exists that user interacted with
             const hasValidRecord = store.maintenanceRecords.some(r => r.lastReplacementDate || r.lastReplacementMileage);
-            if (!hasValidRecord) {
-                useAlertStore.getState().showAlert('알림', '등록된 소모품 정비 내역이 없습니다.', 'ERROR');
+            if (!hasValidRecord && store.maintenanceRecords.length > 0) {
+                useAlertStore.getState().showAlert('알림', '최소 하나의 소모품 정보를 입력해주세요.', 'ERROR');
+                return;
+            }
+
+            // 모든 추가된 레코드에 대해 "km(주행거리)"가 누락된 항목이 있는지 검사
+            const missingMileageRecords = store.maintenanceRecords.filter(
+                (r) => (r.lastReplacementDate || r.lastReplacementMileage) && !r.lastReplacementMileage
+            );
+
+            if (missingMileageRecords.length > 0) {
+                const names = missingMileageRecords.map((r) => r.itemName).join(', ');
+                useAlertStore.getState().showAlert(
+                    '입력 누락',
+                    `${names} 항목의 교체 시점 주행거리(km)를 반드시 입력해주세요.`,
+                    'WARNING'
+                );
                 return;
             }
         }
@@ -180,7 +195,7 @@ export default function MaintenanceReg() {
                 <View style={styles.titleSection}>
                     <Text style={styles.mainTitle}>최근 정비한 내역이 있나요?</Text>
                     <Text style={styles.subTitle}>AI가 다음 교체 시기를 예측해드립니다.</Text>
-                    <Text style={styles.tipText}>* 날짜 또는 주행거리 중 하나만 입력해도 됩니다.</Text>
+                    <Text style={styles.tipText}>* 교체 시점의 주행거리(km)는 필수 입력 사항입니다.</Text>
                 </View>
 
                 {/* List of Added Records */}
