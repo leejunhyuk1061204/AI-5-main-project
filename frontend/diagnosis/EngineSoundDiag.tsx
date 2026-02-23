@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { View, Text, TouchableOpacity, Animated, ActivityIndicator } from 'react-native';
 import { useAlertStore } from '../store/useAlertStore';
-import { useAiDiagnosisStore } from '../store/useAiDiagnosisStore';
+import { useAiDiagnosisStore, DiagType } from '../store/useAiDiagnosisStore';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Audio } from 'expo-av';
@@ -47,6 +47,7 @@ const RecordingText = () => {
 export default function EngineSoundDiag() {
     const navigation = useNavigation<any>();
     const route = useRoute<any>();
+    const diagType: DiagType = route.params?.diagType || 'SOUND';
 
     // State for Diagnosis Flow
     const [step, setStep] = useState(1); // 1: Record/Review, 2: Analyze, 3: Result
@@ -249,7 +250,7 @@ export default function EngineSoundDiag() {
     };
 
     const executeSoundAnalysis = async (uri: string, sessionId: string | null) => {
-        const { updateStatus, setVehicleId } = useAiDiagnosisStore.getState();
+        const { updateStatus, setVehicleId, sessions } = useAiDiagnosisStore.getState();
         const vehicleId = route.params?.vehicleId || useAiDiagnosisStore.getState().selectedVehicleId;
         if (!vehicleId) return;
         try {
@@ -261,16 +262,30 @@ export default function EngineSoundDiag() {
                     vehicleId: vehicleId as string
                 }, undefined, uri);
 
-                useAiDiagnosisStore.setState({ isWaitingForAi: true });
+                useAiDiagnosisStore.setState((state) => ({
+                    sessions: {
+                        ...state.sessions,
+                        [diagType]: {
+                            ...state.sessions[diagType],
+                            isWaitingForAi: true
+                        }
+                    }
+                }));
             } else {
                 // 신규 진단인 경우
-                useAiDiagnosisStore.setState({
-                    status: 'PROCESSING',
-                    loadingMessage: '소리를 분석하고 있습니다...',
-                    messages: [],
-                    diagResult: null,
-                    currentSessionId: null
-                });
+                useAiDiagnosisStore.setState((state) => ({
+                    sessions: {
+                        ...state.sessions,
+                        [diagType]: {
+                            ...state.sessions[diagType],
+                            status: 'PROCESSING',
+                            loadingMessage: '소리를 분석하고 있습니다...',
+                            messages: [],
+                            diagResult: null,
+                            currentSessionId: null
+                        }
+                    }
+                }));
 
                 result = await diagnoseEngineSound(uri, vehicleId as string);
             }
@@ -279,7 +294,15 @@ export default function EngineSoundDiag() {
 
             if (result.sessionId) {
                 setVehicleId(vehicleId as string);
-                useAiDiagnosisStore.setState({ currentSessionId: result.sessionId });
+                useAiDiagnosisStore.setState((state) => ({
+                    sessions: {
+                        ...state.sessions,
+                        [diagType]: {
+                            ...state.sessions[diagType],
+                            currentSessionId: result.sessionId
+                        }
+                    }
+                }));
             } else {
                 setStep(3);
             }
@@ -287,11 +310,22 @@ export default function EngineSoundDiag() {
             console.error(error);
             useAlertStore.getState().showAlert('진단 실패', error.message || '서버 통신 중 오류가 발생했습니다.', 'ERROR');
             setStep(1);
-            useAiDiagnosisStore.setState({ status: 'IDLE' });
+            useAiDiagnosisStore.setState((state) => ({
+                sessions: {
+                    ...state.sessions,
+                    [diagType]: {
+                        ...state.sessions[diagType],
+                        status: 'IDLE'
+                    }
+                }
+            }));
         }
     };
 
-    const { status, currentSessionId, updateStatus } = useAiDiagnosisStore();
+    const { sessions, updateStatus } = useAiDiagnosisStore();
+    const session = sessions[diagType];
+    const { status, currentSessionId } = session;
+
     const [sseToken, setSseToken] = useState<string | null>(null);
 
     useEffect(() => {
@@ -312,7 +346,7 @@ export default function EngineSoundDiag() {
             try {
                 const data = JSON.parse(event.data) as import('../api/aiApi').AiDiagnosisResponse;
                 if (data && (data.status || data.responseMode || data.response_mode)) {
-                    updateStatus(currentSessionId, { ...data, sessionId: data.sessionId ?? currentSessionId });
+                    updateStatus(diagType, currentSessionId, { ...data, sessionId: data.sessionId ?? currentSessionId });
                 }
             } catch (e) {
                 console.warn('[EngineSoundDiag] SSE status parse error:', e);
@@ -323,7 +357,16 @@ export default function EngineSoundDiag() {
             const msg = (event.data && String(event.data).trim()) || '진단에 실패했습니다.';
             useAlertStore.getState().showAlert('진단 실패', msg, 'ERROR');
             setStep(1);
-            useAiDiagnosisStore.setState({ status: 'IDLE', currentSessionId: null });
+            useAiDiagnosisStore.setState((state) => ({
+                sessions: {
+                    ...state.sessions,
+                    [diagType]: {
+                        ...state.sessions[diagType],
+                        status: 'IDLE',
+                        currentSessionId: null
+                    }
+                }
+            }));
         };
 
         es.addEventListener('status' as any, handleStatus);
@@ -353,14 +396,16 @@ export default function EngineSoundDiag() {
         if (status === 'INTERACTIVE' || status === 'ACTION_REQUIRED') {
             navigation.navigate('AiDiagChat', {
                 sessionId: currentSessionId,
-                vehicleId: route.params?.vehicleId
+                vehicleId: route.params?.vehicleId,
+                diagType
             });
         } else if (status === 'REPORT') {
             navigation.replace('DiagnosisReport', {
-                reportData: { sessionId: currentSessionId }
+                reportData: { sessionId: currentSessionId },
+                diagType
             });
         }
-    }, [status, currentSessionId]);
+    }, [status, currentSessionId, diagType]);
 
     const handleRecordToggle = () => {
         if (isProcessing) return;

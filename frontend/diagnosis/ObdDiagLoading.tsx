@@ -13,7 +13,7 @@ import Animated, {
     Easing
 } from 'react-native-reanimated';
 
-import { useAiDiagnosisStore } from '../store/useAiDiagnosisStore';
+import { useAiDiagnosisStore, DiagType } from '../store/useAiDiagnosisStore';
 import { useAlertStore } from '../store/useAlertStore';
 
 const { width } = Dimensions.get('window');
@@ -21,23 +21,31 @@ const { width } = Dimensions.get('window');
 type ActiveLoadingParams = {
     vehicleId?: string;
     sessionId?: string;
+    diagType?: DiagType;
 };
 
 export default function ObdDiagLoading({ navigation }: any) {
     const insets = useSafeAreaInsets();
     const route = useRoute<RouteProp<{ ObdDiagLoading: ActiveLoadingParams }, 'ObdDiagLoading'>>();
     const vehicleId = route.params?.vehicleId;
+    const diagType: DiagType = route.params?.diagType || 'OBD'; // Default to OBD if not provided
+
+    const {
+        sessions,
+        connectSse,
+        clearSseFailed,
+        selectedVehicleId
+    } = useAiDiagnosisStore();
+
+    const session = sessions[diagType];
     const {
         currentSessionId,
         sseProgress,
         sseStatusMessage,
-        connectSse,
         sseFailedWithMessage,
-        clearSseFailed,
         status,
-        selectedVehicleId,
         diagResult
-    } = useAiDiagnosisStore();
+    } = session;
 
     // Animations
     const scanLineY = useSharedValue(0);
@@ -47,32 +55,32 @@ export default function ObdDiagLoading({ navigation }: any) {
     // Ensure SSE is connected when we have a session (no cleanup: connection lives in store)
     useEffect(() => {
         if (!currentSessionId) return;
-        connectSse(currentSessionId);
-    }, [currentSessionId, connectSse]);
+        connectSse(diagType, currentSessionId);
+    }, [currentSessionId, connectSse, diagType]);
 
     // Navigate when store reports completion (step5 handled in store)
     useEffect(() => {
         if (status === 'INTERACTIVE' || status === 'ACTION_REQUIRED') {
             const t = setTimeout(() => {
-                navigation.replace('AiDiagChat', { sessionId: currentSessionId, vehicleId: vehicleId ?? selectedVehicleId ?? undefined });
+                navigation.replace('AiDiagChat', { sessionId: currentSessionId, vehicleId: vehicleId ?? selectedVehicleId ?? undefined, diagType });
             }, 800);
             return () => clearTimeout(t);
         }
         if (status === 'REPORT') {
             const t = setTimeout(() => {
-                navigation.replace('DiagnosisReport', { reportData: diagResult, sessionId: currentSessionId });
+                navigation.replace('DiagnosisReport', { reportData: diagResult, sessionId: currentSessionId, diagType });
             }, 800);
             return () => clearTimeout(t);
         }
-    }, [status, currentSessionId, vehicleId, selectedVehicleId, diagResult, navigation]);
+    }, [status, currentSessionId, vehicleId, selectedVehicleId, diagResult, navigation, diagType]);
 
     // Show failure alert when SSE failed; clear immediately so we only show once
     useEffect(() => {
         if (!sseFailedWithMessage) return;
         const message = sseFailedWithMessage;
-        clearSseFailed();
+        clearSseFailed(diagType);
         useAlertStore.getState().showAlert('진단 실패', message, 'ERROR', () => navigation.goBack());
-    }, [sseFailedWithMessage, clearSseFailed, navigation]);
+    }, [sseFailedWithMessage, clearSseFailed, navigation, diagType]);
 
     // Animations start on mount
     useEffect(() => {

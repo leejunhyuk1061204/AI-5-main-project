@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, TouchableOpacity, TextInput, ActivityIndicator, ScrollView, Animated, Platform, StyleSheet, KeyboardAvoidingView, Keyboard, Image, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, TextInput, ActivityIndicator, ScrollView, Animated, Platform, StyleSheet, KeyboardAvoidingView, Keyboard, Image } from 'react-native';
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -14,17 +14,19 @@ import { useBleStore } from '../store/useBleStore';
 // API
 import { getDiagnosisSessionStatus, replyToDiagnosisSession, AiDiagnosisResponse, DiagnosisMessage } from '../api/aiApi';
 import Header from '../header/Header';
+import { DiagType, useAiDiagnosisStore } from '../store/useAiDiagnosisStore';
+import { useAlertStore } from '../store/useAlertStore';
 
 // Types
 type RootStackParamList = {
     Login: undefined;
     AlertMain: undefined;
-    Filming: { sessionId: string | null; vehicleId?: number };
-    EngineSoundDiag: { sessionId: string | null; vehicleId?: number };
-    DiagnosisReport: { sessionId: string; reportData: any };
-    AiDiagChat: { autoStart?: boolean; vehicleId?: string; sessionId?: string; pendingMessage?: { type: 'image' | 'audio'; uri: string; text: string; timestamp: number } };
-    ChatCameraScreen: { sessionId: string | null; vehicleId?: string };
-    ChatAudioScreen: { sessionId: string | null; vehicleId?: string };
+    Filming: { sessionId: string | null; vehicleId?: number; diagType?: DiagType };
+    EngineSoundDiag: { sessionId: string | null; vehicleId?: number; diagType?: DiagType };
+    DiagnosisReport: { sessionId: string; reportData: any; diagType?: DiagType };
+    AiDiagChat: { autoStart?: boolean; vehicleId?: string; sessionId?: string; pendingMessage?: { type: 'image' | 'audio'; uri: string; text: string; timestamp: number }; diagType?: DiagType };
+    ChatCameraScreen: { sessionId: string | null; vehicleId?: string; diagType?: DiagType };
+    ChatAudioScreen: { sessionId: string | null; vehicleId?: string; diagType?: DiagType };
     MainHome: undefined;
     DiagTab: undefined;
     HistoryTab: undefined;
@@ -139,9 +141,12 @@ export default function AiDiagChat() {
     const { isKeyboardVisible, setKeyboardVisible } = useUIStore();
     const { nickname, loadUser } = useUserStore();
     const { status: bleStatus } = useBleStore();
-
     // sessionId 추출 (route params 우선)
     const sessionId = route.params?.sessionId || null;
+    const diagType: DiagType = route.params?.diagType || 'OBD';
+
+    // Global diagnosis store (for syncing overall session state on failure)
+    const { reset } = useAiDiagnosisStore();
 
     // -- EFFECTS --
     useEffect(() => { loadUser(); }, []);
@@ -194,22 +199,21 @@ export default function AiDiagChat() {
                 console.log("[AiDiagChat] Diagnosis COMPLETED. Navigating to Report.");
                 navigation.replace('DiagnosisReport', {
                     sessionId: sid,
-                    reportData: data
+                    reportData: data,
+                    diagType
                 });
             }
 
-            // FAILED 상태 처리 (알림 표시 후 이전 화면으로)
+            // FAILED 상태 처리 (알림 표시 + 글로벌 세션 상태 리셋)
             if (data.status === 'FAILED' || data.status === 'ERROR') {
-                console.log("[AiDiagChat] Diagnosis FAILED. Showing error message.");
-                Alert.alert(
+                console.log("[AiDiagChat] Diagnosis FAILED. Showing error message and resetting session state.");
+                // 전역 진단 세션 상태 초기화 (해당 diagType만)
+                reset(diagType);
+                useAlertStore.getState().showAlert(
                     '진단 실패',
                     data.progressMessage || 'AI 분석 중 문제가 발생했습니다. 다시 시도해 주세요.',
-                    [
-                        {
-                            text: '확인',
-                            onPress: () => navigation.goBack()
-                        }
-                    ]
+                    'ERROR',
+                    () => navigation.goBack()
                 );
             }
         } catch (error) {
@@ -271,7 +275,7 @@ export default function AiDiagChat() {
                 console.warn('[AiDiagChat] Polling Timeout (1min)');
                 clearInterval(intervalId);
                 setIsWaitingForAi(false);
-                Alert.alert('알림', '진단 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.');
+                useAlertStore.getState().showAlert('알림', '진단 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.', 'WARNING');
                 return;
             }
             loadSessionData(sessionId);
@@ -335,17 +339,17 @@ export default function AiDiagChat() {
 
     const handleCamera = () => {
         setIsMenuOpen(false);
-        navigation.navigate('ChatCameraScreen', { sessionId, vehicleId: route.params?.vehicleId });
+        navigation.navigate('ChatCameraScreen', { sessionId, vehicleId: route.params?.vehicleId, diagType });
     };
 
     const handleMic = () => {
         setIsMenuOpen(false);
-        navigation.navigate('ChatAudioScreen', { sessionId, vehicleId: route.params?.vehicleId });
+        navigation.navigate('ChatAudioScreen', { sessionId, vehicleId: route.params?.vehicleId, diagType });
     };
 
     const handleGallery = () => {
         setIsMenuOpen(false);
-        navigation.navigate('Filming', { sessionId, vehicleId: route.params?.vehicleId });
+        navigation.navigate('Filming', { sessionId, vehicleId: route.params?.vehicleId, diagType });
     };
 
     const onNavigate = (screen: keyof RootStackParamList) => {
