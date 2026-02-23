@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, Animated, Easing, ActivityIndicator, Alert } from 'react-native';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import Header from '../header/Header';
 import BaseScreen from '../components/layout/BaseScreen';
 import VehicleSelectModal from '../components/VehicleSelectModal';
@@ -16,11 +16,9 @@ export default function DiagMain() {
     const {
         status,
         startDiagnosis,
-        updateStatus,
         currentSessionId,
-        loadingMessage,
         setVehicleId,
-        reset
+        selectedVehicleId
     } = useAiDiagnosisStore();
 
     const { primaryVehicle } = useVehicleStore();
@@ -48,7 +46,16 @@ export default function DiagMain() {
         ).start();
     }, []);
 
-    // Status Watcher: 상태 변화에 따른 네비게이션
+    // 진단 탭에 다시 들어왔을 때 진행 중이면 로딩 화면으로 이동
+    useFocusEffect(
+        React.useCallback(() => {
+            if (status === 'PROCESSING' && currentSessionId) {
+                navigation.navigate('ObdDiagLoading', { vehicleId: selectedVehicleId ?? undefined });
+            }
+        }, [status, currentSessionId, selectedVehicleId, navigation])
+    );
+
+    // Status Watcher: 상태 변화에 따른 네비게이션 (다른 화면에 있을 때 완료되면 이동)
     useEffect(() => {
         if (status === 'INTERACTIVE' || status === 'ACTION_REQUIRED') {
             navigation.navigate('AiDiagChat', { sessionId: currentSessionId });
@@ -118,7 +125,6 @@ export default function DiagMain() {
                     className="w-full bg-white/5 border border-white/10 rounded-2xl p-5 active:bg-white/10"
                     activeOpacity={0.8}
                     onPress={() => {
-                        reset();
                         const { selectedVehicleId } = useAiDiagnosisStore.getState();
                         if (selectedVehicleId) {
                             startDiagnosis(selectedVehicleId).then(() => {
@@ -144,7 +150,6 @@ export default function DiagMain() {
                 <TouchableOpacity
                     className="w-full bg-white/5 border border-white/10 rounded-2xl p-5 active:bg-white/10"
                     onPress={() => {
-                        reset();
                         const { selectedVehicleId } = useAiDiagnosisStore.getState();
                         if (selectedVehicleId) navigation.navigate('EngineSoundDiag', { from: 'professional', vehicleId: selectedVehicleId });
                         else { setPendingAction('SOUND'); setVehicleSelectVisible(true); }
@@ -166,7 +171,6 @@ export default function DiagMain() {
                 <TouchableOpacity
                     className="w-full bg-white/5 border border-white/10 rounded-2xl p-5 active:bg-white/10"
                     onPress={() => {
-                        reset();
                         const { selectedVehicleId } = useAiDiagnosisStore.getState();
                         if (selectedVehicleId) navigation.navigate('Filming', { from: 'professional', vehicleId: selectedVehicleId });
                         else { setPendingAction('PHOTO'); setVehicleSelectVisible(true); }

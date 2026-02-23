@@ -77,6 +77,12 @@ spring:
 
 
 
+# Tomcat 기본 POST body 제한(2MB) 상향 — 큰 사진 업로드 시 413 방지 (배포 413 원인)
+server:
+  tomcat:
+    max-http-post-size: 50MB
+    max-swallow-size: 50MB
+
 app:
   backend-url: ${APP_BACKEND_URL:http://localhost:8080}
   cors:
