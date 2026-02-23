@@ -227,7 +227,16 @@ export default function ObdDiagLoading({ navigation }: any) {
                 style={{ paddingTop: insets.top }}
             >
                 <View className="flex-row items-center justify-between px-4 py-3">
-                    <Text className="text-white text-lg font-bold tracking-tight uppercase opacity-90 pr-10 flex-1 text-center">
+                    <TouchableOpacity
+                        onPress={() => {
+                            useAiDiagnosisStore.setState({ status: 'IDLE', currentSessionId: null });
+                            navigation.goBack();
+                        }}
+                        className="w-10 h-10 items-center justify-center -ml-2"
+                    >
+                        <MaterialIcons name="arrow-back-ios-new" size={24} color="#0d7ff2" />
+                    </TouchableOpacity>
+                    <Text className="text-white text-lg font-bold tracking-tight uppercase opacity-90 pr-8 flex-1 text-center">
                         AI Diagnostics
                     </Text>
                 </View>

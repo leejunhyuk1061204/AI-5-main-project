@@ -427,7 +427,7 @@ export default function EngineSoundDiag() {
                 {/* Step 1 & 2: Visualization UI */}
                 {step <= 2 && (
                     <>
-                        <View className="items-center mb-12">
+                        <View className="items-center mt-8 mb-8">
                             <Text className="text-2xl font-bold text-white text-center leading-9 mb-3">
                                 {step === 1
                                     ? (recordedUri
@@ -442,7 +442,7 @@ export default function EngineSoundDiag() {
                             </Text>
                         </View>
 
-                        <View className="relative items-center justify-center w-full h-40 mb-12">
+                        <View className="relative items-center justify-center w-full h-40 my-8">
                             <View className="flex-row items-center justify-center gap-1.5 h-full z-10">
                                 {animations.map((anim, index) => (
                                     <Animated.View
@@ -465,11 +465,11 @@ export default function EngineSoundDiag() {
                         </View>
 
                         {step === 1 && (
-                            <View className="w-full flex-col items-center gap-8">
+                            <View className="w-full flex-col items-center flex-1 justify-center pb-8">
                                 {/* Recording/Playback Controls */}
                                 {!recordedUri ? (
                                     /* Recording State */
-                                    <View className="items-center gap-8 w-full flex-row justify-center mt-4">
+                                    <View className="items-center gap-8 w-full flex-row justify-center">
                                         <View className="items-center gap-4">
                                             <TouchableOpacity
                                                 onPress={handleRecordToggle}
@@ -541,6 +541,9 @@ export default function EngineSoundDiag() {
                                     </View>
                                 )}
                             </View>
+                        )}
+                        {step === 2 && (
+                            <View className="w-full flex-col items-center flex-1 justify-center pb-8" />
                         )}
                     </>
                 )}
