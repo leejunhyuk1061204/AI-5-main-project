@@ -417,7 +417,7 @@ public class AiDiagnosisService {
         String imageFile = taskMessage.getImageUrl();
         String audioFile = taskMessage.getAudioUrl();
 
-        // 0. SSE 연결 대기 (Frontend Navigation & Connect 시간 확보)
+        // 0. SSE 연결 대기 (프론트 구독·연결 시간만 확보, 과도한 대기 제거)
         try {
             log.info("[Diagnosis] Waiting for SSE connection... (2s)");
             Thread.sleep(2000);

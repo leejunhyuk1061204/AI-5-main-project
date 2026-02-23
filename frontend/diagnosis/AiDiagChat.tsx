@@ -145,11 +145,20 @@ export default function AiDiagChat() {
     const sessionId = route.params?.sessionId || null;
     const diagType: DiagType = route.params?.diagType || 'OBD';
 
-    // Global diagnosis store (for syncing overall session state on failure)
+    // Global diagnosis store (for syncing overall session state on failure + REPORT 시 즉시 이동)
     const { reset } = useAiDiagnosisStore();
+    const storeStatus = useAiDiagnosisStore(state => state.sessions[diagType]?.status);
+    const storeDiagResult = useAiDiagnosisStore(state => state.sessions[diagType]?.diagResult);
 
     // -- EFFECTS --
     useEffect(() => { loadUser(); }, []);
+
+    // store가 REPORT로 바뀌면 (예: OBD step5 후) 채팅에 머물지 않고 바로 리포트로 이동
+    useEffect(() => {
+        if (storeStatus !== 'REPORT' || !sessionId) return;
+        const reportData = storeDiagResult ?? sessionData ?? undefined;
+        navigation.replace('DiagnosisReport', { sessionId, reportData, diagType });
+    }, [storeStatus, sessionId, storeDiagResult, sessionData, diagType]);
 
     // 세션 데이터 로드 함수
     const loadSessionData = async (sid: string) => {
