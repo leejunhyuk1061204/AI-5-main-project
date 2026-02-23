@@ -153,6 +153,17 @@ export default function AiDiagChat() {
     // -- EFFECTS --
     useEffect(() => { loadUser(); }, []);
 
+    // 채팅에서 뒤로가기 시 해당 타입을 IDLE로 → 진단 메인에서 새 진단 가능, 이어하기는 진단 내역에서만
+    useEffect(() => {
+        const unsub = navigation.addListener('beforeRemove', (e: any) => {
+            const action = e.data?.action;
+            if (action?.type === 'POP' || action?.type === 'GO_BACK') {
+                reset(diagType);
+            }
+        });
+        return unsub;
+    }, [navigation, reset, diagType]);
+
     // store가 REPORT로 바뀌면 (예: OBD step5 후) 채팅에 머물지 않고 바로 리포트로 이동
     useEffect(() => {
         if (storeStatus !== 'REPORT' || !sessionId) return;
@@ -366,6 +377,7 @@ export default function AiDiagChat() {
     };
 
     const onBack = () => {
+        reset(diagType);
         navigation.goBack();
     };
 
@@ -538,6 +550,18 @@ export default function AiDiagChat() {
             {/* Bottom Nav - Hidden when keyboard is open */}
             {!isKeyboardVisible && (
                 <SimpleBottomNav onNavigate={onNavigate} />
+            )}
+            {insets.bottom > 0 && (
+                <View
+                    style={{
+                        position: 'absolute',
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        height: insets.bottom,
+                        backgroundColor: '#111827',
+                    }}
+                />
             )}
         </View>
     );

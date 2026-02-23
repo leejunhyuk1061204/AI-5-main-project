@@ -1,6 +1,6 @@
-import React, { useEffect } from 'react';
-import { View, Text, TouchableOpacity, ImageBackground, Dimensions } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import React, { useEffect, useState } from 'react';
+import { View, Text, TouchableOpacity, ImageBackground, Dimensions, BackHandler } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRoute, RouteProp } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
@@ -51,6 +51,10 @@ export default function ObdDiagLoading({ navigation }: any) {
     // store 반영이 비동기라 로딩 진입 직후 currentSessionId가 비어 있을 수 있음 → params.sessionId 사용
     const effectiveSessionId = currentSessionId || paramSessionId;
 
+    const isComplete = status === 'REPORT' || status === 'INTERACTIVE' || status === 'ACTION_REQUIRED';
+    const completeTarget = status === 'REPORT' ? '결과 화면' : '대화창';
+    const [failedDisplay, setFailedDisplay] = useState(false);
+
     useEffect(() => {
         console.log('[ObdDiagLoading] mount/params', { diagType, vehicleId, paramSessionId, currentSessionId, effectiveSessionId });
     }, [diagType, vehicleId, paramSessionId, currentSessionId, effectiveSessionId]);
@@ -89,13 +93,27 @@ export default function ObdDiagLoading({ navigation }: any) {
         }
     }, [status, effectiveSessionId, vehicleId, selectedVehicleId, diagResult, navigation, diagType]);
 
-    // Show failure alert when SSE failed; clear immediately so we only show once
+    // 뒤로가기 시 항상 진단 메인(DiagTab)으로
+    const goToDiagMain = () => {
+        (navigation as any).navigate('MainPage', { screen: 'DiagTab' });
+    };
+
+    useEffect(() => {
+        const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+            goToDiagMain();
+            return true;
+        });
+        return () => sub.remove();
+    }, [navigation]);
+
+    // Show failure alert when SSE failed; 화면에 "진단 실패" 표시 후 알림
     useEffect(() => {
         if (!sseFailedWithMessage) return;
         const message = sseFailedWithMessage;
+        setFailedDisplay(true);
         clearSseFailed(diagType);
-        useAlertStore.getState().showAlert('진단 실패', message, 'ERROR', () => navigation.goBack());
-    }, [sseFailedWithMessage, clearSseFailed, navigation, diagType]);
+        useAlertStore.getState().showAlert('진단 실패', message, 'ERROR', goToDiagMain);
+    }, [sseFailedWithMessage, clearSseFailed, diagType]);
 
     // Animations start on mount
     useEffect(() => {
@@ -152,16 +170,14 @@ export default function ObdDiagLoading({ navigation }: any) {
 
     return (
         <View className="flex-1 bg-background-dark">
+            <SafeAreaView className="flex-1" edges={['top', 'left', 'right', 'bottom']}>
             <StatusBar style="light" />
 
-            {/* Header */}
-            <View
-                className="z-10 bg-transparent absolute top-0 w-full"
-                style={{ paddingTop: insets.top }}
-            >
+            {/* Header — 상단 safe area 반영 */}
+            <View className="z-10 bg-transparent absolute top-0 w-full" style={{ paddingTop: insets.top }}>
                 <View className="flex-row items-center justify-between px-4 py-3">
                     <TouchableOpacity
-                        onPress={() => navigation.goBack()}
+                        onPress={goToDiagMain}
                         className="w-10 h-10 items-center justify-center -ml-2"
                     >
                         <MaterialIcons name="arrow-back-ios-new" size={24} color="#0d7ff2" />
@@ -235,11 +251,20 @@ export default function ObdDiagLoading({ navigation }: any) {
                 {/* Headline Text */}
                 <View className="w-full items-center mb-10">
                     <Text className="text-white text-[26px] font-bold leading-tight mb-2 text-center">
-                        차량 정보를{'\n'}
-                        <Text className="text-primary">정밀 분석</Text> 중입니다...
+                        {failedDisplay ? (
+                            <>진단 <Text className="text-red-400">실패</Text></>
+                        ) : isComplete ? (
+                            <>진단 <Text className="text-primary">완료</Text></>
+                        ) : (
+                            <>차량 정보를{'\n'}<Text className="text-primary">정밀 분석</Text> 중입니다...</>
+                        )}
                     </Text>
                     <Text className="text-slate-400 text-sm font-normal leading-relaxed text-center px-4">
-                        AI가 차량의 상태를 실시간으로 진단하고{'\n'}잠재적인 위험 요소를 파악합니다.
+                        {failedDisplay
+                            ? '오류가 발생했습니다. 확인을 누르면 진단 화면으로 이동합니다.'
+                            : isComplete
+                                ? `${completeTarget}(으)로 이동합니다.`
+                                : 'AI가 차량의 상태를 실시간으로 진단하고\n잠재적인 위험 요소를 파악합니다.'}
                     </Text>
                 </View>
 
@@ -249,15 +274,27 @@ export default function ObdDiagLoading({ navigation }: any) {
                         <View className="gap-1">
                             <Text className="text-primary text-xs font-bold tracking-widest uppercase">Status</Text>
                             <View className="flex-row items-center gap-2">
-                                {/* Simple spin animation replacement just with icon for now or reusable spin */}
-                                <MaterialIcons name="sync" size={14} color="#9cabba" className="animate-spin" />
-                                {/** No duplicate icon needed, removed duplicate from previous bad view */}
+                                {failedDisplay ? (
+                                    <MaterialIcons name="error-outline" size={14} color="#f87171" />
+                                ) : isComplete ? (
+                                    <MaterialIcons name="check-circle" size={14} color="#0d7ff2" />
+                                ) : (
+                                    <MaterialIcons name="sync" size={14} color="#9cabba" />
+                                )}
                                 <Text className="text-[#9cabba] text-sm font-medium">
-                                    {!effectiveSessionId ? '세션 정보를 찾을 수 없습니다.' : sseStatusMessage}
+                                    {failedDisplay
+                                        ? '진단 실패'
+                                        : isComplete
+                                            ? '완료'
+                                            : !effectiveSessionId
+                                                ? '세션 정보를 찾을 수 없습니다.'
+                                                : sseStatusMessage}
                                 </Text>
                             </View>
                         </View>
-                        <Text className="text-white text-3xl font-bold tracking-tighter">{Math.round(sseProgress * 100)}%</Text>
+                        <Text className="text-white text-3xl font-bold tracking-tighter">
+                            {failedDisplay ? '—' : Math.round(sseProgress * 100)}%
+                        </Text>
                     </View>
 
                     {/* Progress Bar Container */}
@@ -280,6 +317,19 @@ export default function ObdDiagLoading({ navigation }: any) {
                 </View>
 
             </View>
+            </SafeAreaView>
+            {insets.bottom > 0 && (
+                <View
+                    style={{
+                        position: 'absolute',
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        height: insets.bottom,
+                        backgroundColor: '#101922',
+                    }}
+                />
+            )}
         </View>
     );
 }

@@ -359,6 +359,18 @@ export default function Filming({ navigation, route }: { navigation?: any; route
                     </View>
                 )}
             </View>
+            {insets.bottom > 0 && (
+                <View
+                    style={{
+                        position: 'absolute',
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        height: insets.bottom,
+                        backgroundColor: '#101922',
+                    }}
+                />
+            )}
         </View>
     );
 }
