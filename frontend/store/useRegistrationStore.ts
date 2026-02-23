@@ -132,7 +132,7 @@ export const useRegistrationStore = create<RegistrationState>((set, get) => ({
     },
 
     loadModels: async (make) => {
-        set({ isLoading: true });
+        set({ isLoading: true, years: [], availableFuels: [] });
         try {
             const data = await getModels(make);
             const distinctModelNames = [...new Set(data.map((d) => d.modelNameKo))];
@@ -154,11 +154,11 @@ export const useRegistrationStore = create<RegistrationState>((set, get) => ({
         const { modelsFull } = get();
         const match = modelsFull.find((d) => d.modelNameKo === modelNameKo);
         const modelNameEn = match?.modelNameEn ?? '';
-        set({ modelName: modelNameKo, modelNameEn });
+        set({ modelName: modelNameKo, modelNameEn, availableFuels: [] });
     },
 
     loadYears: async (make, model) => {
-        set({ isLoading: true });
+        set({ isLoading: true, availableFuels: [] });
         try {
             const data = await getModelYears(make, model);
             set({ years: data.map(String) });
