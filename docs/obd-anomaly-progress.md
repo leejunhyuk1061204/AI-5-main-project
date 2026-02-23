@@ -417,3 +417,147 @@
   - 규칙 미탐지는 로직 이슈가 아니라 입력 구간 미포함 이슈
 - 다음 액션:
   - 스톨 직전~직후(최소 1~2분) 원본 구간 재추출 후 재검증
+
+## 2026-02-23 | Step10: Synthetic Anomaly Benchmark (결과 반영)
+
+### Step10 공통 범례 (먼저 읽기)
+- `FPR`: 실제 정상 중 오탐 비율, **낮을수록 좋음**
+- `Recall`: 실제 이상 중 탐지 비율, **높을수록 좋음**
+- `Precision`: 탐지한 이상 중 실제 이상 비율, **높을수록 좋음**
+- `F1`: Precision/Recall 균형 점수, **높을수록 좋음**
+- `Accuracy`: 전체 정답률(보조 지표)
+
+- `threshold(th)`: 이상 판정 점수 기준값
+- `k_consecutive(k)`: 연속 초과 필요 횟수
+- `warning(w)`: WARNING 경계
+- `critical(c)`: CRITICAL 경계
+### 7) Step10 1차 실행 결과 (Synthetic Eval)
+- 실행 일시: 2026-02-23
+- 입력: `ai/app/services/obd_anomaly/offline/datasets/vfinal/split/val_synthetic.jsonl`
+- 샘플 수: 18 (normal=12, synthetic anomaly=6)
+- 산출물:
+  - `ai/app/services/obd_anomaly/offline/datasets/vfinal/synthetic_eval.json`
+  - `ai/app/services/obd_anomaly/offline/datasets/vfinal/synthetic_eval_report.md`
+
+- Confusion Matrix
+  - TP: 5
+  - FP: 9
+  - TN: 3
+  - FN: 1
+
+- Metrics
+  - Precision: 0.3571
+  - Recall: 0.8333
+  - F1: 0.5000
+  - FPR: 0.7500
+  - Accuracy: 0.4444
+
+- 해석
+  - 이상 검출률(Recall)은 높지만 정상 오탐(FP)이 커서 FPR이 높다.
+  - 현재 정책은 synthetic anomaly에 민감한 대신 정상 억제가 약한 상태다.
+
+### 8) Step10 정책 보수화 A/B/C 실험 결과 (Synthetic Eval)
+- 공통 입력: `ai/app/services/obd_anomaly/offline/datasets/vfinal/split/val_synthetic.jsonl`
+- 공통 샘플: 18 (normal=12, synthetic anomaly=6)
+
+- Baseline (기존 정책)
+  - 파라미터: `threshold=0.795981`, `k=2`, `warning=0.70`, `critical=0.85`
+  - TP/FP/TN/FN: `5/9/3/1`
+  - Precision/Recall/F1/FPR/Accuracy: `0.3571 / 0.8333 / 0.5000 / 0.7500 / 0.4444`
+
+- 실험 A
+  - 파라미터: `threshold=0.86`, `k=3`, `warning=0.80`, `critical=0.90`
+  - TP/FP/TN/FN: `3/4/8/3`
+  - Precision/Recall/F1/FPR/Accuracy: `0.4286 / 0.5000 / 0.4615 / 0.3333 / 0.6111`
+
+- 실험 B
+  - 파라미터: `threshold=0.90`, `k=3`, `warning=0.85`, `critical=0.93`
+  - TP/FP/TN/FN: `0/0/12/6`
+  - Precision/Recall/F1/FPR/Accuracy: `0.0000 / 0.0000 / 0.0000 / 0.0000 / 0.6667`
+  - 해석: 과보수(미탐 과다)로 운영 부적합
+
+- 실험 C
+  - 파라미터: `threshold=0.88`, `k=3`, `warning=0.82`, `critical=0.91`
+  - TP/FP/TN/FN: `3/3/9/3`
+  - Precision/Recall/F1/FPR/Accuracy: `0.5000 / 0.5000 / 0.5000 / 0.2500 / 0.6667`
+  - 해석: A 대비 오탐(FPR) 추가 개선, Recall 유지
+
+- 중간 결론
+  - B는 폐기.
+  - A/C 중에서는 Step10 합성 벤치 기준 `C`가 균형이 더 좋음.
+
+### 9) 운영 기준 (잠정)
+#### 범례 (Metric Legend)
+- TP: 실제 이상을 이상으로 탐지
+- FP: 실제 정상을 이상으로 오탐
+- TN: 실제 정상을 정상으로 탐지
+- FN: 실제 이상을 정상으로 미탐
+
+- Precision: 탐지한 이상 중 실제 이상의 비율 (높을수록 좋음)
+- Recall: 실제 이상 중 탐지한 비율 (높을수록 좋음)
+- F1: Precision/Recall 균형 점수 (높을수록 좋음)
+- FPR: 실제 정상 중 오탐 비율 (낮을수록 좋음)
+- Accuracy: 전체 예측 정확도 (높을수록 좋음)
+
+- threshold(th): 이상 판정 점수 기준값
+- k_consecutive(k): 연속 초과 필요 횟수
+- warning(w): WARNING 경계
+- critical(c): CRITICAL 경계
+
+- 목표 지표
+  - `FPR <= 0.20`
+  - `Recall >= 0.60`
+  - `F1 >= 0.55`
+- 초기 운영/데모 허용 범위
+  - `FPR <= 0.30` (임시 허용)
+- 후보 선택 우선순위
+  - 1순위: FPR
+  - 2순위: Recall
+  - 3순위: F1
+- 비고
+  - 현재 Step10 합성 벤치 결과는 운영 목표 대비 미달이며, 추가 정책 탐색(grid search) 진행 필요
+
+### 10) 발표용 요약 (읽는 순서 + 비교표 + 결론)
+
+#### 10-1) 판독 범례 (Legend)
+- `FPR`(False Positive Rate): 실제 정상 중 오탐 비율, **낮을수록 좋음**
+- `Recall`(재현율): 실제 이상 중 탐지 비율, **높을수록 좋음**
+- `Precision`(정밀도): 탐지한 이상 중 실제 이상 비율, **높을수록 좋음**
+- `F1`: Precision/Recall 균형 점수, **높을수록 좋음**
+- `Accuracy`: 전체 정답률(보조 지표)
+
+#### 10-2) 운영 판단 기준 (이번 발표 기준)
+- 1순위: `FPR` (오탐 억제)
+- 2순위: `Recall` (미탐 억제)
+- 3순위: `F1` (균형)
+- 운영 목표치: `FPR <= 0.20`, `Recall >= 0.60`, `F1 >= 0.55`
+
+#### 10-3) 실험 결과 비교표
+| 설정 | Precision | Recall | F1 | FPR | Accuracy | 운영 판단 |
+|---|---:|---:|---:|---:|---:|---|
+| Baseline | 0.3571 | 0.8333 | 0.5000 | 0.7500 | 0.4444 | 오탐 과다로 부적합 |
+| A | 0.4286 | 0.5000 | 0.4615 | 0.3333 | 0.6111 | 개선됐지만 FPR 높음 |
+| B | 0.0000 | 0.0000 | 0.0000 | 0.0000 | 0.6667 | 미탐 100%로 제외 |
+| C | 0.5000 | 0.5000 | 0.5000 | 0.2500 | 0.6667 | 현재 균형 후보 |
+| Grid-best(자동) | 0.0000 | 0.0000 | 0.0000 | 0.0000 | 0.6667 | 자동선정 한계로 제외 |
+
+#### 10-4) 한 줄 해석
+- `B`/`Grid-best`는 FPR만 보면 좋아 보이지만 Recall=0이라 실사용 불가.
+- 현재는 `C`가 가장 균형적 후보이나, 운영 목표치 동시 충족은 아직 미달.
+- 다음 단계는 실차 이상 라벨 확충 후 동일 지표로 재검증.
+### 11) 실험값과 운영값 구분 (중요)
+- 이번 Step10에서 A/B/C/grid-search로 바꾼 `threshold/k/warning/critical` 값은 **튜닝 실험값**이다.
+- 목적: 성능(FPR/Recall/F1) 변화 추세를 확인하고 후보를 고르는 것.
+- 의미: 실험값은 "비교용"이지, 자동으로 운영 정책으로 확정되지 않는다.
+
+- 현재 결론
+  - 실험 관점 후보: `C(th=0.88, k=3)`
+  - 운영 확정값: 별도 승인/결정 전까지 기존 정책값 유지
+
+- 운영 반영 원칙
+  1. 실험으로 후보 선정
+  2. 실차 라벨/시연 검증
+  3. 팀 합의 후 정책 파일(`threshold_policy.json`)에 최종 반영
+
+- 한 줄 요약
+  - "지금 돌린 값들은 실험값이고, 운영값은 아직 확정 전"이 맞다.
