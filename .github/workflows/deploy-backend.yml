@@ -141,6 +141,20 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           command_timeout: 60m
           script: |
+            # --- Nginx client_max_body_size (사진 업로드 413 방지) ---
+            if command -v nginx &> /dev/null; then
+              echo "📦 Configuring Nginx client_max_body_size for file uploads..."
+              echo 'client_max_body_size 50M;' | sudo tee /etc/nginx/conf.d/client-max-body.conf
+              if sudo nginx -t 2>/dev/null; then
+                sudo systemctl reload nginx
+                echo "✅ Nginx reloaded with client_max_body_size 50M"
+              else
+                echo "⚠️ Nginx config test failed, skipping reload"
+              fi
+            else
+              echo "ℹ️ Nginx not found, skipping"
+            fi
+
             # --- 0. Optimize Memory & Disk (Critical for t2.micro) ---
             echo "🧹 Cleaning up old Docker images to free space..."
             sudo docker image prune -a -f
