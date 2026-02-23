@@ -82,7 +82,7 @@ export default function Spec() {
                 />
             </View>
 
-            <SafeAreaView edges={['top']} className="flex-1">
+            <SafeAreaView edges={['top', 'bottom']} className="flex-1">
                 {/* Header */}
                 <View className="px-5 pb-5 pt-2 flex-row items-center justify-between">
                     <TouchableOpacity
@@ -255,6 +255,18 @@ export default function Spec() {
                     </View>
                 </ScrollView>
             </SafeAreaView>
+            {insets.bottom > 0 && (
+                <View
+                    style={{
+                        position: 'absolute',
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        height: insets.bottom,
+                        backgroundColor: '#101922',
+                    }}
+                />
+            )}
         </View>
     );
 }

@@ -119,7 +119,11 @@ export default function DiagnosisHistory() {
     const handlePressItem = (item: any) => {
         const diagType = mapTriggerToDiagType(item.triggerType);
         if (item.responseMode === 'INTERACTIVE' || item.status === 'ACTION_REQUIRED') {
-            navigation.navigate('AiDiagChat', { sessionId: item.sessionId, diagType });
+            navigation.navigate('AiDiagChat', {
+                sessionId: item.sessionId,
+                diagType,
+                vehicleId: selectedVehicleId ?? undefined
+            });
         } else {
             navigation.navigate('DiagnosisReport', { reportData: item, fromHistory: true, diagType });
         }

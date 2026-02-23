@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Animated, LayoutAnimation, Platform, UIManager } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
@@ -220,10 +220,12 @@ export default function SupManage() {
     const urgentCount = consumables.filter(c => c.remainingLifePercent <= 20).length;
     const warningCount = consumables.filter(c => c.remainingLifePercent > 20 && c.remainingLifePercent <= 50).length;
 
+    const insets = useSafeAreaInsets();
+
     return (
         <View className="flex-1 bg-background-dark">
             <StatusBar style="light" />
-            <SafeAreaView className="flex-1" edges={['top']}>
+            <SafeAreaView className="flex-1" edges={['top', 'bottom']}>
 
                 {/* Header */}
                 <Header title="소모품 관리" />
@@ -361,6 +363,18 @@ export default function SupManage() {
                 />
 
             </SafeAreaView>
+            {insets.bottom > 0 && (
+                <View
+                    style={{
+                        position: 'absolute',
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        height: insets.bottom,
+                        backgroundColor: '#101922',
+                    }}
+                />
+            )}
         </View>
     );
 }
