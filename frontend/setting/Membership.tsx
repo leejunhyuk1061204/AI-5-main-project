@@ -262,6 +262,7 @@ export default function Membership() {
                                     </View>
                                 </View>
 
+                                {/* 체크 + 혜택 설명 주석 처리 */}
                                 <View className="gap-2.5">
                                     {plan.features.map((feature, index) => (
                                         <View key={index} className="flex-row items-center gap-3">
@@ -279,6 +280,7 @@ export default function Membership() {
                                         </View>
                                     ))}
                                 </View>
+                               
                             </View>
                         </TouchableOpacity>
                     ))}

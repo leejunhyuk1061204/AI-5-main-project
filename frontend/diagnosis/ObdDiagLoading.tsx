@@ -1,11 +1,9 @@
-import React, { useEffect } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { View, Text, TouchableOpacity, ImageBackground, Dimensions, Platform } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import React, { useEffect, useState } from 'react';
+import { View, Text, TouchableOpacity, ImageBackground, Dimensions, BackHandler } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import { CommonActions, useRoute, RouteProp } from '@react-navigation/native';
+import { useRoute, RouteProp } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
-import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
     useSharedValue,
     useAnimatedStyle,
@@ -15,152 +13,110 @@ import Animated, {
     Easing
 } from 'react-native-reanimated';
 
-import EventSource from "react-native-sse";
-import { BASE_URL } from '../api/axios';
-import { getDiagnosisSessionStatus } from '../api/aiApi';
-import { useAiDiagnosisStore } from '../store/useAiDiagnosisStore';
+import { useAiDiagnosisStore, DiagType } from '../store/useAiDiagnosisStore';
 import { useAlertStore } from '../store/useAlertStore';
 
 const { width } = Dimensions.get('window');
 
-// Route 파라미터 타입 정의
 type ActiveLoadingParams = {
     vehicleId?: string;
     sessionId?: string;
+    diagType?: DiagType;
 };
 
 export default function ObdDiagLoading({ navigation }: any) {
     const insets = useSafeAreaInsets();
     const route = useRoute<RouteProp<{ ObdDiagLoading: ActiveLoadingParams }, 'ObdDiagLoading'>>();
     const vehicleId = route.params?.vehicleId;
-    const { currentSessionId } = useAiDiagnosisStore();
+    const diagType: DiagType = route.params?.diagType || 'OBD';
+    const paramSessionId = route.params?.sessionId;
 
-    // SSE State
-    const [progress, setProgress] = React.useState(0.0);
-    const [statusMessage, setStatusMessage] = React.useState("서버 연결 대기 중...");
-    const [token, setToken] = React.useState<string | null>(null);
+    const {
+        sessions,
+        connectSse,
+        clearSseFailed,
+        selectedVehicleId
+    } = useAiDiagnosisStore();
+
+    const session = sessions[diagType];
+    const {
+        currentSessionId,
+        sseProgress,
+        sseStatusMessage,
+        sseFailedWithMessage,
+        status,
+        diagResult
+    } = session;
+
+    // store 반영이 비동기라 로딩 진입 직후 currentSessionId가 비어 있을 수 있음 → params.sessionId 사용
+    const effectiveSessionId = currentSessionId || paramSessionId;
+
+    const isComplete = status === 'REPORT' || status === 'INTERACTIVE' || status === 'ACTION_REQUIRED';
+    const completeTarget = status === 'REPORT' ? '결과 화면' : '대화창';
+    const [failedDisplay, setFailedDisplay] = useState(false);
+
+    useEffect(() => {
+        console.log('[ObdDiagLoading] mount/params', { diagType, vehicleId, paramSessionId, currentSessionId, effectiveSessionId });
+    }, [diagType, vehicleId, paramSessionId, currentSessionId, effectiveSessionId]);
 
     // Animations
     const scanLineY = useSharedValue(0);
     const particleOpacity = useSharedValue(0.3);
     const rotate = useSharedValue(0);
 
-    // 1. Get Token
+    // Ensure SSE is connected when we have a session (no cleanup: connection lives in store)
     useEffect(() => {
-        AsyncStorage.getItem('accessToken').then(t => {
-            if (t) {
-                setToken(t);
-            } else {
-                console.error("[ObdDiagLoading] No Access Token found!");
-                setStatusMessage("인증 정보를 찾을 수 없습니다.");
-            }
-        });
-    }, []);
-
-    // 2. Connect SSE
-    useEffect(() => {
-        if (!currentSessionId) {
-            console.error("[ObdDiagLoading] No Session ID found!");
-            setStatusMessage("세션 정보를 찾을 수 없습니다.");
+        if (!effectiveSessionId) {
+            console.log('[ObdDiagLoading] skip connectSse: no effectiveSessionId');
             return;
         }
+        console.log('[ObdDiagLoading] connectSse', { diagType, effectiveSessionId });
+        connectSse(diagType, effectiveSessionId);
+    }, [effectiveSessionId, connectSse, diagType]);
 
-        if (!token) {
-            // Wait for token
-            return;
+    // INTERACTIVE → 채팅, REPORT → 리포트만 이동 (한 번에 하나만)
+    useEffect(() => {
+        const sid = effectiveSessionId;
+        if (status === 'REPORT') {
+            console.log('[ObdDiagLoading] status=REPORT, replace → DiagnosisReport');
+            const t = setTimeout(() => {
+                navigation.replace('DiagnosisReport', { reportData: diagResult, sessionId: sid, diagType });
+            }, 800);
+            return () => clearTimeout(t);
         }
+        if (status === 'INTERACTIVE' || status === 'ACTION_REQUIRED') {
+            console.log('[ObdDiagLoading] status=INTERACTIVE/ACTION_REQUIRED, replace → AiDiagChat');
+            const t = setTimeout(() => {
+                navigation.replace('AiDiagChat', { sessionId: sid, vehicleId: vehicleId ?? selectedVehicleId ?? undefined, diagType });
+            }, 800);
+            return () => clearTimeout(t);
+        }
+    }, [status, effectiveSessionId, vehicleId, selectedVehicleId, diagResult, navigation, diagType]);
 
-        const url = `${BASE_URL}/api/v1/ai/diagnose/session/${currentSessionId}/sse`;
-        console.log(`[ObdDiagLoading] Connecting SSE: ${url}`);
+    // 뒤로가기 시 항상 진단 메인(DiagTab)으로
+    const goToDiagMain = () => {
+        (navigation as any).navigate('MainPage', { screen: 'DiagTab' });
+    };
 
-        // IMPORTANT: Pass Authorization Header for secured endpoint
-        const es = new EventSource(url, {
-            headers: {
-                Authorization: `Bearer ${token}`
-            }
+    useEffect(() => {
+        const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+            goToDiagMain();
+            return true;
         });
+        return () => sub.remove();
+    }, [navigation]);
 
-        const handleOpen = () => {
-            console.log("[SSE] Connected!");
-            setStatusMessage("서버 연결 성공 (진단 시작)");
-            setProgress(0.1);
-        };
+    // Show failure alert when SSE failed; 화면에 "진단 실패" 표시 후 알림
+    useEffect(() => {
+        if (!sseFailedWithMessage) return;
+        const message = sseFailedWithMessage;
+        setFailedDisplay(true);
+        clearSseFailed(diagType);
+        useAlertStore.getState().showAlert('진단 실패', message, 'ERROR', goToDiagMain);
+    }, [sseFailedWithMessage, clearSseFailed, diagType]);
 
-        const handleStep1 = (event: any) => {
-            console.log("[SSE] Step 1:", event.data);
-            setStatusMessage("진단 요청 접수 완료");
-            setProgress(0.2);
-        };
-        const handleStep2 = (event: any) => {
-            console.log("[SSE] Step 2:", event.data);
-            setStatusMessage("멀티미디어 데이터 전처리 완료");
-            setProgress(0.4);
-        };
-        const handleStep3 = (event: any) => {
-            console.log("[SSE] Step 3:", event.data);
-            setStatusMessage("AI 정밀 분석 완료 (시각/청각/OBD)");
-            setProgress(0.6);
-        };
-        const handleStep4 = (event: any) => {
-            console.log("[SSE] Step 4:", event.data);
-            setStatusMessage("결함 원인 추론 및 지식 검색 완료");
-            setProgress(0.8);
-        };
-        const handleFailed = (event: any) => {
-            console.log("[SSE] Failed:", event.data);
-            const message = (event?.data && String(event.data).trim()) || "AI 분석 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.";
-            setStatusMessage(message);
-            setProgress(1.0);
-            useAiDiagnosisStore.setState({ status: 'IDLE', currentSessionId: null });
-            useAlertStore.getState().showAlert('진단 실패', message, 'ERROR', () => navigation.goBack());
-        };
-        const handleStep5 = async (event: any) => {
-            console.log("[SSE] Step 5:", event.data);
-            setStatusMessage("최종 진단 완료 (결과 확인 중)");
-            setProgress(1.0);
-
-            if (!currentSessionId) {
-                setTimeout(() => navigation.replace('DiagnosisReport'), 1000);
-                return;
-            }
-            try {
-                const data = await getDiagnosisSessionStatus(currentSessionId);
-                const status = (data?.status || '').toUpperCase();
-                const responseMode = data?.responseMode || data?.response_mode || '';
-
-                const isInteractive = status === 'ACTION_REQUIRED' || status === 'INTERACTIVE' || responseMode === 'INTERACTIVE';
-                const reportData = data?.report || data?.result || data;
-
-                setTimeout(() => {
-                    if (isInteractive) {
-                        navigation.replace('AiDiagChat', { sessionId: currentSessionId, vehicleId: vehicleId ?? undefined });
-                    } else {
-                        navigation.replace('DiagnosisReport', { reportData, sessionId: currentSessionId });
-                    }
-                }, 800);
-            } catch (e) {
-                console.warn("[ObdDiagLoading] Step5 status fetch failed, going to result:", e);
-                // 에러 발생 시에도 리포트 화면으로 이동 (빈 데이터라도 보여줌)
-                setTimeout(() => navigation.replace('DiagnosisReport', { sessionId: currentSessionId }), 1000);
-            }
-        };
-
-        const handleError = (error: any) => {
-            // console.error("[SSE] Error:", error);
-            // Ignore simple connection errors/retries for now, or handle specifically
-        };
-
-        // Cast custom event names to any to avoid TS errors
-        es.addEventListener("open" as any, handleOpen);
-        es.addEventListener("step1" as any, handleStep1);
-        es.addEventListener("step2" as any, handleStep2);
-        es.addEventListener("step3" as any, handleStep3);
-        es.addEventListener("step4" as any, handleStep4);
-        es.addEventListener("step5" as any, handleStep5);
-        es.addEventListener("failed" as any, handleFailed);
-        es.addEventListener("error" as any, handleError);
-
-        // Animations start
+    // Animations start on mount
+    useEffect(() => {
         scanLineY.value = withRepeat(
             withTiming(1, { duration: 3000, easing: Easing.linear }),
             -1,
@@ -179,12 +135,7 @@ export default function ObdDiagLoading({ navigation }: any) {
             -1,
             false
         );
-
-        return () => {
-            es.close();
-            // Optional: reset animations if needed
-        };
-    }, [currentSessionId, token]);
+    }, []);
 
     const animatedScanLineStyle = useAnimatedStyle(() => ({
         top: `${scanLineY.value * 100}%`,
@@ -219,19 +170,14 @@ export default function ObdDiagLoading({ navigation }: any) {
 
     return (
         <View className="flex-1 bg-background-dark">
+            <SafeAreaView className="flex-1" edges={['top', 'left', 'right', 'bottom']}>
             <StatusBar style="light" />
 
-            {/* Header */}
-            <View
-                className="z-10 bg-transparent absolute top-0 w-full"
-                style={{ paddingTop: insets.top }}
-            >
+            {/* Header — 상단 safe area 반영 */}
+            <View className="z-10 bg-transparent absolute top-0 w-full" style={{ paddingTop: insets.top }}>
                 <View className="flex-row items-center justify-between px-4 py-3">
                     <TouchableOpacity
-                        onPress={() => {
-                            useAiDiagnosisStore.setState({ status: 'IDLE', currentSessionId: null });
-                            navigation.goBack();
-                        }}
+                        onPress={goToDiagMain}
                         className="w-10 h-10 items-center justify-center -ml-2"
                     >
                         <MaterialIcons name="arrow-back-ios-new" size={24} color="#0d7ff2" />
@@ -239,11 +185,15 @@ export default function ObdDiagLoading({ navigation }: any) {
                     <Text className="text-white text-lg font-bold tracking-tight uppercase opacity-90 pr-8 flex-1 text-center">
                         AI Diagnostics
                     </Text>
+                    <View className="w-10" />
                 </View>
             </View>
 
-            {/* Main Content */}
-            <View className="flex-1 items-center justify-center px-6 pb-8">
+            {/* Main Content - paddingTop so car image is not covered by header */}
+            <View
+                className="flex-1 items-center justify-center px-6 pb-8"
+                style={{ paddingTop: insets.top + 48 }}
+            >
 
                 {/* Central Visual: Holographic Car Scanner */}
                 <View className="relative w-full aspect-square max-h-[360px] mb-8 items-center justify-center">
@@ -301,11 +251,20 @@ export default function ObdDiagLoading({ navigation }: any) {
                 {/* Headline Text */}
                 <View className="w-full items-center mb-10">
                     <Text className="text-white text-[26px] font-bold leading-tight mb-2 text-center">
-                        차량 데이터를{'\n'}
-                        <Text className="text-primary">정밀 분석</Text> 중입니다...
+                        {failedDisplay ? (
+                            <>진단 <Text className="text-red-400">실패</Text></>
+                        ) : isComplete ? (
+                            <>진단 <Text className="text-primary">완료</Text></>
+                        ) : (
+                            <>차량 정보를{'\n'}<Text className="text-primary">정밀 분석</Text> 중입니다...</>
+                        )}
                     </Text>
                     <Text className="text-slate-400 text-sm font-normal leading-relaxed text-center px-4">
-                        AI가 차량의 상태를 실시간으로 진단하고{'\n'}잠재적인 위험 요소를 파악합니다.
+                        {failedDisplay
+                            ? '오류가 발생했습니다. 확인을 누르면 진단 화면으로 이동합니다.'
+                            : isComplete
+                                ? `${completeTarget}(으)로 이동합니다.`
+                                : 'AI가 차량의 상태를 실시간으로 진단하고\n잠재적인 위험 요소를 파악합니다.'}
                     </Text>
                 </View>
 
@@ -315,19 +274,33 @@ export default function ObdDiagLoading({ navigation }: any) {
                         <View className="gap-1">
                             <Text className="text-primary text-xs font-bold tracking-widest uppercase">Status</Text>
                             <View className="flex-row items-center gap-2">
-                                {/* Simple spin animation replacement just with icon for now or reusable spin */}
-                                <MaterialIcons name="sync" size={14} color="#9cabba" className="animate-spin" />
-                                {/** No duplicate icon needed, removed duplicate from previous bad view */}
-                                <Text className="text-[#9cabba] text-sm font-medium">{statusMessage}</Text>
+                                {failedDisplay ? (
+                                    <MaterialIcons name="error-outline" size={14} color="#f87171" />
+                                ) : isComplete ? (
+                                    <MaterialIcons name="check-circle" size={14} color="#0d7ff2" />
+                                ) : (
+                                    <MaterialIcons name="sync" size={14} color="#9cabba" />
+                                )}
+                                <Text className="text-[#9cabba] text-sm font-medium">
+                                    {failedDisplay
+                                        ? '진단 실패'
+                                        : isComplete
+                                            ? '완료'
+                                            : !effectiveSessionId
+                                                ? '세션 정보를 찾을 수 없습니다.'
+                                                : sseStatusMessage}
+                                </Text>
                             </View>
                         </View>
-                        <Text className="text-white text-3xl font-bold tracking-tighter">{Math.round(progress * 100)}%</Text>
+                        <Text className="text-white text-3xl font-bold tracking-tighter">
+                            {failedDisplay ? '—' : Math.round(sseProgress * 100)}%
+                        </Text>
                     </View>
 
                     {/* Progress Bar Container */}
                     <View className="h-1.5 w-full bg-[#2a3848] rounded-full overflow-hidden relative">
                         {/* Fill */}
-                        <View className="h-full bg-primary shadow-[0_0_10px_rgba(13,127,242,0.6)]" style={{ width: `${progress * 100}%` }} />
+                        <View className="h-full bg-primary shadow-[0_0_10px_rgba(13,127,242,0.6)]" style={{ width: `${sseProgress * 100}%` }} />
                     </View>
                 </View>
 
@@ -344,6 +317,19 @@ export default function ObdDiagLoading({ navigation }: any) {
                 </View>
 
             </View>
+            </SafeAreaView>
+            {insets.bottom > 0 && (
+                <View
+                    style={{
+                        position: 'absolute',
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        height: insets.bottom,
+                        backgroundColor: '#101922',
+                    }}
+                />
+            )}
         </View>
     );
 }

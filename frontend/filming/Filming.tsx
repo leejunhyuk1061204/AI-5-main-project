@@ -1,11 +1,8 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, TouchableOpacity, Dimensions, StyleSheet, Image, ActivityIndicator, StatusBar as RNStatusBar } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import EventSource from 'react-native-sse';
 import { useAlertStore } from '../store/useAlertStore';
-import { useAiDiagnosisStore } from '../store/useAiDiagnosisStore';
+import { useAiDiagnosisStore, DiagType } from '../store/useAiDiagnosisStore';
 import { diagnoseImage, replyToDiagnosisSession } from '../api/aiApi';
-import { BASE_URL } from '../api/axios';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -17,6 +14,8 @@ const { width } = Dimensions.get('window');
 // Main Camera Component
 export default function Filming({ navigation, route }: { navigation?: any; route?: any }) {
     const insets = useSafeAreaInsets();
+    const diagType: DiagType = route?.params?.diagType || 'PHOTO';
+
     const [permission, requestPermission] = useCameraPermissions();
     const [facing, setFacing] = useState<CameraType>('back');
     const [enableTorch, setEnableTorch] = useState(false);
@@ -105,22 +104,39 @@ export default function Filming({ navigation, route }: { navigation?: any; route
         try {
             let result;
             if (sessionId) {
-                // If we are in an interactive session, use REPLY endpoint
                 result = await replyToDiagnosisSession(sessionId as string, {
                     userResponse: "사진을 촬영했습니다.",
                     vehicleId: vehicleId as string
                 }, capturedImage || undefined);
-                // After reply, set waiting state
-                useAiDiagnosisStore.setState({ isWaitingForAi: true });
+                useAiDiagnosisStore.setState((state) => ({
+                    sessions: {
+                        ...state.sessions,
+                        [diagType]: {
+                            ...state.sessions[diagType],
+                            status: 'REPLY_PROCESSING',
+                            isWaitingForAi: true
+                        }
+                    }
+                }));
+                setIsAnalyzing(false);
+                const replySessionId = useAiDiagnosisStore.getState().sessions[diagType].currentSessionId;
+                navigation.navigate('ObdDiagLoading', { vehicleId: vehicleId as string, diagType: 'PHOTO', sessionId: replySessionId ?? undefined });
+                return;
             } else {
                 // Otherwise start a new diagnosis
-                useAiDiagnosisStore.setState({
-                    status: 'PROCESSING',
-                    loadingMessage: '촬영된 이미지를 분석하고 있습니다...',
-                    messages: [],
-                    diagResult: null,
-                    currentSessionId: null
-                });
+                useAiDiagnosisStore.setState((state) => ({
+                    sessions: {
+                        ...state.sessions,
+                        [diagType]: {
+                            ...state.sessions[diagType],
+                            status: 'PROCESSING',
+                            loadingMessage: '촬영된 이미지를 분석하고 있습니다...',
+                            messages: [],
+                            diagResult: null,
+                            currentSessionId: null
+                        }
+                    }
+                }));
                 result = await diagnoseImage(capturedImage || '', vehicleId as string);
             }
 
@@ -130,97 +146,40 @@ export default function Filming({ navigation, route }: { navigation?: any; route
                 return;
             }
 
-            // 통합 진단 흐름 분기: REPORT vs INTERACTIVE
             if (result.sessionId) {
                 setVehicleId(vehicleId as string);
-                useAiDiagnosisStore.setState({ currentSessionId: result.sessionId });
-            } else {
-                // Fallback (Legacy)
+                useAiDiagnosisStore.setState((state) => ({
+                    sessions: {
+                        ...state.sessions,
+                        [diagType]: {
+                            ...state.sessions[diagType],
+                            currentSessionId: result.sessionId
+                        }
+                    }
+                }));
                 setIsAnalyzing(false);
-                navigation.navigate('VisualDiagnosis', { diagnosisResult: result, capturedImage: capturedImage });
+                navigation.navigate('ObdDiagLoading', { vehicleId: vehicleId as string, diagType: 'PHOTO', sessionId: result.sessionId });
+            } else {
+                setIsAnalyzing(false);
+                navigation.navigate('VisualDiagnosis', { diagnosisResult: result, capturedImage: capturedImage, diagType });
             }
 
         } catch (error: any) {
             console.error('Diagnosis Error:', error);
             useAlertStore.getState().showAlert('진단 실패', error.message || '서버 통신 중 오류가 발생했습니다.', 'ERROR');
             setIsAnalyzing(false);
-            useAiDiagnosisStore.setState({ status: 'IDLE' });
+            useAiDiagnosisStore.setState((state) => ({
+                sessions: {
+                    ...state.sessions,
+                    [diagType]: {
+                        ...state.sessions[diagType],
+                        status: 'IDLE'
+                    }
+                }
+            }));
         }
         // Note: setIsAnalyzing(false) is handled effectively by navigation unmount or status change
     };
-
-    const { status, currentSessionId, updateStatus } = useAiDiagnosisStore();
-    const [sseToken, setSseToken] = useState<string | null>(null);
-
-    useEffect(() => {
-        AsyncStorage.getItem('accessToken').then((t) => {
-            if (t) setSseToken(t);
-        });
-    }, []);
-
-    useEffect(() => {
-        if (!currentSessionId || !sseToken || status !== 'PROCESSING') return;
-
-        const url = `${BASE_URL}/api/v1/ai/diagnose/session/${currentSessionId}/sse`;
-        const es = new EventSource(url, {
-            headers: { Authorization: `Bearer ${sseToken}` }
-        });
-
-        const handleStatus = (event: { data: string }) => {
-            try {
-                const data = JSON.parse(event.data) as import('../api/aiApi').AiDiagnosisResponse;
-                if (data && (data.status || data.responseMode || data.response_mode)) {
-                    updateStatus(currentSessionId, { ...data, sessionId: data.sessionId ?? currentSessionId });
-                }
-            } catch (e) {
-                console.warn('[Filming] SSE status parse error:', e);
-            }
-        };
-
-        const handleFailed = (event: { data?: string }) => {
-            const msg = (event.data && String(event.data).trim()) || '진단에 실패했습니다.';
-            useAlertStore.getState().showAlert('진단 실패', msg, 'ERROR');
-            setIsAnalyzing(false);
-            useAiDiagnosisStore.setState({ status: 'IDLE', currentSessionId: null });
-        };
-
-        es.addEventListener('status' as any, handleStatus);
-        es.addEventListener('failed' as any, handleFailed);
-
-        return () => {
-            es.removeAllEventListeners?.();
-            es.close();
-        };
-    }, [currentSessionId, sseToken, status]);
-
-    // Status Watcher: 상태 변화에 따른 네비게이션
-    const isInitialMount = useRef(true);
-
-    useEffect(() => {
-        if (!currentSessionId) return;
-
-        // Skip the first check if status is already INTERACTIVE/ACTION_REQUIRED
-        // This prevents immediate kickback when opening Camera from the menu
-        if (isInitialMount.current) {
-            isInitialMount.current = false;
-            if (status === 'INTERACTIVE' || status === 'ACTION_REQUIRED') {
-                return;
-            }
-        }
-
-        if (status === 'INTERACTIVE' || status === 'ACTION_REQUIRED') {
-            setIsAnalyzing(false);
-            navigation.navigate('AiDiagChat', {
-                sessionId: currentSessionId,
-                vehicleId: route?.params?.vehicleId
-            });
-        } else if (status === 'REPORT') {
-            setIsAnalyzing(false);
-            navigation.replace('DiagnosisReport', {
-                reportData: { sessionId: currentSessionId }
-            });
-        }
-    }, [status, currentSessionId]);
 
     useEffect(() => {
         if (!permission) {
@@ -400,6 +359,18 @@ export default function Filming({ navigation, route }: { navigation?: any; route
                     </View>
                 )}
             </View>
+            {insets.bottom > 0 && (
+                <View
+                    style={{
+                        position: 'absolute',
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        height: insets.bottom,
+                        backgroundColor: '#101922',
+                    }}
+                />
+            )}
         </View>
     );
 }

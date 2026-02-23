@@ -77,6 +77,12 @@ spring:
 
 
 
+# Tomcat 기본 POST body 제한(2MB) 상향 — 큰 사진 업로드 시 413 방지 (배포 413 원인)
+server:
+  tomcat:
+    max-http-post-size: 50MB
+    max-swallow-size: 50MB
+
 app:
   backend-url: ${APP_BACKEND_URL:http://localhost:8080}
   cors:
@@ -126,6 +132,8 @@ kakao:
   pay:
     secret-key: ${KAKAO_PAY_SECRET_KEY:dummy}
 
+# 백엔드가 AI 서버(진단/임베딩)를 호출할 때 사용. Docker 등에서 실행 시
+# 백엔드에서 도달 가능한 주소로 설정 (예: http://host.docker.internal:8001 또는 실제 AI 서버 URL).
 ai:
   server:
     url: ${AI_SERVER_URL:http://localhost:8001}

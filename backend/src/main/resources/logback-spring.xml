@@ -24,6 +24,25 @@
         </rollingPolicy>
     </appender>
 
+    <!-- AI 통신 전용 File Appender (ai-communication.log) -->
+    <appender name="AI_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_PATH}/ai-communication.log</file>
+        <encoder class="ch.qos.logback.classic.encoder.PatternLayoutEncoder">
+            <pattern>${LOG_PATTERN}</pattern>
+        </encoder>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_PATH}/archived/ai-communication.%d{yyyy-MM-dd}.log</fileNamePattern>
+            <maxHistory>3</maxHistory> <!-- 3일만 보관 -->
+            <totalSizeCap>50MB</totalSizeCap>
+        </rollingPolicy>
+    </appender>
+
+    <!-- AI 통신 전용 로거 설정 (기존 backend.log 파일에는 남지 않도록 additivity="false" 설정) -->
+    <logger name="AI_COMMUNICATION_LOG" level="INFO" additivity="false">
+        <appender-ref ref="CONSOLE" />
+        <appender-ref ref="AI_FILE" />
+    </logger>
+
     <!-- Root Logger -->
     <root level="INFO">
         <appender-ref ref="CONSOLE" />

@@ -3,11 +3,14 @@ import { View, Text, TouchableOpacity, Image } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import BaseScreen from '../components/layout/BaseScreen';
+import { useAiDiagnosisStore, DiagType } from '../store/useAiDiagnosisStore';
 
 export default function VisualDiagnosis() {
     const navigation = useNavigation<any>();
     const route = useRoute<any>();
     const { diagnosisResult, capturedImage } = route.params || {};
+    const diagType: DiagType = route.params?.diagType || 'PHOTO';
+    const { reset } = useAiDiagnosisStore();
 
     // API 이미지 URL이 없으면 로컬 촬영 이미지(capturedImage)를 사용
     const displayImage = diagnosisResult?.imageUrl || capturedImage;
@@ -105,13 +108,16 @@ export default function VisualDiagnosis() {
 
                 <View className="flex-row items-center gap-3 mb-10">
                     <TouchableOpacity
-                        onPress={() => navigation.replace('Filming', { vehicleId: route.params?.vehicleId })}
+                        onPress={() => navigation.replace('Filming', { vehicleId: route.params?.vehicleId, diagType })}
                         className="flex-1 bg-surface-card border border-white/10 py-4 rounded-xl items-center active:scale-95"
                     >
                         <Text className="text-white font-bold text-base">재촬영</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
-                        onPress={() => navigation.navigate('DiagMain')}
+                        onPress={() => {
+                            reset(diagType);
+                            navigation.navigate('DiagMain');
+                        }}
                         className="flex-1 bg-primary py-4 rounded-xl items-center active:scale-95 shadow-lg shadow-primary/20"
                     >
                         <Text className="text-white font-bold text-base">확인</Text>
