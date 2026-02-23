@@ -19,6 +19,7 @@ export default function ChatCameraScreen() {
 
     // Params
     const { sessionId } = route.params || {};
+    const diagType: import('../store/useAiDiagnosisStore').DiagType = route.params?.diagType || 'PHOTO';
     // Use param or fallback to store
     const vehicleId = route.params?.vehicleId || useAiDiagnosisStore(state => state.selectedVehicleId);
 
@@ -109,9 +110,17 @@ export default function ChatCameraScreen() {
             } else {
                 const result = await diagnoseImage(capturedImage, vehicleId);
                 if (result?.sessionId) {
-                    useAiDiagnosisStore.setState({ currentSessionId: result.sessionId });
+                    useAiDiagnosisStore.setState((state) => ({
+                        sessions: {
+                            ...state.sessions,
+                            [diagType]: {
+                                ...state.sessions[diagType],
+                                currentSessionId: result.sessionId
+                            }
+                        }
+                    }));
                     setVehicleId(vehicleId);
-                    updateStatus(result.sessionId);
+                    updateStatus(diagType, result.sessionId, { sessionId: result.sessionId } as any);
                 }
             }
 
@@ -119,14 +128,24 @@ export default function ChatCameraScreen() {
             navigation.navigate('AiDiagChat', {
                 sessionId,
                 vehicleId,
-                pendingMessage
+                pendingMessage,
+                diagType
             });
 
         } catch (error) {
             console.error(error);
             useAlertStore.getState().showAlert('전송 실패', '사진 전송 중 오류가 발생했습니다.', 'ERROR');
             setIsSending(false);
-            useAiDiagnosisStore.setState({ isWaitingForAi: false, status: 'IDLE' });
+            useAiDiagnosisStore.setState((state) => ({
+                sessions: {
+                    ...state.sessions,
+                    [diagType]: {
+                        ...state.sessions[diagType],
+                        isWaitingForAi: false,
+                        status: 'IDLE'
+                    }
+                }
+            }));
         }
     };
 

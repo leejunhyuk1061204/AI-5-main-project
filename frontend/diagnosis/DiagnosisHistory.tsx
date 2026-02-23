@@ -7,6 +7,7 @@ import Header from '../header/Header';
 import BaseScreen from '../components/layout/BaseScreen';
 import { getDiagnosisList } from '../api/aiApi';
 import { getVehicleList, VehicleResponse } from '../api/vehicleApi';
+import { DiagType } from '../store/useAiDiagnosisStore';
 
 export default function DiagnosisHistory() {
     const navigation = useNavigation<any>();
@@ -104,11 +105,23 @@ export default function DiagnosisHistory() {
         }
     };
 
+    const mapTriggerToDiagType = (triggerType?: string): DiagType => {
+        switch (triggerType) {
+            case 'VISUAL':
+                return 'PHOTO';
+            case 'AUDIO':
+                return 'SOUND';
+            default:
+                return 'OBD';
+        }
+    };
+
     const handlePressItem = (item: any) => {
+        const diagType = mapTriggerToDiagType(item.triggerType);
         if (item.responseMode === 'INTERACTIVE' || item.status === 'ACTION_REQUIRED') {
-            navigation.navigate('AiDiagChat', { sessionId: item.sessionId });
+            navigation.navigate('AiDiagChat', { sessionId: item.sessionId, diagType });
         } else {
-            navigation.navigate('DiagnosisReport', { reportData: item, fromHistory: true });
+            navigation.navigate('DiagnosisReport', { reportData: item, fromHistory: true, diagType });
         }
     };
 

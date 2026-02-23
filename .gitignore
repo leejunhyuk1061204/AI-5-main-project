@@ -145,6 +145,7 @@ release.keystore
 !debug.keystore
 .env
 .env.local
+*.pem
 
 # ==================================================
 # AI Large Files (Models / Weights / Runs / Data)
