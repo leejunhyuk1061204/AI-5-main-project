@@ -19,18 +19,27 @@ import { useNavigation } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
 import { format } from 'date-fns';
 import { useRegistrationStore } from '../../store/useRegistrationStore';
+import { useConsumableStore } from '../../store/useConsumableStore';
 import { useAlertStore } from '../../store/useAlertStore';
 import { useDatePickerStore } from '../../store/useDatePickerStore';
+import { isPositionTypeCode, getPositionOptions } from '../../maintenance/consumableItems';
+
+const BOTTOM_BAR_HEIGHT = 156;
 
 export default function MaintenanceReg() {
     const navigation = useNavigation<any>();
     const insets = useSafeAreaInsets();
     const store = useRegistrationStore();
     const datePickerStore = useDatePickerStore();
+    const consumablePickerList = useConsumableStore((s) => s.consumablePickerList);
+    const getConsumableMasterItem = useConsumableStore((s) => s.getConsumableMasterItem);
 
     // UI State
     const [modalVisible, setModalVisible] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
+    const [positionModalVisible, setPositionModalVisible] = useState(false);
+    const [positionTypeCode, setPositionTypeCode] = useState<'TIRE_POSITION' | 'BRAKE_POSITION' | null>(null);
+    const [selectedPositionCodes, setSelectedPositionCodes] = useState<string[]>([]);
 
     useEffect(() => {
         const init = async () => {
@@ -43,10 +52,25 @@ export default function MaintenanceReg() {
     // Helper: Handle Registration
     const handleComplete = async (isSkip: boolean = false) => {
         if (!isSkip) {
-            // Check if at least one record has either date or mileage
+            // Check if at least one record exists that user interacted with
             const hasValidRecord = store.maintenanceRecords.some(r => r.lastReplacementDate || r.lastReplacementMileage);
-            if (!hasValidRecord) {
-                useAlertStore.getState().showAlert('알림', '등록된 소모품 정비 내역이 없습니다.', 'ERROR');
+            if (!hasValidRecord && store.maintenanceRecords.length > 0) {
+                useAlertStore.getState().showAlert('알림', '최소 하나의 소모품 정보를 입력해주세요.', 'ERROR');
+                return;
+            }
+
+            // 모든 추가된 레코드에 대해 "km(주행거리)"가 누락된 항목이 있는지 검사
+            const missingMileageRecords = store.maintenanceRecords.filter(
+                (r) => (r.lastReplacementDate || r.lastReplacementMileage) && !r.lastReplacementMileage
+            );
+
+            if (missingMileageRecords.length > 0) {
+                const names = missingMileageRecords.map((r) => r.itemName).join(', ');
+                useAlertStore.getState().showAlert(
+                    '입력 누락',
+                    `${names} 항목의 교체 시점 주행거리(km)를 반드시 입력해주세요.`,
+                    'WARNING'
+                );
                 return;
             }
         }
@@ -61,11 +85,37 @@ export default function MaintenanceReg() {
         }
     };
 
-    // Helper: Filter Master List
-    const filteredMasterList = store.consumableMasterList.filter(item => {
+    const filteredMasterList = consumablePickerList.filter(item => {
         const query = searchQuery.toLowerCase();
-        return item.name.toLowerCase().includes(query) || (item.category && item.category.toLowerCase().includes(query));
+        return item.name.toLowerCase().includes(query);
     });
+
+    const togglePosition = (code: string) => {
+        setSelectedPositionCodes(prev =>
+            prev.includes(code) ? prev.filter(c => c !== code) : [...prev, code]
+        );
+    };
+
+    const openPositionModal = (code: 'TIRE_POSITION' | 'BRAKE_POSITION') => {
+        setPositionTypeCode(code);
+        setSelectedPositionCodes([]);
+        setPositionModalVisible(true);
+    };
+
+    const confirmPositionSelection = () => {
+        if (!positionTypeCode || selectedPositionCodes.length === 0) {
+            useAlertStore.getState().showAlert('알림', '최소 1개 위치를 선택해주세요.', 'INFO');
+            return;
+        }
+        selectedPositionCodes.forEach(code => {
+            const item = getConsumableMasterItem(code);
+            if (item) store.addMaintenanceRecord(item);
+        });
+        setPositionModalVisible(false);
+        setModalVisible(false);
+        setPositionTypeCode(null);
+        setSelectedPositionCodes([]);
+    };
 
     // Helper: Date Picker
     const showDatePicker = (itemCode: string) => {
@@ -126,11 +176,12 @@ export default function MaintenanceReg() {
     };
 
     return (
-        <View style={styles.container}>
+        <View style={[styles.container, { flex: 1 }]}>
+            <SafeAreaView style={{ flex: 1 }} edges={['top', 'left', 'right', 'bottom']}>
             <StatusBar style="light" />
 
             {/* Header */}
-            <View style={[styles.header, { paddingTop: insets.top }]}>
+            <View style={styles.header}>
                 <View style={styles.headerContent}>
                     <TouchableOpacity
                         style={styles.backButton}
@@ -143,11 +194,14 @@ export default function MaintenanceReg() {
                 </View>
             </View>
 
-            <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+            <ScrollView
+                style={styles.scrollView}
+                contentContainerStyle={[styles.scrollContent, { paddingBottom: BOTTOM_BAR_HEIGHT }]}
+            >
                 <View style={styles.titleSection}>
                     <Text style={styles.mainTitle}>최근 정비한 내역이 있나요?</Text>
                     <Text style={styles.subTitle}>AI가 다음 교체 시기를 예측해드립니다.</Text>
-                    <Text style={styles.tipText}>* 날짜 또는 주행거리 중 하나만 입력해도 됩니다.</Text>
+                    <Text style={styles.tipText}>* 교체 시점의 주행거리(km)는 필수 입력 사항입니다.</Text>
                 </View>
 
                 {/* List of Added Records */}
@@ -163,8 +217,8 @@ export default function MaintenanceReg() {
                 </TouchableOpacity>
             </ScrollView>
 
-            {/* Bottom Actions */}
-            <View style={[styles.bottomActions, { paddingBottom: insets.bottom + 16 }]}>
+            {/* 하단 고정: 등록 / 건너뛰기 (스크롤 시 리스트가 버튼 아래로 비치지 않도록 scrollContent paddingBottom으로 여백 확보) */}
+            <View style={[styles.bottomActions, { paddingBottom: Math.max(insets.bottom, 16) }]}>
                 <TouchableOpacity
                     onPress={() => handleComplete(false)}
                     style={styles.registerButton}
@@ -172,7 +226,6 @@ export default function MaintenanceReg() {
                     <Text style={styles.registerButtonText}>등록</Text>
                     <MaterialIcons name="check" size={20} color="white" />
                 </TouchableOpacity>
-
                 <TouchableOpacity
                     onPress={() => {
                         store.clearMaintenanceRecords();
@@ -217,26 +270,99 @@ export default function MaintenanceReg() {
                             <FlatList
                                 data={filteredMasterList}
                                 keyExtractor={(item) => item.code}
-                                renderItem={({ item }) => (
-                                    <TouchableOpacity
-                                        style={styles.listItem}
-                                        onPress={() => {
-                                            store.addMaintenanceRecord(item);
-                                            setModalVisible(false);
-                                        }}
-                                    >
-                                        <View>
-                                            <Text style={styles.listItemName}>{item.name}</Text>
-                                            <Text style={styles.listItemSub}>
-                                                교체 주기: {item.replacementCycleKm?.toLocaleString()}km
-                                            </Text>
-                                        </View>
-                                    </TouchableOpacity>
-                                )}
+                                contentContainerStyle={{ paddingBottom: 80 }}
+                                renderItem={({ item }) => {
+                                    const masterItem = getConsumableMasterItem(item.code);
+                                    const isPosition = isPositionTypeCode(item.code);
+                                    return (
+                                        <TouchableOpacity
+                                            style={styles.listItem}
+                                            onPress={() => {
+                                                if (isPosition) {
+                                                    openPositionModal(item.code as 'TIRE_POSITION' | 'BRAKE_POSITION');
+                                                } else if (masterItem) {
+                                                    store.addMaintenanceRecord(masterItem);
+                                                    setModalVisible(false);
+                                                }
+                                            }}
+                                        >
+                                            <View>
+                                                <Text style={styles.listItemName}>{item.name}</Text>
+                                                <Text style={styles.listItemSub}>
+                                                    {masterItem?.replacementCycleKm != null
+                                                        ? `교체 주기: ${masterItem.replacementCycleKm.toLocaleString()}km`
+                                                        : isPosition ? '위치 선택 시 개별 등록' : ''}
+                                                </Text>
+                                            </View>
+                                        </TouchableOpacity>
+                                    );
+                                }}
                             />
                         </Pressable>
                     </Pressable>
                 </KeyboardAvoidingView>
+            </Modal>
+
+            {/* 타이어/브레이크 위치 선택 모달 */}
+            <Modal
+                visible={positionModalVisible}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setPositionModalVisible(false)}
+            >
+                <Pressable style={styles.modalOverlay} onPress={() => setPositionModalVisible(false)}>
+                    <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
+                        <View style={styles.modalHeader}>
+                            <Text style={styles.modalTitle}>
+                                {positionTypeCode === 'TIRE_POSITION' ? '어느 타이어를 등록할까요?' : '어느 브레이크 패드를 등록할까요?'}
+                            </Text>
+                            <TouchableOpacity onPress={() => setPositionModalVisible(false)}>
+                                <MaterialIcons name="close" size={24} color="#94a3b8" />
+                            </TouchableOpacity>
+                        </View>
+                        <View style={styles.positionModalBody}>
+                            <Text style={[styles.subTitle, styles.positionModalSubtitle]}>복수 선택 가능</Text>
+                            <View style={styles.positionOptionsGrid}>
+                                {positionTypeCode && getPositionOptions(positionTypeCode).map((opt) => (
+                                    <TouchableOpacity
+                                        key={opt.code}
+                                        style={[
+                                            styles.positionOptionChip,
+                                            selectedPositionCodes.includes(opt.code) && styles.positionOptionChipSelected
+                                        ]}
+                                        onPress={() => togglePosition(opt.code)}
+                                    >
+                                        <MaterialIcons
+                                            name={selectedPositionCodes.includes(opt.code) ? 'check-box' : 'check-box-outline-blank'}
+                                            size={22}
+                                            color={selectedPositionCodes.includes(opt.code) ? '#3b82f6' : '#64748b'}
+                                        />
+                                        <Text style={styles.positionOptionLabel}>{opt.name}</Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
+                            <View style={styles.positionModalActions}>
+                                <TouchableOpacity
+                                    style={[styles.positionModalButton, styles.positionModalButtonCancel]}
+                                    onPress={() => setPositionModalVisible(false)}
+                                >
+                                    <Text style={styles.listItemName}>취소</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={[
+                                        styles.positionModalButton,
+                                        styles.positionModalButtonConfirm,
+                                        selectedPositionCodes.length === 0 && styles.positionModalButtonDisabled
+                                    ]}
+                                    onPress={confirmPositionSelection}
+                                    disabled={selectedPositionCodes.length === 0}
+                                >
+                                    <Text style={[styles.listItemName, selectedPositionCodes.length === 0 && { color: '#64748b' }]}>선택 완료</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+                    </Pressable>
+                </Pressable>
             </Modal>
 
             {/* Loading Overlay */}
@@ -247,6 +373,19 @@ export default function MaintenanceReg() {
                         <Text style={styles.loadingText}>등록 중입니다...</Text>
                     </View>
                 </View>
+            )}
+            </SafeAreaView>
+            {insets.bottom > 0 && (
+                <View
+                    style={{
+                        position: 'absolute',
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        height: insets.bottom,
+                        backgroundColor: '#111827',
+                    }}
+                />
             )}
         </View>
     );
@@ -287,7 +426,16 @@ const styles = StyleSheet.create({
         paddingHorizontal: 20,
     },
     scrollContent: {
-        paddingBottom: 120,
+        paddingBottom: 24,
+    },
+    bottomActions: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        paddingHorizontal: 20,
+        paddingTop: 20,
+        backgroundColor: '#111827',
     },
     titleSection: {
         marginTop: 8,
@@ -391,13 +539,6 @@ const styles = StyleSheet.create({
         color: '#3b82f6',
         fontWeight: 'bold',
     },
-    bottomActions: {
-        position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        padding: 20,
-    },
     registerButton: {
         width: '100%',
         height: 56,
@@ -492,6 +633,63 @@ const styles = StyleSheet.create({
         color: '#94a3b8',
         fontSize: 12,
         marginTop: 2,
+    },
+    positionModalBody: {
+        paddingHorizontal: 20,
+        paddingTop: 8,
+        paddingBottom: 24,
+    },
+    positionModalSubtitle: {
+        marginBottom: 16,
+    },
+    positionOptionsGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 12,
+    },
+    positionOptionChip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        width: '48%',
+        paddingVertical: 14,
+        paddingHorizontal: 16,
+        backgroundColor: '#1e293b',
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.1)',
+        borderRadius: 12,
+        gap: 10,
+    },
+    positionOptionChipSelected: {
+        backgroundColor: 'rgba(59, 130, 246, 0.2)',
+        borderColor: 'rgba(59, 130, 246, 0.5)',
+    },
+    positionOptionLabel: {
+        color: 'white',
+        fontWeight: '500',
+        fontSize: 15,
+    },
+    positionModalActions: {
+        flexDirection: 'row',
+        gap: 12,
+        marginTop: 24,
+    },
+    positionModalButton: {
+        flex: 1,
+        paddingVertical: 16,
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    positionModalButtonCancel: {
+        backgroundColor: '#1e293b',
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.1)',
+    },
+    positionModalButtonConfirm: {
+        backgroundColor: 'rgba(59, 130, 246, 0.3)',
+    },
+    positionModalButtonDisabled: {
+        opacity: 0.7,
     },
     loadingOverlay: {
         position: 'absolute',

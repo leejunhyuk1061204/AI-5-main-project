@@ -102,13 +102,14 @@ export default function PassiveReg() {
             if (store.manufacturer !== item) {
                 store.setVehicleInfo('manufacturer', item);
                 store.setVehicleInfo('modelName', '');
+                store.setVehicleInfo('modelNameEn', '');
                 store.setVehicleInfo('modelYear', '');
                 store.setVehicleInfo('fuelType', '');
                 store.loadModels(item);
             }
         } else if (activeType === 'model') {
             if (store.modelName !== item) {
-                store.setVehicleInfo('modelName', item);
+                store.setModelSelection(item);
                 store.setVehicleInfo('modelYear', '');
                 store.setVehicleInfo('fuelType', '');
                 store.loadYears(store.manufacturer, item);
@@ -123,8 +124,15 @@ export default function PassiveReg() {
     };
 
     const handleNext = () => {
-        if (!store.vehicleNumber || !store.manufacturer || !store.modelName || !store.modelYear || !store.fuelType) {
-            useAlertStore.getState().showAlert('알림', '모든 필수 필드를 입력해주세요.', 'WARNING');
+        const missingFields = [];
+        if (!store.vehicleNumber) missingFields.push('차량 번호');
+        if (!store.manufacturer) missingFields.push('제조사');
+        if (!store.modelName) missingFields.push('모델명');
+        if (!store.modelYear) missingFields.push('연식');
+        if (!store.fuelType) missingFields.push('연료 타입');
+
+        if (missingFields.length > 0) {
+            useAlertStore.getState().showAlert('필수 항목 누락', `${missingFields.join(', ')} 항목을 입력해주세요.`, 'WARNING');
             return;
         }
         // Go to Step 2
@@ -159,11 +167,11 @@ export default function PassiveReg() {
 
     return (
         <View className="flex-1 bg-background-dark">
+            <SafeAreaView className="flex-1" edges={['top', 'left', 'right', 'bottom']}>
             <StatusBar style="light" />
 
             {/* Header */}
-            {/* Header */}
-            <View className="bg-background-dark/80 backdrop-blur-md z-50 sticky top-0" style={{ paddingTop: insets.top }}>
+            <View className="bg-background-dark/80 backdrop-blur-md z-50 sticky top-0">
                 <View className="flex-row items-center justify-between px-4 py-3 pb-4">
                     <TouchableOpacity
                         className="w-10 h-10 items-center justify-center rounded-full hover:bg-white/10"
@@ -177,7 +185,7 @@ export default function PassiveReg() {
                 </View>
             </View>
 
-            <ScrollView className="flex-1 px-5" contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
+            <ScrollView className="flex-1 px-5" contentContainerStyle={{ paddingBottom: 120 + (insets.bottom || 0) }} showsVerticalScrollIndicator={false}>
                 <View className="space-y-8 mt-2">
                     {/* Vehicle Number */}
                     <View className="mb-8">
@@ -191,6 +199,7 @@ export default function PassiveReg() {
                                 className="flex-1 text-white text-lg font-bold"
                             />
                         </View>
+                        <Text className="text-xs text-slate-500 mt-1.5 ml-1">ex) 12가 3456</Text>
                     </View>
 
                     {/* Total Mileage Input */}
@@ -209,8 +218,8 @@ export default function PassiveReg() {
                         </View>
                     </View>
 
-                    {/* VIN Number */}
-                    <View>
+                    {/* VIN Number — 주석 처리 */}
+                    {/* <View>
                         <Text className="text-sm font-medium text-slate-400 mb-2 pl-1">차대번호 (VIN)</Text>
                         <View className="relative flex-row items-center">
                             <TextInput
@@ -224,7 +233,7 @@ export default function PassiveReg() {
                                 <MaterialIcons name="center-focus-strong" size={24} color="#0d7ff2" />
                             </TouchableOpacity>
                         </View>
-                    </View>
+                    </View> */}
 
                     {/* Dropdown Fields */}
                     <View className="space-y-5">
@@ -410,6 +419,19 @@ export default function PassiveReg() {
                 </KeyboardAvoidingView>
             </Modal>
 
+            </SafeAreaView>
+            {insets.bottom > 0 && (
+                <View
+                    style={{
+                        position: 'absolute',
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        height: insets.bottom,
+                        backgroundColor: '#111827',
+                    }}
+                />
+            )}
         </View>
     );
 }

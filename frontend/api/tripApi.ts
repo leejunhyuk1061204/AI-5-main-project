@@ -11,6 +11,36 @@ export interface TripSummary {
     averageSpeed: number;
     topSpeed: number;
     fuelConsumed: number;
+
+    // Detailed stats
+    minBatteryVoltage?: number;
+    maxCoolantTemp?: number;
+    avgFuelTrim?: number;
+    maxEngineLoad?: number;
+    idleTime?: number;
+    hardAccelCount?: number;
+    hardBrakeCount?: number;
+    avgRpm?: number;
+    avgEngineLoad?: number;
+    avgMaf?: number;
+    avgThrottlePos?: number;
+    overheatDurationSec?: number;
+}
+
+export interface TripObdLogDto {
+    timestamp: string;
+    rpm?: number;
+    speed?: number;
+    voltage?: number;
+    coolantTemp?: number;
+    engineLoad?: number;
+    fuelTrimShort?: number;
+    fuelTrimLong?: number;
+    throttlePos?: number;
+    map?: number;
+    maf?: number;
+    intakeTemp?: number;
+    engineRuntime?: number;
 }
 
 const tripApi = {
@@ -32,6 +62,17 @@ const tripApi = {
             return response.data;
         } catch (error) {
             console.error('Error fetching trip detail:', error);
+            throw error;
+        }
+    },
+
+    /** 주행 구간 OBD 로그 조회 (CSV 내보내기용) */
+    getTripObdLogs: async (tripId: string): Promise<ApiResponse<TripObdLogDto[]>> => {
+        try {
+            const response = await api.get(`/api/v1/trips/${tripId}/obd-logs`);
+            return response.data;
+        } catch (error) {
+            console.error('Error fetching trip OBD logs:', error);
             throw error;
         }
     },

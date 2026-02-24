@@ -71,7 +71,7 @@ export default function AiProfessionalDiag() {
             const response = await diagnoseObdOnly(vehicleId);
 
             // Fix: Access sessionId from data property if response is wrapped
-            const sessionId = response?.data?.sessionId || response?.sessionId;
+            const sessionId = response?.sessionId;
 
             if (sessionId) {
                 setCurrentSessionId(sessionId);
@@ -164,9 +164,6 @@ export default function AiProfessionalDiag() {
 
                     if (statusData) {
                         // Update Messages if available
-                        if (statusData.messages) {
-                            setMessages(statusData.messages);
-                        }
 
                         const currentStatus = (statusData.status || '').toUpperCase();
 

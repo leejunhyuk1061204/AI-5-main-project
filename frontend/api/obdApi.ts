@@ -18,6 +18,7 @@ export interface ObdDeviceRegisterRequest {
 
 export interface ConnectHistoryRequest {
     vehicleId: string;
+    vin?: string;
     calid?: string;
     cvn?: string;
 }
@@ -27,6 +28,12 @@ export interface ResolveVehicleRequest {
     vin?: string;
     calid?: string;
     cvn?: string;
+}
+
+export interface ConnectionStatusResponse {
+    vehicleId: string;
+    isConnected: boolean;
+    lastHeartbeatAt?: string;
 }
 
 const obdDeviceApi = {
@@ -47,22 +54,22 @@ const obdDeviceApi = {
     }
 };
 
-// OBD 로그 요청 인터페이스 (백엔드 ObdLogDto와 매칭)
+// OBD 로그 요청 인터페이스 (백엔드 ObdLogDto와 매칭, null = 의심 구간/SUSPECT_END)
 export interface ObdLogRequest {
     timestamp: string; // ISO 8601 형식 (예: "2026-01-20T15:00:00")
     vehicleId: string; // UUID 문자열
-    rpm?: number;
-    speed?: number;
-    voltage?: number;
-    coolantTemp?: number;
-    engineLoad?: number;
-    fuelTrimShort?: number;
-    fuelTrimLong?: number;
-    throttle?: number;
-    map?: number;
-    maf?: number;
-    intakeTemp?: number;
-    engineRuntime?: number;
+    rpm?: number | null;
+    speed?: number | null;
+    voltage?: number | null;
+    coolantTemp?: number | null;
+    engineLoad?: number | null;
+    fuelTrimShort?: number | null;
+    fuelTrimLong?: number | null;
+    throttle?: number | null;
+    map?: number | null;
+    maf?: number | null;
+    intakeTemp?: number | null;
+    engineRuntime?: number | null;
 }
 
 /**
@@ -93,7 +100,7 @@ export const uploadObdBatch = async (data: ObdBatchRequest): Promise<void> => {
  * 차량 연결 상태 조회
  * @param vehicleId - 차량 UUID
  */
-export const getConnectionStatus = async (vehicleId: string) => {
+export const getConnectionStatus = async (vehicleId: string): Promise<ApiResponse<ConnectionStatusResponse>> => {
     const response = await api.get(`/api/v1/telemetry/status/${vehicleId}`);
     return response.data;
 };

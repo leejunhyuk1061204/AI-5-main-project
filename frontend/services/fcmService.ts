@@ -1,3 +1,5 @@
+import { Platform, PermissionsAndroid } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import messaging from '@react-native-firebase/messaging';
 import firebase from '@react-native-firebase/app';
 import { authService } from './auth';
@@ -5,18 +7,52 @@ import { useAlertStore } from '../store/useAlertStore';
 import { Platform } from 'react-native';
 
 /**
+ * FCM 알림 데이터 타입
+ */
+export interface NotificationData {
+    type?: string;
+    sessionId?: string;
+    tripId?: string;
+    itemCode?: string;
+    remainingKm?: string;
+    score?: string;
+    distance?: string;
+    [key: string]: string | undefined;
+}
+
+/**
  * FCM 서비스
- * Firebase Cloud Messaging 초기화 및 토큰 관리
  */
 class FcmService {
     private initialized = false;
 
     /**
-     * FCM 초기화
-     * - 권한 요청
-     * - 토큰 가져오기
-     * - 백엔드에 토큰 등록
-     * - 토큰 갱신 리스너 등록
+     * FCM 권한 요청 및 초기화 (Android 13+ 대응)
+     */
+    public async requestUserPermission() {
+        if (Platform.OS === 'android' && Platform.Version >= 33) {
+            const granted = await PermissionsAndroid.request(
+                PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS
+            );
+            if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
+                console.log('[FCM] Permission for notifications denied');
+                return false;
+            }
+        }
+
+        const authStatus = await messaging().requestPermission();
+        const enabled =
+            authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
+            authStatus === messaging.AuthorizationStatus.PROVISIONAL;
+
+        if (enabled) {
+            console.log('[FCM] Authorization status:', authStatus);
+        }
+        return enabled;
+    }
+
+    /**
+     * FCM 초기화 및 토큰 등록
      */
     async initialize() {
         if (this.initialized) {
@@ -25,38 +61,16 @@ class FcmService {
         }
 
         try {
-            // 0. Firebase App 초기화 확인 (React Native Firebase는 자동 초기화됨)
             if (firebase.apps.length === 0) {
-                console.error('[FCM] Firebase App not initialized. Check google-services.json');
-                return;
-            }
-            console.log('[FCM] Firebase App already initialized');
-
-            // 1. 권한 요청
-            const authStatus = await messaging().requestPermission();
-            const enabled =
-                authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
-                authStatus === messaging.AuthorizationStatus.PROVISIONAL;
-
-            if (!enabled) {
-                console.log('[FCM] Permission denied');
+                console.error('[FCM] Firebase App not initialized');
                 return;
             }
 
-            console.log('[FCM] Permission granted');
+            const enabled = await this.requestUserPermission();
+            if (!enabled) return;
 
-            // 2. FCM 토큰 가져오기
-            const fcmToken = await messaging().getToken();
-            console.log('[FCM] Token obtained:', fcmToken.substring(0, 20) + '...');
-
-            // 3. 백엔드에 토큰 등록
-            await this.registerToken(fcmToken);
-
-            // 4. 토큰 갱신 리스너
-            messaging().onTokenRefresh(async (newToken) => {
-                console.log('[FCM] Token refreshed');
-                await this.registerToken(newToken);
-            });
+            await this.registerFcmToken();
+            this.setupTokenRefreshListener();
 
             this.initialized = true;
             console.log('[FCM] Initialization complete');
@@ -66,18 +80,61 @@ class FcmService {
     }
 
     /**
-     * 백엔드에 FCM 토큰 등록
+     * FCM 토큰 발급 및 서버 동기화 (AsyncStorage 캐싱 포함)
      */
-    private async registerToken(fcmToken: string) {
+    async registerFcmToken() {
         try {
-            const response = await authService.updateFcmToken(fcmToken);
-            if (response.success) {
-                console.log('[FCM] Token registered successfully');
+            // 1. 권한 확인
+            const hasPermission = await this.requestUserPermission();
+            if (!hasPermission) return;
+
+            // 2. 토큰 가져오기
+            const fcmToken = await messaging().getToken();
+
+            if (fcmToken) {
+                console.log('[FCM] Token issued:', fcmToken.substring(0, 20) + '...');
+
+                // 3. 서버에 저장되어 있는 토큰과 비교 (불필요한 네트워크 호출 방지)
+                const savedToken = await AsyncStorage.getItem('savedFcmToken');
+                const accessToken = await AsyncStorage.getItem('accessToken');
+
+                if (accessToken && fcmToken !== savedToken) {
+                    // 4. 서버로 토큰 전송
+                    const response = await authService.updateFcmToken(fcmToken);
+                    if (response.success) {
+                        console.log('[FCM] Successfully registered token to server');
+                        await AsyncStorage.setItem('savedFcmToken', fcmToken);
+                    }
+                }
             }
         } catch (error) {
-            console.error('[FCM] Token registration failed:', error);
+            console.error('[FCM] Failed to register token:', error);
         }
     }
+
+    /**
+     * 토큰 갱신 리스너 설정
+     */
+    setupTokenRefreshListener() {
+        try {
+            if (Platform.OS === 'web') return () => { };
+            return messaging().onTokenRefresh(async (newToken) => {
+                console.log('[FCM] Token refreshed:', newToken.substring(0, 20) + '...');
+                const accessToken = await AsyncStorage.getItem('accessToken');
+                if (accessToken) {
+                    const response = await authService.updateFcmToken(newToken);
+                    if (response.success) {
+                        await AsyncStorage.setItem('savedFcmToken', newToken);
+                    }
+                }
+            });
+        } catch (error) {
+            console.error('[FCM] setupTokenRefreshListener failed:', error);
+            return () => { };
+        }
+    }
+
+
 
     /**
      * Foreground 알림 핸들러 설정
@@ -101,7 +158,7 @@ class FcmService {
 
             // 데이터 처리
             if (remoteMessage.data) {
-                this.handleNotificationData(remoteMessage.data as unknown as { [key: string]: string });
+                this.handleNotificationData(remoteMessage.data as NotificationData);
             }
         });
 
@@ -117,7 +174,7 @@ class FcmService {
             console.log('[FCM] Background message received:', remoteMessage);
 
             if (remoteMessage.data) {
-                this.handleNotificationData(remoteMessage.data as unknown as { [key: string]: string });
+                this.handleNotificationData(remoteMessage.data as NotificationData);
             }
         });
 
@@ -135,14 +192,14 @@ class FcmService {
             .then((remoteMessage) => {
                 if (remoteMessage) {
                     console.log('[FCM] Notification caused app to open:', remoteMessage);
-                    this.handleNotificationNavigation(remoteMessage.data as unknown as { [key: string]: string }, navigation);
+                    this.handleNotificationNavigation(remoteMessage.data as NotificationData, navigation);
                 }
             });
 
         // 앱이 백그라운드 상태에서 알림 클릭
         messaging().onNotificationOpenedApp((remoteMessage) => {
             console.log('[FCM] Notification opened app:', remoteMessage);
-            this.handleNotificationNavigation(remoteMessage.data as unknown as { [key: string]: string }, navigation);
+            this.handleNotificationNavigation(remoteMessage.data as NotificationData, navigation);
         });
 
         console.log('[FCM] Notification opened handler set up');
@@ -151,13 +208,15 @@ class FcmService {
     /**
      * 알림 데이터 처리
      */
-    private handleNotificationData(data: { [key: string]: string }) {
+    private handleNotificationData(data: NotificationData) {
         console.log('[FCM] Handling notification data:', data);
 
         const { type } = data;
 
         switch (type) {
             case 'DIAGNOSIS_COMPLETE':
+            case 'DIAG_COMPLETE':
+            case 'DIAG_INTERACTIVE':
                 console.log('[FCM] Diagnosis complete:', data.sessionId, 'Score:', data.score);
                 break;
 
@@ -166,7 +225,12 @@ class FcmService {
                 break;
 
             case 'TRIP_COMPLETE':
-                console.log('[FCM] Trip complete:', data.tripId, 'Distance:', data.distance);
+            case 'TRIP_END':
+                console.log('[FCM] Trip end:', data.tripId, 'Distance:', data.distance);
+                break;
+
+            case 'TRIP_START':
+                console.log('[FCM] Trip start:', data.tripId);
                 break;
 
             default:
@@ -177,7 +241,7 @@ class FcmService {
     /**
      * 알림 클릭 시 네비게이션 처리
      */
-    private handleNotificationNavigation(data: { [key: string]: string } | undefined, navigation: any) {
+    private handleNotificationNavigation(data: NotificationData | undefined, navigation: any) {
         if (!data || !navigation) return;
 
         const { type, sessionId, tripId } = data;
@@ -185,6 +249,8 @@ class FcmService {
         try {
             switch (type) {
                 case 'DIAGNOSIS_COMPLETE':
+                case 'DIAG_COMPLETE':
+                case 'DIAG_INTERACTIVE':
                     if (sessionId) {
                         navigation.navigate('DiagnosisReport', { sessionId });
                     }
@@ -195,9 +261,14 @@ class FcmService {
                     break;
 
                 case 'TRIP_COMPLETE':
+                case 'TRIP_END':
                     if (tripId) {
                         navigation.navigate('DrivingHis');
                     }
+                    break;
+
+                case 'TRIP_START':
+                    navigation.navigate('MainPage');
                     break;
 
                 default:

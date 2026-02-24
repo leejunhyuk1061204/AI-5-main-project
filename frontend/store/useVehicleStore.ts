@@ -26,12 +26,13 @@ export const useVehicleStore = create<VehicleState>((set, get) => ({
     },
 
     setVehicles: (vehicles) => {
-        set({ vehicles });
+        const sorted = [...vehicles].sort((a, b) => (b.isPrimary ? 1 : 0) - (a.isPrimary ? 1 : 0));
+        set({ vehicles: sorted });
         // Update primary vehicle if needed
         if (vehicles.length > 0) {
             const currentPrimary = get().primaryVehicle;
             if (!currentPrimary) {
-                const primary = vehicles.find((v: any) => v.isPrimary) || vehicles[0];
+                const primary = vehicles.find((v: VehicleResponse) => v.isPrimary) || vehicles[0];
                 get().setPrimaryVehicle(primary);
             }
         }
@@ -42,17 +43,23 @@ export const useVehicleStore = create<VehicleState>((set, get) => ({
         try {
             const { getVehicleList } = require('../api/vehicleApi');
             const data = await getVehicleList();
-            set({ vehicles: data });
+            const sorted = [...data].sort((a, b) => (b.isPrimary ? 1 : 0) - (a.isPrimary ? 1 : 0));
+            set({ vehicles: sorted });
 
             // 대표 차량이 설정되어 있지 않다면 첫 번째 차량이나 isPrimary인 차량을 설정
             if (data.length > 0) {
-                const primary = data.find((v: any) => v.isPrimary) || data[0];
+                const primary = data.find((v: VehicleResponse) => v.isPrimary) || data[0];
                 set({ primaryVehicle: primary });
                 await AsyncStorage.setItem('primaryVehicle', JSON.stringify(primary));
             } else {
                 set({ primaryVehicle: null });
                 await AsyncStorage.removeItem('primaryVehicle');
             }
+
+            // 차량 목록과 함께 소모품 마스터 로드 (앱 전역에서 한 시점에)
+            const { useConsumableStore } = require('./useConsumableStore');
+            useConsumableStore.getState().loadConsumableMaster().catch(() => {});
+
             return data;
         } catch (e) {
             console.error('Failed to fetch vehicles', e);

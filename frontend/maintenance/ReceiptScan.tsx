@@ -85,12 +85,20 @@ export default function ReceiptScan({ navigation, route }: { navigation?: any; r
             // Call OCR analyze API (분석만)
             const result = await ocrApi.analyzeReceipt(formData);
 
-            // Navigate to result screen
+            if (result?.ocrText === '텍스트 추출 실패' || !result?.ocrText?.trim()) {
+                useAlertStore.getState().showAlert(
+                    '영수증 인식 실패',
+                    '영수증을 인식하지 못했습니다. 사진을 다시 찍어주세요.',
+                    'WARNING'
+                );
+                return;
+            }
+
             navigation.navigate('ReceiptResult', {
                 vehicleId,
                 imageUri: capturedImage,
                 ocrResult: result,
-                initialType: route?.params?.initialType, // 전달받은 타입 넘기기
+                initialType: route?.params?.initialType,
             });
         } catch (error: any) {
             console.error('OCR Analysis Error:', error);
@@ -261,6 +269,18 @@ export default function ReceiptScan({ navigation, route }: { navigation?: any; r
                     </View>
                 )}
             </View>
+            {insets.bottom > 0 && (
+                <View
+                    style={{
+                        position: 'absolute',
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        height: insets.bottom,
+                        backgroundColor: '#101922',
+                    }}
+                />
+            )}
         </View>
     );
 }

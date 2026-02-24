@@ -21,6 +21,12 @@ public class SseEmitters {
 
         log.info("SSE Emitter added: {}", sessionId);
 
+        try {
+            emitter.send(SseEmitter.event().name("open").data("connected"));
+        } catch (IOException e) {
+            log.warn("Failed to send initial SSE open event to {}", sessionId, e);
+        }
+
         emitter.onCompletion(() -> {
             log.info("SSE Emitter completed: {}", sessionId);
             this.emitters.remove(sessionId);

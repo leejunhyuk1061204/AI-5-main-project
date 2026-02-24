@@ -17,10 +17,16 @@ import os
 import shutil
 import platform
 from ultralytics import YOLO
+import shutil
+
+# Removed global model initialization to prevent multiprocessing issues on Windows
 
 # =============================================================================
 # [Configuration] GPU Optimized Settings
 # =============================================================================
+# [Architecture] YOLO11m with P2 Head (Small Target Optimization)
+# 4개의 Detection Head(P2, P3, P4, P5)를 사용하여 아주 작은 부품 감지력을 극대화한 구조입니다.
+BASE_YAML = "ai/data/yolo/engine/yolo11m-p2.yaml"
 BASE_MODEL = "yolo11m.pt"
 
 # [Path Config] RunPod과 로컬 환경 자동 감지
@@ -28,19 +34,22 @@ RUNPOD_DATA_PATH = "/workspace/large_data"
 LOCAL_DATA_PATH = "ai/data"
 DATA_ROOT = RUNPOD_DATA_PATH if os.path.exists(RUNPOD_DATA_PATH) else LOCAL_DATA_PATH
 
-DATA_YAML_PATH = os.path.join(DATA_ROOT, "yolo/engine/data.yaml")
+DATA_YAML_PATH = os.path.join(DATA_ROOT, "yolo/engine/engine_merged.yaml")
 OUTPUT_DIR = "ai/runs/engine_model"
-SAVE_PATH = "ai/weights/engine/best.pt"
+SAVE_PATH = "ai/weights/engine/best_engine11m.pt"
 
-# Training Hyperparameters (RunPod Optimized)
-DEFAULT_EPOCHS = 100
-BATCH_SIZE = int(os.getenv("BATCH_SIZE", "16"))  # RunPod 기본값 16 (로컬 2)
+# Training Hyperparameters (0.9 mAP Target + P2 Head)
+DEFAULT_EPOCHS = 200
+# [RunPod RTX 4070 (12GB) Optimized] 
+# P2 Head + 1280px 환경에서도 12GB VRAM이면 Batch Size 16까지 충분히 가능합니다.
+BATCH_SIZE = int(os.getenv("BATCH_SIZE", "16"))
 IMG_SIZE = 1280
 OPTIMIZER = "AdamW"
 LR0 = 0.001
 LRF = 0.01
 PATIENCE = 50
-WORKERS = 8 if platform.system() != "Windows" else 0  # 자동 감지
+# RunPod(Linux) 환경에서는 CPU 코어 활용을 위해 Workers를 8로 상향
+WORKERS = 8 if platform.system() != "Windows" else 0 
 
 # [Original RTX 4090 Reference]
 # DEFAULT_EPOCHS = 150
@@ -59,6 +68,8 @@ HSV_V = 0.6      # 0.4 → 0.6 (명도 변화 증가)
 FLIPUD = 0.0     # 유지 (엔진룸은 상하 반전 X)
 FLIPLR = 0.5     # 유지
 
+
+
 # Regularization (과적합 방지)
 WEIGHT_DECAY = 0.0005  # 추가!
 
@@ -74,10 +85,12 @@ def evaluate_baseline():
         print(f"[Error] data.yaml not found at {DATA_YAML_PATH}")
         return None
     
+    # Baseline은 순수 모델 성능 측정을 위해 기본 모델 사용 (imgsz만 1280 적용)
     model = YOLO(BASE_MODEL)
     
     print(f"[Info] Evaluating with base model ({BASE_MODEL})...")
-    metrics = model.val(data=DATA_YAML_PATH, split='val', imgsz=1280)
+    metrics = model.val(data=DATA_YAML_PATH, split='val', imgsz=IMG_SIZE, half=True)
+
     
     map50 = metrics.box.map50
     map50_95 = metrics.box.map
@@ -93,16 +106,17 @@ def evaluate_baseline():
 # =============================================================================
 # 2. Model Training (Optimized)
 # =============================================================================
-def train_model(epochs=DEFAULT_EPOCHS):
+def train_model(epochs=DEFAULT_EPOCHS, batch=BATCH_SIZE, imgsz=IMG_SIZE, workers=WORKERS, device=0):
     print("\n" + "="*60)
-    print(f"[Step 2] Training Model (YOLOv8m, {epochs} epochs, batch={BATCH_SIZE})...")
+    print(f"[Step 2] Training Model (YOLOv8s, {epochs} epochs, batch={BATCH_SIZE})...")
     print("="*60)
     
     if not os.path.exists(DATA_YAML_PATH):
         print(f"[Error] data.yaml not found at {DATA_YAML_PATH}")
         return None
     
-    model = YOLO(BASE_MODEL)
+    # [P2 Head 적용] YAML 아키텍처로 초기화 및 가중치 로드
+    model = YOLO(BASE_YAML).load(BASE_MODEL)
     
     # [Weight Management] 기존 가중치가 있다면 백업 (누적 방지용)
     if os.path.exists(SAVE_PATH):
@@ -114,9 +128,9 @@ def train_model(epochs=DEFAULT_EPOCHS):
     results = model.train(
         data=DATA_YAML_PATH,
         epochs=epochs,
-        imgsz=1280,
+        imgsz=imgsz,
         batch=BATCH_SIZE,  # 상수 사용 (일관성 유지)
-        device=0,  # GPU 0
+        device=device,  # GPU 0
         project=OUTPUT_DIR,
         name="run",
         exist_ok=True,
@@ -141,9 +155,12 @@ def train_model(epochs=DEFAULT_EPOCHS):
         # Regularization (과적합 방지)
         weight_decay=WEIGHT_DECAY,
         
+        # Optimization Protocol
+        close_mosaic=20,  # 마지막 20 에폭에서 Mosaic 끄기 (정밀도 향상)
+        
         # Performance
-        workers=WORKERS,  # 환경 자동 감지
-        cache=True,  # RAM으로 데이터셋 캐싱 (속도 향상)
+        workers=workers,  # 환경 자동 감지 (변수 사용)
+        cache=False,  # RAM으로 데이터셋 캐싱 (속도 향상)
         
         # Logging
         verbose=True,
@@ -186,7 +203,8 @@ def evaluate_final():
     model = YOLO(SAVE_PATH)
     
     print(f"[Info] Evaluating with trained model ({SAVE_PATH})...")
-    metrics = model.val(data=DATA_YAML_PATH, split='val', imgsz=1280)
+    metrics = model.val(data=DATA_YAML_PATH, split='val', imgsz=IMG_SIZE, half=True)
+
     
     map50 = metrics.box.map50
     map50_95 = metrics.box.map
@@ -209,6 +227,10 @@ if __name__ == "__main__":
                         help="Execution Mode")
     parser.add_argument("--epochs", type=int, default=DEFAULT_EPOCHS,
                         help=f"Number of epochs (default: {DEFAULT_EPOCHS})")
+    parser.add_argument("--batch", type=int, default=BATCH_SIZE, help="Batch size")
+    parser.add_argument("--imgsz", type=int, default=IMG_SIZE, help="Image size")
+    parser.add_argument("--workers", type=int, default=WORKERS, help="Number of dataloader workers")
+    parser.add_argument("--device", type=int, default=0, help="CUDA device index")
     
     args = parser.parse_args()
     
@@ -223,7 +245,7 @@ if __name__ == "__main__":
         evaluate_baseline()
     
     elif args.mode == "train":
-        train_model(epochs=args.epochs)
+        train_model(epochs=args.epochs, batch=args.batch, imgsz=args.imgsz, workers=args.workers, device=args.device)
     
     elif args.mode == "test":
         evaluate_final()

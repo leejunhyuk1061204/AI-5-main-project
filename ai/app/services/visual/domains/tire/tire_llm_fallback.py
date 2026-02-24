@@ -22,6 +22,7 @@ After YOLO multi-class retraining (cracked/flat/bulge), upgrade to detection fal
 2. Conservative Thresholds (wear is subjective)
 3. LLM Oracle Only (no agreement-based LLM in this domain yet)
 """
+
 import logging
 from typing import List, Dict, Optional
 from PIL import Image

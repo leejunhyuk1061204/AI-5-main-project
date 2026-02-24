@@ -7,7 +7,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useUserStore } from '../store/useUserStore';
 import { useAlertStore } from '../store/useAlertStore';
 import BaseScreen from '../components/layout/BaseScreen';
-import NotificationService from '../services/NotificationService';
+import fcmService from '../services/fcmService';
 import ObdService from '../services/ObdService';
 import Svg, { Path } from 'react-native-svg';
 
@@ -72,7 +72,7 @@ export default function Login() {
 
     const handleNavigation = async (result: any) => {
         // FCM 토큰 등록/갱신
-        await NotificationService.registerFcmToken();
+        await fcmService.registerFcmToken();
 
         // 로그인 성공 시, 이미 등록된 OBD 기기 목록을 새로 불러와 캐시에 반영하고
         // 백그라운드 재연결 서비스를 시작한다.
@@ -310,20 +310,21 @@ export default function Login() {
                     </TouchableOpacity>
                 </View>
 
-                <TouchableOpacity
+                {/* ELM327 블루투스 테스트 */}
+                {/* <TouchableOpacity
                     onPress={() => navigation.navigate('Elm327Test')}
                     className="mb-2 items-center"
                 >
                     <Text className="text-xs text-text-muted">ELM327 테스트 (로그인 없이)</Text>
-                </TouchableOpacity>
+                </TouchableOpacity> */}
 
                 {/* Reset Button (For Testing) */}
-                <TouchableOpacity
+                {/* <TouchableOpacity
                     onPress={handleReset}
                     className="mb-8 items-center"
                 >
                     <Text className="text-xs text-gray-600 underline">앱 초기화 (테스트용)</Text>
-                </TouchableOpacity>
+                </TouchableOpacity> */}
             </View>
         </BaseScreen>
     );

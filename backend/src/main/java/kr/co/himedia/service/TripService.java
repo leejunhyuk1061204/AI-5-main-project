@@ -1,5 +1,6 @@
 package kr.co.himedia.service;
 
+import kr.co.himedia.common.constants.ConsumableConstants;
 import kr.co.himedia.common.exception.BaseException;
 import kr.co.himedia.common.exception.ErrorCode;
 import kr.co.himedia.entity.ObdLog;
@@ -17,6 +18,8 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import kr.co.himedia.dto.trip.TripObdLogDto;
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -26,6 +29,8 @@ public class TripService {
     private final AiDiagnosisService aiDiagnosisService;
     private final WearFactorService wearFactorService;
     private final kr.co.himedia.repository.VehicleRepository vehicleRepository;
+    private final kr.co.himedia.service.NotificationService notificationService;
+    private final kr.co.himedia.repository.UserRepository userRepository;
 
     // 최소 유효 주행 거리 (100m = 0.1km) - 이 미만의 주행은 분석 대상에서 제외
     private static final double MIN_TRIP_DISTANCE_KM = 0.1;
@@ -43,6 +48,43 @@ public class TripService {
                 .orElseThrow(() -> new BaseException(ErrorCode.TRIP_NOT_FOUND));
     }
 
+    /**
+     * 주행 구간 OBD 로그 조회 (CSV 내보내기용)
+     */
+    @Transactional(readOnly = true)
+    public List<TripObdLogDto> getTripObdLogs(UUID tripId) {
+        TripSummary trip = tripSummaryRepository.findByTripId(tripId)
+                .orElseThrow(() -> new BaseException(ErrorCode.TRIP_NOT_FOUND));
+
+        if (trip.getEndTime() == null) {
+            return List.of();
+        }
+
+        var startOffset = trip.getStartTime().atZone(java.time.ZoneId.systemDefault()).toOffsetDateTime();
+        var endOffset = trip.getEndTime().atZone(java.time.ZoneId.systemDefault()).toOffsetDateTime();
+
+        List<ObdLog> logs = obdLogRepository.findByVehicleIdAndTimeBetweenOrderByTimeAsc(
+                trip.getVehicleId(), startOffset, endOffset);
+
+        return logs.stream()
+                .map(log -> TripObdLogDto.builder()
+                        .timestamp(log.getTime() != null ? log.getTime().toString() : "")
+                        .rpm(log.getRpm())
+                        .speed(log.getSpeed())
+                        .voltage(log.getVoltage())
+                        .coolantTemp(log.getCoolantTemp())
+                        .engineLoad(log.getEngineLoad())
+                        .fuelTrimShort(log.getFuelTrimShort())
+                        .fuelTrimLong(log.getFuelTrimLong())
+                        .throttlePos(log.getThrottlePos())
+                        .map(log.getMap())
+                        .maf(log.getMaf())
+                        .intakeTemp(log.getIntakeTemp())
+                        .engineRuntime(log.getEngineRuntime())
+                        .build())
+                .collect(Collectors.toList());
+    }
+
     // 주행 시작 (Trip ID 발급 및 초기화)
     @Transactional
     public TripSummary startTrip(UUID vehicleId) {
@@ -57,7 +99,20 @@ public class TripService {
                 .startTime(LocalDateTime.now())
                 .build();
 
-        return tripSummaryRepository.save(newTrip);
+        TripSummary saved = tripSummaryRepository.save(newTrip);
+
+        vehicleRepository.findById(vehicleId).ifPresent(vehicle -> {
+            userRepository.findById(vehicle.getUserId()).ifPresent(user -> {
+                java.util.Map<String, String> data = new java.util.HashMap<>();
+                data.put("type", "TRIP_START");
+                data.put("tripId", saved.getTripId().toString());
+                notificationService.sendNotification(user, "주행 시작", "차봄OBD 데이터 수집을 시작합니다.",
+                        kr.co.himedia.entity.Notification.NotificationType.TRIP_START, data);
+                log.info("[TripStart] FCM notification sent for trip: {}", saved.getTripId());
+            });
+        });
+
+        return saved;
     }
 
     /**
@@ -77,12 +132,14 @@ public class TripService {
         trip.setEndTime(endTime);
 
         var startOffset = trip.getStartTime().atZone(java.time.ZoneId.systemDefault()).toOffsetDateTime();
+        var endOffset = endTime.atZone(java.time.ZoneId.systemDefault()).toOffsetDateTime();
 
-        log.info("[TripEnd] Query for all logs from startTime: {} (vehicleId={})", startOffset, trip.getVehicleId());
+        log.info("[TripEnd] Query logs between {} ~ {} (vehicleId={})", startOffset, endOffset, trip.getVehicleId());
 
-        List<ObdLog> tripLogs = obdLogRepository.findByVehicleIdAndTimeGreaterThanEqualOrderByTimeAsc(
+        List<ObdLog> tripLogs = obdLogRepository.findByVehicleIdAndTimeBetweenOrderByTimeAsc(
                 trip.getVehicleId(),
-                startOffset);
+                startOffset,
+                endOffset);
 
         log.info("[TripEnd] Found {} logs for trip {}", tripLogs.size(), tripId);
 
@@ -94,6 +151,8 @@ public class TripService {
             int driveScore = 100;
 
             // 추가 통계 변수 초기화
+            int highRpmCount = 0;
+            int totalCount = 0;
             double sumRpm = 0.0;
             double sumEngineLoad = 0.0;
             double sumMaf = 0.0;
@@ -111,6 +170,12 @@ public class TripService {
             double prevSpeed = -1.0; // -1 for initial state
 
             for (ObdLog log : tripLogs) {
+                totalCount++;
+
+                if (log.getRpm() != null && log.getRpm() > ConsumableConstants.HIGH_RPM_THRESHOLD) {
+                    highRpmCount++;
+                }
+
                 double speed = log.getSpeed() != null ? log.getSpeed() : 0.0;
                 double rpm = log.getRpm() != null ? log.getRpm() : 0.0;
                 double coolant = log.getCoolantTemp() != null ? log.getCoolantTemp() : 0.0;
@@ -142,7 +207,7 @@ public class TripService {
                     minBatteryVoltage = voltage; // 0이 아닌 최소값
 
                 // 과열 지속 시간 (95도 이상)
-                if (coolant >= 95.0)
+                if (coolant >= ConsumableConstants.COOLANT_OVERHEAT_THRESHOLD)
                     overheatDurationSec++;
 
                 // 공회전 시간 (속도 0, RPM > 0)
@@ -156,13 +221,13 @@ public class TripService {
                 // 급가속/급감속 (이전 데이터와 비교)
                 if (prevSpeed != -1.0) {
                     double speedDelta = speed - prevSpeed; // km/h per sec (assuming 1hz)
-                    if (speedDelta >= 10.0) {
+                    if (speedDelta >= ConsumableConstants.HARD_ACCEL_THRESHOLD) {
                         hardAccelCount++; // 초당 10km/h 증가
                         driveScore = Math.max(0, driveScore - 5); // 급가속 -5점
                     }
-                    if (speedDelta <= -10.0) {
+                    if (speedDelta <= -ConsumableConstants.HARD_BRAKE_THRESHOLD) {
                         hardBrakeCount++; // 초당 10km/h 감소
-                        driveScore = Math.max(0, driveScore - 5); // 급측정 -5점
+                        driveScore = Math.max(0, driveScore - 5); // 급감속 -5점
                     }
                 }
                 prevSpeed = speed;
@@ -198,6 +263,13 @@ public class TripService {
             trip.setAvgThrottlePos(sumThrottlePos / count);
             trip.setAvgFuelTrim(sumFuelTrim / count);
 
+            // Calculate highRpmRatio
+            Double highRpmRatio = null;
+            if (totalCount > 0) {
+                highRpmRatio = (double) highRpmCount / totalCount;
+            }
+            trip.setHighRpmRatio(highRpmRatio);
+
             trip.setMaxCoolantTemp(maxCoolantTemp);
             trip.setMaxEngineLoad(maxEngineLoad);
             trip.setMinBatteryVoltage(minBatteryVoltage);
@@ -221,9 +293,10 @@ public class TripService {
                     log.info("[TripEnd] Updated Vehicle Total Mileage: {} -> {}", currentTotal, newTotal);
 
                     try {
-                        // [Mod] 통계가 모두 계산된 trip 객체를 직접 전달하여 데이터 정합성 보장
-                        wearFactorService.calculateAndSaveWearFactors(trip.getVehicleId(), newTotal, trip);
-                        log.info("Successfully triggered wear factor calculation for vehicle: {}", trip.getVehicleId());
+                        // [Migration] 규칙 기반 로컬 마모 계수 계산 (AI 서버 호출 제거)
+                        wearFactorService.calculateWearFactorsLocal(trip);
+                        log.info("Completed local wear factor calculation for vehicle: {}",
+                                trip.getVehicleId());
                     } catch (Exception e) {
                         log.error("Wear factor trigger failed", e);
                     }
@@ -234,9 +307,9 @@ public class TripService {
                             "tripId", trip.getTripId().toString(),
                             "logCount", tripLogs.size(),
                             "logs", tripLogs.stream().limit(500).map(log -> Map.of(
-                                    "time", log.getTime().toString(),
-                                    "rpm", log.getRpm(),
-                                    "speed", log.getSpeed(),
+                                    "time", log.getTime() != null ? log.getTime().toString() : "",
+                                    "rpm", log.getRpm() != null ? log.getRpm() : 0.0,
+                                    "speed", log.getSpeed() != null ? log.getSpeed() : 0.0,
                                     "coolant", log.getCoolantTemp() != null ? log.getCoolantTemp() : 0.0,
                                     "load", log.getEngineLoad() != null ? log.getEngineLoad() : 0.0,
                                     "voltage", log.getVoltage() != null ? log.getVoltage() : 0.0))
@@ -281,7 +354,21 @@ public class TripService {
             log.info("[TripEnd] No logs found for trip {}. Setting stats to default (0).", tripId);
         }
 
-        return tripSummaryRepository.save(trip);
+        TripSummary saved = tripSummaryRepository.save(trip);
+
+        vehicleRepository.findById(trip.getVehicleId()).ifPresent(vehicle -> {
+            userRepository.findById(vehicle.getUserId()).ifPresent(user -> {
+                java.util.Map<String, String> data = new java.util.HashMap<>();
+                data.put("type", "TRIP_END");
+                data.put("tripId", saved.getTripId().toString());
+                data.put("distance", String.valueOf(saved.getDistance() != null ? saved.getDistance() : 0.0));
+                notificationService.sendNotification(user, "주행 종료", "차봄OBD 데이터 수집이 완료되었습니다. AI 진단이 자동으로 진행됩니다.",
+                        kr.co.himedia.entity.Notification.NotificationType.TRIP_END, data);
+                log.info("[TripEnd] FCM notification sent for trip: {}", saved.getTripId());
+            });
+        });
+
+        return saved;
     }
 
     /**
@@ -293,7 +380,8 @@ public class TripService {
         TripSummary trip = tripSummaryRepository.findByTripId(tripId)
                 .orElseThrow(() -> new BaseException(ErrorCode.TRIP_NOT_FOUND));
 
-        kr.co.himedia.entity.Vehicle oldVehicle = vehicleRepository.findByVehicleIdAndDeletedAtIsNull(trip.getVehicleId())
+        kr.co.himedia.entity.Vehicle oldVehicle = vehicleRepository
+                .findByVehicleIdAndDeletedAtIsNull(trip.getVehicleId())
                 .orElseThrow(() -> new BaseException(ErrorCode.VEHICLE_NOT_FOUND));
         if (!oldVehicle.getUserId().equals(userId))
             throw new BaseException(ErrorCode.VEHICLE_NOT_FOUND);
@@ -308,12 +396,14 @@ public class TripService {
             return trip;
         }
 
-        java.time.OffsetDateTime startOffset = trip.getStartTime().atZone(java.time.ZoneId.systemDefault()).toOffsetDateTime();
+        java.time.OffsetDateTime startOffset = trip.getStartTime().atZone(java.time.ZoneId.systemDefault())
+                .toOffsetDateTime();
         java.time.OffsetDateTime endOffset = (trip.getEndTime() != null)
                 ? trip.getEndTime().atZone(java.time.ZoneId.systemDefault()).toOffsetDateTime()
                 : java.time.OffsetDateTime.now();
 
-        List<ObdLog> oldLogs = obdLogRepository.findByVehicleIdAndTimeBetweenOrderByTimeAsc(oldVehicleId, startOffset, endOffset);
+        List<ObdLog> oldLogs = obdLogRepository.findByVehicleIdAndTimeBetweenOrderByTimeAsc(oldVehicleId, startOffset,
+                endOffset);
         List<ObdLog> newLogs = oldLogs.stream()
                 .map(log -> ObdLog.builder()
                         .time(log.getTime())
@@ -365,32 +455,48 @@ public class TripService {
                 double throttle = log.getThrottlePos() != null ? log.getThrottlePos() : 0.0;
                 double fuelTrim = log.getFuelTrimShort() != null ? log.getFuelTrimShort() : 0.0;
 
-                if (speed > maxSpeed) maxSpeed = speed;
+                if (speed > maxSpeed)
+                    maxSpeed = speed;
                 sumSpeed += speed;
                 sumRpm += rpm;
                 sumEngineLoad += load;
                 sumMaf += maf;
                 sumThrottlePos += throttle;
                 sumFuelTrim += fuelTrim;
-                if (coolant > maxCoolantTemp) maxCoolantTemp = coolant;
-                if (load > maxEngineLoad) maxEngineLoad = load;
-                if (voltage > 0 && (minBatteryVoltage == 0 || voltage < minBatteryVoltage)) minBatteryVoltage = voltage;
-                if (coolant >= 95.0) overheatDurationSec++;
+                if (coolant > maxCoolantTemp)
+                    maxCoolantTemp = coolant;
+                if (load > maxEngineLoad)
+                    maxEngineLoad = load;
+                if (voltage > 0 && (minBatteryVoltage == 0 || voltage < minBatteryVoltage))
+                    minBatteryVoltage = voltage;
+                if (coolant >= ConsumableConstants.COOLANT_OVERHEAT_THRESHOLD)
+                    overheatDurationSec++;
                 if (speed < 1.0 && rpm > 0) {
                     idleTime++;
-                    if (idleTime % 60 == 0) driveScore = Math.max(0, driveScore - 1);
+                    if (idleTime % 60 == 0)
+                        driveScore = Math.max(0, driveScore - 1);
                 }
                 if (prevSpeed != -1.0) {
                     double speedDelta = speed - prevSpeed;
-                    if (speedDelta >= 10.0) { hardAccelCount++; driveScore = Math.max(0, driveScore - 5); }
-                    if (speedDelta <= -10.0) { hardBrakeCount++; driveScore = Math.max(0, driveScore - 5); }
+                    if (speedDelta >= ConsumableConstants.HARD_ACCEL_THRESHOLD) {
+                        hardAccelCount++;
+                        driveScore = Math.max(0, driveScore - 5);
+                    }
+                    if (speedDelta <= -ConsumableConstants.HARD_BRAKE_THRESHOLD) {
+                        hardBrakeCount++;
+                        driveScore = Math.max(0, driveScore - 5);
+                    }
                 }
                 prevSpeed = speed;
                 distance += (speed / 3600.0);
-                if (speed > 140) driveScore = Math.max(0, driveScore - 1);
-                if (rpm > 5000) driveScore = Math.max(0, driveScore - 1);
-                if (throttle > 90) driveScore = Math.max(0, driveScore - 1);
-                if (load > 90) driveScore = Math.max(0, driveScore - 1);
+                if (speed > 140)
+                    driveScore = Math.max(0, driveScore - 1);
+                if (rpm > 5000)
+                    driveScore = Math.max(0, driveScore - 1);
+                if (throttle > 90)
+                    driveScore = Math.max(0, driveScore - 1);
+                if (load > 90)
+                    driveScore = Math.max(0, driveScore - 1);
             }
 
             int count = newLogs.size();
@@ -432,4 +538,5 @@ public class TripService {
         tripSummaryRepository.delete(trip);
         return tripSummaryRepository.save(newTrip);
     }
+
 }

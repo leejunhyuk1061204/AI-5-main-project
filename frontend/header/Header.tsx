@@ -1,9 +1,19 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useUserStore } from '../store/useUserStore';
 import { useBleStore } from '../store/useBleStore';
+import { useVehicleStore } from '../store/useVehicleStore';
+
+/** 연결된 차량 한 줄 라벨 (예: E-Class (W214), 벤츠 E클래스) */
+function getConnectedVehicleLabel(vehicle: { manufacturerKo: string; modelNameKo: string; modelNameEn?: string | null } | undefined): string {
+    if (!vehicle) return '';
+    if (vehicle.modelNameEn && vehicle.modelNameEn.trim()) {
+        return `${vehicle.modelNameKo} (${vehicle.modelNameEn})`;
+    }
+    return `${vehicle.manufacturerKo} ${vehicle.modelNameKo}`;
+}
 
 interface HeaderProps {
     navigation?: any;
@@ -13,17 +23,26 @@ interface HeaderProps {
 export default function Header({ navigation: propNavigation, ...props }: HeaderProps) {
     const navigation = propNavigation || useNavigation<any>();
     const { nickname, membership, loadUser } = useUserStore();
-    const { status } = useBleStore();
+    const { status, connectedVehicleId } = useBleStore();
+    const { vehicles } = useVehicleStore();
 
     useEffect(() => {
         loadUser();
     }, []);
 
-    // 블루투스 상태에 따른 텍스트 및 색상 설정
+    const connectedVehicle = useMemo(
+        () => (connectedVehicleId ? vehicles.find(v => v.vehicleId === connectedVehicleId) : undefined),
+        [connectedVehicleId, vehicles]
+    );
+    const vehicleLabel = useMemo(() => getConnectedVehicleLabel(connectedVehicle), [connectedVehicle]);
+
     const getStatusInfo = () => {
         switch (status) {
             case 'connected':
-                return { text: 'Connected', color: 'text-success' };
+                return {
+                    text: vehicleLabel ? `${vehicleLabel} : Connected` : 'Connected',
+                    color: 'text-success'
+                };
             case 'connecting':
                 return { text: 'Connecting...', color: 'text-warning' };
             default:
@@ -62,8 +81,8 @@ export default function Header({ navigation: propNavigation, ...props }: HeaderP
                         </Text>
                     </TouchableOpacity>
                 )}
-                <Text className={`text-xs mt-1 font-medium ${statusInfo.color}`}>
-                    Vehicle Status: {statusInfo.text}
+                <Text className={`text-xs mt-1 font-medium ${statusInfo.color}`} numberOfLines={1}>
+                    {statusInfo.text}
                 </Text>
             </View>
             <TouchableOpacity

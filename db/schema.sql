@@ -8,7 +8,7 @@ CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;
 CREATE EXTENSION IF NOT EXISTS vector;
 
 -- 2. ENUM 타입 정의
-DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'user_level') THEN CREATE TYPE user_level AS ENUM ('FREE', 'PREMIUM', 'ADMIN');
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'user_level') THEN CREATE TYPE user_level AS ENUM ('FREE', 'PREMIUM', 'BUSINESS');
 
 END IF;
 
@@ -57,29 +57,37 @@ CREATE TABLE IF NOT EXISTS users (
     membership_expiry TIMESTAMP,
     last_login_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT NOW(),
-    deleted_at TIMESTAMP
+    updated_at TIMESTAMP DEFAULT NOW(),
+    deleted_at TIMESTAMP,
+    profile_image OID,
+    kakao_sid VARCHAR(255)
 );
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS kakao_sid VARCHAR(255);
 
 -- 사용자 설정 (2.1.2)
 CREATE TABLE IF NOT EXISTS user_settings (
     user_id UUID PRIMARY KEY REFERENCES users (user_id),
     noti_maintenance BOOLEAN DEFAULT TRUE,
     noti_anomaly BOOLEAN DEFAULT TRUE, -- AI 진단 리포트 알림 (Post-Trip report) 수신 여부
-    noti_recall BOOLEAN DEFAULT TRUE,
+    noti_dtc_tts BOOLEAN DEFAULT TRUE,
     noti_marketing BOOLEAN DEFAULT FALSE,
     night_push_allowed BOOLEAN DEFAULT FALSE
 );
 
 -- 클라우드 계정 (2.1.3)
 CREATE TABLE IF NOT EXISTS cloud_accounts (
-    account_id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
-    user_id UUID REFERENCES users (user_id),
-    provider VARCHAR(50),
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
+    user_id UUID NOT NULL REFERENCES users (user_id),
+    provider VARCHAR(50) NOT NULL,
     provider_user_id VARCHAR(255),
     access_token TEXT,
     refresh_token TEXT,
     expires_at TIMESTAMP,
-    last_synced_at TIMESTAMP
+    last_synced_at TIMESTAMP,
+    status VARCHAR(50) NOT NULL DEFAULT 'DISCONNECTED',
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
 );
 
 -- 차량 (2.1.4)
@@ -99,13 +107,15 @@ CREATE TABLE IF NOT EXISTS vehicles (
     is_primary BOOLEAN DEFAULT FALSE,
     registration_source registration_source,
     cloud_linked BOOLEAN DEFAULT FALSE,
+    nickname VARCHAR(50),
+    memo TEXT,
     created_at TIMESTAMP DEFAULT NOW(),
     deleted_at TIMESTAMP
 );
 
 -- 차량 모델 마스터 (2.1.5 - Track B Reference)
 CREATE TABLE IF NOT EXISTS car_model_master (
-    model_id SERIAL PRIMARY KEY,
+    model_id BIGSERIAL PRIMARY KEY,
     manufacturer_ko VARCHAR(50),
     manufacturer_en VARCHAR(50),
     model_name_ko VARCHAR(100),
@@ -113,7 +123,13 @@ CREATE TABLE IF NOT EXISTS car_model_master (
     model_year INT,
     fuel_type VARCHAR(20),
     displacement INT,
-    spec_json JSONB
+    spec_json JSONB,
+    CONSTRAINT unique_car_model UNIQUE (
+        manufacturer_ko,
+        model_name_ko,
+        model_year,
+        fuel_type
+    )
 );
 
 -- 4. 텔레메트리 (Telemetry)
@@ -142,7 +158,11 @@ CREATE TABLE IF NOT EXISTS obd_device_vehicle_history (
     updated_at TIMESTAMP
 );
 
-CREATE INDEX IF NOT EXISTS idx_obd_history_device_last ON obd_device_vehicle_history (obd_device_id, last_connected_at DESC);
+CREATE INDEX IF NOT EXISTS idx_obd_history_device_last ON obd_device_vehicle_history (
+    obd_device_id,
+    last_connected_at DESC
+);
+
 CREATE INDEX IF NOT EXISTS idx_obd_history_device_calid_cvn ON obd_device_vehicle_history (obd_device_id, calid, cvn);
 
 -- OBD 실시간 로그 (2.2.1) - TimescaleDB
@@ -199,6 +219,8 @@ outside_temp FLOAT, -- 실외 온도
 -- 상태 (Status)
 door_lock_status VARCHAR(20),    -- 문 잠금 상태 (LOCKED/UNLOCKED)
     window_open_status VARCHAR(20),  -- 창문 열림 상태 (CLOSED/OPEN/PARTIAL)
+    trunk_open_status VARCHAR(20),
+    hood_open_status VARCHAR(20),
     charging_status charging_status
 );
 
@@ -220,6 +242,7 @@ CREATE TABLE IF NOT EXISTS trip_summaries (
     idle_time INT,
     hard_accel_count INT,
     hard_brake_count INT,
+    high_rpm_ratio FLOAT,
     avg_rpm FLOAT,
     avg_engine_load FLOAT,
     avg_maf FLOAT,
@@ -250,9 +273,12 @@ CREATE TABLE IF NOT EXISTS diag_results (
     final_report TEXT,
     confidence_level VARCHAR(20), -- HIGH | MEDIUM | LOW
     summary TEXT,
-    detected_issues JSONB,
-    actions_json JSONB,
-    requested_actions JSONB,
+    detected_issues TEXT,
+    actions_json TEXT,
+    requested_action VARCHAR(30),
+    response_mode VARCHAR(20),
+    confidence_score FLOAT,
+    interactive_json TEXT,
     risk_level risk_level
 );
 
@@ -285,16 +311,15 @@ CREATE TABLE IF NOT EXISTS dtc_codes (
 -- DTC 고장 코드 이력 (2.4.1)
 CREATE TABLE IF NOT EXISTS dtc_history (
     dtc_id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
-    vehicles_id UUID REFERENCES vehicles (vehicles_id),
-    dtc_code VARCHAR(10),
-    dtc_manufacturer VARCHAR(50) DEFAULT 'GENERIC',
+    vehicles_id UUID NOT NULL REFERENCES vehicles (vehicles_id),
+    dtc_code VARCHAR(255) NOT NULL,
     description TEXT,
-    dtc_type dtc_type,
-    status dtc_status,
-    resolution_type dtc_resolution_type,
+    dtc_type VARCHAR(50),
+    status VARCHAR(50),
+    severity VARCHAR(20),
+    rag_guide TEXT,
     discovered_at TIMESTAMP,
-    resolved_at TIMESTAMP,
-    FOREIGN KEY (dtc_code, dtc_manufacturer) REFERENCES dtc_codes (code, manufacturer)
+    resolved_at TIMESTAMP
 );
 
 -- DTC 고장 시점 스냅샷 (2.4.2)
@@ -320,7 +345,7 @@ CREATE TABLE IF NOT EXISTS dtc_freeze_frames (
 
 -- 2.4.3 소모품 항목 마스터 (consumable_items) - Reference
 CREATE TABLE IF NOT EXISTS consumable_items (
-    id SERIAL PRIMARY KEY,
+    id BIGSERIAL PRIMARY KEY,
     code VARCHAR(50) UNIQUE NOT NULL, -- ENGINE_OIL, TIRES...
     name VARCHAR(100) NOT NULL,
     default_interval_mileage INT NOT NULL,
@@ -332,7 +357,7 @@ CREATE TABLE IF NOT EXISTS consumable_items (
 CREATE TABLE IF NOT EXISTS vehicle_consumables (
     vehicle_consumable_id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
     vehicles_id UUID REFERENCES vehicles (vehicles_id),
-    consumable_item_id INT REFERENCES consumable_items (id),
+    consumable_item_id BIGINT REFERENCES consumable_items (id),
     wear_factor FLOAT DEFAULT 1.0, -- AI 계산 마모율 (1.0 = 표준)
     last_replaced_at TIMESTAMP,
     last_replaced_mileage FLOAT, -- 교체 시점의 주행거리
@@ -346,19 +371,43 @@ CREATE TABLE IF NOT EXISTS vehicle_consumables (
     )
 );
 
--- 정비 차계부 (2.4.4)
+-- 정비 차계부 (2.4.4) - MaintenanceHistory 엔티티와 동일
 CREATE TABLE IF NOT EXISTS maintenance_logs (
     maintenance_id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
-    vehicles_id UUID REFERENCES vehicles (vehicles_id),
-    maintenance_date DATE,
-    part_name VARCHAR(50),
+    vehicle_id UUID NOT NULL REFERENCES vehicles (vehicles_id),
+    maintenance_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    mileage_at_maintenance DOUBLE PRECISION NOT NULL,
+    consumable_item_id BIGINT REFERENCES consumable_items (id),
     is_standardized BOOLEAN,
-    cost INT,
     shop_name VARCHAR(100),
-    mileage_at_work FLOAT,
-    receipts_s3_key TEXT,
-    memo TEXT
+    cost INT,
+    quantity INT DEFAULT 1,
+    ocr_data JSONB,
+    receipt_id UUID,
+    memo TEXT,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
+
+-- 주유 차계부 (2.4.5) - FuelingHistory 엔티티와 동기화 (백엔드가 이 스키마를 단일 소스로 관리)
+CREATE TABLE IF NOT EXISTS fueling_logs (
+    fueling_id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
+    vehicle_id UUID NOT NULL REFERENCES vehicles (vehicles_id),
+    fuel_type fuel_type NOT NULL,
+    fueling_date DATE NOT NULL,
+    amount DOUBLE PRECISION,
+    unit_price INT,
+    total_cost INT NOT NULL,
+    mileage_at_fueling DOUBLE PRECISION,
+    shop_name VARCHAR(100),
+    station_name VARCHAR(100),
+    memo TEXT,
+    receipt_id UUID,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_fueling_logs_vehicle_date ON fueling_logs (vehicle_id, fueling_date DESC);
 
 -- 7. 알림 및 지식 베이스 (Notification & Knowledge)
 
@@ -373,6 +422,28 @@ CREATE TABLE IF NOT EXISTS user_notifications (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
+-- 앱 내 알림 엔티티 매핑용 (JPA: kr.co.himedia.entity.Notification)
+CREATE TABLE IF NOT EXISTS notification (
+    id BIGSERIAL PRIMARY KEY,
+    user_id UUID NOT NULL REFERENCES users (user_id),
+    title VARCHAR(255) NOT NULL,
+    body TEXT NOT NULL,
+    type VARCHAR(50) NOT NULL,
+    is_read BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    CONSTRAINT notification_type_check CHECK (
+        type IN (
+            'MAINTENANCE_ALERT',
+            'COMMUNITY_ALERT',
+            'SYSTEM_ALERT',
+            'DTC_ALERT',
+            'DIAG_ALERT',
+            'TRIP_START',
+            'TRIP_END'
+        )
+    )
+);
+
 -- 지식 베이스 벡터 (2.5.2) - RAG용 매뉴얼 청크 (charm.li)
 CREATE TABLE IF NOT EXISTS knowledge_vectors (
     knowledge_id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
@@ -384,6 +455,7 @@ CREATE TABLE IF NOT EXISTS knowledge_vectors (
 );
 
 CREATE INDEX IF NOT EXISTS idx_knowledge_metadata ON knowledge_vectors USING GIN (metadata);
+
 CREATE INDEX IF NOT EXISTS idx_knowledge_embedding ON knowledge_vectors USING hnsw (embedding vector_cosine_ops);
 
 -- 8. 외부 API 연동 및 상세 정보 (External)
@@ -466,4 +538,27 @@ CREATE TABLE IF NOT EXISTS user_insights (
     content_markdown TEXT,
     created_at TIMESTAMP DEFAULT NOW(),
     is_read BOOLEAN DEFAULT FALSE
+);
+-- 결제 시스템 (Payments)
+CREATE TABLE IF NOT EXISTS payments (
+    payment_id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
+    user_id UUID REFERENCES users (user_id),
+    tid VARCHAR(20),
+    order_id VARCHAR(255) NOT NULL UNIQUE,
+    item_name VARCHAR(255),
+    amount INT,
+    status VARCHAR(20) DEFAULT 'PENDING',
+    sid VARCHAR(255),
+    approved_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS sid VARCHAR(255);
+
+-- 리프레시 토큰 (Refresh Tokens)
+CREATE TABLE IF NOT EXISTS refresh_tokens (
+    id BIGSERIAL PRIMARY KEY,
+    user_id UUID NOT NULL REFERENCES users (user_id),
+    token VARCHAR(1000) NOT NULL UNIQUE,
+    expiry_date TIMESTAMP NOT NULL
 );

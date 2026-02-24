@@ -4,7 +4,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { CommonActions } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function ObdDiagResult({ navigation, route }: any) {
     const params = route.params || {};
@@ -15,7 +15,8 @@ export default function ObdDiagResult({ navigation, route }: any) {
     };
 
     return (
-        <View style={[styles.container, { paddingTop: insets.top }]}>
+        <View style={[styles.container, { flex: 1 }]}>
+            <SafeAreaView style={{ flex: 1 }} edges={['top', 'left', 'right', 'bottom']}>
             <StatusBar style="light" />
 
             <View style={styles.header}>
@@ -86,12 +87,25 @@ export default function ObdDiagResult({ navigation, route }: any) {
                         end={{ x: 1, y: 0 }}
                         style={styles.gradientButton}
                     >
-                        <Text style={styles.buttonText}>확인 (홈으로)</Text>
+                        <Text style={styles.buttonText}>홈으로</Text>
                         <MaterialIcons name="home" size={24} color="white" />
                     </LinearGradient>
                 </TouchableOpacity>
 
             </ScrollView>
+            </SafeAreaView>
+            {insets.bottom > 0 && (
+                <View
+                    style={{
+                        position: 'absolute',
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        height: insets.bottom,
+                        backgroundColor: '#101922',
+                    }}
+                />
+            )}
         </View>
     );
 }

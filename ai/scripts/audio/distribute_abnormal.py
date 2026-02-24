@@ -1,3 +1,8 @@
+"""
+[파일 용도] 비정상(Abnormal) 데이터 분배
+전처리된 비정상 오디오 데이터를 Train/Test 셋으로 비율에 맞춰 분배하는 스크립트입니다.
+데이터 누수(Leakage)를 방지하기 위해 파일명 접두사(Source ID)를 기준으로 그룹화하여 분할합니다.
+"""
 import os
 import shutil
 import random

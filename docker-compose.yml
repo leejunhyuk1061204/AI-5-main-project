@@ -1,4 +1,4 @@
-﻿services:
+services:
   db:
     image: timescale/timescaledb-ha:pg15
     container_name: car-sentry-db
@@ -9,13 +9,16 @@
       - POSTGRES_DB=${DB_NAME:-car_sentry}
     ports:
       - "${DB_PORT:-5432}:5432"
-    shm_size: 1gb
+    shm_size: 3gb
     volumes:
       - ./data/postgres_1024:/var/lib/postgresql/data
       - ./db/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql
-      - ./db/data.sql:/docker-entrypoint-initdb.d/02_data.sql
-      - ./db/seed_car_models.sql:/docker-entrypoint-initdb.d/03_seed_car_models.sql
-      - ./db/seed_dtc_data.sql:/docker-entrypoint-initdb.d/04_seed_dtc_codes.sql
+      - ./db/seed_consumable.sql:/docker-entrypoint-initdb.d/02_seed_consumable.sql
+      - ./db/seed_car_models_load.docker.sql:/docker-entrypoint-initdb.d/03_seed_car_models_load.sql
+      - ./db/seed_car_models.csv:/docker-entrypoint-initdb.d/seed_car_models.csv
+      - ./db/seed_dtc_data_load.docker.sql:/docker-entrypoint-initdb.d/04_seed_dtc_data_load.sql
+      - ./db/seed_dtc_data.csv:/docker-entrypoint-initdb.d/seed_dtc_data.csv
+      # - ./db/seed_v1.sql:/docker-entrypoint-initdb.d/05_seed_v1.sql
     networks:
       - car-sentry-network
 

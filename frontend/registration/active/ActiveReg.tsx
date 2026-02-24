@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, ImageBackground } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { CommonActions } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
@@ -70,12 +70,10 @@ export default function ActiveReg({ navigation }: any) {
 
     return (
         <View className="flex-1 bg-background-dark">
+            <SafeAreaView className="flex-1" edges={['top', 'left', 'right', 'bottom']}>
             <StatusBar style="light" />
 
-            <View
-                className="bg-background-dark/80 backdrop-blur-md z-50 sticky top-0"
-                style={{ paddingTop: insets.top }}
-            >
+            <View className="bg-background-dark/80 backdrop-blur-md z-50 sticky top-0">
                 <View className="flex-row items-center justify-between px-4 py-3 pb-4">
                     <TouchableOpacity
                         className="w-12 h-12 items-center justify-center rounded-full hover:bg-slate-800"
@@ -247,6 +245,19 @@ export default function ActiveReg({ navigation }: any) {
                 }}
             />
 
+            </SafeAreaView>
+            {insets.bottom > 0 && (
+                <View
+                    style={{
+                        position: 'absolute',
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        height: insets.bottom,
+                        backgroundColor: '#101922',
+                    }}
+                />
+            )}
         </View>
     );
 }

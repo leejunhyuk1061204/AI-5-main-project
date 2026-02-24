@@ -37,6 +37,9 @@ public class DiagResult {
     @Column(name = "confidence_level", length = 20)
     private String confidenceLevel; // HIGH | MEDIUM | LOW
 
+    @Column(name = "confidence_score")
+    private Double confidenceScore; // 0.0 ~ 1.0 (numeric)
+
     @Column(name = "summary", columnDefinition = "TEXT")
     private String summary;
 

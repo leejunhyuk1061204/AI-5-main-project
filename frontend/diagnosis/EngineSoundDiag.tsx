@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, Animated, ActivityIndicator } from 'react-native';
 import { useAlertStore } from '../store/useAlertStore';
-import { useAiDiagnosisStore } from '../store/useAiDiagnosisStore';
+import { useAiDiagnosisStore, DiagType } from '../store/useAiDiagnosisStore';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Audio } from 'expo-av';
@@ -44,6 +44,7 @@ const RecordingText = () => {
 export default function EngineSoundDiag() {
     const navigation = useNavigation<any>();
     const route = useRoute<any>();
+    const diagType: DiagType = route.params?.diagType || 'SOUND';
 
     // State for Diagnosis Flow
     const [step, setStep] = useState(1); // 1: Record/Review, 2: Analyze, 3: Result
@@ -246,28 +247,46 @@ export default function EngineSoundDiag() {
     };
 
     const executeSoundAnalysis = async (uri: string, sessionId: string | null) => {
-        const { updateStatus, setVehicleId } = useAiDiagnosisStore.getState();
+        const { setVehicleId } = useAiDiagnosisStore.getState();
         const vehicleId = route.params?.vehicleId || useAiDiagnosisStore.getState().selectedVehicleId;
         if (!vehicleId) return;
         try {
             let result;
             if (sessionId) {
-                // INTERACTIVE 모드 답변인 경우
                 result = await replyToDiagnosisSession(sessionId as string, {
                     userResponse: "소리를 녹음했습니다.",
                     vehicleId: vehicleId as string
                 }, undefined, uri);
 
-                useAiDiagnosisStore.setState({ isWaitingForAi: true });
+                useAiDiagnosisStore.setState((state) => ({
+                    sessions: {
+                        ...state.sessions,
+                        [diagType]: {
+                            ...state.sessions[diagType],
+                            status: 'REPLY_PROCESSING',
+                            isWaitingForAi: true
+                        }
+                    }
+                }));
+                setDiagnosisResult(result);
+                const replySessionId = useAiDiagnosisStore.getState().sessions[diagType].currentSessionId;
+                navigation.navigate('ObdDiagLoading', { vehicleId: vehicleId as string, diagType: 'SOUND', sessionId: replySessionId ?? undefined });
+                return;
             } else {
                 // 신규 진단인 경우
-                useAiDiagnosisStore.setState({
-                    status: 'PROCESSING',
-                    loadingMessage: '소리를 분석하고 있습니다...',
-                    messages: [],
-                    diagResult: null,
-                    currentSessionId: null
-                });
+                useAiDiagnosisStore.setState((state) => ({
+                    sessions: {
+                        ...state.sessions,
+                        [diagType]: {
+                            ...state.sessions[diagType],
+                            status: 'PROCESSING',
+                            loadingMessage: '소리를 분석하고 있습니다...',
+                            messages: [],
+                            diagResult: null,
+                            currentSessionId: null
+                        }
+                    }
+                }));
 
                 result = await diagnoseEngineSound(uri, vehicleId as string);
             }
@@ -276,8 +295,16 @@ export default function EngineSoundDiag() {
 
             if (result.sessionId) {
                 setVehicleId(vehicleId as string);
-                useAiDiagnosisStore.setState({ currentSessionId: result.sessionId });
-                await updateStatus(result.sessionId);
+                useAiDiagnosisStore.setState((state) => ({
+                    sessions: {
+                        ...state.sessions,
+                        [diagType]: {
+                            ...state.sessions[diagType],
+                            currentSessionId: result.sessionId
+                        }
+                    }
+                }));
+                navigation.navigate('ObdDiagLoading', { vehicleId: vehicleId as string, diagType: 'SOUND', sessionId: result.sessionId });
             } else {
                 setStep(3);
             }
@@ -285,51 +312,17 @@ export default function EngineSoundDiag() {
             console.error(error);
             useAlertStore.getState().showAlert('진단 실패', error.message || '서버 통신 중 오류가 발생했습니다.', 'ERROR');
             setStep(1);
-            useAiDiagnosisStore.setState({ status: 'IDLE' });
+            useAiDiagnosisStore.setState((state) => ({
+                sessions: {
+                    ...state.sessions,
+                    [diagType]: {
+                        ...state.sessions[diagType],
+                        status: 'IDLE'
+                    }
+                }
+            }));
         }
     };
-
-    // Polling Effect (소리 진단 화면용)
-    const { status, currentSessionId, updateStatus } = useAiDiagnosisStore();
-
-    useEffect(() => {
-        let intervalId: NodeJS.Timeout;
-        if (status === 'PROCESSING' && currentSessionId) {
-            intervalId = setInterval(() => {
-                updateStatus(currentSessionId);
-            }, 2000);
-        }
-        return () => {
-            if (intervalId) clearInterval(intervalId);
-        };
-    }, [status, currentSessionId]);
-
-    // Status Watcher: 상태 변화에 따른 네비게이션
-    // Status Watcher: 상태 변화에 따른 네비게이션
-    const isInitialMount = useRef(true);
-
-    useEffect(() => {
-        if (!currentSessionId) return;
-
-        // Skip the first check if status is already INTERACTIVE/ACTION_REQUIRED
-        if (isInitialMount.current) {
-            isInitialMount.current = false;
-            if (status === 'INTERACTIVE' || status === 'ACTION_REQUIRED') {
-                return;
-            }
-        }
-
-        if (status === 'INTERACTIVE' || status === 'ACTION_REQUIRED') {
-            navigation.navigate('AiDiagChat', {
-                sessionId: currentSessionId,
-                vehicleId: route.params?.vehicleId
-            });
-        } else if (status === 'REPORT') {
-            navigation.replace('DiagnosisReport', {
-                reportData: { sessionId: currentSessionId }
-            });
-        }
-    }, [status, currentSessionId]);
 
     const handleRecordToggle = () => {
         if (isProcessing) return;
@@ -396,7 +389,7 @@ export default function EngineSoundDiag() {
                 {/* Step 1 & 2: Visualization UI */}
                 {step <= 2 && (
                     <>
-                        <View className="items-center mb-12">
+                        <View className="items-center mt-8 mb-8">
                             <Text className="text-2xl font-bold text-white text-center leading-9 mb-3">
                                 {step === 1
                                     ? (recordedUri
@@ -411,7 +404,7 @@ export default function EngineSoundDiag() {
                             </Text>
                         </View>
 
-                        <View className="relative items-center justify-center w-full h-40 mb-12">
+                        <View className="relative items-center justify-center w-full h-40 my-8">
                             <View className="flex-row items-center justify-center gap-1.5 h-full z-10">
                                 {animations.map((anim, index) => (
                                     <Animated.View
@@ -434,11 +427,11 @@ export default function EngineSoundDiag() {
                         </View>
 
                         {step === 1 && (
-                            <View className="w-full flex-col items-center gap-8">
+                            <View className="w-full flex-col items-center flex-1 justify-center pb-8">
                                 {/* Recording/Playback Controls */}
                                 {!recordedUri ? (
                                     /* Recording State */
-                                    <View className="items-center gap-8 w-full flex-row justify-center mt-4">
+                                    <View className="items-center gap-8 w-full flex-row justify-center">
                                         <View className="items-center gap-4">
                                             <TouchableOpacity
                                                 onPress={handleRecordToggle}
@@ -510,6 +503,9 @@ export default function EngineSoundDiag() {
                                     </View>
                                 )}
                             </View>
+                        )}
+                        {step === 2 && (
+                            <View className="w-full flex-col items-center flex-1 justify-center pb-8" />
                         )}
                     </>
                 )}

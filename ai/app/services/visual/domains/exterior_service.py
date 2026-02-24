@@ -11,6 +11,16 @@
 - Gate Numbering: Integer based (0-4).
 - UNKNOWN Philosophy: Honest uncertainty is a first-class result.
 """
+"""
+차량 외관(Exterior) 손상 진단 메인 서비스
+
+차량의 범퍼, 도어, 펜더, 유리 등 외판 부위의 결함을 정밀 스캔하는 서비스입니다.
+주요 프로세스:
+1. 1280 해상도의 고화질 이미지를 분석하여 미세 스크래치 탐지력 강화
+2. YOLOv11m 모델 기반 6종 통합 시스템(Glass, Light, Bumper, Body, Surface, Mirror) 분석
+3. 이상 탐지 시 실시간 Decision Layer를 통해 즉각 통보 또는 정밀 폴백 분석 수행
+"""
+import logging
 from typing import List, Optional, Union, Dict, Any
 from PIL import Image
 from ai.app.services.common.llm_service import analyze_general_image

@@ -1,5 +1,14 @@
 # ai/app/services/visual/domains/engine/engine_llm_fallback.py
 """
+엔진룸 부품 분석용 LLM 폴백(Fall-back) 및 의사결정 레이어
+
+엔진룸 내 26종(또는 통합 8종) 주요 구성 요소의 상태를 YOLO 모델이 분석한 후,
+그 결과가 불충분하거나 오류 가능성이 보일 때 작동합니다.
+주요 기능:
+1. 부품 식별 점수가 임계치 미만일 때 LLM 상세 육안 검사 모드 전환
+2. 누유, 부식 등 미세 결함에 대한 다각도 검증 로직
+"""
+"""
 Production-Grade LLM Agreement Fallback for Engine Detection
 
 [핵심 원칙]
@@ -308,32 +317,19 @@ def llm_agreement_fallback(
         if top_conf < T_LLM_ACCEPT:
             logger.warning(f"⚠️ ambiguous_low_conf: top={top_conf:.2f} < {T_LLM_ACCEPT} (high retraining value)")
     
-    # Non-critical parts in middle zone → Strategic choice
+    # Non-critical + ambiguous or lower conf → Conservative (UNKNOWN)
     if not is_critical:
-        # Clear + Reasonably high → ACCEPT (avoid over-conservative rejections)
-        if not is_amb and top_conf >= T_AMB_SKIP_LLM:
-            logger.info(f"Non-critical + clear + high conf={top_conf:.2f} >= {T_AMB_SKIP_LLM} → ACCEPT")
-            return {
-                "label": top_label,
-                "model_confidence": top_conf,
-                "decision_confidence": top_conf,
-                "source": "middle_zone_non_critical_clear",
-                "gate": "gate3_non_critical_clear"
-            }
-        
-        # Ambiguous or lower conf → Conservative (UNKNOWN)
-        else:
-            logger.info(f"Non-critical + (ambiguous or conf<{T_AMB_SKIP_LLM}) → UNKNOWN")
-            return {
-                "label": "UNKNOWN",
-                "model_confidence": top_conf,
-                "decision_confidence": None,
-                "source": "middle_zone_conservative",
-                "reason_tag": "non_critical_middle_zone",
-                "gate": "gate3_non_critical_conservative",
-                "hard_sample": True,
-                "retraining_priority": "MEDIUM"
-            }
+        logger.info(f"Non-critical + (ambiguous or conf<{T_AMB_SKIP_LLM}) → UNKNOWN")
+        return {
+            "label": "UNKNOWN",
+            "model_confidence": top_conf,
+            "decision_confidence": None,
+            "source": "middle_zone_conservative",
+            "reason_tag": "non_critical_middle_zone",
+            "gate": "gate3_non_critical_conservative",
+            "hard_sample": True,
+            "retraining_priority": "MEDIUM"
+        }
     
     # Critical parts → LLM verification
     logger.info(f"Critical part in middle zone, proceeding with LLM verification")

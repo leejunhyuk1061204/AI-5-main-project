@@ -87,9 +87,11 @@ export default function AllHistoryList({
         }, []);
 
         groupedMaintenance.forEach(group => {
+            const first = group.items[0];
+            const qtySuffix = (first.quantity != null && first.quantity > 1) ? ` x${first.quantity}` : '';
             const title = group.items.length > 1
-                ? `${group.items[0].itemDescription} 외 ${group.items.length - 1}건`
-                : group.items[0].itemDescription;
+                ? `${first.itemDescription} 외 ${group.items.length - 1}건`
+                : `${first.itemDescription}${qtySuffix}`;
 
             list.push({
                 id: `M-${group.receiptId}`,
@@ -99,7 +101,7 @@ export default function AllHistoryList({
                 shopName: group.shopName || '정비소 미기록',
                 cost: group.cost,
                 mileage: group.mileage,
-                data: { ...group, isFueling: false, totalCost: group.cost } // 상세 보기를 위한 데이터 구조 맞춤
+                data: { ...group, isFueling: false, totalCost: group.cost, maintenanceDate: group.date } // 상세 보기를 위한 데이터 구조 맞춤
             });
         });
 

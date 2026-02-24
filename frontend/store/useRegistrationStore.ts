@@ -1,16 +1,18 @@
 import { create } from 'zustand';
-import { getManufacturers, getModelNames, getModelYears, getAvailableFuelTypes, getAllConsumableItems, ConsumableMaster } from '../api/masterApi';
+import { getManufacturers, getModels, getModelYears, getAvailableFuelTypes, ConsumableMaster, CarModelDto } from '../api/masterApi';
 import { registerVehicle } from '../api/vehicleApi';
 import maintenanceApi from '../api/maintenanceApi';
 import { useVehicleStore } from './useVehicleStore';
-import { Alert } from 'react-native'; // Simple alert for logic inside store if needed, or better use useAlertStore
+import { useConsumableStore } from './useConsumableStore';
 
 interface RegistrationState {
     // Step 1: Vehicle Info
     vehicleNumber: string;
     vin: string;
     manufacturer: string;
+    manufacturerEn: string;
     modelName: string;
+    modelNameEn: string;
     modelYear: string;
     fuelType: string;
     totalMileage: string;
@@ -28,15 +30,16 @@ interface RegistrationState {
     // Master Data Options
     manufacturers: string[];
     models: string[];
+    modelsFull: CarModelDto[];
     years: string[];
     availableFuels: string[];
-    consumableMasterList: ConsumableMaster[];
 
     // UI State
     isLoading: boolean;
 
     // Actions
     setVehicleInfo: (field: string, value: string) => void;
+    setModelSelection: (modelNameKo: string) => void;
     addMaintenanceRecord: (item: ConsumableMaster) => void;
     removeMaintenanceRecord: (itemCode: string) => void;
     updateMaintenanceRecord: (itemCode: string, field: 'date' | 'mileage', value: string) => void;
@@ -60,7 +63,9 @@ export const useRegistrationStore = create<RegistrationState>((set, get) => ({
     vehicleNumber: '',
     vin: '',
     manufacturer: '',
+    manufacturerEn: '',
     modelName: '',
+    modelNameEn: '',
     modelYear: '',
     fuelType: '',
     totalMileage: '',
@@ -68,9 +73,9 @@ export const useRegistrationStore = create<RegistrationState>((set, get) => ({
 
     manufacturers: [],
     models: [],
+    modelsFull: [],
     years: [],
     availableFuels: [],
-    consumableMasterList: [],
 
     isLoading: false,
 
@@ -127,10 +132,17 @@ export const useRegistrationStore = create<RegistrationState>((set, get) => ({
     },
 
     loadModels: async (make) => {
-        set({ isLoading: true });
+        set({ isLoading: true, years: [], availableFuels: [] });
         try {
-            const data = await getModelNames(make);
-            set({ models: data });
+            const data = await getModels(make);
+            const distinctModelNames = [...new Set(data.map((d) => d.modelNameKo))];
+            const manufacturerEn = data.length > 0 ? (data[0].manufacturerEn ?? '') : '';
+            set({
+                modelsFull: data,
+                models: distinctModelNames,
+                manufacturerEn,
+                modelNameEn: ''
+            });
         } catch (e) {
             console.error(e);
         } finally {
@@ -138,8 +150,15 @@ export const useRegistrationStore = create<RegistrationState>((set, get) => ({
         }
     },
 
+    setModelSelection: (modelNameKo) => {
+        const { modelsFull } = get();
+        const match = modelsFull.find((d) => d.modelNameKo === modelNameKo);
+        const modelNameEn = match?.modelNameEn ?? '';
+        set({ modelName: modelNameKo, modelNameEn, availableFuels: [] });
+    },
+
     loadYears: async (make, model) => {
-        set({ isLoading: true });
+        set({ isLoading: true, availableFuels: [] });
         try {
             const data = await getModelYears(make, model);
             set({ years: data.map(String) });
@@ -165,18 +184,7 @@ export const useRegistrationStore = create<RegistrationState>((set, get) => ({
     },
 
     loadConsumableMaster: async () => {
-        // Cache check could be here
-        if (get().consumableMasterList.length > 0) return;
-
-        set({ isLoading: true });
-        try {
-            const data = await getAllConsumableItems();
-            set({ consumableMasterList: data });
-        } catch (e) {
-            console.error(e);
-        } finally {
-            set({ isLoading: false });
-        }
+        await useConsumableStore.getState().loadConsumableMaster();
     },
 
     registerAll: async () => {
@@ -193,12 +201,12 @@ export const useRegistrationStore = create<RegistrationState>((set, get) => ({
                     lastReplacedMileage: r.lastReplacementMileage ? parseInt(r.lastReplacementMileage) : undefined
                 }));
 
-            // 2. Register Vehicle & Consumables together
-            const vehicleRes = await registerVehicle({
-                manufacturerKo: s.manufacturer, // Assuming input is Korean
-                // manufacturerEn: undefined, 
-                modelNameKo: s.modelName,       // Assuming input is Korean
-                // modelNameEn: undefined,
+            // 2. Register Vehicle & Consumables together (영문 포함 전송, 백엔드 fallback 보완)
+            await registerVehicle({
+                manufacturerKo: s.manufacturer,
+                manufacturerEn: s.manufacturerEn || undefined,
+                modelNameKo: s.modelName,
+                modelNameEn: s.modelNameEn || undefined,
                 modelYear: parseInt(s.modelYear),
                 fuelType: s.fuelType as any,
                 carNumber: s.vehicleNumber,
@@ -229,40 +237,28 @@ export const useRegistrationStore = create<RegistrationState>((set, get) => ({
             vehicleNumber: '',
             vin: '',
             manufacturer: '',
+            manufacturerEn: '',
             modelName: '',
+            modelNameEn: '',
             modelYear: '',
             fuelType: '',
             totalMileage: '',
             maintenanceRecords: [],
-            // manufacturers: [],  // Keep cached - 제조사 목록은 캐싱 유지
             models: [],
+            modelsFull: [],
             years: [],
             availableFuels: []
-            // Keep consumableMasterList cached
         });
     },
 
     addDefaultConsumables: () => {
-        const { maintenanceRecords, consumableMasterList, addMaintenanceRecord } = get();
+        const { maintenanceRecords, addMaintenanceRecord } = get();
         if (maintenanceRecords.length > 0) return;
 
-        // Defined defaults with fallback data if missing in master
-        const defaults = [
-            { code: 'ENGINE_OIL', name: '엔진 오일', category: 'ENGINE', icon: 'oil-barrel' }
-        ];
-
-        defaults.forEach(def => {
-            const item = consumableMasterList.find(c => c.code === def.code);
-            if (item) {
-                addMaintenanceRecord(item);
-            } else {
-                // Add as custom/fallback item if not in master
-                addMaintenanceRecord({
-                    ...def,
-                    replacementCycleKm: 0,
-                    replacementCycleMonth: 0
-                } as ConsumableMaster);
-            }
-        });
+        const consumableMasterList = useConsumableStore.getState().consumableMasterList;
+        const getConsumableMasterItem = useConsumableStore.getState().getConsumableMasterItem;
+        const defaultCode = 'ENGINE_OIL';
+        const item = consumableMasterList.find(c => c.code === defaultCode) ?? getConsumableMasterItem(defaultCode);
+        if (item) addMaintenanceRecord(item);
     }
 }));

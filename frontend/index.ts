@@ -1,8 +1,7 @@
-// import './polyfills';
-// import 'react-native-gesture-handler';
-// import { Buffer } from 'buffer';
-// global.Buffer = global.Buffer || Buffer;
+import { Buffer } from 'buffer';
+global.Buffer = global.Buffer || Buffer;
 
+import 'react-native-gesture-handler';
 import { registerRootComponent } from 'expo';
 import { LogBox, Platform } from 'react-native';
 // Firebase는 안드로이드 네이티브(google-services 플러그인)를 통해 자동으로 초기화되므로
@@ -14,8 +13,7 @@ LogBox.ignoreLogs([
     "navigation context",
 ]);
 
-// 콘솔 로그 디버깅을 위해 로깅 오버라이드는 일시적으로 비활성화
-/*
+// 콘솔 로그를 파일로 저장할 수 있도록 LogBuffer에 복사
 import { LogBuffer } from './services/LogBuffer';
 const originalLog = console.log;
 const originalWarn = console.warn;
@@ -32,10 +30,11 @@ console.error = (...args: unknown[]) => {
     LogBuffer.append('error', ...args);
     originalError.apply(console, args);
 };
-*/
 
-// import App from './App';
-// import App from './App.test';
+// FCM Background Message Handler (Must be defined early and outside React lifecycle)
+import fcmService from './services/fcmService';
+fcmService.setupBackgroundHandler();
+
 import App from './App';
 
 // registerRootComponent calls AppRegistry.registerComponent('main', () => App);

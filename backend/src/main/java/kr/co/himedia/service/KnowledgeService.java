@@ -30,8 +30,8 @@ public class KnowledgeService {
     private final DtcCodeRepository dtcCodeRepository;
     private final RestTemplate restTemplate = new RestTemplate();
 
-    @Value("${ai.server.url.embedding:http://localhost:8001/api/v1/connect/predict/embedding}")
-    private String embeddingApiUrl;
+    @Value("${ai.server.url:http://localhost:8001}")
+    private String aiServerBaseUrl;
 
     /**
      * 자연어 쿼리를 입력받아 가장 관련 있는 지식 문서들을 반환
@@ -105,11 +105,9 @@ public class KnowledgeService {
                 String description = (descEn != null && !descEn.isBlank()) ? descEn : descKo;
                 searchContext = description;
 
-                // 결과에는 한국어/영어 정의 모두 포함 (LLM 참고용)
+                // 결과에는 영어 정의만 포함 (LLM 참고용)
                 if (descEn != null && !descEn.isBlank())
                     results.add("[DTC Definition (En)] " + descEn);
-                if (descKo != null && !descKo.isBlank())
-                    results.add("[DTC Definition (Ko)] " + descKo);
             }
         }
 
@@ -130,7 +128,10 @@ public class KnowledgeService {
             return null;
         try {
             Map<String, String> request = Map.of("text", text);
-            Map<String, Object> response = restTemplate.postForObject(embeddingApiUrl, request, Map.class);
+            String embeddingUrl = aiServerBaseUrl + "/api/v1/predict/embedding";
+            log.info("[Embedding] Request url={}, textLength={}, textPreview={}",
+                    embeddingUrl, text.length(), text.length() > 200 ? text.substring(0, 200) + "..." : text);
+            Map<String, Object> response = restTemplate.postForObject(embeddingUrl, request, Map.class);
 
             if (response != null && response.containsKey("embedding")) {
                 Object embeddingObj = response.get("embedding");

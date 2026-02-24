@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, TouchableOpacity, TextInput, ActivityIndicator, ScrollView, Animated, Platform, StyleSheet, KeyboardAvoidingView, Keyboard, Image, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, TextInput, ActivityIndicator, ScrollView, Animated, Platform, StyleSheet, KeyboardAvoidingView, Keyboard, Image } from 'react-native';
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -12,19 +12,21 @@ import { useUserStore } from '../store/useUserStore';
 import { useBleStore } from '../store/useBleStore';
 
 // API
-import { getDiagnosisSessionStatus, replyToDiagnosisSession } from '../api/aiApi';
+import { getDiagnosisSessionStatus, replyToDiagnosisSession, AiDiagnosisResponse, DiagnosisMessage } from '../api/aiApi';
 import Header from '../header/Header';
+import { DiagType, useAiDiagnosisStore } from '../store/useAiDiagnosisStore';
+import { useAlertStore } from '../store/useAlertStore';
 
 // Types
 type RootStackParamList = {
     Login: undefined;
     AlertMain: undefined;
-    Filming: { sessionId: string | null; vehicleId?: number };
-    EngineSoundDiag: { sessionId: string | null; vehicleId?: number };
-    DiagnosisReport: { sessionId: string; reportData: any };
-    AiDiagChat: { autoStart?: boolean; vehicleId?: string; sessionId?: string; pendingMessage?: { type: 'image' | 'audio'; uri: string; text: string; timestamp: number } };
-    ChatCameraScreen: { sessionId: string | null; vehicleId?: string };
-    ChatAudioScreen: { sessionId: string | null; vehicleId?: string };
+    Filming: { sessionId: string | null; vehicleId?: number; diagType?: DiagType };
+    EngineSoundDiag: { sessionId: string | null; vehicleId?: number; diagType?: DiagType };
+    DiagnosisReport: { sessionId: string; reportData: any; diagType?: DiagType };
+    AiDiagChat: { autoStart?: boolean; vehicleId?: string; sessionId?: string; pendingMessage?: { type: 'image' | 'audio'; uri: string; text: string; timestamp: number }; diagType?: DiagType };
+    ChatCameraScreen: { sessionId: string | null; vehicleId?: string; diagType?: DiagType };
+    ChatAudioScreen: { sessionId: string | null; vehicleId?: string; diagType?: DiagType };
     MainHome: undefined;
     DiagTab: undefined;
     HistoryTab: undefined;
@@ -129,8 +131,8 @@ export default function AiDiagChat() {
     // State
     const [userInput, setUserInput] = useState('');
     const [isMenuOpen, setIsMenuOpen] = useState(false);
-    const [sessionData, setSessionData] = useState<any>(null);
-    const [messages, setMessages] = useState<any[]>([]);
+    const [sessionData, setSessionData] = useState<AiDiagnosisResponse | null>(null);
+    const [messages, setMessages] = useState<DiagnosisMessage[]>([]);
     const [loading, setLoading] = useState(false);
     const [isWaitingForAi, setIsWaitingForAi] = useState(false);
 
@@ -139,12 +141,35 @@ export default function AiDiagChat() {
     const { isKeyboardVisible, setKeyboardVisible } = useUIStore();
     const { nickname, loadUser } = useUserStore();
     const { status: bleStatus } = useBleStore();
-
     // sessionId 추출 (route params 우선)
     const sessionId = route.params?.sessionId || null;
+    const diagType: DiagType = route.params?.diagType || 'OBD';
+
+    // Global diagnosis store (for syncing overall session state on failure + REPORT 시 즉시 이동)
+    const { reset } = useAiDiagnosisStore();
+    const storeStatus = useAiDiagnosisStore(state => state.sessions[diagType]?.status);
+    const storeDiagResult = useAiDiagnosisStore(state => state.sessions[diagType]?.diagResult);
 
     // -- EFFECTS --
     useEffect(() => { loadUser(); }, []);
+
+    // 채팅에서 뒤로가기 시 해당 타입을 IDLE로 → 진단 메인에서 새 진단 가능, 이어하기는 진단 내역에서만
+    useEffect(() => {
+        const unsub = navigation.addListener('beforeRemove', (e: any) => {
+            const action = e.data?.action;
+            if (action?.type === 'POP' || action?.type === 'GO_BACK') {
+                reset(diagType);
+            }
+        });
+        return unsub;
+    }, [navigation, reset, diagType]);
+
+    // store가 REPORT로 바뀌면 (예: OBD step5 후) 채팅에 머물지 않고 바로 리포트로 이동
+    useEffect(() => {
+        if (storeStatus !== 'REPORT' || !sessionId) return;
+        const reportData = storeDiagResult ?? sessionData ?? undefined;
+        navigation.replace('DiagnosisReport', { sessionId, reportData, diagType });
+    }, [storeStatus, sessionId, storeDiagResult, sessionData, diagType]);
 
     // 세션 데이터 로드 함수
     const loadSessionData = async (sid: string) => {
@@ -160,22 +185,27 @@ export default function AiDiagChat() {
                 msgs = data.interactiveData.conversation;
             }
             // AI의 마지막 메시지 추가 (서버 API 응답 구조 준수)
+            // AI의 마지막 메시지 추가 (서버 API 응답 구조 준수)
             if (data.interactiveData?.message) {
-                const lastMsg = msgs[msgs.length - 1];
-                if (!lastMsg || lastMsg.content !== data.interactiveData.message) {
+                // 중복 방지: 서버가 보낸 메시지가 이미 대화 목록(특히 끝부분)에 있는지 확인
+                const isMessageAlreadyExist = msgs.some((m, idx) =>
+                    idx >= msgs.length - 2 && m.role === 'ai' && m.content === data.interactiveData?.message
+                );
+
+                if (!isMessageAlreadyExist) {
                     msgs.push({ role: 'ai', content: data.interactiveData.message });
                 }
             }
 
             // 2. 서버에서 온 메시지들 (isPending 없음)
-            const serverMsgs = msgs.map((m: any) => ({ ...m, isPending: false }));
+            const serverMsgs = msgs.map((m: DiagnosisMessage) => ({ ...m, isPending: false }));
 
             // 3. 현재 로컬 상태에서 아직 서버에 반영 안 된(펜딩 중인) 사용자 메시지 추출
             // (서버 메시지와 내용이 겹치지 않는 것만 유지)
-            setMessages((prev: any[]) => {
+            setMessages((prev: DiagnosisMessage[]) => {
                 const pendingMsgs = prev.filter(m => m.isPending);
                 const filteredPending = pendingMsgs.filter(p =>
-                    !serverMsgs.some((s: any) => s.role === 'user' && s.content === p.content)
+                    !serverMsgs.some((s: DiagnosisMessage) => s.role === 'user' && s.content === p.content)
                 );
                 return [...serverMsgs, ...filteredPending];
             });
@@ -189,22 +219,21 @@ export default function AiDiagChat() {
                 console.log("[AiDiagChat] Diagnosis COMPLETED. Navigating to Report.");
                 navigation.replace('DiagnosisReport', {
                     sessionId: sid,
-                    reportData: data
+                    reportData: data,
+                    diagType
                 });
             }
 
-            // FAILED 상태 처리 (알림 표시 후 이전 화면으로)
+            // FAILED 상태 처리 (알림 표시 + 글로벌 세션 상태 리셋)
             if (data.status === 'FAILED' || data.status === 'ERROR') {
-                console.log("[AiDiagChat] Diagnosis FAILED. Showing error message.");
-                Alert.alert(
+                console.log("[AiDiagChat] Diagnosis FAILED. Showing error message and resetting session state.");
+                // 전역 진단 세션 상태 초기화 (해당 diagType만)
+                reset(diagType);
+                useAlertStore.getState().showAlert(
                     '진단 실패',
                     data.progressMessage || 'AI 분석 중 문제가 발생했습니다. 다시 시도해 주세요.',
-                    [
-                        {
-                            text: '확인',
-                            onPress: () => navigation.goBack()
-                        }
-                    ]
+                    'ERROR',
+                    () => navigation.goBack()
                 );
             }
         } catch (error) {
@@ -220,7 +249,7 @@ export default function AiDiagChat() {
             // 1. pendingMessage가 있으면 즉시 표시 (Optimistic UI)
             if (route.params?.pendingMessage) {
                 const pending = route.params.pendingMessage;
-                const newMessage = {
+                const newMessage: DiagnosisMessage = {
                     role: 'user',
                     content: pending.text,
                     mediaType: pending.type,
@@ -266,7 +295,7 @@ export default function AiDiagChat() {
                 console.warn('[AiDiagChat] Polling Timeout (1min)');
                 clearInterval(intervalId);
                 setIsWaitingForAi(false);
-                Alert.alert('알림', '진단 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.');
+                useAlertStore.getState().showAlert('알림', '진단 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.', 'WARNING');
                 return;
             }
             loadSessionData(sessionId);
@@ -305,12 +334,13 @@ export default function AiDiagChat() {
 
         // 즉시 UI 반영 (timestamp와 isPending 추가)
         const timestamp = Date.now();
-        setMessages(prev => [...prev, {
+        const newUserMsg: DiagnosisMessage = {
             role: 'user',
             content: msg,
             timestamp,
             isPending: true
-        }]);
+        };
+        setMessages(prev => [...prev, newUserMsg]);
         setIsWaitingForAi(true);
 
         try {
@@ -329,17 +359,17 @@ export default function AiDiagChat() {
 
     const handleCamera = () => {
         setIsMenuOpen(false);
-        navigation.navigate('ChatCameraScreen', { sessionId, vehicleId: route.params?.vehicleId });
+        navigation.navigate('ChatCameraScreen', { sessionId, vehicleId: route.params?.vehicleId, diagType });
     };
 
     const handleMic = () => {
         setIsMenuOpen(false);
-        navigation.navigate('ChatAudioScreen', { sessionId, vehicleId: route.params?.vehicleId });
+        navigation.navigate('ChatAudioScreen', { sessionId, vehicleId: route.params?.vehicleId, diagType });
     };
 
     const handleGallery = () => {
         setIsMenuOpen(false);
-        navigation.navigate('Filming', { sessionId, vehicleId: route.params?.vehicleId });
+        navigation.navigate('Filming', { sessionId, vehicleId: route.params?.vehicleId, diagType });
     };
 
     const onNavigate = (screen: keyof RootStackParamList) => {
@@ -347,6 +377,7 @@ export default function AiDiagChat() {
     };
 
     const onBack = () => {
+        reset(diagType);
         navigation.goBack();
     };
 
@@ -519,6 +550,18 @@ export default function AiDiagChat() {
             {/* Bottom Nav - Hidden when keyboard is open */}
             {!isKeyboardVisible && (
                 <SimpleBottomNav onNavigate={onNavigate} />
+            )}
+            {insets.bottom > 0 && (
+                <View
+                    style={{
+                        position: 'absolute',
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        height: insets.bottom,
+                        backgroundColor: '#111827',
+                    }}
+                />
             )}
         </View>
     );

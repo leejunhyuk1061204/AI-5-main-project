@@ -1,6 +1,7 @@
 package kr.co.himedia.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import kr.co.himedia.dto.maintenance.MaintenanceLineItemDto;
 import kr.co.himedia.dto.maintenance.OcrAnalysisResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -37,6 +38,8 @@ public class ReceiptAnalyzerService {
 
         // 1. Naver OCR 호출 (텍스트 추출)
         String rawText = extractText(file);
+        log.info("[OCR output] length={} chars, text={}", rawText.length(),
+                rawText.length() > 500 ? rawText.substring(0, 500) + "..." : rawText);
         if (rawText.isEmpty()) {
             return OcrAnalysisResponse.builder()
                     .ocrText("텍스트 추출 실패")
@@ -174,19 +177,32 @@ public class ReceiptAnalyzerService {
             String prompt = "You are a professional receipt parser. Analyze the provided Korean receipt text and return ONLY a single JSON object.\n\n"
                     + "First, determine if this is a 'MAINTENANCE' receipt or a 'FUELING' receipt.\n"
                     + "- receiptType: string ('MAINTENANCE' or 'FUELING')\n\n"
-                    + "Common Fields:\n"
-                    + "- shopName: string (Business name)\n"
-                    + "- maintenanceDate: string (ISO format YYYY-MM-DD)\n"
-                    + "- cost: number (Total amount, integer only)\n"
-                    + "- mileageAtMaintenance: number (Odometer value if present, otherwise null)\n\n"
-                    + "For MAINTENANCE receipts (General repairs or consumable replacement):\n"
-                    + "- consumableItemCode: string (Match one of: " + itemsList + ", or UNKNOWN)\n\n"
+                    + "Common Fields (always include):\n"
+                    + "- shopName: string (Business name; look for 상호, 가맹점, 정비소 등)\n"
+                    + "- maintenanceDate: string (ISO YYYY-MM-DD; look for 거래일시, 정비일, 결제일 등)\n"
+                    + "- cost: number (Total amount only, integer; look for 총합계, 거래금액, 최종 결제 금액, 총 합 계 등)\n"
+                    + "- mileageAtMaintenance: number (Odometer if present, otherwise null)\n\n"
+                    + "For MAINTENANCE receipts:\n"
+                    + "- items: array of objects. Each object: { consumableItemCode, quantity, amount, description }.\n"
+                    + "  - consumableItemCode: string. Use one of: " + itemsList + ", or OTHER for unmapped items (수리비, 부품가, 판금도색, 몰딩, 범퍼, 휀더 등).\n"
+                    + "  - quantity: number (1 if not stated).\n"
+                    + "  - amount: number (line total in KRW, or null if not available).\n"
+                    + "  - description: string (original line text, optional).\n"
+                    + "  Receipt formats to handle:\n"
+                    + "  (1) Table with columns 상품명/단가/수량/금액: one item per data row. Skip discount-only rows (e.g. 포인트사용 with amount 0) or set amount 0.\n"
+                    + "  (2) Sectioned (수리비, 부품가): one item per line under each section (e.g. 뒤 범퍼 판금도색, 몰딩교환 → map to OTHER).\n"
+                    + "  If there is only one main item, still return items as an array with one element. If no line items are found, return items: [] and set consumableItemCode/quantity from the receipt as fallback.\n"
+                    + "- consumableItemCode: string (single primary item code when items is empty or for backward compatibility; same allowed values as above)\n"
+                    + "- quantity: number (for single-item fallback)\n\n"
                     + "For FUELING receipts (Gas station, EV charging):\n"
                     + "- fuelType: string ('GASOLINE', 'DIESEL', 'EV', 'LPG', 'premium_gasoline')\n"
                     + "- unitPrice: number (Price per unit)\n"
-                    + "- fuelAmount: number (Amount of fuel/charge, e.g., 30.30)\n\n"
-                    + "If a value is missing, use null. Be precise.\n\n"
+                    + "- fuelAmount: number (Amount of fuel/charge in liters, e.g., 30.30)\n\n"
+                    + "If a value is missing, use null. Do not guess. Ignore non-receipt text (URLs, other UI).\n\n"
                     + "Text: \n" + rawText;
+
+            log.info("[LLM input] promptLength={} chars, promptPreview={}", prompt.length(),
+                    prompt.length() > 600 ? prompt.substring(0, 600) + "..." : prompt);
 
             java.util.Map<String, Object> requestBody = new java.util.HashMap<>();
             requestBody.put("model", "gpt-4o-mini");
@@ -203,6 +219,8 @@ public class ReceiptAnalyzerService {
             if (response.getStatusCode() == org.springframework.http.HttpStatus.OK) {
                 com.fasterxml.jackson.databind.JsonNode root = objectMapper.readTree(response.getBody());
                 String content = root.path("choices").path(0).path("message").path("content").asText();
+                log.info("[LLM output] contentLength={} chars, content={}", content.length(),
+                        content.length() > 500 ? content.substring(0, 500) + "..." : content);
 
                 // Markdown block 제거
                 if (content.contains("```json")) {
@@ -215,6 +233,37 @@ public class ReceiptAnalyzerService {
 
                 com.fasterxml.jackson.databind.JsonNode parsedJson = objectMapper.readTree(content.trim());
 
+                String singleCode = parsedJson.path("consumableItemCode").asText("UNKNOWN");
+                Integer singleQty = parsedJson.has("quantity") && !parsedJson.path("quantity").isNull()
+                        ? parsedJson.path("quantity").asInt(1)
+                        : null;
+
+                java.util.List<MaintenanceLineItemDto> parsedItems = null;
+                com.fasterxml.jackson.databind.JsonNode itemsNode = parsedJson.path("items");
+                if (itemsNode.isArray() && itemsNode.size() > 0) {
+                    parsedItems = new java.util.ArrayList<>();
+                    for (com.fasterxml.jackson.databind.JsonNode node : itemsNode) {
+                        String code = node.path("consumableItemCode").asText("OTHER");
+                        if ("UNKNOWN".equals(code)) {
+                            code = "OTHER";
+                        }
+                        int qty = node.has("quantity") && !node.path("quantity").isNull() ? node.path("quantity").asInt(1) : 1;
+                        Integer amt = node.has("amount") && !node.path("amount").isNull() ? node.path("amount").asInt() : null;
+                        String desc = node.has("description") && !node.path("description").isNull() ? node.path("description").asText(null) : null;
+                        kr.co.himedia.dto.master.ConsumableItemDto master = masterDataService.getConsumableByCode(code);
+                        String name = master != null ? master.getName() : "기타 정비";
+                        parsedItems.add(MaintenanceLineItemDto.builder()
+                                .consumableItemCode(code)
+                                .consumableItemName(name)
+                                .quantity(qty)
+                                .amount(amt)
+                                .description(desc)
+                                .build());
+                    }
+                    singleCode = parsedItems.get(0).getConsumableItemCode();
+                    singleQty = parsedItems.get(0).getQuantity();
+                }
+
                 return OcrAnalysisResponse.builder()
                         .shopName(parsedJson.path("shopName").asText(null))
                         .maintenanceDate(
@@ -226,7 +275,12 @@ public class ReceiptAnalyzerService {
                                 && !parsedJson.path("mileageAtMaintenance").isNull()
                                         ? parsedJson.path("mileageAtMaintenance").asDouble()
                                         : null)
-                        .consumableItemCode(parsedJson.path("consumableItemCode").asText("UNKNOWN"))
+                        .consumableItemCode(singleCode)
+                        .quantity(singleQty)
+                        .consumableItemName(parsedItems != null && !parsedItems.isEmpty()
+                                ? parsedItems.get(0).getConsumableItemName()
+                                : (masterDataService.getConsumableByCode(singleCode) != null ? masterDataService.getConsumableByCode(singleCode).getName() : null))
+                        .items(parsedItems)
                         .receiptType(parsedJson.path("receiptType").asText("MAINTENANCE"))
                         .fuelType(parsedJson.path("fuelType").asText(null))
                         .unitPrice(parsedJson.has("unitPrice") && !parsedJson.path("unitPrice").isNull()

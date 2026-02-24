@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, TouchableOpacity, Dimensions, StyleSheet, Image, ActivityIndicator, StatusBar as RNStatusBar } from 'react-native';
 import { useAlertStore } from '../store/useAlertStore';
-import { useAiDiagnosisStore } from '../store/useAiDiagnosisStore';
+import { useAiDiagnosisStore, DiagType } from '../store/useAiDiagnosisStore';
 import { diagnoseImage, replyToDiagnosisSession } from '../api/aiApi';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -14,6 +14,8 @@ const { width } = Dimensions.get('window');
 // Main Camera Component
 export default function Filming({ navigation, route }: { navigation?: any; route?: any }) {
     const insets = useSafeAreaInsets();
+    const diagType: DiagType = route?.params?.diagType || 'PHOTO';
+
     const [permission, requestPermission] = useCameraPermissions();
     const [facing, setFacing] = useState<CameraType>('back');
     const [enableTorch, setEnableTorch] = useState(false);
@@ -95,29 +97,46 @@ export default function Filming({ navigation, route }: { navigation?: any; route
     };
 
     const executeAnalysis = async (sessionId: string | null) => {
-        const { updateStatus, setVehicleId } = useAiDiagnosisStore.getState();
+        const { setVehicleId } = useAiDiagnosisStore.getState();
         const vehicleId = route?.params?.vehicleId || useAiDiagnosisStore.getState().selectedVehicleId;
         if (!vehicleId) return;
         setIsAnalyzing(true);
         try {
             let result;
             if (sessionId) {
-                // If we are in an interactive session, use REPLY endpoint
                 result = await replyToDiagnosisSession(sessionId as string, {
                     userResponse: "사진을 촬영했습니다.",
                     vehicleId: vehicleId as string
                 }, capturedImage || undefined);
-                // After reply, set waiting state
-                useAiDiagnosisStore.setState({ isWaitingForAi: true });
+                useAiDiagnosisStore.setState((state) => ({
+                    sessions: {
+                        ...state.sessions,
+                        [diagType]: {
+                            ...state.sessions[diagType],
+                            status: 'REPLY_PROCESSING',
+                            isWaitingForAi: true
+                        }
+                    }
+                }));
+                setIsAnalyzing(false);
+                const replySessionId = useAiDiagnosisStore.getState().sessions[diagType].currentSessionId;
+                navigation.navigate('ObdDiagLoading', { vehicleId: vehicleId as string, diagType: 'PHOTO', sessionId: replySessionId ?? undefined });
+                return;
             } else {
                 // Otherwise start a new diagnosis
-                useAiDiagnosisStore.setState({
-                    status: 'PROCESSING',
-                    loadingMessage: '촬영된 이미지를 분석하고 있습니다...',
-                    messages: [],
-                    diagResult: null,
-                    currentSessionId: null
-                });
+                useAiDiagnosisStore.setState((state) => ({
+                    sessions: {
+                        ...state.sessions,
+                        [diagType]: {
+                            ...state.sessions[diagType],
+                            status: 'PROCESSING',
+                            loadingMessage: '촬영된 이미지를 분석하고 있습니다...',
+                            messages: [],
+                            diagResult: null,
+                            currentSessionId: null
+                        }
+                    }
+                }));
                 result = await diagnoseImage(capturedImage || '', vehicleId as string);
             }
 
@@ -127,76 +146,40 @@ export default function Filming({ navigation, route }: { navigation?: any; route
                 return;
             }
 
-            // 통합 진단 흐름 분기: REPORT vs INTERACTIVE
             if (result.sessionId) {
                 setVehicleId(vehicleId as string);
-                useAiDiagnosisStore.setState({ currentSessionId: result.sessionId });
-
-                // Trigger immediate update but rely on polling effect for navigation
-                await updateStatus(result.sessionId);
-            } else {
-                // Fallback (Legacy)
+                useAiDiagnosisStore.setState((state) => ({
+                    sessions: {
+                        ...state.sessions,
+                        [diagType]: {
+                            ...state.sessions[diagType],
+                            currentSessionId: result.sessionId
+                        }
+                    }
+                }));
                 setIsAnalyzing(false);
-                navigation.navigate('VisualDiagnosis', { diagnosisResult: result, capturedImage: capturedImage });
+                navigation.navigate('ObdDiagLoading', { vehicleId: vehicleId as string, diagType: 'PHOTO', sessionId: result.sessionId });
+            } else {
+                setIsAnalyzing(false);
+                navigation.navigate('VisualDiagnosis', { diagnosisResult: result, capturedImage: capturedImage, diagType });
             }
 
         } catch (error: any) {
             console.error('Diagnosis Error:', error);
             useAlertStore.getState().showAlert('진단 실패', error.message || '서버 통신 중 오류가 발생했습니다.', 'ERROR');
             setIsAnalyzing(false);
-            useAiDiagnosisStore.setState({ status: 'IDLE' });
+            useAiDiagnosisStore.setState((state) => ({
+                sessions: {
+                    ...state.sessions,
+                    [diagType]: {
+                        ...state.sessions[diagType],
+                        status: 'IDLE'
+                    }
+                }
+            }));
         }
         // Note: setIsAnalyzing(false) is handled effectively by navigation unmount or status change
     };
-
-    // Polling Effect and Status Watcher
-    const { status, currentSessionId, updateStatus } = useAiDiagnosisStore();
-
-    // 1. Polling
-    useEffect(() => {
-        let intervalId: NodeJS.Timeout;
-        if (status === 'PROCESSING' && currentSessionId) {
-            intervalId = setInterval(() => {
-                updateStatus(currentSessionId);
-            }, 2000);
-        }
-        return () => {
-            if (intervalId) clearInterval(intervalId);
-        };
-    }, [status, currentSessionId]);
-
-    // 2. Navigation
-    // 2. Navigation
-    const isInitialMount = useRef(true);
-
-    useEffect(() => {
-        if (!currentSessionId) return;
-
-        // Skip the first check if status is already INTERACTIVE/ACTION_REQUIRED
-        // This prevents immediate kickback when opening Camera from the menu
-        if (isInitialMount.current) {
-            isInitialMount.current = false;
-            if (status === 'INTERACTIVE' || status === 'ACTION_REQUIRED') {
-                return;
-            }
-        }
-
-        if (status === 'INTERACTIVE' || status === 'ACTION_REQUIRED') {
-            setIsAnalyzing(false);
-            navigation.navigate('AiDiagChat', {
-                sessionId: currentSessionId,
-                vehicleId: route?.params?.vehicleId
-            });
-        } else if (status === 'REPORT') {
-            setIsAnalyzing(false);
-            const { diagResult } = useAiDiagnosisStore.getState();
-            navigation.replace('VisualDiagnosis', {
-                diagnosisResult: diagResult,
-                capturedImage: capturedImage,
-                vehicleId: route?.params?.vehicleId || useAiDiagnosisStore.getState().selectedVehicleId
-            });
-        }
-    }, [status, currentSessionId]);
 
     useEffect(() => {
         if (!permission) {
@@ -376,6 +359,18 @@ export default function Filming({ navigation, route }: { navigation?: any; route
                     </View>
                 )}
             </View>
+            {insets.bottom > 0 && (
+                <View
+                    style={{
+                        position: 'absolute',
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        height: insets.bottom,
+                        backgroundColor: '#101922',
+                    }}
+                />
+            )}
         </View>
     );
 }

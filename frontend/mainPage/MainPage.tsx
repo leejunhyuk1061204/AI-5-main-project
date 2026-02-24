@@ -164,7 +164,7 @@ export default function MainPage() {
         if (!item) return { color: '#334155', text: '-', percent: 0, iconColor: '#475569' };
 
         const life = Math.round(item.remainingLifePercent);
-        let color = '#22c55e'; // Success (Good)
+        let color = '#0d7ff2'; // Primary Blue (Good)
         let statusText = '양호';
 
         if (life <= 20) {
@@ -230,8 +230,8 @@ export default function MainPage() {
 
     // Reusable Gauge Component
     const ScoreGauge = ({ score, label }: { score: number | null, label: string }) => {
-        const radius = 40;
-        const strokeWidth = 7;
+        const radius = 42;
+        const strokeWidth = 9;
         const circumference = 2 * Math.PI * radius;
         const colorStops = getScoreColorStops(score);
 
@@ -239,7 +239,7 @@ export default function MainPage() {
 
         return (
             <View className="items-center justify-center">
-                <View className="relative w-40 h-40 items-center justify-center">
+                <View className="relative w-48 h-48 items-center justify-center">
                     <Svg width="100%" height="100%" viewBox="0 0 100 100" className="-rotate-90">
                         <Defs>
                             <LinearGradient id={`grad-${label}`} x1="0%" y1="0%" x2="100%" y2="0%">
@@ -260,9 +260,9 @@ export default function MainPage() {
                         />
                     </Svg>
                     <View className="absolute inset-0 items-center justify-center z-10">
-                        <Text className="text-text-muted text-xs font-medium tracking-wide mb-1">{label}</Text>
-                        <Text className="text-3xl font-bold text-white tracking-tighter">
-                            {score === null ? '-' : score}<Text className="text-sm text-text-dim font-normal">점</Text>
+                        <Text className="text-text-muted text-sm font-medium tracking-wide mb-1">{label}</Text>
+                        <Text className="text-4xl font-bold text-white tracking-tighter">
+                            {score === null ? '-' : score}<Text className="text-base text-text-dim font-normal">점</Text>
                         </Text>
                     </View>
                 </View>
@@ -308,7 +308,7 @@ export default function MainPage() {
             </View>
 
             {/* Dual Score Gauges */}
-            <View className="px-3 py-4 flex-row justify-center gap-3">
+            <View className="px-3 py-8 flex-row justify-center gap-2">
                 <ScoreGauge
                     score={maintenanceScore}
                     label="차량 관리"
@@ -321,16 +321,16 @@ export default function MainPage() {
             </View>
 
             {/* Status Grid */}
-            <View className="px-6 mb-4">
+            <View className="px-6 mb-8">
                 <View className="flex-row items-center mb-3">
                     <Text className="text-white text-lg font-bold">실시간 상태</Text>
                     <View className="h-px bg-white/5 flex-1 ml-4" />
                 </View>
                 <View className="flex-row gap-2.5">
                     {[
-                        { label: '엔진오일', icon: 'oil', family: 'MaterialCommunityIcons', data: engineStatus },
+                        { label: '엔진오일', icon: 'water-drop', family: 'MaterialIcons', data: engineStatus },
                         { label: '배터리', icon: 'battery-charging-full', family: 'MaterialIcons', data: batteryStatus },
-                        { label: '냉각수', icon: 'coolant-temperature', family: 'MaterialCommunityIcons', data: coolantStatus }
+                        { label: '냉각수', icon: 'thermostat', family: 'MaterialIcons', data: coolantStatus }
                     ].map((item, index) => (
                         <TouchableOpacity
                             key={index}

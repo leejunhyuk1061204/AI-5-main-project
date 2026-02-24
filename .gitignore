@@ -16,6 +16,7 @@ out/
 *.iml
 *.ipr
 *.iws
+ai_personal/
 
 !gradle/wrapper/gradle-wrapper.jar
 !**/src/main/resources/ant-static-assets/
@@ -69,6 +70,7 @@ ai_env/
 logs/
 *.log
 backend/logs/
+elm.log.*
 
 # ==================================================
 # RAG / Data (Large or Generated)
@@ -87,6 +89,7 @@ db/seed_knowledge_vectors_v1.sql
 db/seed_knowledge_vectors_v2.sql
 db/seed_knowledge_vectors_v3.sql
 data/dtc/
+data/engine/
 
 # ==================================================
 # OS
@@ -142,6 +145,7 @@ release.keystore
 !debug.keystore
 .env
 .env.local
+*.pem
 
 # ==================================================
 # AI Large Files (Models / Weights / Runs / Data)
@@ -170,6 +174,8 @@ offline/raw/efd/*.csv
 
 # generated datasets (용량 크면 제외 권장)
 offline/datasets/**/*.jsonl
+offline/datasets/**/*.csv
+offline/datasets/vfinal/
 # 예시/샘플만 허용하고 싶으면 아래 라인으로 예외 허용(필요시 주석 해제)
 # !offline/datasets/kaggle_efd/example_*.jsonl
 
@@ -195,13 +201,13 @@ offline/**/*.pyc
 # Anomaly Offline (absolute paths)
 ai/app/services/obd_anomaly/offline/raw/
 ai/app/services/obd_anomaly/offline/datasets/**/*.jsonl
+ai/app/services/obd_anomaly/offline/datasets/**/*.csv
+ai/app/services/obd_anomaly/offline/datasets/vfinal/
 ai/app/services/obd_anomaly/offline/registry/models/
 ai/app/services/obd_anomaly/offline/registry/scalers/
 
-
 # Local Deployment Scripts
 scripts/deploy_backend.ps1
-
 backend/deploy_backend.ps1
 
 

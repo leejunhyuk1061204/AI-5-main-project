@@ -75,7 +75,7 @@ export default function MyPage() {
             try {
                 const token = await AsyncStorage.getItem('accessToken');
                 if (token) {
-                    const res = await authService.updateProfile(token, tempInput);
+                    const res = await authService.updateProfile(tempInput);
                     if (res.success) {
                         setModalVisible(false);
                         setTimeout(() => {
@@ -106,12 +106,13 @@ export default function MyPage() {
             try {
                 const token = await AsyncStorage.getItem('accessToken');
                 if (token) {
-                    const res = await authService.updateProfile(token, undefined, tempInput);
+                    const res = await authService.updateProfile(undefined, tempInput);
                     if (res.success) {
                         setModalVisible(false);
                         setTimeout(() => {
                             showAlert('성공', '비밀번호가 변경되었습니다.\n다시 로그인해주세요.', async () => {
                                 setModalVisible(false);
+                                await logout();
                                 const { clearStorageForLogout } = await import('../utils/storageLogout');
                                 await clearStorageForLogout();
                                 navigation.dispatch(

@@ -22,4 +22,12 @@ public class WebConfig implements WebMvcConfigurer {
     public void configurePathMatch(PathMatchConfigurer configurer) {
         configurer.addPathPrefix("/api/v1", c -> c.getPackage().getName().equals("kr.co.himedia.controller"));
     }
+
+    @Override
+    public void addResourceHandlers(
+            org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry registry) {
+        // "uploads" 폴더를 "/api/v1/uploads/**" 경로로 매핑
+        registry.addResourceHandler("/api/v1/uploads/**")
+                .addResourceLocations("file:uploads/");
+    }
 }

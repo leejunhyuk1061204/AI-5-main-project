@@ -1,18 +1,22 @@
 # ai/app/services/audio_service.py
 """
-통합 오디오 분석 서비스 (Audio Orchestrator)
+[역할 분담: 전체 파이프라인의 '관제탑']
+- 본 파일은 오디오 분석의 전체 워크플로우를 관리하는 '오케스트레이터'입니다.
+- 개별 모델의 세부 구현(Sliding Window 등)은 알지 못하며, 어떤 데이터를 누구에게 맡겨서 어떤 최종 응답을 만들지만 결정합니다.
 
-[역할]
-1. 오디오 데이터 로드: S3 URL로부터 오디오 파일을 다운로드하고, SSRF 공격을 방지하기 위해 도메인을 검증합니다.
-2. 오디오 전처리: 분석에 적합하도록 16kHz WAV 포맷으로 변환합니다.
-3. 지능형 진단: AST(Audio Spectrogram Transformer) 모델과 LLM(Audio Vision)을 연동하여 기계 결함 소음을 분석합니다.
-
-[주요 기능]
-- 오디오 정밀 진단 (get_audio_diagnosis)
-- 안전한 오디오 로딩 및 전처리 (_safe_load_audio)
-- AST 및 LLM 기반 복합 분석 수행
+[주요 책임]
+1. Infrastructure: S3 URL 보안 검증(SSRF 방지), 오디오 다운로드 및 크기 제한
+2. Signal: `audio_preprocessing.py`를 통한 전처리(노이즈/음성 제거) 정책 적용
+3. Orchestration: AST 서비스 호출 및 결과 수신
+4. Decision: 신뢰도 게이트 판정 및 LLM Fallback 실행 여부 결정
+5. Data: 저신뢰 데이터에 대한 Active Learning(LLM Oracle) 기록 관리
 """
 import os
+import logging
+
+# Logger 설정
+logger = logging.getLogger(__name__)
+
 from ai.app.services.audio.hertz import process_to_16khz
 from ai.app.services.audio.ast_service import run_ast_inference
 from ai.app.services.common.llm_service import analyze_audio_with_llm
@@ -84,6 +88,13 @@ class AudioService:
                 
                 if len(content) > MAX_AUDIO_SIZE:
                     raise ValueError("Audio file too large")
+                
+                # [Debug] Check if content is valid audio or S3 error
+                sample = content[:100]
+                logger.info(f"[Audio Debug] Downloaded {len(content)} bytes. Head: {sample}")
+                if b"<Error>" in sample or b"<?xml" in sample:
+                    logger.error(f"[Audio Debug] S3 Error suspected: {content.decode('utf-8', errors='ignore')}")
+                
                 return content
             except Exception as e:
                 raise ValueError(f"Failed to download audio: {e}")
@@ -102,50 +113,66 @@ class AudioService:
         try:
             audio_bytes = await self._safe_load_audio(s3_url)
         except Exception as e:
-            print(f"[Audio Service] 로드 실패: {e}")
+            logger.error(f"[Audio Service] 로드 실패: {e}")
             return AudioResponse(
                 status="ERROR",
                 analysis_type="IO",
                 category="UNKNOWN_AUDIO",
-                data=AudioDetail(diagnosed_label="Load Error", description=str(e)),
+                detail=AudioDetail(diagnosed_label="FAULTY_SOUND"),
                 confidence=0.0
             )
 
         # 2. 전처리: 노이즈 필터링 파이프라인 (음성/잡음 제거)
         try:
             from ai.app.services.audio.audio_preprocessing import preprocess_audio_pipeline
-            preprocessed_bytes = await preprocess_audio_pipeline(audio_bytes)
-            print(f"[Audio Service] 노이즈 필터링 완료 (원본: {len(audio_bytes)}B → 처리: {len(preprocessed_bytes)}B)")
+            preprocessed_bytes, speech_ratio = await preprocess_audio_pipeline(audio_bytes, source_url=s3_url)
+            logger.info(f"[Audio Service] 노이즈 필터링 완료 (원본: {len(audio_bytes)}B → 처리: {len(preprocessed_bytes)}B, 음성비율: {speech_ratio:.2%})")
         except Exception as e:
-            print(f"[Audio Service] 전처리 실패 (Fallback to raw): {e}")
+            logger.warning(f"[Audio Service] 전처리 실패 (Fallback to raw): {e}")
             preprocessed_bytes = audio_bytes
+            speech_ratio = 0.0
         
         # 3. 16kHz 변환 (이미 전처리에서 완료되었으나 버퍼 형태로 변환)
         audio_buffer = io.BytesIO(preprocessed_bytes)
         
         # 3. 1차 진단: AST 모델
+        logger.info(f"[Audio Service] AST Inference 시작 (preprocessed: {len(preprocessed_bytes):,} bytes)")
         try:
             ast_result = await run_ast_inference(audio_buffer, ast_model_payload=ast_model)
+            logger.info(f"[Audio Service] AST Inference 완료 (status={ast_result.status}, conf={ast_result.confidence})")
         except Exception as e:
-            print(f"[Audio Service] AST Inference Error: {e}")
+            logger.error(f"[Audio Service] AST Inference Error: {e}")
             from ai.app.schemas.audio_schema import AudioResponse, AudioDetail
             ast_result = AudioResponse(
                 status="UNKNOWN",
                 analysis_type="AST_FAILED",
                 category="UNKNOWN_AUDIO",
-                data=AudioDetail(diagnosed_label="Error", description="AST Model Failed"),
+                detail=AudioDetail(diagnosed_label="FAULTY_SOUND"),
                 confidence=0.0,
                 is_critical=False
             )
         
-        # 4. 2차 진단 판단 (Threshold 적용)
-        if ast_result.confidence < FAST_PATH_AUDIO_CONF or ast_result.status == "UNKNOWN":
-            print(f"[Audio Fallback] AST 결과 미흡 (신뢰도: {ast_result.confidence:.2f}, 상태: {ast_result.status}) -> LLM으로 전환 요청")
+        # 4. 2차 진단 판단 (Decision Layer 적용)
+        from ai.app.services.audio.audio_llm_fallback import get_audio_decision
+        
+        # AST 결과에서 Decision 추출
+        decision = get_audio_decision(
+            confidence=ast_result.confidence,
+            label=ast_result.category,
+            all_probs=getattr(ast_result, "all_probs", None) or {},
+            speech_ratio=speech_ratio # [New] Pass Voice Ratio to prevent OOD misclassification
+        )
+        
+        if decision.status == "UNCERTAIN":
+            logger.info(f"[Audio Fallback] {decision.reason} (Gate: {decision.gate}) -> LLM으로 전환 요청")
             wav_bytes = audio_buffer.getvalue() if audio_buffer else audio_bytes
             final_result = await analyze_audio_with_llm(s3_url, audio_bytes=wav_bytes)
-            print(f"[Audio Fallback] LLM 응답: {final_result}")
+            logger.info(f"[Audio Fallback] LLM 응답: {final_result}")
+            # Decision 정보 주입
+            final_result.analysis_type = f"LLM_FALLBACK_GATE_{decision.gate}"
         else:
             final_result = ast_result
+            final_result.analysis_type = f"AST_GATE_{decision.gate}"
 
         # =================================================================
         # [Active Learning] 공통 서비스 활용
@@ -155,7 +182,7 @@ class AudioService:
                 from ai.app.services.common.llm_service import generate_audio_labels
                 from ai.app.services.common.active_learning_service import get_active_learning_service
 
-                print(f"[Active Learning] 저신뢰 오디오 감지 ({final_result.confidence:.2f}). LLM 라벨링 시작...")
+                logger.info(f"[Active Learning] 저신뢰 오디오 감지 ({final_result.confidence:.2f}). LLM 라벨링 시작...")
                 
                 # Step 1: LLM Oracle
                 oracle_labels = await generate_audio_labels(s3_url, audio_bytes=audio_bytes)
@@ -163,7 +190,7 @@ class AudioService:
                 
                 # Step 2: Quality Check
                 if status == "RE_RECORD_REQUIRED" or status in ["UNKNOWN", "ERROR"] or not oracle_labels.get("label"):
-                    print(f"[Active Learning] 배제: 품질 미달 ({status})")
+                    logger.info(f"[Active Learning] 배제: 품질 미달 ({status})")
                     return final_result
 
                 # Step 3: Save & Manifest (via Common Service)
@@ -186,7 +213,7 @@ class AudioService:
                     )
 
             except Exception as e:
-                print(f"[Active Learning Audio] 기록 실패 (무시): {e}")
+                logger.error(f"[Active Learning Audio] 기록 실패 (무시): {e}")
             
         return final_result
 
@@ -196,7 +223,7 @@ class AudioService:
             status="NORMAL",
             analysis_type="AST",
             category="ENGINE",
-            data=AudioDetail(diagnosed_label="NORMAL", description="정상입니다."),
+            detail=AudioDetail(diagnosed_label="NORMAL_SOUND"),
             confidence=0.99,
             is_critical=False
         )

@@ -1,6 +1,7 @@
 import BackgroundService from 'react-native-background-actions';
-import { Platform } from 'react-native';
+import { Platform, PermissionsAndroid } from 'react-native';
 import ObdService from './ObdService';
+import { useBleStore } from '../store/useBleStore';
 
 const sleep = (time: number) => new Promise<void>((resolve) => setTimeout(() => resolve(), time));
 
@@ -21,6 +22,14 @@ class BackgroundTaskService {
 
         console.log('[BackgroundService] Task started. intervalMs=', intervalMs, 'reconnectEveryTicks=', reconnectEveryTicks);
 
+        // 시작 직후 1회 즉시 자동 연결 시도
+        try {
+            console.log('[BackgroundService] Initial auto-connect from cache...');
+            await ObdService.tryAutoConnectFromCache();
+        } catch (e) {
+            console.warn('[BackgroundService] initial tryAutoConnectFromCache failed', e);
+        }
+
         while (BackgroundService.isRunning()) {
             await sleep(HEARTBEAT_MS);
             tick++;
@@ -30,7 +39,10 @@ class BackgroundTaskService {
                     console.log('[BackgroundService] Heartbeat tick reached. Trying auto-connect from cache...');
                     await ObdService.tryAutoConnectFromCache();
                 } catch (e) {
-                    console.warn('[BackgroundService] tryAutoConnectFromCache failed', e);
+                    const msg = e instanceof Error ? e.message : String(e);
+                    console.warn('[BackgroundService] tryAutoConnectFromCache failed', msg);
+                    useBleStore.getState().setError(msg);
+                    useBleStore.getState().setStatus('disconnected');
                 }
             }
         }
@@ -54,6 +66,38 @@ class BackgroundTaskService {
     async start() {
         if (Platform.OS !== 'android') return;
         if (this.isRunning) return;
+
+        // [Fix] Android 12+ (API 31+) requires runtime permissions for Bluetooth.
+        // Also Android 13+ (API 33+) requires POST_NOTIFICATIONS for Foreground Service.
+        try {
+            const permissionsToRequest = [
+                PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
+                PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
+            ];
+
+            // Add POST_NOTIFICATIONS for Android 13+
+            if (Platform.Version >= 33) {
+                permissionsToRequest.push(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS);
+            }
+
+            // Add ACCESS_FINE_LOCATION for older Android versions or some specific BLE requirements
+            permissionsToRequest.push(PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION);
+
+            const granted = await PermissionsAndroid.requestMultiple(permissionsToRequest);
+
+            const connectGranted = granted[PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT] === PermissionsAndroid.RESULTS.GRANTED;
+            const scanGranted = granted[PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN] === PermissionsAndroid.RESULTS.GRANTED;
+
+            // If critical permissions are denied, do not start service to avoid crash
+            if (!connectGranted || !scanGranted) {
+                console.warn('[BackgroundService] Bluetooth permissions denied. Cannot start service.');
+                // Optionally: Show an alert or toast to the user here
+                return;
+            }
+        } catch (err) {
+            console.warn('[BackgroundService] Permission request failed', err);
+            return;
+        }
 
         try {
             console.log('[BackgroundService] Starting...');

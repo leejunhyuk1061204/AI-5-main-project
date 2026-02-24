@@ -1,7 +1,5 @@
 package kr.co.himedia.controller;
 
-import jakarta.servlet.http.HttpServletRequest;
-
 import kr.co.himedia.common.ApiResponse;
 import kr.co.himedia.dto.payment.KakaoApproveResponse;
 import kr.co.himedia.dto.payment.KakaoReadyResponse;
@@ -28,18 +26,19 @@ public class PaymentController {
 
     private final KakaoPayService kakaoPayService;
 
+    @org.springframework.beans.factory.annotation.Value("${app.backend-url}")
+    private String backendUrl;
+
     /**
      * 결제 준비 API 엔드포인트입니다.
      */
     @PostMapping("/ready")
     public ResponseEntity<ApiResponse<KakaoReadyResponse>> ready(
             @AuthenticationPrincipal CustomUserDetails userDetails,
-            @RequestBody PaymentReadyRequest request,
-            HttpServletRequest servletRequest) {
+            @RequestBody PaymentReadyRequest request) {
 
-        // 현재 요청된 서버의 Base URL 동적 추출 (http://IP:PORT 형태)
-        String baseUrl = servletRequest.getScheme() + "://" + servletRequest.getServerName() + ":"
-                + servletRequest.getServerPort();
+        // 설정된 고정 URL (예: https://api.carbom.store) 또는 기본값 사용
+        String baseUrl = backendUrl;
 
         KakaoReadyResponse response = kakaoPayService.ready(userDetails.getUserId().toString(), request, baseUrl);
         return ResponseEntity.ok(ApiResponse.success(response));

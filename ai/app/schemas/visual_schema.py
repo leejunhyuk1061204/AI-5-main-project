@@ -163,6 +163,7 @@ class VisualResponse(BaseModel):
     detected_count: Optional[int] = Field(None, description="감지된 객체 수 (Legacy or Intermediate)")
     detections: Optional[List[DetectionItem]] = Field(None, description="감지 목록 (Legacy or Intermediate)")
     processed_image_url: Optional[str] = Field(None, description="처리된 이미지 URL")
+    is_mock: bool = Field(False, description="테스트 또는 장애 대응용 가짜 데이터 여부")
 
 
 class EngineAnalysisResponse(BaseModel):
