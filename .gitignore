@@ -90,6 +90,7 @@ db/seed_knowledge_vectors_v2.sql
 db/seed_knowledge_vectors_v3.sql
 data/dtc/
 data/engine/
+db/seed_v*.sql
 
 # ==================================================
 # OS
