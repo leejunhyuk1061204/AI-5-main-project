@@ -606,7 +606,7 @@
 
 ### 3) 핵심 결과
 - Step11 제약 기반 grid 결과(조건: recall>=0.5):
-  - 후보: 	h=0.87, k=3, warning=0.78, critical=0.86
+  - 후보: `th=0.87, k=3, warning=0.78, critical=0.86`
   - 성능: Precision=0.50, Recall=0.50, F1=0.50, FPR=0.25
   - CM: TP=3, FP=3, TN=9, FN=3
 - Top 후보 출력은 eligible pool 기준으로 정렬되도록 수정 완료.
@@ -622,3 +622,30 @@
   1. 실차 라벨 확충
   2. 동일 파이프라인으로 재평가
   3. 운영 정책 최종 확정 및 API 반영
+
+## Step12 LOCKED Final (발표/시연 기준 고정)
+
+### 고정 후보(실험값)
+- `threshold=0.87`, `k_consecutive=3`, `warning=0.78`, `critical=0.86`
+
+### 고정 지표
+- `Precision=0.50`
+- `Recall=0.50`
+- `F1=0.50`
+- `FPR=0.25`
+- `CM: TP=3, FP=3, TN=9, FN=3`
+
+### 운영 해석
+- 위 값은 Step11 synthetic benchmark 기준 **실험 후보값**이다.
+- 운영 정책값(`threshold_policy.json`)은 별도 승인 전까지 기존 운영값 유지.
+- 발표 시에는 “실험값과 운영값 분리 관리”를 명확히 설명한다.
+
+### Step12 스모크 요약
+- Sample: anomaly 경로 정상 동작 확인
+- Real-case(battery): 엔진/전기 도메인 응답 및 이벤트 경로 확인
+- Synthetic eval: 지표 산출 파일 생성 확인
+
+### 남은 마감 작업(최소)
+- 보드 카드 상태 최종 업데이트
+- 최종 커밋/푸시
+- 3분 리허설 1회
