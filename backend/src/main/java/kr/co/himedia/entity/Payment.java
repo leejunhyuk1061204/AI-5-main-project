@@ -49,6 +49,9 @@ public class Payment {
     @Column(name = "status")
     private PaymentStatus status;
 
+    @Column(name = "sid")
+    private String sid;
+
     // 결제 승인 일시
     @Column(name = "approved_at")
     private LocalDateTime approvedAt;

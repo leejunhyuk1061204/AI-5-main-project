@@ -4,7 +4,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useAlertStore } from '../store/useAlertStore';
 
 type Agreements = {
@@ -26,20 +26,17 @@ export default function Tos() {
 
     const allAgreed = Object.values(agreements).every(Boolean);
 
-    // Handle hardware back button
-    useEffect(() => {
-        const backAction = () => {
-            BackHandler.exitApp();
-            return true;
-        };
-
-        const backHandler = BackHandler.addEventListener(
-            'hardwareBackPress',
-            backAction
-        );
-
-        return () => backHandler.remove();
-    }, []);
+    // Handle hardware back button only when this screen is focused (so other screens get normal stack back)
+    useFocusEffect(
+        React.useCallback(() => {
+            const backAction = () => {
+                BackHandler.exitApp();
+                return true;
+            };
+            const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
+            return () => backHandler.remove();
+        }, [])
+    );
 
     const toggleAll = () => {
         const newState = !allAgreed;

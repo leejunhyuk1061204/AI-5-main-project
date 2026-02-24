@@ -47,6 +47,7 @@ export default function ChatAudioScreen() {
 
     // Params
     const { sessionId } = route.params || {};
+    const diagType: import('../store/useAiDiagnosisStore').DiagType = route.params?.diagType || 'SOUND';
     // Use param or fallback to store
     const vehicleId = route.params?.vehicleId || useAiDiagnosisStore(state => state.selectedVehicleId);
 
@@ -191,9 +192,17 @@ export default function ChatAudioScreen() {
             } else {
                 const result = await diagnoseEngineSound(recordedUri, vehicleId);
                 if (result?.sessionId) {
-                    useAiDiagnosisStore.setState({ currentSessionId: result.sessionId });
+                    useAiDiagnosisStore.setState((state) => ({
+                        sessions: {
+                            ...state.sessions,
+                            [diagType]: {
+                                ...state.sessions[diagType],
+                                currentSessionId: result.sessionId
+                            }
+                        }
+                    }));
                     setVehicleId(vehicleId);
-                    updateStatus(result.sessionId);
+                    updateStatus(diagType, result.sessionId, { sessionId: result.sessionId } as any);
                 }
             }
 
@@ -201,14 +210,24 @@ export default function ChatAudioScreen() {
             navigation.navigate('AiDiagChat', {
                 sessionId,
                 vehicleId,
-                pendingMessage
+                pendingMessage,
+                diagType
             });
 
         } catch (error) {
             console.error(error);
             useAlertStore.getState().showAlert('전송 실패', '오디오 전송 중 오류가 발생했습니다.', 'ERROR');
             setIsSending(false);
-            useAiDiagnosisStore.setState({ isWaitingForAi: false, status: 'IDLE' });
+            useAiDiagnosisStore.setState((state) => ({
+                sessions: {
+                    ...state.sessions,
+                    [diagType]: {
+                        ...state.sessions[diagType],
+                        isWaitingForAi: false,
+                        status: 'IDLE'
+                    }
+                }
+            }));
         }
     };
 
@@ -315,6 +334,18 @@ export default function ChatAudioScreen() {
                     </View>
                 )}
             </View>
+            {insets.bottom > 0 && (
+                <View
+                    style={{
+                        position: 'absolute',
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        height: insets.bottom,
+                        backgroundColor: '#111827',
+                    }}
+                />
+            )}
         </View>
     );
 }

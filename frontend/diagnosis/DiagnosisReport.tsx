@@ -4,7 +4,7 @@ import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useAiDiagnosisStore } from '../store/useAiDiagnosisStore';
+import { useAiDiagnosisStore, DiagType } from '../store/useAiDiagnosisStore';
 import { getDiagnosisSessionStatus } from '../api/aiApi';
 import Header from '../header/Header';
 
@@ -20,6 +20,7 @@ export default function DiagnosisReport() {
     const [loading, setLoading] = useState(false);
 
     const sessionId = route.params?.sessionId || report?.sessionId;
+    const diagType: DiagType = route.params?.diagType || 'OBD';
 
     useEffect(() => {
         if (sessionId && (!report || !report.summary)) {
@@ -54,7 +55,7 @@ export default function DiagnosisReport() {
         if (route.params?.fromHistory) {
             navigation.goBack();
         } else {
-            reset();
+            reset(diagType);
             navigation.navigate('MainPage');
         }
     };
@@ -246,6 +247,18 @@ export default function DiagnosisReport() {
                     </LinearGradient>
                 </TouchableOpacity>
             </View>
+            {insets.bottom > 0 && (
+                <View
+                    style={{
+                        position: 'absolute',
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        height: insets.bottom,
+                        backgroundColor: '#101922',
+                    }}
+                />
+            )}
         </View>
     );
 }

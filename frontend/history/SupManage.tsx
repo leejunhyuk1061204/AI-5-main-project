@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Animated, LayoutAnimation, Platform, UIManager } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
@@ -11,6 +11,7 @@ import maintenanceApi, { VehicleConsumable } from '../api/maintenanceApi';
 import { useVehicleStore } from '../store/useVehicleStore';
 import { VehicleResponse } from '../api/vehicleApi';
 import VehicleSelectModal from '../components/VehicleSelectModal';
+import Header from '../header/Header';
 
 if (Platform.OS === 'android') {
     if (UIManager.setLayoutAnimationEnabledExperimental) {
@@ -219,28 +220,15 @@ export default function SupManage() {
     const urgentCount = consumables.filter(c => c.remainingLifePercent <= 20).length;
     const warningCount = consumables.filter(c => c.remainingLifePercent > 20 && c.remainingLifePercent <= 50).length;
 
+    const insets = useSafeAreaInsets();
+
     return (
         <View className="flex-1 bg-background-dark">
             <StatusBar style="light" />
-            <SafeAreaView className="flex-1" edges={['top']}>
+            <SafeAreaView className="flex-1" edges={['top', 'bottom']}>
 
                 {/* Header */}
-                <View className="flex-row items-center justify-between px-4 py-3 z-10">
-                    <TouchableOpacity
-                        onPress={() => navigation.goBack()}
-                        className="w-10 h-10 items-center justify-center rounded-full active:bg-white/10"
-                    >
-                        <MaterialIcons name="arrow-back-ios" size={20} color="white" />
-                    </TouchableOpacity>
-
-                    <Text className="text-white font-bold text-lg">
-                        소모품 관리
-                    </Text>
-
-                    < TouchableOpacity className="w-10 h-10 items-center justify-center rounded-full active:bg-white/10">
-                        <MaterialIcons name="notifications-none" size={24} color="white" />
-                    </TouchableOpacity>
-                </View>
+                <Header title="소모품 관리" />
 
                 <ScrollView className="flex-1 px-5" contentContainerStyle={{ paddingBottom: 100, paddingTop: 10 }}>
 
@@ -375,6 +363,18 @@ export default function SupManage() {
                 />
 
             </SafeAreaView>
+            {insets.bottom > 0 && (
+                <View
+                    style={{
+                        position: 'absolute',
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        height: insets.bottom,
+                        backgroundColor: '#101922',
+                    }}
+                />
+            )}
         </View>
     );
 }

@@ -63,6 +63,7 @@ import Membership from './setting/Membership';
 import ChatCameraScreen from './diagnosis/ChatCameraScreen';
 import ChatAudioScreen from './diagnosis/ChatAudioScreen';
 import MaintenanceBook from './maintenance/MaintenanceBook';
+import ReceiptGallery from './maintenance/ReceiptGallery';
 import ReceiptScan from './maintenance/ReceiptScan';
 import ReceiptResult from './maintenance/ReceiptResult';
 import PaymentSuccess from './payment/PaymentSuccess';
@@ -146,7 +147,7 @@ export default function App() {
           if (Platform.OS === 'android') {
             // NavigationBar는 일부 환경에서 실패할 수 있으므로 안전하게 처리
             try {
-              await NavigationBar.setVisibilityAsync("hidden");
+              // await NavigationBar.setVisibilityAsync("hidden"); // 하단 네비게이션 바를 강제로 숨기지 않도록 주석 처리
               await NavigationBar.setBackgroundColorAsync("transparent");
               await NavigationBar.setButtonStyleAsync("light");
             } catch (navErr) {
@@ -345,6 +346,7 @@ export default function App() {
                   <Stack.Screen name="Cloud" component={Cloud} />
                   <Stack.Screen name="Membership" component={Membership} />
                   <Stack.Screen name="MaintenanceBook" component={MaintenanceBook} />
+                  <Stack.Screen name="ReceiptGallery" component={ReceiptGallery} />
                   <Stack.Screen name="ReceiptScan" component={ReceiptScan} />
                   <Stack.Screen name="ReceiptResult" component={ReceiptResult} />
                   <Stack.Screen name="PaymentSuccess" component={PaymentSuccess} />

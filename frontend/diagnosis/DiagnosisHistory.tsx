@@ -7,6 +7,7 @@ import Header from '../header/Header';
 import BaseScreen from '../components/layout/BaseScreen';
 import { getDiagnosisList } from '../api/aiApi';
 import { getVehicleList, VehicleResponse } from '../api/vehicleApi';
+import { DiagType } from '../store/useAiDiagnosisStore';
 
 export default function DiagnosisHistory() {
     const navigation = useNavigation<any>();
@@ -104,25 +105,34 @@ export default function DiagnosisHistory() {
         }
     };
 
+    const mapTriggerToDiagType = (triggerType?: string): DiagType => {
+        switch (triggerType) {
+            case 'VISUAL':
+                return 'PHOTO';
+            case 'AUDIO':
+                return 'SOUND';
+            default:
+                return 'OBD';
+        }
+    };
+
     const handlePressItem = (item: any) => {
+        const diagType = mapTriggerToDiagType(item.triggerType);
         if (item.responseMode === 'INTERACTIVE' || item.status === 'ACTION_REQUIRED') {
-            navigation.navigate('AiDiagChat', { sessionId: item.sessionId });
+            navigation.navigate('AiDiagChat', {
+                sessionId: item.sessionId,
+                diagType,
+                vehicleId: selectedVehicleId ?? undefined
+            });
         } else {
-            navigation.navigate('DiagnosisReport', { reportData: item, fromHistory: true });
+            navigation.navigate('DiagnosisReport', { reportData: item, fromHistory: true, diagType });
         }
     };
 
     return (
-        <BaseScreen header={<Header />} padding={false} useBottomNav={true} scrollable={false}>
-            <View className="flex-1 px-6 pt-4">
-                <View className="flex-row items-center justify-between mb-4">
-                    <Text className="text-white text-xl font-bold">진단 기록</Text>
-                    {selectedVehicleId && (
-                        <TouchableOpacity onPress={() => fetchHistory(selectedVehicleId)} className="p-2 bg-white/5 rounded-full">
-                            <MaterialIcons name="refresh" size={20} color="#94a3b8" />
-                        </TouchableOpacity>
-                    )}
-                </View>
+        <BaseScreen padding={false} useBottomNav={true} scrollable={false}>
+            <View className="flex-1 px-6">
+                <Header title="진단 내역" />
 
                 {/* Vehicle Filter */}
                 {vehicles.length > 0 && (
@@ -141,8 +151,8 @@ export default function DiagnosisHistory() {
                                             fetchHistory(item.vehicleId);
                                         }}
                                         className={`mr-3 px-4 py-2 rounded-full border ${isSelected
-                                                ? 'bg-primary/20 border-primary'
-                                                : 'bg-surface-card border-white/5'
+                                            ? 'bg-primary/20 border-primary'
+                                            : 'bg-surface-card border-white/5'
                                             }`}
                                     >
                                         <Text className={`text-xs font-bold ${isSelected ? 'text-primary' : 'text-text-dim'}`}>

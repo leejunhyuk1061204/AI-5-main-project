@@ -245,13 +245,19 @@ def create_app() -> FastAPI:
     )
 
     # 라우터 등록
-    app.include_router(health_router, prefix="/api/v1", tags=["health"])
-    app.include_router(predict_router, prefix="/api/v1", tags=["predict"])
-    app.include_router(visual_router, prefix="/api/v1", tags=["visual"])
-    app.include_router(audio_router, prefix="/api/v1", tags=["audio"])
-    app.include_router(wear_factor_router, prefix="/api/v1", tags=["wear-factor"])
-    app.include_router(obd_anomaly_router, prefix="/api/v1", tags=["anomaly"])
-    app.include_router(embedding_router, prefix="/api/v1", tags=["embedding"])
+    # app.include_router(health_router, prefix="/api/v1", tags=["health"])
+    # app.include_router(predict_router, prefix="/api/v1", tags=["predict"])
+    # app.include_router(visual_router, prefix="/api/v1", tags=["visual"])
+    # app.include_router(audio_router, prefix="/api/v1", tags=["audio"])
+    # app.include_router(wear_factor_router, prefix="/api/v1", tags=["wear-factor"])
+    # app.include_router(obd_anomaly_router, prefix="/api/v1", tags=["anomaly"])
+    # app.include_router(embedding_router, prefix="/api/v1", tags=["embedding"])
+    # [Clean-up] 개별 라우터들을 하나하나 수동으로 등록하기보다,
+    # 통합 라우터(predict_router) 하나만 /api/v1 접두어로 등록하여 중복을 방지합니다.
+    app.include_router(predict_router, prefix="/api/v1")
+    
+    # 테스트 라우터 (별도 유지)
+
 
     # 테스트 라우터
     from ai.app.api.v1.routes.test_router import router as test_router

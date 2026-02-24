@@ -1,13 +1,9 @@
 # ai/scripts/evaluate_audio.py
 """
-AST 오디오 모델 성능 평가 도구 (Audio Evaluator)
+[파일 용도] AST 오디오 모델 성능 평가 도구 (Audio Evaluator)
+학습 완료된 AST 모델의 체크포인트(.pt)를 로드하여 테스트 데이터셋에 대한 정확도(Accuracy) 및 성능 지표를 측정합니다.
+외부 데이터 테스트 및 추가적인 검증 목적으로 사용됩니다.
 
-[역할]
-1. 모델 검증: 학습 완료된 AST(Audio Spectrogram Transformer) 모델의 분류 정확도(Accuracy)를 측정합니다.
-2. 외부 데이터 테스트: 학습 데이터셋이 아닌 새로운 현장 녹음 데이터를 사용하여 모델의 일반화 성능을 확인합니다.
-3. 리포트 생성: 클래스별 정확도와 전체 에러율을 요약하여 출력합니다.
-
-[사용법]
 python ai/scripts/evaluate_audio.py
 
 [주요 설정]

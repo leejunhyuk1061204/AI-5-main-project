@@ -2,7 +2,7 @@ name: Deploy Backend
 
 on:
   push:
-    branches: [deploy, main, csb/feature-CICD, deploy-test]
+    branches: [deploy-test]
 
 jobs:
   deploy:
@@ -17,6 +17,25 @@ jobs:
         working-directory: backend
         run: |
           cat <<'EOF' > .env
+          APP_ENV=production
+          STORAGE_TYPE=s3
+          AI_SERVER_URL=${{ secrets.AI_SERVER_URL }}
+          
+          S3_ACCESS_KEY=${{ secrets.S3_ACCESS_KEY }}
+          S3_SECRET_KEY=${{ secrets.S3_SECRET_KEY }}
+          S3_REGION=${{ secrets.S3_REGION }}
+          S3_BUCKET_NAME=${{ secrets.S3_BUCKET_NAME }}
+          
+          SMARTCAR_CLIENT_ID=${{ secrets.SMARTCAR_CLIENT_ID }}
+          SMARTCAR_CLIENT_SECRET=${{ secrets.SMARTCAR_CLIENT_SECRET }}
+          SMARTCAR_REDIRECT_URI=${{ secrets.SMARTCAR_REDIRECT_URI }}
+          SMARTCAR_MODE=${{ secrets.SMARTCAR_MODE }}
+          
+          Client_ID=${{ secrets.CLIENT_ID }}
+          Client_Secret=${{ secrets.CLIENT_SECRET }}
+          Secret_key=${{ secrets.SECRET_KEY }}
+          KAKAO_PAY_SECRET_KEY=${{ secrets.KAKAO_PAY_SECRET_KEY }}
+          
           JWT_SECRET=${{ secrets.JWT_SECRET }}
           ENCRYPTION_KEY=${{ secrets.ENCRYPTION_KEY }}
           NAVER_OCR_Secret_Key=${{ secrets.NAVER_OCR_SECRET_KEY }}
@@ -24,11 +43,16 @@ jobs:
           OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
           HM_CLIENT_ID=${{ secrets.HM_CLIENT_ID }}
           HM_CLIENT_SECRET=${{ secrets.HM_CLIENT_SECRET }}
+          
+          FIREBASE_CONFIG_PATH=firebase-service-account.json
+          ALLOWED_ORIGINS=http://localhost:8080,http://localhost:19006,http://10.0.2.2:8080,http://${{ secrets.EC2_HOST }}:8080
+          
           DB_HOST=localhost
           DB_PORT=5432
           DB_NAME=car_sentry
           DB_USER=postgres
           DB_PASSWORD=postgres
+          APP_BACKEND_URL=https://api.carbom.store
           REDIS_HOST=localhost
           REDIS_PORT=6379
           MQ_HOST=localhost
@@ -80,6 +104,16 @@ jobs:
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:$SAFE_BRANCH_NAME
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:latest
 
+      - name: Clean up old DB directories
+        uses: appleboy/ssh-action@v0.1.6
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            sudo rm -rf /home/ubuntu/db || true
+            sudo rm -f /home/ubuntu/*.sql /home/ubuntu/*.csv || true
+
       - name: Copy Configuration Files to EC2
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -90,6 +124,15 @@ jobs:
           target: "/home/ubuntu/"
           strip_components: 1
 
+      - name: Copy DB init files to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "db"
+          target: "/home/ubuntu/"
+
       - name: Deploy to EC2
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -98,6 +141,63 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           command_timeout: 60m
           script: |
+            # --- Nginx: client_max_body_size (사진 업로드 413) + SSE 스트리밍(api.carbom.store 전용) ---
+            if command -v nginx &> /dev/null; then
+              echo "📦 Configuring Nginx..."
+              echo 'client_max_body_size 50M;' | sudo tee /etc/nginx/conf.d/client-max-body.conf
+              sudo tee /etc/nginx/sse-streaming.conf << 'SSEEOF'
+            location ~ ^/api/v1/ai/diagnose/session/[^/]+/sse$ {
+              proxy_pass http://127.0.0.1:8080;
+              proxy_http_version 1.1;
+              proxy_set_header Connection "";
+              proxy_buffering off;
+              proxy_cache off;
+              gzip off;
+              proxy_read_timeout 3600s;
+              proxy_send_timeout 3600s;
+              add_header X-Accel-Buffering no;
+              add_header Cache-Control no-cache;
+              proxy_set_header Host $host;
+              proxy_set_header X-Real-IP $remote_addr;
+              proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+              proxy_set_header X-Forwarded-Proto $scheme;
+              proxy_set_header Authorization $http_authorization;
+            }
+            SSEEOF
+              SITE=""
+              if [ -f /etc/nginx/sites-enabled/api.carbom.store ]; then
+                SITE=/etc/nginx/sites-enabled/api.carbom.store
+              fi
+              if [ -z "$SITE" ]; then
+                SITE=$(sudo grep -RIl "server_name[[:space:]]*api\.carbom\.store" /etc/nginx/sites-enabled /etc/nginx/sites-available 2>/dev/null | head -1)
+              fi
+              if [ -z "$SITE" ]; then
+                SITE=$(sudo grep -RIl "8080" /etc/nginx/sites-enabled /etc/nginx/sites-available /etc/nginx/conf.d 2>/dev/null | head -1)
+                [ -z "$SITE" ] && [ -f /etc/nginx/nginx.conf ] && sudo grep -q "8080" /etc/nginx/nginx.conf 2>/dev/null && SITE="/etc/nginx/nginx.conf"
+              fi
+              if [ -n "$SITE" ]; then
+                if ! sudo grep -q 'sse-streaming.conf' "$SITE" 2>/dev/null; then
+                  sudo sed -i '/server[[:space:]]*{/a \    include /etc/nginx/sse-streaming.conf;' "$SITE"
+                  echo "✅ Added SSE include to server block(s) in $SITE"
+                else
+                  echo "ℹ️ SSE include already present in $SITE"
+                fi
+              else
+                echo "⚠️ No nginx config with api.carbom.store or 8080 found; add 'include /etc/nginx/sse-streaming.conf;' inside server { } manually"
+              fi
+              if sudo nginx -t 2>/dev/null; then
+                sudo systemctl reload nginx
+                echo "✅ Nginx reloaded (client_max_body_size 50M + SSE streaming)"
+              else
+                echo "⚠️ Nginx config test failed, skipping reload"
+              fi
+              echo "---- nginx effective config check ----"
+              sudo nginx -T 2>/dev/null | grep -n -E "client_max_body_size|sse-streaming.conf|diagnose/session/[^/]+/sse" || true
+              echo "--------------------------------------"
+            else
+              echo "ℹ️ Nginx not found, skipping"
+            fi
+
             # --- 0. Optimize Memory & Disk (Critical for t2.micro) ---
             echo "🧹 Cleaning up old Docker images to free space..."
             sudo docker image prune -a -f
@@ -118,14 +218,21 @@ jobs:
             # Pull latest image
             sudo docker pull ${{ secrets.DOCKERHUB_USERNAME }}/ai-5-backend:latest
             
-            # --- 1. PostgreSQL ---
+            # --- 1. PostgreSQL (Persistent) ---
             if [ ! "$(sudo docker ps -q -f name=ai-5-db)" ]; then
                 if [ "$(sudo docker ps -aq -f status=exited -f name=ai-5-db)" ]; then
                     echo "🔄 Starting existing PostgreSQL container..."
                     sudo docker start ai-5-db
                 else
                     echo "🐘 Running new PostgreSQL container..."
-                    sudo docker run -d --name ai-5-db --restart unless-stopped --network host -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=car_sentry postgres:15
+                    # 초기 1회 실행 시에는 /docker-entrypoint-initdb.d 마운트가 필요할 수 있으나, 
+                    # 이미 데이터가 있다면 볼륨 마운트만으로 충분함
+                    sudo docker run -d --name ai-5-db --restart unless-stopped --network host \
+                      -e POSTGRES_USER=postgres \
+                      -e POSTGRES_PASSWORD=postgres \
+                      -e POSTGRES_DB=car_sentry \
+                      -v /home/ubuntu/data/postgres_1024:/var/lib/postgresql/data \
+                      timescale/timescaledb-ha:pg15
                 fi
             fi
 
@@ -173,6 +280,17 @@ jobs:
             timeout 60s bash -c 'until sudo ss -tulpn | grep 5672; do sleep 2; echo "Waiting for RabbitMQ..."; done'
             timeout 30s bash -c 'until sudo ss -tulpn | grep 6379; do sleep 2; echo "Waiting for Redis..."; done'
             echo "✅ Services are listening!"
+
+            echo "📋 Database Status:"
+            sudo docker exec ai-5-db pg_isready || echo "Creating DB health check failed (container might be down)"
+            
+            echo "🔄 Applying Database Schema (schema.sql)..."
+            if [ -f "/home/ubuntu/db/schema.sql" ]; then
+                sudo docker exec -i ai-5-db psql -U postgres -d car_sentry < /home/ubuntu/db/schema.sql
+                echo "✅ Schema applied successfully."
+            else
+                echo "⚠️ Warning: schema.sql not found at /home/ubuntu/db/schema.sql"
+            fi
 
             REMOTE_ENV_PATH="/home/ubuntu/app.env"
             FIREBASE_MOUNT=""
@@ -234,10 +352,6 @@ jobs:
                 sudo docker logs --tail 100 ai-5-backend
                 exit 1
             fi
-
-            echo "📋 Database Status:"
-            sudo docker exec ai-5-db pg_isready || echo "Creating DB health check failed (container might be down)"
-            
             echo "📋 Container Status:"
             sudo docker ps -a -f name=ai-5-backend
             
