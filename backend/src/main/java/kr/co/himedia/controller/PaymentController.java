@@ -20,7 +20,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 
 @RestController
-@RequestMapping("/payment")
+@RequestMapping("/api/v1/payment")
 @RequiredArgsConstructor
 public class PaymentController {
 

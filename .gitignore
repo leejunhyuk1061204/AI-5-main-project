@@ -209,3 +209,16 @@ ai/app/services/obd_anomaly/offline/registry/scalers/
 # Local Deployment Scripts
 scripts/deploy_backend.ps1
 backend/deploy_backend.ps1
+
+
+# ==================================================
+# Temporary & Data Files (Added by Assistant)
+# ==================================================
+eofc/
+*.csv
+__pycache__/
+
+
+*.bak
+*.jpg
+

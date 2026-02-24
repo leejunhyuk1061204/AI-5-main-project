@@ -1,0 +1,58 @@
+[
+    {
+        "component": "ABS_Unit",
+        "normal_conf_avg": 0.7804432133833568,
+        "abnormal_conf_avg": 0.24538601296288626,
+        "accuracy": 68.18181818181817,
+        "total_test_files": 22
+    },
+    {
+        "component": "Air_Filter_Cover",
+        "normal_conf_avg": 0.9683161440648531,
+        "abnormal_conf_avg": 0.9340386816433498,
+        "accuracy": 100.0,
+        "total_test_files": 26
+    },
+    {
+        "component": "Battery",
+        "normal_conf_avg": 0.9268044736878626,
+        "abnormal_conf_avg": 0.38929181625800474,
+        "accuracy": 86.11111111111111,
+        "total_test_files": 36
+    },
+    {
+        "component": "Brake_Fluid",
+        "normal_conf_avg": 0.9043499404733831,
+        "abnormal_conf_avg": 0.4319064477458596,
+        "accuracy": 90.32258064516128,
+        "total_test_files": 62
+    },
+    {
+        "component": "Engine_Cover",
+        "normal_conf_avg": 0.9478651747107506,
+        "abnormal_conf_avg": 0.038779651430169385,
+        "accuracy": 91.95402298850574,
+        "total_test_files": 87
+    },
+    {
+        "component": "Engine_Oil_Fill_Cap",
+        "normal_conf_avg": 0.9931328574816386,
+        "abnormal_conf_avg": 0.9638603840555463,
+        "accuracy": 100.0,
+        "total_test_files": 22
+    },
+    {
+        "component": "Radiator",
+        "normal_conf_avg": 0.9534308212144035,
+        "abnormal_conf_avg": 0.8356395811840359,
+        "accuracy": 97.61904761904762,
+        "total_test_files": 42
+    },
+    {
+        "component": "Windshield_Wiper_Fluid",
+        "normal_conf_avg": 0.9842136183689381,
+        "abnormal_conf_avg": 0.9871452706200736,
+        "accuracy": 100.0,
+        "total_test_files": 65
+    }
+]

@@ -1,0 +1,23 @@
+diff --git a/node_modules/expo-modules-core/index.js b/node_modules/expo-modules-core/index.js
+index b894a23..5a9175d 100644
+--- a/node_modules/expo-modules-core/index.js
++++ b/node_modules/expo-modules-core/index.js
+@@ -1 +1,17 @@
+-module.exports = null;
++class UnavailabilityError extends Error {
++    constructor(moduleName, propertyName) {
++        super(
++            `The method or property ${moduleName}.${propertyName} is not available on the selected platform, are you sure you've linked all the native modules correctly?`
++        );
++        this.code = 'ERR_UNAVAILABLE';
++    }
++}
++
++module.exports = {
++    UnavailabilityError,
++    EventEmitter: require('events').EventEmitter,
++    NativeModulesProxy: {},
++    ProxyNativeModule: {},
++    Platform: { OS: 'web' },
++    requireNativeModule: () => ({}),
++};

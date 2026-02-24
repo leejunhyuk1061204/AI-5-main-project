@@ -25,7 +25,7 @@ import java.util.UUID;
 
 @Slf4j
 @RestController
-@RequestMapping("/master")
+@RequestMapping("/api/v1/master")
 @RequiredArgsConstructor
 public class MasterController {
 
