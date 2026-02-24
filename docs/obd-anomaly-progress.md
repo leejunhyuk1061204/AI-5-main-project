@@ -561,3 +561,24 @@
 
 - 한 줄 요약
   - "지금 돌린 값들은 실험값이고, 운영값은 아직 확정 전"이 맞다.
+
+## 2026-02-24 | Step11: Grid Best 선정 기준 보정
+
+### 변경 배경
+- 기존 grid search `best` 선정이 FPR 최우선이라 `Recall=0` 조합이 1등으로 선택되는 문제가 확인됨.
+- 운영 관점에서는 미탐 100%(Recall=0) 조합은 채택 불가하므로 선정 기준 보정이 필요함.
+
+### 코드 변경
+- 파일: `ai/app/services/obd_anomaly/offline/scripts/grid_search_synthetic_policy.py`
+- 추가 인자:
+  - `--min-recall` (default: `0.5`)
+  - `--min-f1` (default: `0.0`)
+- 선정 로직:
+  - `best`는 `recall >= min_recall` AND `f1 >= min_f1`를 만족하는 후보군에서 선택
+  - 조건 미충족 시에만 기존 ranked 최상단을 fallback으로 사용
+- 산출물 강화:
+  - JSON/Report에 `selection_criteria`, `eligible_count` 기록
+
+### 해석
+- 이제 report의 `best`가 단순 FPR 최소값이 아니라 운영 최소 조건(Recall/F1)을 반영한 값으로 출력됨.
+- Step11 이후 비교/발표에서는 `selection_criteria`와 `eligible_count`를 함께 제시한다.

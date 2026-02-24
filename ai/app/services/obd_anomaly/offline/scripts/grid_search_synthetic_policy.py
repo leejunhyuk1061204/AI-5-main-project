@@ -132,6 +132,8 @@ def main() -> None:
     ap.add_argument("--warning-list", default="0.78,0.80,0.82,0.84")
     ap.add_argument("--critical-offset-list", default="0.08,0.10")
     ap.add_argument("--topk", type=int, default=10)
+    ap.add_argument("--min-recall", type=float, default=0.5)
+    ap.add_argument("--min-f1", type=float, default=0.0)
     args = ap.parse_args()
 
     rows = _load_jsonl(Path(args.input_jsonl))
@@ -193,8 +195,14 @@ def main() -> None:
         )
 
     ranked = sorted(runs, key=_rank_key)
-    best = ranked[0] if ranked else None
-    topk = ranked[: max(1, args.topk)]
+    eligible = [
+        r
+        for r in ranked
+        if r["metrics"]["recall"] >= args.min_recall and r["metrics"]["f1"] >= args.min_f1
+    ]
+    pool = eligible if eligible else ranked
+    best = pool[0] if pool else None
+    topk = pool[: max(1, args.topk)]
 
     out_payload = {
         "domain": domain,
@@ -206,6 +214,11 @@ def main() -> None:
             "critical_offsets": critical_offsets,
         },
         "num_runs": len(runs),
+        "selection_criteria": {
+            "min_recall": args.min_recall,
+            "min_f1": args.min_f1,
+        },
+        "eligible_count": len(eligible),
         "best": best,
         "topk": topk,
     }
@@ -220,6 +233,8 @@ def main() -> None:
         f"- domain: {domain}",
         f"- input_jsonl: {args.input_jsonl}",
         f"- num_runs: {len(runs)}",
+        f"- selection_criteria: recall>={args.min_recall}, f1>={args.min_f1}",
+        f"- eligible_count: {len(eligible)}",
         "",
     ]
 
@@ -238,7 +253,10 @@ def main() -> None:
             "",
         ]
 
-    lines += ["## Top Candidates"]
+    lines += [
+        "## Top Candidates",
+        f"- source_pool: {'eligible' if eligible else 'all(ranked)'}",
+    ]
     for idx, item in enumerate(topk, start=1):
         p = item["params"]
         m = item["metrics"]
