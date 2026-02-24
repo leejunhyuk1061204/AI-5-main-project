@@ -4,7 +4,6 @@ import messaging from '@react-native-firebase/messaging';
 import firebase from '@react-native-firebase/app';
 import { authService } from './auth';
 import { useAlertStore } from '../store/useAlertStore';
-import { Platform } from 'react-native';
 
 /**
  * FCM 알림 데이터 타입
