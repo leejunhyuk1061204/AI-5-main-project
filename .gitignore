@@ -91,6 +91,7 @@ db/seed_knowledge_vectors_v3.sql
 data/dtc/
 data/engine/
 db/seed_v*.sql
+db/seed_v*.csv
 
 # ==================================================
 # OS
