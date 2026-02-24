@@ -1,4 +1,4 @@
-﻿# OBD Anomaly Progress Log
+# OBD Anomaly Progress Log
 
 참조 문서:
 - docs/obd-anomaly-design-and-overfitting-guardrails.md
@@ -561,3 +561,64 @@
 
 - 한 줄 요약
   - "지금 돌린 값들은 실험값이고, 운영값은 아직 확정 전"이 맞다.
+
+## 2026-02-24 | Step12: Finalization Scope
+
+### 목표
+- Step11 결과를 운영 문서 기준으로 고정하고 발표/시연 준비를 마무리한다.
+
+### 범위
+- 운영값 vs 실험값 분리 명시
+- synthetic benchmark 최종 후보/지표 고정
+- API 스모크 로그/테스트 통과 로그 링크 정리
+- 발표용 요약(지표/한계/다음 단계) 확정
+
+### 완료 기준
+- 문서 최종본 1개로 상태 설명 가능
+- 지표표 1개 + 핵심 결론 3줄 확정
+- 시연 절차/멘트 초안 확정
+
+### Step12 API/평가 스모크 로그 (2026-02-24)
+- Sample smoke (`ai/scripts/obd_engine/run_obd_anomaly_sample.py`)
+  - 결과: `is_anomaly=true`, `engine.is_anomaly=true`
+  - 이벤트: `ENGINE_HARD_LIMIT_ANOMALY`, `ENGINE_POLICY_ANOMALY`
+- Real-case smoke (`2026-02-03_(2015_grandeur-hg_battery-case).csv`)
+  - 결과: `is_anomaly=false`, `engine.is_anomaly=false`, `electrical.is_anomaly=false`
+  - 이벤트: `VOLTAGE_ON_WARNING_LOW`(WARNING), `INSUFFICIENT_CORE_FEATURES`(INFO)
+- Synthetic eval smoke
+  - 실행: `python -m ai.app.services.obd_anomaly.offline.scripts.eval_synthetic_metrics ...`
+  - 산출물:
+    - `ai/app/services/obd_anomaly/offline/datasets/vfinal/synthetic_eval_step12.json`
+    - `ai/app/services/obd_anomaly/offline/datasets/vfinal/synthetic_eval_step12_report.md`
+  - 상태: `[OK] synthetic metrics evaluated`
+
+## 발표용 1페이지 요약 (Step12)
+
+### 1) 문제 정의
+- 실차 이상 라벨이 충분하지 않아 supervised 방식의 직접 성능평가가 제한됨.
+- 따라서 one-class(정상 중심) + 정책 기반 탐지로 운영 가능한 형태를 우선 구축함.
+
+### 2) 접근 방법
+- 엔진 도메인: Hybrid(IF + LSTM-AE)
+- 입력 품질 저하 시: IF_ONLY fallback
+- 정책 파라미터: threshold / k_consecutive / cooldown / severity
+- synthetic anomaly를 생성해 정량 지표(FPR/Precision/Recall/F1)로 비교 평가
+
+### 3) 핵심 결과
+- Step11 제약 기반 grid 결과(조건: recall>=0.5):
+  - 후보: 	h=0.87, k=3, warning=0.78, critical=0.86
+  - 성능: Precision=0.50, Recall=0.50, F1=0.50, FPR=0.25
+  - CM: TP=3, FP=3, TN=9, FN=3
+- Top 후보 출력은 eligible pool 기준으로 정렬되도록 수정 완료.
+
+### 4) 운영 해석
+- FPR과 Recall은 임계값 기반 탐지 특성상 trade-off 관계.
+- 현재 후보는 과탐/미탐 균형점이며, 운영 목표(예: FPR<=0.20, Recall>=0.60)에는 추가 검증이 필요함.
+- 실험값과 운영값은 분리 관리하며, 운영 정책은 별도 승인 후 반영.
+
+### 5) 한계 및 다음 단계
+- 한계: 실고장 라벨 부족, synthetic 기반 검증 비중이 큼.
+- 다음:
+  1. 실차 라벨 확충
+  2. 동일 파이프라인으로 재평가
+  3. 운영 정책 최종 확정 및 API 반영
