@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, ImageBackground, Dimensions, BackHandler } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useRoute, RouteProp } from '@react-navigation/native';
+import { useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
 import Animated, {
     useSharedValue,
@@ -93,18 +93,20 @@ export default function ObdDiagLoading({ navigation }: any) {
         }
     }, [status, effectiveSessionId, vehicleId, selectedVehicleId, diagResult, navigation, diagType]);
 
-    // 뒤로가기 시 항상 진단 메인(DiagTab)으로
+    // 뒤로가기 시 항상 진단 메인(DiagTab)으로 (이 화면에 포커스 있을 때만)
     const goToDiagMain = () => {
         (navigation as any).navigate('MainPage', { screen: 'DiagTab' });
     };
 
-    useEffect(() => {
-        const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-            goToDiagMain();
-            return true;
-        });
-        return () => sub.remove();
-    }, [navigation]);
+    useFocusEffect(
+        React.useCallback(() => {
+            const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+                goToDiagMain();
+                return true;
+            });
+            return () => sub.remove();
+        }, [navigation])
+    );
 
     // Show failure alert when SSE failed; 화면에 "진단 실패" 표시 후 알림
     useEffect(() => {
