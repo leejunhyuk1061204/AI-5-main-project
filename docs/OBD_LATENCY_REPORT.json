@@ -1,0 +1,11 @@
+{
+  "runs": 8,
+  "mean_ms": 50.5485749890795,
+  "min_ms": 39.91160006262362,
+  "max_ms": 57.83730000257492,
+  "p95_ms": 56.060099974274635,
+  "num_windows": 3,
+  "top_is_anomaly": false,
+  "engine_score": 0.46088667674869066,
+  "engine_is_anomaly": false
+}

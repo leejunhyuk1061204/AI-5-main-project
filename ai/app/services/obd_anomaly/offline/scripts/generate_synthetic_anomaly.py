@@ -101,12 +101,10 @@ def _inject_pattern(
     for i in range(start, end):
         if pattern == "rpm_spike":
             rpm[i] = 6500.0
-            speed[i] = max(120.0, speed[i] if _is_finite_number(speed[i]) else 120.0)
             throttle[i] = 95.0
             maf[i] = 120.0
             imap[i] = 250.0
         elif pattern == "stall_suspect":
-            speed[i] = max(35.0, speed[i] if _is_finite_number(speed[i]) else 35.0)
             rpm[i] = 250.0
             throttle[i] = 8.0
             maf[i] = 0.8
@@ -117,7 +115,6 @@ def _inject_pattern(
             rpm[i] = 3200.0
         elif pattern == "throttle_mismatch":
             throttle[i] = 98.0
-            speed[i] = 5.0
             rpm[i] = 4200.0
             maf[i] = 140.0
         else:

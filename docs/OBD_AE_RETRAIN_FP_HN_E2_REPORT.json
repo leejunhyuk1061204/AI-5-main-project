@@ -1,0 +1,12 @@
+{
+  "windows": 6332,
+  "features": 7,
+  "epochs": 2,
+  "final_loss": 0.40744367076290977,
+  "loss_curve": [
+    0.6160637071036329,
+    0.40744367076290977
+  ],
+  "model": "ai\\app\\services\\obd_anomaly\\core\\artifacts\\candidates\\lstm_ae_fp_hn_e2.pt",
+  "scaler": "ai\\app\\services\\obd_anomaly\\core\\artifacts\\candidates\\scaler_fp_hn_e2.json"
+}
