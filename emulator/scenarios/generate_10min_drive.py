@@ -30,6 +30,8 @@ CITY_DECEL_END = 70
 STOP_END = 90
 HWY_ACCEL_END = 115
 HWY_CRUISE_END = 275
+# 주행 중 DTC 켜짐 시점 (고속 구간 진입 후)
+DTC_ON_DRIVING_SEC = 150
 
 
 def _idle_row(seed_idx, coolant=88.0):
@@ -116,7 +118,7 @@ def generate_10min_drive_csv():
     path = os.path.join(base, "scenario_10min_drive.csv")
     headers = [
         "rpm", "speed", "temp", "load", "voltage", "map", "maf",
-        "intake_temp", "throttle", "fuel_trim_short", "fuel_trim_long",
+        "intake_temp", "throttle", "fuel_trim_short", "fuel_trim_long", "dtcs",
     ]
 
     rows_off_1 = ROWS_PER_MIN
@@ -130,26 +132,27 @@ def generate_10min_drive_csv():
         w.writerow(headers)
 
         for _ in range(rows_off_1):
-            w.writerow(_engine_off_row())
+            w.writerow(_engine_off_row() + [""])
 
         for i in range(rows_idle_2):
-            w.writerow(_idle_row(i, coolant=52.0 + i * 0.05))
+            w.writerow(_idle_row(i, coolant=52.0 + i * 0.05) + [""])
 
         stop_row_start = int(CITY_DECEL_END / SECS_PER_ROW)
         stop_row_end = int(STOP_END / SECS_PER_ROW)
         for i in range(rows_drive):
             driving_sec = (i + 1) * SECS_PER_ROW
+            dtcs = "P0300" if driving_sec >= DTC_ON_DRIVING_SEC else ""
             if stop_row_start <= i < stop_row_end:
-                w.writerow(_idle_row(300 + i, coolant=88.0))
+                w.writerow(_idle_row(300 + i, coolant=88.0) + [dtcs])
             else:
                 speed = _driving_speed_at_sec_5min(driving_sec)
-                w.writerow(_driving_row(driving_sec, speed, i))
+                w.writerow(_driving_row(driving_sec, speed, i) + [dtcs])
 
         for i in range(rows_idle_1):
-            w.writerow(_idle_row(240 + i, coolant=88.0))
+            w.writerow(_idle_row(240 + i, coolant=88.0) + ["P0300"])
 
         for _ in range(rows_off_final):
-            w.writerow(_engine_off_row())
+            w.writerow(_engine_off_row() + ["P0300"])
 
     total_rows = rows_off_1 + rows_idle_2 + rows_drive + rows_idle_1 + rows_off_final
     print(f"Generated {path} ({total_rows} rows, 10 min at {SECS_PER_ROW}s interval)")

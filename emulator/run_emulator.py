@@ -146,7 +146,8 @@ class RobustElmEmulator:
     }
 
     def update_from_csv_row(self, row, mappings):
-        """mappings: PID -> { col, formula }. CSV row에서 값을 꺼내 formula 적용 후 PIDs 업데이트."""
+        """mappings: PID -> { col, formula }. CSV row에서 값을 꺼내 formula 적용 후 PIDs 업데이트.
+        CSV에 dtcs 컬럼이 있으면 해당 행 시점의 DTC/MIL 상태로 갱신 (주행 중 DTC 켜짐 시나리오용)."""
         if not mappings:
             return
         data = {}
@@ -165,6 +166,14 @@ class RobustElmEmulator:
                 logger.debug(f"CSV mapping {pid} col={col}: {e}")
         if data:
             self.update_pids_from_dict(data)
+        if 'dtcs' in row:
+            raw = (row['dtcs'] or '').strip()
+            if not raw:
+                self.dtcs = []
+                self.mil_on = False
+            else:
+                self.dtcs = [c.strip() for c in raw.split(',') if c.strip()]
+                self.mil_on = len(self.dtcs) > 0
 
     def replay_worker(self):
         """선택된 차량의 CSV를 주기적으로 읽어 PIDs 업데이트"""
