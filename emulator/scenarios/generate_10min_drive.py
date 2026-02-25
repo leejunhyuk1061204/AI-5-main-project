@@ -2,11 +2,11 @@
 10분 주행 시나리오 CSV 생성 (1+2+5+1+1, 운전점수 감점 최소화)
 
 타임라인:
-  0~1분   : 시동 끔 (rpm=0, speed=0)
-  1~3분   : 시동 켬 + 대기 (공회전)
-  3~8분   : 주행 5분 (시내→신호 정지→고속도로 80~90, 변동 포함)
-  8~9분   : 시동 켬 + 대기 (공회전)
-  9~10분  : 시동 끔
+  0~2초   : 시동 끔 (rpm=0). 앱 주행 시작 조건: RPM>300 연속 4초 → 2초 후 공회전 진입하면 4초 연속 구간 발생
+  2초~2분2초 : 시동 켬 + 대기 (공회전, rpm 820~950)
+  2분5초~7분5초 : 주행 5분 (시내→신호 정지→고속도로 80~90)
+  7분5초~8분5초 : 시동 켬 + 대기 (공회전)
+  8분5초~9분5초 : 시동 끔
 
 주행 5분: 시내 가속~정속~감속(정지) → 20초 대기 → 고속 가속 → 80~90 km/h 정속(사인+짧은주기 변동) → 감속.
 """
@@ -35,27 +35,29 @@ DTC_ON_DRIVING_SEC = 150
 
 
 def _idle_row(seed_idx, coolant=88.0):
-    """공회전 1행: RPM 800~950, speed 0, throttle/load 낮음."""
+    """공회전 1행: RPM 690~800, speed 0, 스로틀 0. 행마다 1~2 단위 미세 변동."""
     t = seed_idx % 37
-    rpm = 820 + (t * 3) % 130
+    q = seed_idx % 11
+    rpm = 692 + (t * 3) % 108 + (q % 3) - 1
     return [
         rpm,
         0,
-        round(coolant + (t % 5) * 0.3, 1),
-        15 + (t % 6),
-        round(13.9 + (t % 4) * 0.1, 1),
-        28 + (t % 5),
-        round(3.5 + (t % 3) * 0.2, 1),
-        26 + (t % 4),
-        8 + (t % 4),
-        (t - 2) % 5 - 2,
-        (t - 1) % 5 - 2,
+        round(coolant + (t % 5) * 0.3 + (q % 3) * 0.2 - 0.2, 1),
+        15 + (t % 6) + (q % 2) - 0,
+        round(13.9 + (t % 4) * 0.1 + (q % 5) * 0.04, 1),
+        28 + (t % 5) + (q % 3) - 1,
+        round(3.5 + (t % 3) * 0.2 + (q % 4) * 0.1, 1),
+        26 + (t % 4) + (q % 3) - 1,
+        0,
+        (t - 2) % 5 - 2 + (q % 2) - 0,
+        (t - 1) % 5 - 2 + (q % 2) - 0,
     ]
 
 
-def _engine_off_row():
-    """시동 끔: RPM 0, 속도 0."""
-    return [0, 0, 85, 0, 12.5, 30, 0, 35, 0, 0, 0]
+def _engine_off_row(seed_idx=0):
+    """시동 끔: RPM 0. 행마다 0.5~1 단위 변동."""
+    t = seed_idx % 7
+    return [0, 0, 84 + (t % 3), 0, round(12.4 + (t % 5) * 0.05, 1), 29 + (t % 3), 0, 34 + (t % 3), 0, 0, 0]
 
 
 def _driving_speed_at_sec_5min(driving_sec):
@@ -89,27 +91,35 @@ def _driving_speed_at_sec_5min(driving_sec):
 
 
 def _driving_row(driving_sec, speed_kmh, row_idx):
-    """주행 1행: 속도에 맞춘 RPM/부하/스로틀 (속도 올라가면 RPM·부하·스로틀 함께 상승)."""
-    rpm = 1200 + speed_kmh * 28 + (row_idx % 5) * 2
-    rpm = min(max(int(rpm), 900), 2800)
-    coolant = 86.0 + (row_idx % 7) * 0.5
-    load = min(75.0, 20.0 + speed_kmh * 0.9 + (row_idx % 5))
-    throttle = min(65.0, 15.0 + speed_kmh * 0.7 + (row_idx % 4))
-    map_kpa = 35 + int(speed_kmh * 0.8) + (row_idx % 3)
-    map_kpa = min(map_kpa, 85)
-    maf = 5.0 + speed_kmh * 0.25 + (row_idx % 3) * 0.1
+    """주행 1행: 고속 max 2200, 사인+행별 1~2 단위 변동."""
+    base_rpm = 900 + speed_kmh * 15
+    rpm_wave = 80 * math.sin(driving_sec * 0.15) + 40 * math.sin(driving_sec * 0.4)
+    rpm = int(base_rpm + rpm_wave + (row_idx % 5) * 3 + (row_idx % 7) - 3)
+    rpm = min(max(rpm, 850), 2200)
+    coolant = 86.0 + (row_idx % 7) * 0.5 + (row_idx % 5) * 0.2 - 0.4
+    load_base = 18.0 + speed_kmh * 0.6
+    load_wave = 5 * math.sin(driving_sec * 0.2)
+    load = min(70.0, max(10.0, load_base + load_wave + (row_idx % 4) + (row_idx % 3) - 1))
+    throttle_base = 12.0 + speed_kmh * 0.45
+    throttle_wave = 8 * math.sin(driving_sec * 0.25) + 4 * math.sin(driving_sec * 0.1)
+    throttle = min(55.0, max(8.0, throttle_base + throttle_wave + (row_idx % 3) + (row_idx % 4) * 0.5 - 1))
+    map_kpa = 32 + int(speed_kmh * 0.6) + (row_idx % 3) + (row_idx % 5) % 2
+    map_kpa = min(map_kpa, 80)
+    maf = 4.0 + speed_kmh * 0.22 + (row_idx % 3) * 0.1 + (row_idx % 4) * 0.05 - 0.08
+    volt = 14.0 + (row_idx % 3) * 0.1 + (row_idx % 7) * 0.02 - 0.06
+    intake = 28 + (row_idx % 5) + (row_idx % 4) - 1
     return [
         rpm,
         round(speed_kmh, 1),
         round(coolant, 1),
         round(load, 1),
-        round(14.0 + (row_idx % 3) * 0.1, 1),
+        round(volt, 1),
         map_kpa,
         round(maf, 1),
-        28 + (row_idx % 5),
+        intake,
         round(throttle, 1),
-        (row_idx - 1) % 5 - 2,
-        (row_idx % 5) - 2,
+        (row_idx - 1) % 5 - 2 + (row_idx % 2) - 0,
+        (row_idx % 5) - 2 + (row_idx % 3) % 2 - 0,
     ]
 
 
@@ -118,10 +128,12 @@ def generate_10min_drive_csv():
     path = os.path.join(base, "scenario_10min_drive.csv")
     headers = [
         "rpm", "speed", "temp", "load", "voltage", "map", "maf",
-        "intake_temp", "throttle", "fuel_trim_short", "fuel_trim_long", "dtcs",
+        "intake_temp", "throttle", "fuel_trim_short", "fuel_trim_long",
+        "engine_runtime", "dtcs",
     ]
 
-    rows_off_1 = ROWS_PER_MIN
+    # 시나리오 1처럼 첫 행부터 rpm>300(공회전) — 주행 시작/종료·DTC 인식이 안정적으로 동작
+    rows_off_1 = 0
     rows_idle_2 = 240
     rows_drive = int(DRIVE_DURATION_SEC / SECS_PER_ROW)
     rows_idle_1 = ROWS_PER_MIN
@@ -131,32 +143,37 @@ def generate_10min_drive_csv():
         w = csv.writer(f)
         w.writerow(headers)
 
-        for _ in range(rows_off_1):
-            w.writerow(_engine_off_row() + [""])
+        if rows_off_1 > 0:
+            for i in range(rows_off_1):
+                w.writerow(_engine_off_row(i) + [0] + [""])
 
+        engine_sec = 0.0
         for i in range(rows_idle_2):
-            w.writerow(_idle_row(i, coolant=52.0 + i * 0.05) + [""])
+            engine_sec = (i + 1) * SECS_PER_ROW
+            w.writerow(_idle_row(i, coolant=52.0 + i * 0.05) + [int(engine_sec)] + [""])
 
         stop_row_start = int(CITY_DECEL_END / SECS_PER_ROW)
         stop_row_end = int(STOP_END / SECS_PER_ROW)
         for i in range(rows_drive):
             driving_sec = (i + 1) * SECS_PER_ROW
+            engine_sec = 120 + driving_sec
             dtcs = "P0300" if driving_sec >= DTC_ON_DRIVING_SEC else ""
             if stop_row_start <= i < stop_row_end:
-                w.writerow(_idle_row(300 + i, coolant=88.0) + [dtcs])
+                w.writerow(_idle_row(300 + i, coolant=88.0) + [int(engine_sec)] + [dtcs])
             else:
                 speed = _driving_speed_at_sec_5min(driving_sec)
-                w.writerow(_driving_row(driving_sec, speed, i) + [dtcs])
+                w.writerow(_driving_row(driving_sec, speed, i) + [int(engine_sec)] + [dtcs])
 
         for i in range(rows_idle_1):
-            w.writerow(_idle_row(240 + i, coolant=88.0) + ["P0300"])
+            engine_sec = 420 + (i + 1) * SECS_PER_ROW
+            w.writerow(_idle_row(240 + i, coolant=88.0) + [int(engine_sec)] + ["P0300"])
 
-        for _ in range(rows_off_final):
-            w.writerow(_engine_off_row() + ["P0300"])
+        for i in range(rows_off_final):
+            w.writerow(_engine_off_row(i) + [0] + ["P0300"])
 
     total_rows = rows_off_1 + rows_idle_2 + rows_drive + rows_idle_1 + rows_off_final
     print(f"Generated {path} ({total_rows} rows, 10 min at {SECS_PER_ROW}s interval)")
-    print("Phases: 1min OFF, 2min IDLE, 5min DRIVE, 1min IDLE, 1min OFF.")
+    print("Phases: 0s OFF, 2min IDLE, 5min DRIVE, 1min IDLE, 1min OFF (first row = idle like scenario 1).")
     return path
 
 

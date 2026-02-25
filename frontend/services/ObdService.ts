@@ -179,6 +179,7 @@ class ObdService {
     // 주행 시작 조건: RPM > 300 연속 4초 후 startTrip 1회 호출
     private tripStartConditionCount: number = 0;
     private tripStartTriggered: boolean = false;
+    private lastTripStartLogAt: number = 0;
 
     // [10단계] Grace Period (IDLE/DISCONNECT 동일 30초)
     private readonly GRACE_PERIOD_IDLE_MS = 30000; // 30초
@@ -821,18 +822,41 @@ class ObdService {
 
         this.samplingTimer = setTimeout(() => this.samplingLoop(intervalMs), intervalMs);
 
-        // [10단계] 주행 시작 조건: RPM > 300 연속 4초 후 startTrip 1회
-        if (this.tripState === 'WAITING_START' && this.vehicleId && !useTripStore.getState().isDriving && !this.tripStartTriggered) {
-            const rpmOk = snapshot.rpm !== undefined && snapshot.rpm > 300;
-            if (rpmOk) {
-                this.tripStartConditionCount++;
-                if (this.tripStartConditionCount >= 4) {
-                    this.tripStartTriggered = true;
-                    this.tripState = 'RUNNING';
-                    useTripStore.getState().startTrip(this.vehicleId);
+        // [10단계] 주행 시작 조건: RPM > 300 연속 3초 후 startTrip 1회
+        // 스냅샷(3초 신선도) 대신 실제 수신값+5초 이내 갱신으로 판단 — PID 지연 시에도 3초 유지 시 시작됨
+        if (this.tripState === 'WAITING_START') {
+            const isDriving = useTripStore.getState().isDriving;
+            const rpmAge = now - (this.lastUpdatedAt.get('rpm') ?? 0);
+            const rpmOk = this.currentData.rpm != null && this.currentData.rpm > 300 && rpmAge <= 5000;
+            if (!this.vehicleId) {
+                if (now - (this.lastTripStartLogAt ?? 0) >= 5000) {
+                    this.lastTripStartLogAt = now;
+                    console.log('[ObdService] tripStart blocked: no vehicleId (resolveVehicle not done or failed)');
+                }
+            } else if (isDriving) {
+                if (now - (this.lastTripStartLogAt ?? 0) >= 5000) {
+                    this.lastTripStartLogAt = now;
+                    console.log('[ObdService] tripStart blocked: already isDriving');
+                }
+            } else if (this.tripStartTriggered) {
+                if (now - (this.lastTripStartLogAt ?? 0) >= 5000) {
+                    this.lastTripStartLogAt = now;
+                    console.log('[ObdService] tripStart blocked: already triggered this session');
+                }
+            } else if (!rpmOk) {
+                this.tripStartConditionCount = 0;
+                if (now - (this.lastTripStartLogAt ?? 0) >= 5000) {
+                    this.lastTripStartLogAt = now;
+                    console.log('[ObdService] tripStart blocked: rpm not ok', { rpm: this.currentData.rpm, rpmAgeMs: rpmAge, needConsecutive: 3 });
                 }
             } else {
-                this.tripStartConditionCount = 0;
+                this.tripStartConditionCount++;
+                if (this.tripStartConditionCount >= 3) {
+                    this.tripStartTriggered = true;
+                    this.tripState = 'RUNNING';
+                    console.log('[ObdService] tripStart condition met, calling startTrip', this.vehicleId);
+                    useTripStore.getState().startTrip(this.vehicleId);
+                }
             }
         }
 
@@ -1465,8 +1489,9 @@ class ObdService {
             // 8.5단계: batchId 생성 (차량ID + 타임스탬프 조합으로 중복 방지)
             const batchId = `batch-${this.vehicleId}-${Date.now()}`;
 
+            // 서버(EC2 UTC)와 Trip 구간 조회 일치: 로컬 시간 문자열을 UTC ISO로 변환해 전송
             const logs: ObdLogRequest[] = logsToUpload.map(d => ({
-                timestamp: d.timestamp,
+                timestamp: new Date(d.timestamp).toISOString(),
                 vehicleId: this.vehicleId!,
                 rpm: d.rpm,
                 speed: d.speed,

@@ -3,8 +3,7 @@
 # 예: python run_emulator.py --port COM4 --vehicle DEV_002
 
 # 사용할 차량 ID (vehicles 중 하나). 없으면 첫 번째 차량.
-# DEV_004: 20분 주행 시나리오 (1분 OFF → 2분 대기 → 15분 주행 → 1분 대기 → 1분 OFF)
-# DEV_005: 10분 주행 시나리오 (1분 OFF → 2분 대기 → 5분 주행 → 1분 대기 → 1분 OFF)
+# DEV_005: 10분 주행 시나리오 (2초 OFF → 2분 대기 → 5분 주행 → 1분 대기 → 1분 OFF)
 vehicle_id: "DEV_005"
 
 # 연결 설정
@@ -43,7 +42,7 @@ vehicles:
   - id: "DEV_002"
     name: "K5 Hybrid"
     vin: "KNAKU411B56382911"
-    calid: "312J6000A4701000"
+    calid: "null"
     cvn: "11223344"
     csv_file: "scenarios/driving_traffic.csv"
     mappings:
@@ -74,30 +73,11 @@ vehicles:
       "010F": { col: "intake_temp", formula: "x + 40" }
     dtcs: ["P0011"]
 
-  # 20분 고정 시나리오: 시동끔(1분) → 대기(2분) → 주행(15분) → 대기(1분) → 시동끔(1분). 운전점수 감점 최소.
-  - id: "DEV_004"
-    name: "20min Realistic Drive"
-    vin: "KMHGN41EBJU183921"
-    calid: "null"
-    cvn: "6953cd4b"
-    csv_file: "scenarios/scenario_20min_drive.csv"
-    mappings:
-      "010C": { col: "rpm", formula: "x" }
-      "010D": { col: "speed", formula: "x" }
-      "0105": { col: "temp", formula: "x" }
-      "0104": { col: "load", formula: "x" }
-      "0142": { col: "voltage", formula: "x" }
-      "0111": { col: "throttle", formula: "x" }
-      "010B": { col: "map", formula: "x" }
-      "0110": { col: "maf", formula: "x" }
-      "010F": { col: "intake_temp", formula: "x" }
-    dtcs: []
-
-  # 10분 시나리오: 시동끔(1분) → 대기(2분) → 주행(5분) → 대기(1분) → 시동끔(1분).
+  # 10분 시나리오: 시동끔(2초) → 대기(2분) → 주행(5분) → 대기(1분) → 시동끔(1분).
   - id: "DEV_005"
-    name: "10min Realistic Drive"
+    name: "BMW 5시리즈(F10)"
     vin: "KMHGN41EBJU183921"
-    calid: "null"
+    calid: "312J6000A4701000"
     cvn: "6953cd4b"
     csv_file: "scenarios/scenario_10min_drive.csv"
     mappings:
@@ -110,6 +90,9 @@ vehicles:
       "010B": { col: "map", formula: "x" }
       "0110": { col: "maf", formula: "x" }
       "010F": { col: "intake_temp", formula: "x" }
+      "0106": { col: "fuel_trim_short", formula: "x" }
+      "0107": { col: "fuel_trim_long", formula: "x" }
+      "011F": { col: "engine_runtime", formula: "x" }
     dtcs: []
 
 # 공통 설정

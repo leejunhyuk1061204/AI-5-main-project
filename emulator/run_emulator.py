@@ -138,11 +138,18 @@ class RobustElmEmulator:
         if data.get('throttle') is not None:
             val = int(float(data['throttle']) * 2.55)
             self.pids['0111'] = f"{min(max(val, 0), 255):02X}"
+        if data.get('fuel_trim_short') is not None:
+            val = int(round(128 + float(data['fuel_trim_short']) * 128 / 100))
+            self.pids['0106'] = f"{min(max(val, 0), 255):02X}"
+        if data.get('fuel_trim_long') is not None:
+            val = int(round(128 + float(data['fuel_trim_long']) * 128 / 100))
+            self.pids['0107'] = f"{min(max(val, 0), 255):02X}"
 
     _PID_TO_KEY = {
         '010C': 'rpm', '010D': 'speed', '0105': 'coolant', '0104': 'load',
         '0142': 'voltage', '0111': 'throttle', '010B': 'map', '0110': 'maf',
         '010F': 'intake_temp', '011F': 'engine_runtime',
+        '0106': 'fuel_trim_short', '0107': 'fuel_trim_long',
     }
 
     def update_from_csv_row(self, row, mappings):
@@ -176,7 +183,10 @@ class RobustElmEmulator:
                 self.mil_on = len(self.dtcs) > 0
 
     def replay_worker(self):
-        """선택된 차량의 CSV를 주기적으로 읽어 PIDs 업데이트"""
+        """선택된 차량의 CSV를 주기적으로 읽어 PIDs 업데이트.
+        replay 시작 시 01 01을 0 DTC로 초기화해, CSV에서 dtcs가 채워지면 0→1로 바뀌어 앱 DTC 감지가 동작하도록 함."""
+        self.dtcs = []
+        self.mil_on = False
         replay_cfg = self.config.get('replay', {})
         csv_file = self.vehicle.get('csv_file', replay_cfg.get('csv_file', 'obd_log.csv'))
         mappings = self.vehicle.get('mappings', {})
@@ -213,7 +223,8 @@ class RobustElmEmulator:
     def start(self):
         self.initialize_pids()
         self.engine_start_time = time.time()
-        threading.Thread(target=self._runtime_worker, daemon=True).start()
+        if self.mode != 'replay':
+            threading.Thread(target=self._runtime_worker, daemon=True).start()
         if self.mode == 'replay':
             threading.Thread(target=self.replay_worker, daemon=True).start()
 
