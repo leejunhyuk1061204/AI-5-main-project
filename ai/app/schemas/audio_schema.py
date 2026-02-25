@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, Dict, Any
 
 
 class AudioRequest(BaseModel):

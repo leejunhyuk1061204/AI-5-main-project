@@ -1,6 +1,6 @@
 # ai/scripts/vision/train_router_mobilenet.py
 """
-MobileNetV3-Large 기반 차량 장면 분류(Router) 벤치마크 학습 스크립트
+MobileNetV3-Small 기반 차량 장면 분류(Router) 벤치마크 학습 스크립트
 [기준]
 - 해상도: 224x224
 - 배치 크기: 16
@@ -18,7 +18,7 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 from torchvision import datasets, models, transforms
 from tqdm import tqdm
-from sklearn.metrics import classification_report, confusion_matrix
+from sklearn.metrics import classification_report, confusion_matrix, precision_recall_fscore_support
 import numpy as np
 
 # [Config] 감지 및 경로 설정
@@ -27,13 +27,13 @@ LOCAL_DATA_PATH = "ai/data"
 DATA_ROOT = RUNPOD_DATA_PATH if os.path.exists(RUNPOD_DATA_PATH) else LOCAL_DATA_PATH
 DATA_DIR = os.path.join(DATA_ROOT, "yolo_router")
 SAVE_ROOT = "ai/weights/router"
-SAVE_PATH = os.path.join(SAVE_ROOT, "mobilenet_v3_best.pth")
+SAVE_PATH = os.path.join(SAVE_ROOT, "mobilenet_v3_small_best.pth")
 
 # Hyperparameters (User Request)
 IMG_SIZE = 224
 BATCH_SIZE = 16
-EPOCHS_S1 = 10
-EPOCHS_S2 = 20
+EPOCHS_S1 = 2
+EPOCHS_S2 = 15
 WEIGHT_DECAY = 1e-4
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -62,7 +62,7 @@ def get_transforms():
     }
 
 def train_model():
-    print(f"\n🚀 [MobileNetV3-L] Starting Router Benchmark Training")
+    print(f"\n🚀 [MobileNetV3-S] Starting Router Benchmark Training")
     transforms_dict = get_transforms()
     image_datasets = {
         x: datasets.ImageFolder(os.path.join(DATA_DIR, x), transforms_dict[x])
@@ -76,8 +76,8 @@ def train_model():
     class_names = image_datasets['train'].classes
     num_classes = len(class_names)
 
-    # Model: MobileNetV3-Large
-    model = models.mobilenet_v3_large(weights=models.MobileNet_V3_Large_Weights.DEFAULT)
+    # Model: MobileNetV3-Small
+    model = models.mobilenet_v3_small(weights=models.MobileNet_V3_Small_Weights.DEFAULT)
     num_ftrs = model.classifier[3].in_features
     model.classifier[3] = nn.Linear(num_ftrs, num_classes)
     model = model.to(device)
@@ -86,8 +86,8 @@ def train_model():
     best_acc = 0.0
     best_model_wts = copy.deepcopy(model.state_dict())
 
-    # [Phase 1] 10 Epochs
-    print(f"\n❄️ [Phase 1] Head only (10 Epochs)...")
+    # [Phase 1] 2 Epochs
+    print(f"\n❄️ [Phase 1] Head only (2 Epochs)...")
     for param in model.features.parameters(): param.requires_grad = False
     optimizer_s1 = optim.AdamW(model.classifier.parameters(), lr=1e-3, weight_decay=WEIGHT_DECAY)
 
@@ -96,6 +96,10 @@ def train_model():
         for phase in ['train', 'val']:
             model.train() if phase == 'train' else model.eval()
             running_loss, running_corrects = 0.0, 0
+            
+            all_preds = []
+            all_labels = []
+            
             for inputs, labels in tqdm(dataloaders[phase]):
                 inputs, labels = inputs.to(device), labels.to(device)
                 optimizer_s1.zero_grad()
@@ -108,15 +112,25 @@ def train_model():
                         optimizer_s1.step()
                 running_loss += loss.item() * inputs.size(0)
                 running_corrects += torch.sum(preds == labels.data)
+                
+                if phase == 'val':
+                    all_preds.extend(preds.cpu().numpy())
+                    all_labels.extend(labels.cpu().numpy())
+                    
             print(f'{phase} Acc: {running_corrects.double()/dataset_sizes[phase]:.4f}')
+            
+            if phase == 'val':
+                print("\n🎯 Validation Classification Report:")
+                print(classification_report(all_labels, all_preds, target_names=class_names, digits=4))
+                
             if phase == 'val' and (running_corrects.double()/dataset_sizes[phase]) > best_acc:
                 best_acc = running_corrects.double()/dataset_sizes[phase]
                 best_model_wts = copy.deepcopy(model.state_dict())
                 os.makedirs(SAVE_ROOT, exist_ok=True)
                 torch.save(model.state_dict(), SAVE_PATH)
 
-    # [Phase 2] 20 Epochs
-    print(f"\n🔥 [Phase 2] Full Fine-tuning (20 Epochs)...")
+    # [Phase 2] 2 Epochs
+    print(f"\n🔥 [Phase 2] Full Fine-tuning (15 Epochs)...")
     for param in model.parameters(): param.requires_grad = True
     optimizer_s2 = optim.AdamW(model.parameters(), lr=1e-5, weight_decay=WEIGHT_DECAY)
     scheduler_s2 = optim.lr_scheduler.CosineAnnealingLR(optimizer_s2, T_max=EPOCHS_S2)
@@ -126,6 +140,10 @@ def train_model():
         for phase in ['train', 'val']:
             model.train() if phase == 'train' else model.eval()
             running_loss, running_corrects = 0.0, 0
+            
+            all_preds = []
+            all_labels = []
+            
             for inputs, labels in tqdm(dataloaders[phase]):
                 inputs, labels = inputs.to(device), labels.to(device)
                 optimizer_s2.zero_grad()
@@ -138,8 +156,23 @@ def train_model():
                         optimizer_s2.step()
                 running_loss += loss.item() * inputs.size(0)
                 running_corrects += torch.sum(preds == labels.data)
+                
+                if phase == 'val':
+                    all_preds.extend(preds.cpu().numpy())
+                    all_labels.extend(labels.cpu().numpy())
+                    
             acc = running_corrects.double() / dataset_sizes[phase]
             print(f'{phase} Acc: {acc:.4f}')
+            
+            if phase == 'val':
+                print("\n🎯 Validation Classification Report:")
+                print(classification_report(all_labels, all_preds, target_names=class_names, digits=4))
+                
+                # Manually calculate and print micro avg
+                micro_p, micro_r, micro_f1, _ = precision_recall_fscore_support(all_labels, all_preds, average='micro')
+                print(f"   micro avg     {micro_p:.4f}    {micro_r:.4f}    {micro_f1:.4f}      {len(all_labels)}")
+                
+
             if phase == 'train': scheduler_s2.step()
             if phase == 'val' and acc > best_acc:
                 best_acc = acc

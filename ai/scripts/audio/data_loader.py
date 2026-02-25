@@ -112,40 +112,68 @@ def apply_spec_augment(mel, intensity="medium"):
 # ──────────── 데이터 목록 로딩 ────────────
 
 def get_data_list(base_dir):
-    """base_dir에서 Multi-Task 레이블로 데이터 목록 생성"""
-    print(f"📂 Scanning: {base_dir}", flush=True)
+    """base_dir에서 데이터 목록 생성 (신규 상태별 구조 및 기존 평면 구조 모두 지원)"""
+    print(f"📂 Scanning Dataset: {base_dir}", flush=True)
     data_list = []
-
-    # Audio extensions to support
     EXTENSIONS = (".wav", ".m4a", ".mp3", ".ogg", ".flac")
 
-    # Normal
-    normal_dir = os.path.join(base_dir, "normal")
-    if os.path.exists(normal_dir):
-        for f in os.listdir(normal_dir):
-            if f.lower().endswith(EXTENSIONS):
-                data_list.append({
-                    "path": os.path.join(normal_dir, f),
-                    "type": "normal",    # → type_label = -100
-                    "abnormal": 0
-                })
-
-    # Abnormal subtypes
-    abnormal_dir = os.path.join(base_dir, "abnormal")
-    if os.path.exists(abnormal_dir):
-        for cls in ["starter", "engine", "brake"]:
-            cls_dir = os.path.join(abnormal_dir, cls)
-            if os.path.exists(cls_dir):
-                for f in os.listdir(cls_dir):
+    # 1. [New Structure Check] car dataset/ (braking state, idle state, startup state)
+    mapping = {
+        "braking state": "brake",
+        "idle state": "engine",
+        "startup state": "starter"
+    }
+    
+    found_new = False
+    for state_folder, domain in mapping.items():
+        state_path = os.path.join(base_dir, state_folder)
+        if os.path.exists(state_path):
+            found_new = True
+            for sub_folder in os.listdir(state_path):
+                sub_path = os.path.join(state_path, sub_folder)
+                if not os.path.isdir(sub_path): continue
+                is_abnormal = 0 if sub_folder.lower().startswith("normal") else 1
+                for f in os.listdir(sub_path):
                     if f.lower().endswith(EXTENSIONS):
                         data_list.append({
-                            "path": os.path.join(cls_dir, f),
-                            "type": cls,     # → type_label = type2id[cls]
-                            "abnormal": 1
+                            "path": os.path.join(sub_path, f),
+                            "type": domain,
+                            "abnormal": is_abnormal,
+                            "sub_class": sub_folder
                         })
 
-    counts = Counter([x['type'] for x in data_list])
-    print(f"📊 Data count: {dict(counts)} (total: {len(data_list)})", flush=True)
+    # 2. [Legacy Structure Check] normal/ abnormal/
+    if not found_new:
+        print("ℹ️ New structure not found. Falling back to legacy structure (normal/abnormal).", flush=True)
+        # Normal
+        normal_dir = os.path.join(base_dir, "normal")
+        if os.path.exists(normal_dir):
+            for f in os.listdir(normal_dir):
+                if f.lower().endswith(EXTENSIONS):
+                    data_list.append({
+                        "path": os.path.join(normal_dir, f),
+                        "type": "normal",
+                        "abnormal": 0
+                    })
+        # Abnormal
+        abnormal_dir = os.path.join(base_dir, "abnormal")
+        if os.path.exists(abnormal_dir):
+            for cls in ["starter", "engine", "brake"]:
+                cls_dir = os.path.join(abnormal_dir, cls)
+                if os.path.exists(cls_dir):
+                    for f in os.listdir(cls_dir):
+                        if f.lower().endswith(EXTENSIONS):
+                            data_list.append({
+                                "path": os.path.join(cls_dir, f),
+                                "type": cls,
+                                "abnormal": 1
+                            })
+
+    if len(data_list) == 0:
+        print(f"⚠️ Warning: No audio files found in {base_dir}")
+
+    counts = Counter([f"{x['type']}_{'abnormal' if x['abnormal'] else 'normal'}" for x in data_list])
+    print(f"📊 Detailed Stats: {dict(counts)} (total: {len(data_list)})", flush=True)
     return data_list
 
 # ──────────── 전처리 캐시 ────────────
@@ -409,7 +437,13 @@ def create_dataloaders(arch, feature_extractor=None, batch_size=None, samples_pe
         samples_per_class = COMMON_CONFIG.get("samples_per_class", 0)
 
     # 1. 모든 데이터 수집 및 메타 데이터 생성
-    all_data = get_data_list(TRAIN_DATA_DIR) + get_data_list(TEST_DATA_DIR)
+    if TRAIN_DATA_DIR == TEST_DATA_DIR:
+        all_data = get_data_list(TRAIN_DATA_DIR)
+    else:
+        all_data = get_data_list(TRAIN_DATA_DIR) + get_data_list(TEST_DATA_DIR)
+    
+    if not all_data:
+        raise ValueError(f"❌ No audio data found in {TRAIN_DATA_DIR}")
     
     for item in all_data:
         # 출처 및 그룹 태깅
@@ -418,25 +452,17 @@ def create_dataloaders(arch, feature_extractor=None, batch_size=None, samples_pe
         
         # Group ID 추출: 같은 유튜브 영상에서 나온 조각들은 하나의 그룹으로 묶음
         if item["source"] == "site":
-            # 현장 데이터는 각 파일이 개별 기록이므로 파일명을 그룹 아이디로 (또는 필요시 세션별 묶음)
             item["group_id"] = fname
         else:
-            # 유튜브/외부: [type]_[ID]_... 형태
             parts = fname.split("_")
-            # 1) ext_normal_07023057_034.wav -> 07023057
-            # 2) normal_idle_1_01.wav -> normal_idle_1
-            # 3) brake_id_01_001.wav -> id
             if fname.startswith("ext_normal"):
-                # [ext, normal, ID, seg.wav]
                 item["group_id"] = parts[2] if len(parts) >= 3 else fname
             elif "normal_idle" in fname:
-                # [normal, idle, ID, seg.wav]
                 item["group_id"] = "_".join(parts[:3]) if len(parts) >= 3 else fname
             else:
-                # [type, ID, seg, clip.wav] -> ID는 보통 2번째 파트
                 item["group_id"] = parts[1] if len(parts) >= 2 else fname
 
-        # 계층화 키 생성: {type}_{source} (정상: normal_site, 결함: engine_youtube 등)
+        # 계층화 키 생성
         item["stratify_key"] = f"{item['type']}_{item['source']}"
 
     # 2. 그룹 계층화 분할 (Group Stratified Split)
