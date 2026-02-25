@@ -1,0 +1,15 @@
+{
+  "windows": 6332,
+  "features": 7,
+  "epochs": 5,
+  "final_loss": 0.3828721856228029,
+  "loss_curve": [
+    0.6225748411332718,
+    0.4120404411746998,
+    0.405045317278968,
+    0.3895577071893095,
+    0.3828721856228029
+  ],
+  "model": "ai\\app\\services\\obd_anomaly\\core\\artifacts\\candidates\\lstm_ae_e5_engine_only.pt",
+  "scaler": "ai\\app\\services\\obd_anomaly\\core\\artifacts\\candidates\\scaler_e5_engine_only.json"
+}

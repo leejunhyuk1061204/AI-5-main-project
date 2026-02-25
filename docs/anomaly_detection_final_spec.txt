@@ -1,4 +1,8 @@
-﻿### 3. Anomaly Detection (LSTM-AE + Rule Domains)
+﻿### 3. Anomaly Detection (Engine Hybrid + Rule Domains)
+
+- Canonical note: The operational canonical spec is `docs/4.API 명세서.md` (`window_sec=60`, `stride_sec=30`).
+- This file is maintained as compatibility reference and must not override operational policy values.
+
 
 - 3.1 **POST `/predict/anomaly`**
   - **Description**: 최근 일정 시간(기본 60초 윈도우) 동안 누적된 시계열 OBD 데이터 배열을 입력으로 받아, Core(엔진 ML) + 도메인별 Rule 기반 이상 여부를 분석합니다.
@@ -54,7 +58,7 @@
     "domains": ["engine", "electrical", "brake", "tire", "idle"],
     "return": "summary",
     "window_sec": 60,
-    "stride_sec": 60
+    "stride_sec": 30
   }
 }
 ```
@@ -79,7 +83,7 @@
     "timestamp_unit": "s",
     "total_duration_sec": 900,
     "window_sec": 60,
-    "stride_sec": 60,
+    "stride_sec": 30,
     "num_windows": 15
   },
   "is_anomaly": true,
@@ -212,3 +216,5 @@
 - **Deprecated (응답)**: `core`, `extensions`, `details.rules` 중심 중첩 구조
 - **Deprecated (입력)**: `options.extensions`
 - **권장 표준 (응답)**: `is_anomaly + anomaly_score + domains + events[]`
+
+

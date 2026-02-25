@@ -1,0 +1,81 @@
+﻿metric_name,value,data_condition,calculation,source
+policy_threshold,0.795981228351593,vfinal operation policy,fixed value,ai/app/services/obd_anomaly/models/artifacts/v1/threshold_policy.json
+policy_k_consecutive,2,vfinal operation policy,fixed value,ai/app/services/obd_anomaly/models/artifacts/v1/threshold_policy.json
+policy_cooldown_sec,60,vfinal operation policy,fixed value,ai/app/services/obd_anomaly/models/artifacts/v1/threshold_policy.json
+policy_warning,0.7,vfinal operation policy,fixed value,ai/app/services/obd_anomaly/models/artifacts/v1/threshold_policy.json
+policy_critical,0.85,vfinal operation policy,fixed value,ai/app/services/obd_anomaly/models/artifacts/v1/threshold_policy.json
+gating_ae_min_coverage,0.8,vfinal operation policy,fixed value,ai/app/services/obd_anomaly/models/artifacts/v1/threshold_policy.json
+gating_ae_max_gap,3,vfinal operation policy,fixed value,ai/app/services/obd_anomaly/models/artifacts/v1/threshold_policy.json
+gating_both_min_coverage,0.6,vfinal operation policy,fixed value,ai/app/services/obd_anomaly/models/artifacts/v1/threshold_policy.json
+gating_w_coverage_c0,0.6,vfinal operation policy,fixed value,ai/app/services/obd_anomaly/models/artifacts/v1/threshold_policy.json
+gating_w_coverage_c1,0.95,vfinal operation policy,fixed value,ai/app/services/obd_anomaly/models/artifacts/v1/threshold_policy.json
+ae_score_error_min,0.20534303784370422,vfinal operation policy,fixed value,ai/app/services/obd_anomaly/models/artifacts/v1/threshold_policy.json
+ae_score_error_max,4.375852990150459,vfinal operation policy,fixed value,ai/app/services/obd_anomaly/models/artifacts/v1/threshold_policy.json
+hybrid_q50,0.256836,val normal policy eval,np.quantile(scores,0.5),ai/app/services/obd_anomaly/offline/datasets/vfinal/policy_report.md
+hybrid_q90,0.433243,val normal policy eval,np.quantile(scores,0.9),ai/app/services/obd_anomaly/offline/datasets/vfinal/policy_report.md
+hybrid_q95,0.632952,val normal policy eval,np.quantile(scores,0.95),ai/app/services/obd_anomaly/offline/datasets/vfinal/policy_report.md
+hybrid_q99,0.795981,val normal policy eval,np.quantile(scores,0.99),ai/app/services/obd_anomaly/offline/datasets/vfinal/policy_report.md
+alarms_per_hour,0.226986,val normal policy eval,policy simulation events/hour,ai/app/services/obd_anomaly/offline/datasets/vfinal/policy_report.md
+if_windows,6332,if train report,reported count,ai/app/services/obd_anomaly/offline/datasets/vfinal/iforest_report.json
+if_features,42,if train report,reported count,ai/app/services/obd_anomaly/offline/datasets/vfinal/iforest_report.json
+if_q50,0.41828445767538397,if train report,quantile of IF score,ai/app/services/obd_anomaly/offline/datasets/vfinal/iforest_report.json
+if_q90,0.5029150469170065,if train report,quantile of IF score,ai/app/services/obd_anomaly/offline/datasets/vfinal/iforest_report.json
+if_q95,0.5439460241256392,if train report,quantile of IF score,ai/app/services/obd_anomaly/offline/datasets/vfinal/iforest_report.json
+if_q99,0.595616468781157,if train report,quantile of IF score,ai/app/services/obd_anomaly/offline/datasets/vfinal/iforest_report.json
+lstm_windows,6332,lstm train report,reported count,ai/app/services/obd_anomaly/offline/datasets/vfinal/lstm_ae_report.json
+lstm_features,7,lstm train report,reported count,ai/app/services/obd_anomaly/offline/datasets/vfinal/lstm_ae_report.json
+lstm_epochs,10,lstm train report,reported count,ai/app/services/obd_anomaly/offline/datasets/vfinal/lstm_ae_report.json
+lstm_final_loss,0.36000039217749025,lstm train report,last epoch mse,ai/app/services/obd_anomaly/offline/datasets/vfinal/lstm_ae_report.json
+synthetic_baseline_precision,0.35714285714285715,val_synthetic sample-level,TP/(TP+FP),ai/app/services/obd_anomaly/offline/datasets/vfinal/synthetic_eval.json
+synthetic_baseline_recall,0.8333333333333334,val_synthetic sample-level,TP/(TP+FN),ai/app/services/obd_anomaly/offline/datasets/vfinal/synthetic_eval.json
+synthetic_baseline_f1,0.5,val_synthetic sample-level,2PR/(P+R),ai/app/services/obd_anomaly/offline/datasets/vfinal/synthetic_eval.json
+synthetic_baseline_fpr,0.75,val_synthetic sample-level,FP/(FP+TN),ai/app/services/obd_anomaly/offline/datasets/vfinal/synthetic_eval.json
+synthetic_A_f1,0.4615384615384615,val_synthetic sample-level A,2PR/(P+R),ai/app/services/obd_anomaly/offline/datasets/vfinal/synthetic_eval_A.json
+synthetic_B_f1,0.0,val_synthetic sample-level B,2PR/(P+R),ai/app/services/obd_anomaly/offline/datasets/vfinal/synthetic_eval_B.json
+synthetic_C_f1,0.5,val_synthetic sample-level C,2PR/(P+R),ai/app/services/obd_anomaly/offline/datasets/vfinal/synthetic_eval_C.json
+granularity_sample_f1,0.5,val_synthetic granularity sample,2PR/(P+R),ai/app/services/obd_anomaly/offline/datasets/vfinal/synthetic_eval_granularity.json
+granularity_window60_f1,0.0,val_synthetic granularity window_60s,2PR/(P+R),ai/app/services/obd_anomaly/offline/datasets/vfinal/synthetic_eval_granularity.json
+granularity_chunk900_f1,0.10526315789473684,val_synthetic granularity chunk_900s,2PR/(P+R),ai/app/services/obd_anomaly/offline/datasets/vfinal/synthetic_eval_granularity.json
+grid_best_threshold,0.87,val_synthetic grid best,selected params,ai/app/services/obd_anomaly/offline/datasets/vfinal/synthetic_grid_search.json
+grid_best_k_consecutive,3,val_synthetic grid best,selected params,ai/app/services/obd_anomaly/offline/datasets/vfinal/synthetic_grid_search.json
+grid_best_warning,0.78,val_synthetic grid best,selected params,ai/app/services/obd_anomaly/offline/datasets/vfinal/synthetic_grid_search.json
+grid_best_critical,0.86,val_synthetic grid best,selected params,ai/app/services/obd_anomaly/offline/datasets/vfinal/synthetic_grid_search.json
+grid_best_f1,0.5,val_synthetic grid best,2PR/(P+R),ai/app/services/obd_anomaly/offline/datasets/vfinal/synthetic_grid_search.json
+grid_best_fpr,0.25,val_synthetic grid best,FP/(FP+TN),ai/app/services/obd_anomaly/offline/datasets/vfinal/synthetic_grid_search.json
+latency_runs,8,latency smoke local cpu,repeated inference count,docs/OBD_LATENCY_REPORT.json
+latency_mean_ms_per_request,50.5485749890795,latency smoke local cpu,mean elapsed ms/request,docs/OBD_LATENCY_REPORT.json
+latency_p95_ms_per_request,56.060099974274635,latency smoke local cpu,p95 elapsed ms/request,docs/OBD_LATENCY_REPORT.json
+latency_min_ms_per_request,39.91160006262362,latency smoke local cpu,min elapsed ms/request,docs/OBD_LATENCY_REPORT.json
+latency_max_ms_per_request,57.83730000257492,latency smoke local cpu,max elapsed ms/request,docs/OBD_LATENCY_REPORT.json
+latency_request_num_windows,3,latency smoke local cpu,meta.num_windows for measured request,docs/OBD_LATENCY_REPORT.json
+auc_vfinal,N/A,vfinal operation,not reported in current vfinal artifacts,docs/lstm_ae_train_log.md
+lstm_vs_if_same_condition_compare_status,VALID,same window/stride/policy and 4 injection types,mode-separated KPI run,docs/OBD_MODEL_COMPARE.md
+timestamp_unit_eval_compare,ms,10Hz evaluation request,integer t encoded as ms for uniform_ts compatibility,ai/app/services/obd_anomaly/offline/scripts/eval_model_modes_hardening.py
+compare_v2_hybrid_alarms_per_hour,1.7203764881879948,val+val_synthetic same-condition hardening,policy events/hour,docs/OBD_MODEL_COMPARE.csv
+compare_v2_hybrid_alarms_ci95_low,0.16987704282474697,val+val_synthetic same-condition hardening,bootstrap 2.5 percentile,docs/OBD_MODEL_COMPARE.csv
+compare_v2_hybrid_alarms_ci95_high,3.882955203460273,val+val_synthetic same-condition hardening,bootstrap 97.5 percentile,docs/OBD_MODEL_COMPARE.csv
+compare_v2_if_only_alarms_per_hour,2.8423611543975564,val+val_synthetic same-condition hardening,policy events/hour,docs/OBD_MODEL_COMPARE.csv
+compare_v2_if_only_alarms_ci95_low,0.8116653466762668,val+val_synthetic same-condition hardening,bootstrap 2.5 percentile,docs/OBD_MODEL_COMPARE.csv
+compare_v2_if_only_alarms_ci95_high,5.644480198623025,val+val_synthetic same-condition hardening,bootstrap 97.5 percentile,docs/OBD_MODEL_COMPARE.csv
+compare_v2_ae_only_alarms_per_hour,1.7203764881879948,val+val_synthetic same-condition hardening,policy events/hour,docs/OBD_MODEL_COMPARE.csv
+compare_v2_ae_only_alarms_ci95_low,0.16780883567163536,val+val_synthetic same-condition hardening,bootstrap 2.5 percentile,docs/OBD_MODEL_COMPARE.csv
+compare_v2_ae_only_alarms_ci95_high,3.833187244516462,val+val_synthetic same-condition hardening,bootstrap 97.5 percentile,docs/OBD_MODEL_COMPARE.csv
+compare_v2_hybrid_sample_f1,0.625,val_synthetic same-condition hardening,2PR/(P+R),docs/OBD_MODEL_COMPARE.csv
+compare_v2_hybrid_sample_f1_ci95_low,0.25,val_synthetic same-condition hardening,bootstrap 2.5 percentile,docs/OBD_MODEL_COMPARE.csv
+compare_v2_hybrid_sample_f1_ci95_high,0.8571428571428571,val_synthetic same-condition hardening,bootstrap 97.5 percentile,docs/OBD_MODEL_COMPARE.csv
+compare_v2_if_only_sample_f1,0.5,val_synthetic same-condition hardening,2PR/(P+R),docs/OBD_MODEL_COMPARE.csv
+compare_v2_ae_only_sample_f1,0.7058823529411764,val_synthetic same-condition hardening,2PR/(P+R),docs/OBD_MODEL_COMPARE.csv
+compare_v2_hybrid_window_f1,0.3037974683544304,val_synthetic same-condition hardening,2PR/(P+R),docs/OBD_MODEL_COMPARE.csv
+compare_v2_if_only_window_f1,0.04597701149425287,val_synthetic same-condition hardening,2PR/(P+R),docs/OBD_MODEL_COMPARE.csv
+compare_v2_ae_only_window_f1,0.325,val_synthetic same-condition hardening,2PR/(P+R),docs/OBD_MODEL_COMPARE.csv
+latency_bench_hybrid_p50_ms,189.3786999862641,request-level benchmark n=100,quantile 0.50,docs/OBD_LATENCY_BENCHMARK.csv
+latency_bench_hybrid_p95_ms,215.59441002900712,request-level benchmark n=100,quantile 0.95,docs/OBD_LATENCY_BENCHMARK.csv
+latency_bench_hybrid_p99_ms,285.1403479964943,request-level benchmark n=100,quantile 0.99,docs/OBD_LATENCY_BENCHMARK.csv
+latency_bench_if_only_p50_ms,39.215249998960644,request-level benchmark n=100,quantile 0.50,docs/OBD_LATENCY_BENCHMARK.csv
+latency_bench_if_only_p95_ms,56.168274924857535,request-level benchmark n=100,quantile 0.95,docs/OBD_LATENCY_BENCHMARK.csv
+latency_bench_if_only_p99_ms,61.38448005192914,request-level benchmark n=100,quantile 0.99,docs/OBD_LATENCY_BENCHMARK.csv
+latency_bench_ae_only_p50_ms,213.3262000279501,request-level benchmark n=100,quantile 0.50,docs/OBD_LATENCY_BENCHMARK.csv
+latency_bench_ae_only_p95_ms,347.4154300289227,request-level benchmark n=100,quantile 0.95,docs/OBD_LATENCY_BENCHMARK.csv
+latency_bench_ae_only_p99_ms,551.718161080499,request-level benchmark n=100,quantile 0.99,docs/OBD_LATENCY_BENCHMARK.csv
+sensitivity_grid_total_runs,81,policy sensitivity hardening,3 modes x 27 policies,docs/OBD_POLICY_SENSITIVITY.csv
+repro_command_bundle,AVAILABLE,reproducibility,single command documented,docs/OBD_REPRO_COMMANDS.md

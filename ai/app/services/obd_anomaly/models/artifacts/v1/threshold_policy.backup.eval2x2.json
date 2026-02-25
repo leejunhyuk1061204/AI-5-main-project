@@ -1,0 +1,23 @@
+{
+  "version": "obd-anomaly-policy-v1",
+  "threshold": 0.795981228351593,
+  "k_consecutive": 2,
+  "cooldown_sec": 60,
+  "severity": {
+    "duration_bonus_per_window": 0.05,
+    "max_bonus": 0.3,
+    "critical": 0.85,
+    "warning": 0.7
+  },
+  "gating": {
+    "ae_min_coverage": 0.8,
+    "ae_max_gap": 3,
+    "both_min_coverage": 0.6,
+    "w_coverage_c0": 0.6,
+    "w_coverage_c1": 0.95
+  },
+  "ae_score": {
+    "error_min": 0.20534303784370422,
+    "error_max": 4.375852990150459
+  }
+}

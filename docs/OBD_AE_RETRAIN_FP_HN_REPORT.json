@@ -1,0 +1,18 @@
+{
+  "windows": 6332,
+  "features": 7,
+  "epochs": 8,
+  "final_loss": 0.37478492220844883,
+  "loss_curve": [
+    0.517522439435877,
+    0.3974982618231966,
+    0.395649723407596,
+    0.3958554160263803,
+    0.38163582070006263,
+    0.37864181391819557,
+    0.37261121373887013,
+    0.37478492220844883
+  ],
+  "model": "ai\\app\\services\\obd_anomaly\\core\\artifacts\\candidates\\lstm_ae_fp_hn.pt",
+  "scaler": "ai\\app\\services\\obd_anomaly\\core\\artifacts\\candidates\\scaler_fp_hn.json"
+}

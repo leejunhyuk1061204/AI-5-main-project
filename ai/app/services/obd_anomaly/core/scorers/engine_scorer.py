@@ -5,6 +5,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List
 
+import torch
+import torch.nn as nn
+
 from ai.app.schemas.obd_anomaly_schema import CommonEnvelope, EnvelopeMethod, EnvelopeStatus, ObdAnomalyRequest
 from ai.app.services.obd_anomaly.core.artifacts.loader import load_artifact_json, load_artifact_pickle
 from ai.app.services.obd_anomaly.core.artifacts.registry import ArtifactRegistry
@@ -12,6 +15,24 @@ from ai.app.services.obd_anomaly.core.scorers.feature_alignment import QualityMe
 from ai.app.services.obd_anomaly.core.scorers.iforest_scorer import IForestScorer
 from ai.app.services.obd_anomaly.core.scorers.lstm_ae_scorer import LSTMAEScorer
 from ai.app.services.obd_anomaly.windowing import Window
+
+
+class LSTMAutoencoder(nn.Module):
+    def __init__(self, input_dim: int, hidden_dim: int = 64, latent_dim: int = 16, num_layers: int = 1):
+        super().__init__()
+        self.encoder = nn.LSTM(input_dim, hidden_dim, num_layers, batch_first=True)
+        self.to_latent = nn.Linear(hidden_dim, latent_dim)
+        self.from_latent = nn.Linear(latent_dim, hidden_dim)
+        self.decoder = nn.LSTM(hidden_dim, hidden_dim, num_layers, batch_first=True)
+        self.out = nn.Linear(hidden_dim, input_dim)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        enc_out, _ = self.encoder(x)
+        h_last = enc_out[:, -1, :]
+        z = self.to_latent(h_last)
+        h = self.from_latent(z).unsqueeze(1).repeat(1, x.size(1), 1)
+        dec_out, _ = self.decoder(h)
+        return self.out(dec_out)
 
 
 @dataclass(frozen=True)
@@ -29,10 +50,10 @@ class EngineScorer:
         self._schema = load_artifact_json(p["schema_core"], {"features": [], "core_min": 1})
         self._policy = load_artifact_json(p["threshold_policy"], {})
         self._scaler = self._load_scaler(p["scaler"])
-        self._iforest = load_artifact_pickle(p["iforest"])
-        self._ae_model = self._load_torch_model(p["lstm_ae"])
-
         schema_features = self._schema_features()
+        self._iforest = load_artifact_pickle(p["iforest"])
+        self._ae_model = self._load_torch_model(p["lstm_ae"], input_dim=len(schema_features))
+
         self._if_scorer = IForestScorer(schema_features, self._iforest)
         self._ae_scorer = LSTMAEScorer(schema_features, self._ae_model, self._scaler, self._policy)
 
@@ -47,15 +68,34 @@ class EngineScorer:
             except Exception:
                 return None
 
-    def _load_torch_model(self, path: Path) -> Any:
+    def _load_torch_model(self, path: Path, input_dim: int) -> Any:
         if not path.exists():
             return None
         try:
-            import torch
-
-            return torch.load(path, map_location="cpu")
+            try:
+                obj = torch.load(path, map_location="cpu", weights_only=True)
+            except TypeError:
+                obj = torch.load(path, map_location="cpu")
         except Exception:
-            return None
+            try:
+                import __main__
+
+                setattr(__main__, "LSTMAutoencoder", LSTMAutoencoder)
+                obj = torch.load(path, map_location="cpu")
+            except Exception:
+                return None
+
+        if hasattr(obj, "eval") and hasattr(obj, "__call__"):
+            return obj
+        if isinstance(obj, dict):
+            try:
+                model = LSTMAutoencoder(max(1, int(input_dim)))
+                model.load_state_dict(obj)
+                model.eval()
+                return model
+            except Exception:
+                return None
+        return None
 
     def _threshold(self) -> float:
         return float(self._policy.get("threshold", 0.7))
