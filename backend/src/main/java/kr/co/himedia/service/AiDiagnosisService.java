@@ -919,6 +919,16 @@ public class AiDiagnosisService {
                                     tripId,
                                     tirePressureForPayload);
 
+                            Object dataObj = payload.get("data");
+                            if (!(dataObj instanceof List) || ((List<?>) dataObj).isEmpty()) {
+                                log.warn(
+                                        "[Anomaly-Parallel] 청크 {}/{}: data 비어 있음, API 호출 생략 [Vehicle: {}, Session: {}]",
+                                        chunkIndex, totalChunks, requestDto.getVehicleId(), sessionId);
+                                Map<String, Object> noDataResult = new HashMap<>();
+                                noDataResult.put("is_anomaly", false);
+                                return noDataResult;
+                            }
+
                             log.info(
                                     "[Anomaly-Parallel] 청크 전송 시작 ({}/{}) [Vehicle: {}, Session: {}]",
                                     chunkIndex, totalChunks, requestDto.getVehicleId(), sessionId);

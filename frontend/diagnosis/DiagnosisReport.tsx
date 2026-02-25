@@ -82,7 +82,7 @@ export default function DiagnosisReport() {
     }
 
     const reportData = report.report_data || report.reportData || {};
-    const riskLevel = report.riskLevel || 'NORMAL';
+    const riskLevel = report.riskLevel || report.risk_level || 'LOW';
     const confidenceScore = report.confidence_score || report.confidenceScore || 0;
     const suspectedCauses = reportData.suspected_causes || [];
     const finalGuide = reportData.final_guide || report.finalReport || report.description || '특이사항이 발견되지 않았습니다.';
@@ -91,18 +91,30 @@ export default function DiagnosisReport() {
     const confidencePercent = Math.round(confidenceScore * 100);
 
     const getRiskInfo = (level: string) => {
-        switch (level) {
-            case 'DANGER': return { color: '#ef4444', label: '위험', icon: 'warning', bg: 'bg-error/10', border: 'border-error/30' };
+        const l = (level || '').toUpperCase();
+        switch (l) {
+            case 'CRITICAL':
+            case 'HIGH':
+            case 'DANGER': return { color: '#ef4444', label: l === 'CRITICAL' ? '위험(긴급)' : '위험', icon: 'warning', bg: 'bg-error/10', border: 'border-error/30' };
+            case 'MID':
             case 'WARNING': return { color: '#f59e0b', label: '주의', icon: 'error-outline', bg: 'bg-warning/10', border: 'border-warning/30' };
+            case 'LOW':
+            case 'NORMAL':
             default: return { color: '#10b981', label: '정상', icon: 'check-circle', bg: 'bg-success/10', border: 'border-success/30' };
         }
     };
     const riskInfo = getRiskInfo(riskLevel);
 
     const getRiskSummary = (level: string) => {
-        switch (level) {
+        const l = (level || '').toUpperCase();
+        switch (l) {
+            case 'CRITICAL': return '긴급 점검 필요';
+            case 'HIGH':
             case 'DANGER': return '차량 상태 위험 감지';
+            case 'MID':
             case 'WARNING': return '차량 점검 필요';
+            case 'LOW':
+            case 'NORMAL':
             default: return '차량 상태 정상';
         }
     };

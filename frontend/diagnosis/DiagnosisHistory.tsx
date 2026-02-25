@@ -87,9 +87,15 @@ export default function DiagnosisHistory() {
             return { label: '진단중', color: '#3b82f6', icon: 'sync', bg: 'bg-primary/10' };
         }
 
-        switch (item.riskLevel) {
+        const l = (item.riskLevel || '').toUpperCase();
+        switch (l) {
+            case 'CRITICAL': return { label: '위험(긴급)', color: '#ef4444', icon: 'warning', bg: 'bg-error/10' };
+            case 'HIGH':
             case 'DANGER': return { label: '위험', color: '#ef4444', icon: 'warning', bg: 'bg-error/10' };
+            case 'MID':
             case 'WARNING': return { label: '주의', color: '#f59e0b', icon: 'error-outline', bg: 'bg-warning/10' };
+            case 'LOW':
+            case 'NORMAL':
             default: return { label: '정상', color: '#10b981', icon: 'check-circle', bg: 'bg-success/10' };
         }
     };
