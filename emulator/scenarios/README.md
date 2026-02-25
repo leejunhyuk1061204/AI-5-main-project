@@ -113,7 +113,7 @@ test 010D
    ```
    → `scenario_20min_drive.csv` 생성 (2400행, 0.5초 간격)
 
-2. 에뮬레이터 실행 시 config에서 `vehicle_id: "DEV_004"` 사용 (기본값):
+2. 에뮬레이터 실행 시 config에서 `vehicle_id: "DEV_004"` 또는 `"DEV_005"`(10분) 사용:
    ```bash
    cd emulator
    python run_emulator.py
@@ -124,6 +124,36 @@ test 010D
 
 - 공회전 60초마다 -1점만 적용 → 3분 공회전으로 -3점, **97점 전후** 예상.
 - 급가속/급감속(초당 ±10 km/h) 없음, 과속·고RPM·풀스로틀·과부하 없음.
+
+## 10분 주행 시나리오 (run_emulator.py replay)
+
+총 10분 고정 타임라인 (1+2+5+1+1). 주행 5분: 시내(정지 1회) + 고속도로 80~90 km/h, 정속 구간은 사인/짧은 주기 변동.
+
+### 타임라인
+
+| 구간 | 시간 | 설명 |
+|------|------|------|
+| 1 | 0~1분 | 시동 끔 (RPM 0, 속도 0) |
+| 2 | 1~3분 | 시동 켬 + 대기 (공회전) |
+| 3 | 3~8분 | 주행 5분: 시내(~50)→신호 정지 20초→고속 80~90(변동) |
+| 4 | 8~9분 | 시동 켬 + 대기 |
+| 5 | 9~10분 | 시동 끔 |
+
+### 사용 방법
+
+1. CSV 생성:
+   ```bash
+   cd emulator/scenarios
+   python generate_10min_drive.py
+   ```
+   → `scenario_10min_drive.csv` 생성 (1200행, 0.5초 간격)
+
+2. config에서 `vehicle_id: "DEV_005"` 사용 후:
+   ```bash
+   cd emulator
+   python run_emulator.py
+   ```
+   또는: `python run_emulator.py --vehicle DEV_005`
 
 ## 주의사항
 
