@@ -22,6 +22,8 @@ from ai.app.services.audio.ast_service import run_ast_inference
 from ai.app.services.common.llm_service import analyze_audio_with_llm
 from ai.app.schemas.audio_schema import AudioResponse, AudioDetail
 import httpx
+import librosa
+import numpy as np
 import io
 import re
 from urllib.parse import urlparse
@@ -135,44 +137,52 @@ class AudioService:
         # 3. 16kHz 변환 (이미 전처리에서 완료되었으나 버퍼 형태로 변환)
         audio_buffer = io.BytesIO(preprocessed_bytes)
         
-        # 3. 1차 진단: AST 모델
-        logger.info(f"[Audio Service] AST Inference 시작 (preprocessed: {len(preprocessed_bytes):,} bytes)")
+        # 3. 1차/2차 단일 PaSST 하이브리드 추론 (Stage 1: PaSST -> Stage 2: PaSST)
+        logger.info(f"[Audio Service] PaSST 통합 계층형 추론 시작 (preprocessed: {len(preprocessed_bytes):,} bytes)")
         try:
-            ast_result = await run_ast_inference(audio_buffer, ast_model_payload=ast_model)
-            logger.info(f"[Audio Service] AST Inference 완료 (status={ast_result.status}, conf={ast_result.confidence})")
+            from ai.app.services.audio.passt_hierarchical_service import run_passt_inference
+            ai_result = await run_passt_inference(audio_buffer)
+            logger.info(f"[Audio Service] PaSST 추론 완료 (status={ai_result.status}, conf={ai_result.confidence})")
         except Exception as e:
-            logger.error(f"[Audio Service] AST Inference Error: {e}")
+            logger.error(f"[Audio Service] PaSST Inference Error: {e}")
             from ai.app.schemas.audio_schema import AudioResponse, AudioDetail
-            ast_result = AudioResponse(
+            ai_result = AudioResponse(
                 status="UNKNOWN",
-                analysis_type="AST_FAILED",
+                analysis_type="PASST_FAILED",
                 category="UNKNOWN_AUDIO",
                 detail=AudioDetail(diagnosed_label="FAULTY_SOUND"),
                 confidence=0.0,
                 is_critical=False
             )
         
-        # 4. 2차 진단 판단 (Decision Layer 적용)
-        from ai.app.services.audio.audio_llm_fallback import get_audio_decision
-        
-        # AST 결과에서 Decision 추출
-        decision = get_audio_decision(
-            confidence=ast_result.confidence,
-            label=ast_result.category,
-            all_probs=getattr(ast_result, "all_probs", None) or {},
-            speech_ratio=speech_ratio # [New] Pass Voice Ratio to prevent OOD misclassification
-        )
-        
-        if decision.status == "UNCERTAIN":
-            logger.info(f"[Audio Fallback] {decision.reason} (Gate: {decision.gate}) -> LLM으로 전환 요청")
-            wav_bytes = audio_buffer.getvalue() if audio_buffer else audio_bytes
-            final_result = await analyze_audio_with_llm(s3_url, audio_bytes=wav_bytes)
-            logger.info(f"[Audio Fallback] LLM 응답: {final_result}")
-            # Decision 정보 주입
-            final_result.analysis_type = f"LLM_FALLBACK_GATE_{decision.gate}"
-        else:
-            final_result = ast_result
-            final_result.analysis_type = f"AST_GATE_{decision.gate}"
+        # =================================================================
+        # 🛡️ [Refinement] LLM Fallback (분석 거절 또는 저신뢰 시 LLM 투입)
+        # =================================================================
+        # 1) Stage 1에서 자동차 소리가 아니라고 판단했거나 (PASST_STAGE1_REJECT)
+        # 2) AI 결과의 신뢰도가 낮은 경우 (0.85 미만)
+        is_rejected = ai_result.analysis_type == "PASST_STAGE1_REJECT"
+        is_low_confidence = ai_result.confidence < 0.85
+
+        if is_rejected or is_low_confidence:
+            logger.info(f"[Audio Service] LLM Fallback 기동 (Reject={is_rejected}, LowConf={is_low_confidence})")
+            try:
+                # LLM에게 오디오 분석 요청 (AudioResponse 객체 반환)
+                llm_result = await analyze_audio_with_llm(s3_url, audio_bytes=audio_bytes)
+                
+                # AI 결과를 LLM의 더 똑똑한 해석으로 덮어씀 (객체 속성에 직접 접근)
+                ai_result.status = llm_result.status
+                ai_result.analysis_type = "LLM_FALLBACK"
+                ai_result.category = llm_result.category
+                ai_result.detail = llm_result.detail
+                ai_result.confidence = llm_result.confidence
+                ai_result.is_critical = llm_result.is_critical
+                
+                logger.info(f"[Audio Service] LLM Fallback 완료: {llm_result.status}, Category: {llm_result.category}")
+            except Exception as e:
+                logger.error(f"[Audio Service] LLM Fallback 실패 (AI 결과 유지): {e}")
+
+        # 4. 최종 리포트 확정
+        final_result = ai_result
 
         # =================================================================
         # [Active Learning] 공통 서비스 활용
