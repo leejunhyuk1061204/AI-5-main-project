@@ -2,6 +2,7 @@ package kr.co.himedia.service;
 
 import kr.co.himedia.dto.payment.KakaoApproveResponse;
 import kr.co.himedia.dto.payment.KakaoReadyResponse;
+import kr.co.himedia.dto.payment.OrderStatusResponse;
 import kr.co.himedia.dto.payment.PaymentApproveRequest;
 import kr.co.himedia.dto.payment.PaymentReadyRequest;
 import kr.co.himedia.entity.Payment;
@@ -70,8 +71,9 @@ public class KakaoPayService {
         parameters.put("total_amount", request.getTotalAmount()); // Integer
         parameters.put("tax_free_amount", 0); // Integer
 
-        // 카카오페이는 http/https URL만 허용하므로 백엔드 콜백 사용
-        // baseUrl은 동적으로 추출되므로 로컬 IP(192.168.x.x)가 자동으로 사용됨
+        // 정기결제 정석: 카카오는 http(s)만 허용하므로 approval_url은 반드시 백엔드 공개 URL.
+        // 결제 완료 시 카카오가 사용자 브라우저를 이 URL로 리다이렉트 → 백엔드에서 승인·멤버십 반영 후 앱 딥링크로 리다이렉트.
+        // APP_BACKEND_URL은 휴대폰(인터넷)에서 접근 가능한 URL이어야 함 (localhost/내부 IP 불가).
         parameters.put("approval_url", baseUrl + "/api/v1/payment/ready/success?order_id=" + orderId);
         parameters.put("cancel_url", baseUrl + "/api/v1/payment/ready/cancel");
         parameters.put("fail_url", baseUrl + "/api/v1/payment/ready/fail");
@@ -225,6 +227,20 @@ public class KakaoPayService {
         log.info("[KakaoPay] Payment success and membership updated for user: {}", user.getEmail());
 
         return approveResponse;
+    }
+
+    /**
+     * 주문 ID로 결제 상태를 조회합니다. 본인 주문만 조회 가능.
+     */
+    public java.util.Optional<OrderStatusResponse> getOrderStatus(String userId, String orderId) {
+        return paymentRepository.findByOrderId(orderId)
+                .filter(p -> p.getUser().getUserId().toString().equals(userId))
+                .map(p -> OrderStatusResponse.builder()
+                        .status(p.getStatus().name())
+                        .membership(p.getStatus() == Payment.PaymentStatus.PAID
+                                ? (p.getUser().getUserLevel() != null ? p.getUser().getUserLevel().name() : "FREE")
+                                : null)
+                        .build());
     }
 
     /**

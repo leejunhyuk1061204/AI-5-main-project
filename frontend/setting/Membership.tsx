@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, Dimensions, Linking } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, TouchableOpacity, Dimensions, ActivityIndicator } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 
@@ -68,21 +68,25 @@ export default function Membership() {
     const showAlert = useAlertStore(state => state.showAlert);
     const { membership: currentLevel, membershipExpiry, loadUser } = useUserStore();
     const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
+    const [refreshing, setRefreshing] = useState(false);
 
-    // 내부 ID(lower)와 DB 레벨(upper) 매핑
     const currentPlan = currentLevel?.toLowerCase() || 'free';
 
-    // 화면이 포커스될 때마다 사용자 정보 갱신 (결제 후 복귀 시)
     useFocusEffect(
         React.useCallback(() => {
-            console.log('Membership page focused - reloading user data');
             loadUser();
-        }, [])
+        }, [loadUser])
     );
 
     const handleSelectPlan = (planId: string) => {
         if (planId === currentPlan) return;
         setSelectedPlan(planId);
+    };
+
+    const handleRefreshPlan = async () => {
+        setRefreshing(true);
+        await loadUser();
+        setRefreshing(false);
     };
 
     const handleUpgrade = async () => {
@@ -115,24 +119,36 @@ export default function Membership() {
         }
 
         try {
-            console.log('Initiating payment for:', plan.name);
             const response = await paymentApi.ready(plan.name, plan.priceValue);
-            console.log('Payment ready response:', response);
-
             const urlToOpen = response.next_redirect_mobile_url || response.next_redirect_app_url;
-            console.log('URL to open:', urlToOpen);
+            if (!urlToOpen) {
+                showAlert('결제 오류', '결제 URL을 받지 못했습니다.', 'ERROR');
+                return;
+            }
 
-            if (urlToOpen) {
-                await AsyncStorage.setItem('temp_order_id', response.orderId || '');
-                console.log('Order ID saved:', response.orderId);
+            const orderId = response.orderId ?? '';
+            await AsyncStorage.setItem('temp_order_id', orderId);
 
-                // 외부 브라우저로 결제 페이지 열기 (카카오톡 앱으로 이동)
-                // 결제 완료 후 딥링크로 앱이 자동으로 열림
-                await Linking.openURL(urlToOpen);
-                console.log('External browser opened');
+            await WebBrowser.openBrowserAsync(urlToOpen, { preferEphemeralSession: false });
+
+            if (!orderId) {
+                await loadUser();
+                return;
+            }
+            const statusRes = await paymentApi.getOrderStatus(orderId).catch(() => null);
+            if (statusRes?.status === 'PAID') {
+                await AsyncStorage.removeItem('temp_order_id');
+                await loadUser();
+                showAlert('결제 완료', '멤버십이 변경되었습니다.', 'SUCCESS');
+            } else {
+                await loadUser();
+                showAlert(
+                    '결제 확인',
+                    '결제가 완료되면 플랜이 반영됩니다. 반영되지 않으면 새로고침을 눌러 주세요.',
+                    'INFO'
+                );
             }
         } catch (error) {
-            console.error('Payment Error:', error);
             showAlert('결제 오류', '결제 준비 중 문제가 발생했습니다.', 'ERROR');
         }
     };
@@ -148,6 +164,17 @@ export default function Membership() {
                 <MaterialIcons name="arrow-back-ios-new" size={24} color="#0d7ff2" />
             </TouchableOpacity>
             <Text className="text-white text-lg font-bold flex-1 text-center pr-10">멤버십 관리</Text>
+            <TouchableOpacity
+                className="w-10 h-10 items-center justify-center"
+                onPress={handleRefreshPlan}
+                disabled={refreshing}
+            >
+                {refreshing ? (
+                    <ActivityIndicator size="small" color="#0d7ff2" />
+                ) : (
+                    <MaterialIcons name="refresh" size={24} color="#0d7ff2" />
+                )}
+            </TouchableOpacity>
         </View>
     );
 

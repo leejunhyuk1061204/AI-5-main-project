@@ -1,0 +1,59 @@
+# seed CSV별 distinct 차량 + 어느 시드에 있는지
+# 형식: manufacturer | year | model | 시드(v1,v2,v3,v5)
+
+Acura | 2010 | MDX V6-3.7L | v1
+Acura | 2010 | RDX AWD L4-2.3L Turbo | v2
+Acura | 2010 | RDX FWD L4-2.3L Turbo | v3
+Acura | 2010 | RL V6-3.7L | v1
+Acura | 2010 | TSX V6-3.5L | v2
+Acura | 2010 | ZDX V6-3.7L | v3
+Acura | 2011 | TL AWD V6-3.7L | v2, v5
+Acura | 2011 | TSX Sedan L4-2.4L | v1
+Acura | 2011 | TSX Sedan V6-3.5L | v2
+Acura | 2011 | TSX Sport Wagon L4-2.4L | v3
+Acura | 2012 | MDX V6-3.7L | v5
+Acura | 2012 | RDX FWD L4-2.3L Turbo | v1
+Acura | 2012 | RL V6-3.7L | v2
+Acura | 2012 | TL AWD V6-3.7L | v3
+Acura | 2012 | TSX Sport Wagon L4-2.4L | v1
+Acura | 2012 | ZDX V6-3.7L | v2
+Acura | 2013 | ILX L4-1.5L (LEA2) Hybrid | v3
+Acura | 2013 | ILX L4-2.0L (R20A5) | v1
+Acura | 2013 | ILX L4-2.4L (K24Z7) | v2
+Acura | 2013 | RDX AWD V6-3.5L (J35Z2) | v1
+Acura | 2013 | RDX FWD V6-3.5L (J35Z2) | v2
+Acura | 2013 | TL AWD V6-3.7L (J37A4) | v3
+Acura | 2013 | TSX Sedan V6-3.5L (J35Z6) | v3
+Audi | 2010 | A3 (8PA) L4-2.0L DSL Turbo (CBEA) | v3
+Audi | 2012 | R8 GT Quattro Coupe (422) V10-5.2L (CMPA) | v2
+BMW | 2011 | 335is Convertible (E93) L6-3.0L Turbo (N54T) | v1
+BMW | 2011 | 535i Sedan (F10) L6-3.0L Turbo (N55) | v1
+BMW | 2011 | 740i (F01) L6-3.0L Turbo (N54) | v3
+BMW | 2012 | 650i xDrive Coupe AWD (F13) V8-4.4L Turbo (N63) | v3
+BMW | 2012 | 750i (F01) V8-4.4L Turbo (N63) | v3
+BMW | 2012 | Alpina B7 LWB (F02) V8-4.4L Turbo (N63) | v3
+BMW | 2012 | X3 xDrive 28i (F25) L6-3.0L (N52T) | v3
+BMW | 2012 | X6 M (E71) V8-4.4L Turbo (S63) | v3
+BMW | 2013 | 128i Convertible (E88) L6-3.0L (N51) | v3
+BMW | 2013 | 135is Convertible (E88) L6-3.0L Turbo (N55) | v3
+BMW | 2013 | 328i Coupe (E92) L6-3.0L (N51) | v3
+BMW | 2013 | 328i xDrive Sedan AWD (F30) L4-2.0L Turbo (N20) | v3
+BMW | 2013 | 335i xDrive Sedan AWD (F30) L6-3.0L Turbo (N55) | v3
+BMW | 2013 | 535i Sedan (F10) L6-3.0L Turbo (N55) | v3
+BMW | 2013 | 550i xDrive Sedan AWD (F10) V8-4.4L Turbo (N63) | v3
+BMW | 2013 | 650i Gran Coupe (F06) V8-4.4L Turbo (N63T) | v3
+BMW | 2013 | 740i (F01) L6-3.0L Turbo (N55) | v3
+BMW | 2013 | ActiveHybrid 3 (F30H) L6-3.0L Turbo (N55) Hybrid | v3
+BMW | 2013 | Alpina B7 xDrive LWB AWD (F02) V8-4.4L Turbo (N63T) | v3
+BMW | 2013 | X1 sDrive 28i RWD (E84) L4-2.0L Turbo (N20) | v3
+BMW | 2013 | X5 xDrive 35i (E70) L6-3.0L Turbo (N55) | v3
+BMW | 2013 | Z4 sDrive35i (E89) L6-3.0L Turbo (N54) | v3
+Buick | 2010 | Enclave FWD V6-3.6L | v3
+Buick | 2010 | Lucerne V8-4.6L | v3
+Buick | 2011 | Lucerne V6-3.9L | v3
+Buick | 2012 | LaCrosse AWD V6-3.6L | v3
+Buick | 2013 | Enclave AWD V6-3.6L | v3
+Cadillac | 2010 | CTS Sedan RWD V6-3.0L | v3
+Chevrolet | 2011 | Silverado 3500 2WD V8-6.6L DSL Turbo | v5
+Chevrolet | 2011 | Suburban 4WD V8-6.0L | v5
+Chevrolet | 2011 | Traverse FWD V6-3.6L | v5

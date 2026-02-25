@@ -46,8 +46,23 @@ const resetMembership = async (): Promise<void> => {
     await api.post('/api/v1/payment/reset');
 };
 
+// 주문 상태 조회 (PENDING | PAID 등). 본인 주문만 조회 가능.
+export interface OrderStatusResponse {
+    status: string;
+    membership: string | null;
+}
+
+const getOrderStatus = async (orderId: string): Promise<OrderStatusResponse | null> => {
+    const response = await api.get<{ data: OrderStatusResponse | null }>(
+        '/api/v1/payment/order-status',
+        { params: { order_id: orderId } }
+    );
+    return response.data?.data ?? null;
+};
+
 export default {
     ready,
     approve,
-    resetMembership
+    resetMembership,
+    getOrderStatus
 };

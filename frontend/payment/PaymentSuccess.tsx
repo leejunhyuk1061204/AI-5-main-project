@@ -1,61 +1,67 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, ActivityIndicator, TouchableOpacity } from 'react-native';
+import { View, Text, ActivityIndicator, TouchableOpacity, Linking } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { MaterialIcons } from '@expo/vector-icons';
+import * as WebBrowser from 'expo-web-browser';
 import BaseScreen from '../components/layout/BaseScreen';
-import paymentApi from '../api/paymentApi';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useUserStore } from '../store/useUserStore';
+import { useAlertStore } from '../store/useAlertStore';
 
+/**
+ * 결제 성공 딥링크 전용 화면.
+ * 흐름: 카카오 결제 완료 → 백엔드 콜백에서 승인 → frontend://payment/success?order_id=...&status=success 로 리다이렉트 → 이 화면.
+ * 백엔드에서 이미 승인·멤버십 반영이 끝났으므로 여기서는 프로필 갱신 + 알림만 처리.
+ */
 export default function PaymentSuccess() {
     const navigation = useNavigation<any>();
     const route = useRoute<any>();
+    const showAlert = useAlertStore(state => state.showAlert);
     const [loading, setLoading] = useState(true);
     const [success, setSuccess] = useState(false);
     const [errorMsg, setErrorMsg] = useState('');
     const loadUser = useUserStore(state => state.loadUser);
 
     useEffect(() => {
-        const processPayment = async () => {
+        const run = async () => {
             try {
-                // URL 파라미터에서 pg_token 추출 (Deep Link로 전달됨)
-                const { pg_token, order_id } = route.params || {};
+                WebBrowser.maybeCompleteAuthSession();
 
-                if (!pg_token) {
-                    throw new Error('결제 토큰이 없습니다.');
+                const params = (route.params as Record<string, string> | undefined) || {};
+                let orderId = params.order_id;
+                if (!orderId) {
+                    const initialUrl = await Linking.getInitialURL();
+                    if (initialUrl) {
+                        try {
+                            orderId = new URL(initialUrl).searchParams.get('order_id') ?? undefined;
+                        } catch {
+                            orderId = undefined;
+                        }
+                    }
                 }
-
-                // 저장해둔 orderId 가져오기 (URL 파라미터 우선, 없으면 AsyncStorage)
-                const orderId = order_id || await AsyncStorage.getItem('temp_order_id');
+                if (!orderId) orderId = await AsyncStorage.getItem('temp_order_id');
 
                 if (!orderId) {
-                    throw new Error('주문 정보를 찾을 수 없습니다.');
+                    setErrorMsg('주문 정보를 찾을 수 없습니다.');
+                    setSuccess(false);
+                    return;
                 }
 
-                // 승인 요청
-                await paymentApi.approve(pg_token, orderId);
-
-                // 성공 시 사용자 정보 갱신 (등급 등)
                 await loadUser();
-
                 setSuccess(true);
-                await AsyncStorage.removeItem('temp_order_id'); // cleanup
-
-                // 승인 완료 후 자동으로 홈으로 이동
-                navigation.reset({
-                    index: 0,
-                    routes: [{ name: 'MainPage' }],
+                await AsyncStorage.removeItem('temp_order_id');
+                showAlert('결제 완료', '멤버십이 변경되었습니다.', 'SUCCESS', () => {
+                    navigation.reset({ index: 0, routes: [{ name: 'MainPage' }] });
                 });
-            } catch (error: any) {
-                console.error('Payment Approve Error:', error);
-                setErrorMsg(error.response?.data?.error?.message || error.message || '결제 승인 중 오류가 발생했습니다.');
+            } catch {
+                setErrorMsg('결제 결과를 불러오지 못했습니다.');
                 setSuccess(false);
+                await loadUser();
             } finally {
                 setLoading(false);
             }
         };
-
-        processPayment();
+        run();
     }, [route.params]);
 
     const HeaderCustom = (

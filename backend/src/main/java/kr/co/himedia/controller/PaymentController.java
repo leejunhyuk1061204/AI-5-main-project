@@ -3,6 +3,7 @@ package kr.co.himedia.controller;
 import kr.co.himedia.common.ApiResponse;
 import kr.co.himedia.dto.payment.KakaoApproveResponse;
 import kr.co.himedia.dto.payment.KakaoReadyResponse;
+import kr.co.himedia.dto.payment.OrderStatusResponse;
 import kr.co.himedia.dto.payment.PaymentApproveRequest;
 import kr.co.himedia.dto.payment.PaymentReadyRequest;
 import kr.co.himedia.security.CustomUserDetails;
@@ -16,6 +17,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.Optional;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 
@@ -69,10 +72,21 @@ public class PaymentController {
     }
 
     /**
-     * 결제 성공 시 앱으로 리다이렉트하는 콜백 핸들러입니다.
+     * 주문 상태 조회 (결제 완료 여부 확인). 본인 주문만 조회 가능.
      */
+    @GetMapping("/order-status")
+    public ResponseEntity<ApiResponse<OrderStatusResponse>> orderStatus(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @RequestParam("order_id") String orderId) {
+        Optional<OrderStatusResponse> result = kakaoPayService.getOrderStatus(userDetails.getUserId().toString(), orderId);
+        return result
+                .map(r -> ResponseEntity.ok(ApiResponse.success(r)))
+                .orElse(ResponseEntity.ok(ApiResponse.success(null)));
+    }
+
     /**
-     * 결제 성공 시 앱의 딥링크로 리다이렉트합니다.
+     * 정기결제 정석 콜백: 카카오 결제 완료 시 카카오가 사용자 브라우저를 이 URL로 리다이렉트(pg_token 쿼리 추가).
+     * 백엔드에서 승인 API 호출·멤버십 반영 후 앱 딥링크로 리다이렉트.
      */
     @GetMapping("/ready/success")
     public void readySuccess(
