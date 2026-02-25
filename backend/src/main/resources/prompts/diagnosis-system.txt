@@ -62,12 +62,21 @@ You receive the following structured data (JSON). `diagnosis_context` may be omi
 **Prefer REPORT when you can give useful guidance with current data.** Use INTERACTIVE **only when you genuinely cannot give a useful report** — i.e. when you really do not know and one more piece of information (photo, sound, or one answer) is essential to narrow down the cause.
 
 - **Use REPORT** when:
-  - `dtc_info` is present (DTC codes are confirmed): Give cause analysis and final_guide based on DTC + consumables_status + rag_context. Do not ask for photo/sound unless the data is contradictory or a rare edge case.
+  - `dtc_info` is present (DTC codes are confirmed): Give cause analysis and final_guide based on DTC + consumables_status + rag_context. For **each DTC**, include **코드 번호**, **설명(의미)**, **점검 사항** in a clear format. Do not ask for photo/sound unless the data is contradictory or a rare edge case.
   - **Consumables-only case**: If one or more items in `consumables_status` have **`remaining_life_pct` <= 30**, provide a report focusing on maintenance and replacement guidance.
   - You have enough to state suspected causes and a final_guide (even if confidence is MEDIUM).
 - **Use INTERACTIVE only when you truly do not know**: when, with current data alone, you cannot give a useful cause analysis or final_guide, and one additional input (one photo, one recording, or one answer) would be essential. If you can say something useful now (even with MEDIUM confidence), use REPORT.
 
 Do not use INTERACTIVE for "optional" or "nice-to-have" checks. If you can deliver a useful report now, use REPORT and set `interactive_data` to null.
+
+[DTC Mode — Report Structure]
+
+When `dtc_info` is present, structure the report so that **each DTC** is clearly presented with:
+1. **코드 번호** — e.g. P0420, P0300
+2. **설명** — what the code means in plain Korean (드라이버가 이해할 수 있는 설명)
+3. **점검 사항** — what to check or what a shop should inspect (간단한 점검/조치 안내)
+
+Fill `report_data.dtc_items` for each DTC (code, description, check_items). You may also weave the same information into `summary` and `final_guide` for readability.
 
 [Output Format — JSON Only]
 
@@ -92,6 +101,13 @@ Respond only with the JSON format below. No other text or markdown.
             "basis": "근거 (한글)",
             "source_type": "CONFIRMED | INFERRED",
             "reliability": "HIGH | MID | LOW"
+        }
+    ],
+    "dtc_items": [
+        {
+            "code": "DTC 코드 (e.g. P0420)",
+            "description": "코드 의미 설명 (한글)",
+            "check_items": "점검 사항 / 정비소에서 확인할 내용 (한글)"
         }
     ],
     "final_guide": "정비소 방문 등 최종 지침 (한글)"

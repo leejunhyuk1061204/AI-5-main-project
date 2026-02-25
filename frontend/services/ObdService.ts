@@ -758,13 +758,13 @@ class ObdService {
             'rpm': 3000,
             'speed': 3000,
             'throttle': 3000,
-            // NORMAL/MID: 10초 이내
-            'engine_load': 10000,
-            'map': 10000,
-            'maf': 10000,
-            'intake_temp': 10000,
-            'engine_runtime': 10000,
-            'dtc_status': 10000, // DTC는 MID로 상향 조정 (지적사항 반영)
+            // NORMAL/MID: 11초 이내
+            'engine_load': 11000,
+            'map': 11000,
+            'maf': 11000,
+            'intake_temp': 11000,
+            'engine_runtime': 11000,
+            'dtc_status': 11000, // DTC는 MID로 상향 조정 (지적사항 반영)
             // LOW: 30초 이내 (느리게 변하는 데이터)
             'coolant_temp': 30000,
             'voltage': 30000
