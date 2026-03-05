@@ -2,117 +2,153 @@
 
 > **차량 데이터와 인공지능을 결합해 고장을 미리 알려주는 똑똑한 차계부 서비스**
 
-이 프로젝트는 자동차의 실시간 정보를 수집해서 어디가 아픈지 미리 예측하고, 내 운전 습관에 딱 맞는 관리법을 알려주는 똑똑한 시스템입니다.
+자동차 실시간 정보를 수집해 이상을 미리 예측하고, 운전 습관에 맞는 관리법을 제안하는 시스템입니다.  
+단순 진단을 넘어 AI가 주행 기록을 학습해 **고장 전에 미리 알려주고**, "나보다 내 차를 더 잘 아는" 맞춤형 서비스를 제공합니다.
 
 ---
 
-## 1. 프로젝트 개요 (Overview)
-단순한 차량 진단을 넘어, AI가 내 차의 주행 기록을 학습해서 **미래에 발생할 수 있는 고장을 미리 알려줍니다.** 
-본넷을 열어보기 전에도 차의 이상 상태를 미리 감지하고, "나보다 내 차를 더 잘 아는" 맞춤형 서비스를 제공합니다.
+## 핵심 기능
 
-## 2. 핵심 기능 (Key Features)
-- **똑똑한 고장 예측**: 센서 데이터는 물론 엔진 소리나 사진까지 분석해서 부품 수명을 정확히 예측합니다.
-- **실시간 이상 알림**: 운전 중에 평소와 다른 수치가 나타나면 즉시 알려주어 사고를 방지합니다.
-- **나만의 차량 건강 리포트**: 매일매일 내 주행 기록을 요약하고, 다음에 챙겨야 할 정비 항목을 알려줍니다.
-- **제조사 계정 연결**: 현대차나 테슬라 계정을 연결해 내 차의 정보를 자동으로 가져오고 안전하게 관리합니다.
+- **고장 예측**: 센서·엔진음·부품 사진을 분석해 부품 수명·이상 징후 예측
+- **DTC 즉시 알림**: 경고등(DTC) 점등 시 실시간 감지·알림 (실시간 알림은 DTC에 한함)
+- **차량 건강 리포트**: 주행 기록 요약 + 다음 정비 항목 제안
+- **멀티모달 셀프 점검**: 시동음 녹음, 엔진룸/타이어 사진으로 AI 진단
+- **제조사 계정 연동**: 차량 정보 자동 연동·안전 저장
 
-## 3. 시스템 구조 (Architecture)
-데이터 처리를 효율적으로 하기 위해 두 가지 방식을 섞어서 사용합니다.
-- **내 폰과 차**: 현장에서 바로 데이터를 수집하고 간단한 알림을 줍니다.
-- **서버**: 무거운 인공지능 분석과 대용량 데이터 저장, 통계 분석을 담당합니다.
+---
 
-> 더 자세한 기술적인 내용은 [시스템 상세 구조](Docs/시스템_아키텍처_및_데이터_흐름.md)를 참고하세요.
+## 시스템 아키텍처
 
-## 4. 프로젝트 폴더 구성 (Project Structure)
-프로젝트는 크게 세 부분으로 나누어 관리합니다.
+전체는 **Client(앱)·Server(백엔드)·Storage(DB)·AI(분석엔진)** 네 계층으로 구성됩니다.  
+실제 차량은 **ELM327 커넥터**로 앱과 연결되고, 앱이 수집한 주행·센서 데이터를 메인 서버로 보냅니다. (개발·테스트 시에는 에뮬레이터로 시뮬레이션 가능.)
 
-- **`/backend`**: 메인 기능과 데이터 관리를 담당하는 서버 (Java 기반)
-- **`/ai`**: 인공지능 분석을 담당하는 엔진 (Python 기반)
-- **`/frontend`**: 우리가 사용하는 스마트폰 앱 코드
-- **`/Docs`**: 설계서나 명세서 같은 기획 문서들
+```mermaid
+graph TD
+    subgraph Client["Client Layer (모바일 앱)"]
+        ELM[ELM327 커넥터]
+        App[모바일 앱]
+        Car[차량]
+        Car <--> |OBD-II| ELM
+        ELM <--> |블루투스| App
+    end
 
-## 5. 사용한 기술 (Tech Stack)
-### 서버 및 인프라
-- **메인 엔진**: Java / Spring Boot (전체적인 흐름 관리)
-- **인공지능 서비스**: Python / FastAPI (빠른 AI 분석)
-- **데이터 저장소**: 
-  - PostgreSQL (기본 정보 저장)
-  - TimescaleDB (주행 기록 저장에 최적화)
-- **알림 큐**: RabbitMQ (실시간 알림 및 작업 순서 관리)
+    subgraph Server["Server Layer (백엔드)"]
+        MainBE[메인 서버]
+        MQ[메시지 큐]
+        MainBE --- MQ
+    end
 
-### 보안 및 도구
-- **관리 도구**: Docker (어디서든 똑같이 실행되게 함)
-- **정보 보호**: 개인 정보와 계정 토큰을 안전하게 암호화해서 저장
+    subgraph Storage["Storage Layer"]
+        DB[(PostgreSQL / TimescaleDB)]
+        S3[파일 저장소]
+    end
 
-## 6. 주요 문서 (Documentation)
-프로젝트의 자세한 내용은 아래 문서들에서 볼 수 있습니다. (기술적인 용어가 포함되어 있습니다.)
-- [데이터 저장소 설계서](Docs/DB_설계서.md)
-- [API 기능 명세서](Docs/API_명세서.md)
-- [시스템 전체 구조도](Docs/시스템_아키텍처_및_데이터_흐름.md)
-- [개발 가이드라인](Docs/기술_구현_가이드라인.md)
+    subgraph AI["AI Layer (분석 엔진)"]
+        Analysis[AI 분석 서버]
+        LLM[결과 해석 · 리포트]
+    end
 
-## 7. 실행 방법 (Quick Start)
+    App --> |주행·센서 데이터| MainBE
+    MainBE <--> DB
+    MainBE <--> S3
+    MQ --> |분석 요청| Analysis
+    Analysis --> |결과·리포트| MainBE
+```
 
-Docker만 설치되어 있다면, 아래 두 단계를 통해 **모든 서버 환경(이미지 자동 설치 포함)이 구축**됩니다.
+- **Client**: ELM327로 차량(OBD-II)과 연결해 데이터 수집, DTC 시 간단 알림
+- **Server**: 사용자·차량·주행 관리, AI 작업 조율, 알림
+- **Storage**: 주행/진단 데이터 저장, 중요 구간 상세 데이터 보관
+- **AI**: 시계열·이미지·오디오 분석, DTC 해석(RAG). 분석 결과를 **LLM**이 진단 설명·권장 조치 등 사용자용 자연어 리포트로 변환
 
-### 🚀 2단계로 끝내기 (CMD/터미널)
+---
 
-**STEP 1. 설정 파일(.env) 준비**  
-폴더에 들어있는 `.env.example` 파일을 복사한 뒤, 이름을 **`.env`**로 바꿔주세요.  
-(터미널에서 직접 하시려면 아래 명령어를 입력하세요.)
+## 기술 스택
+
+| 영역 | 기술 |
+|:---|:---|
+| **모바일** | React Native (Android/iOS) |
+| **백엔드** | Java, Spring Boot |
+| **AI 서빙** | Python, FastAPI |
+| **AI/ML** | PyTorch, YOLOv8, LSTM |
+| **DB** | PostgreSQL, TimescaleDB, pgvector |
+| **캐시·세션** | Redis (OBD 배치 멱등 락, Refresh Token 저장) |
+| **메시징** | RabbitMQ |
+| **인프라** | Docker |
+| **차량 연동** | ELM327 커넥터 (OBD-II) |
+
+---
+
+## 프로젝트 구조
+
+| 경로 | 설명 |
+|:---|:---|
+| **`/backend`** | Spring Boot — API, DB, 메시지 큐 연동 |
+| **`/frontend`** | React Native 앱 |
+| **`/ai`** | Python AI 엔진 — FastAPI, 학습·추론 스크립트 |
+| **`/docs`** | 기획·설계·아키텍처 문서 |
+| **`/db`** | 스키마·시드 |
+| **`/emulator`** | OBD 시뮬레이션 |
+
+---
+
+## Quick Start (Docker)
+
+Docker만 있으면 DB·RabbitMQ·이미지가 한 번에 구성됩니다.
+
+**1. 환경 설정**
+
 ```cmd
 copy .env.example .env
 ```
 
-**STEP 2. 서버 실행**  
-동일한 터미널에서 아래 명령어를 입력하고 잠시만 기다려 주세요.
+**2. 서비스 기동**
+
 ```cmd
 docker-compose up -d
 ```
 
-> **무엇이 자동으로 되나요?**
-> - DB(Postgres, TimescaleDB) 및 RabbitMQ의 최신 이미지 자동 설치
-> - 서비스 간 네트워크 및 저장소 자동 구성
+| 서비스 | 접속 |
+|:---|:---|
+| PostgreSQL | `localhost:5432` |
+| RabbitMQ 콘솔 | http://localhost:15672 (`guest` / `guest`) |
 
-### 🔗 접속 정보
-- **PostgreSQL**: `localhost:5432`
-- **RabbitMQ**: [http://localhost:15672](http://localhost:15672) (`guest/guest`)
-- 필수 준비물: **Docker Desktop** 실행 중, **`.env`** 파일 존재
+필수: Docker Desktop 실행, 프로젝트 루트에 `.env` 존재.
 
 ---
-© 2026 AI-5 Project Team. All rights reserved.
 
-### ai 환경설정 ###
+## 개발 환경 (로컬 실행)
 
-# 1. 가상환경 생성
+### AI 서버 (Python)
+
+```bash
 conda create -n ai5 python=3.10
 conda activate ai5
-
-# 2. PyTorch 설치 (CUDA 12.1 기준)
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
-
-# 3. 나머지 전부 (transformers, accelerate 포함)
-pip install -r requirements.txt
-
-# 4. AI 서버 실행 (8001 포트 사용)
+pip install -r ai/requirements.txt
 uvicorn ai.app.main:app --reload --host 0.0.0.0 --port 8001
 ```
 
----
-### Frontend 환경설정 및 실행 (Frontend Setup) ###
+### 프론트엔드 (React Native)
 
-# 1. 필수 설치
-# Node.js LTS 버전 설치 필요
+```bash
 npm install
-
-# 2. 실행 방법 (터미널 2개 사용 권장)
-# Terminal 1: 백엔드 & AI 서버 실행
+# 터미널 1: 백엔드 & AI 서버
 npm run server
-
-# Terminal 2: 프론트엔드 실행 (QR 코드 출력)
+# 터미널 2: 앱 실행 (QR 코드 출력)
 npm run dev
+```
 
-# 3. 실기기 테스트 시 주의사항
-# 핸드폰으로 테스트할 경우, PC와 핸드폰이 같은 와이파이에 있어야 합니다.
-# frontend/api/axios.ts 파일에서 본인의 PC IP 주소(예: 192.168.0.11)로 설정을 확인해주세요.
+실기기 테스트: PC와 폰을 같은 Wi‑Fi에 두고, `frontend/api/axios.ts`에서 PC IP를 설정하세요.
 
+---
+
+## 문서
+
+- [프로젝트 기획서](docs/0.프로젝트%20기획서.md)
+- [요구사항 정의서](docs/1.요구사항정의서.md)
+- [시스템 아키텍처 상세](docs/2.아키텍처.md)
+- [DB 설계서](docs/3.DB%20설계서.md)
+
+---
+
+© 2026 AI-5 Project Team
